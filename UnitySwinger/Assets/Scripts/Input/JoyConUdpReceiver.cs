@@ -69,13 +69,26 @@ namespace Swinger.Input
 
         public bool TryDequeue(out GyroSample sample) => _queue.TryDequeue(out sample);
 
-        private void Awake()
+        // Build Plan v3 Phase 3's "one clock domain" rule: this component
+        // previously always started its own private Stopwatch, which would
+        // NOT be the same clock (or the same zero-point) as the one driving
+        // the beat schedule/judge -- call this before the object's OnEnable
+        // (e.g. from another component's Awake, relying on Unity calling all
+        // Awakes before any OnEnable for objects already active at scene
+        // load) to make gyro-sample timestamps and beat-schedule timestamps
+        // directly comparable. If never called, falls back to a private
+        // Stopwatch (preserves the Phase 1 input-only scene's behavior).
+        public void UseClock(Stopwatch clock)
         {
-            _clock = Stopwatch.StartNew();
+            _clock = clock;
         }
 
         private void OnEnable()
         {
+            if (_clock == null)
+            {
+                _clock = Stopwatch.StartNew();
+            }
             _client = new UdpClient(port);
             _running = true;
             _thread = new Thread(ReceiveLoop) { IsBackground = true, Name = "JoyConUdpReceiver" };

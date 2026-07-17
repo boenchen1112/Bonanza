@@ -6,6 +6,6 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
-    path: Assets/Scenes/MetronomeTest.unity
-    guid: 5e57b3d82f0c31f46b5c45da1a881447
+    path: Assets/Scenes/Batting.unity
+    guid: d180f6b0a91da734ba2698639cc7115e
   m_configObjects: {}

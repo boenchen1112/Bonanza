@@ -16,13 +16,25 @@ namespace Swinger.Presentation
     // spread calibration across several real frames -- see Calibrate().
     public sealed class ClockSync
     {
-        private readonly Stopwatch _stopwatch = Stopwatch.StartNew();
+        private readonly Stopwatch _stopwatch;
         private double _lastDspSeen = double.NegativeInfinity;
         private double _sum;
         private int _taken;
 
         public double StartupOffset { get; private set; }
         public bool IsCalibrated { get; private set; }
+
+        // externalStopwatch lets callers share the exact same clock instance
+        // (and zero-point) with other components (e.g. JoyConUdpReceiver via
+        // UseClock()) so all timestamps in the canonical domain are directly
+        // comparable, per the "one clock domain" rule. Defaults to a private
+        // Stopwatch if none is given.
+        public ClockSync(Stopwatch externalStopwatch = null)
+        {
+            _stopwatch = externalStopwatch ?? Stopwatch.StartNew();
+        }
+
+        public Stopwatch UnderlyingStopwatch => _stopwatch;
 
         // Canonical CPU-clock "now", seconds, double precision.
         public double CanonicalNow() => _stopwatch.Elapsed.TotalSeconds;
