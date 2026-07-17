@@ -1,0 +1,87 @@
+{
+  "case": "synthetic_10_swings",
+  "input_sample_count": 1754,
+  "event_count": 10,
+  "events": [
+    {
+      "timestamp": 1.2599999999999998,
+      "peak_magnitude": 741.1904761904727,
+      "rise_duration": 0.05999999999999939,
+      "max_derivative": 11142.857142857145,
+      "sharpness_raw": 11142.857142857145,
+      "sharpness_bucket": "Low"
+    },
+    {
+      "timestamp": 2.406666666666668,
+      "peak_magnitude": 741.1904761904838,
+      "rise_duration": 0.060000000000001386,
+      "max_derivative": 11142.857142857149,
+      "sharpness_raw": 11142.857142857149,
+      "sharpness_bucket": "Low"
+    },
+    {
+      "timestamp": 3.5400000000000276,
+      "peak_magnitude": 741.1904761904838,
+      "rise_duration": 0.060000000000001386,
+      "max_derivative": 11142.857142857149,
+      "sharpness_raw": 11142.857142857149,
+      "sharpness_bucket": "Low"
+    },
+    {
+      "timestamp": 4.673333333333387,
+      "peak_magnitude": 741.1904761904838,
+      "rise_duration": 0.060000000000001386,
+      "max_derivative": 11142.857142857149,
+      "sharpness_raw": 11142.857142857149,
+      "sharpness_bucket": "High"
+    },
+    {
+      "timestamp": 5.806666666666747,
+      "peak_magnitude": 741.1904761904838,
+      "rise_duration": 0.060000000000001386,
+      "max_derivative": 11142.857142857149,
+      "sharpness_raw": 11142.857142857149,
+      "sharpness_bucket": "High"
+    },
+    {
+      "timestamp": 6.940000000000106,
+      "peak_magnitude": 741.1904761904838,
+      "rise_duration": 0.060000000000001386,
+      "max_derivative": 11142.857142857149,
+      "sharpness_raw": 11142.857142857149,
+      "sharpness_bucket": "High"
+    },
+    {
+      "timestamp": 8.073333333333455,
+      "peak_magnitude": 741.1904761904838,
+      "rise_duration": 0.060000000000001386,
+      "max_derivative": 11142.857142857149,
+      "sharpness_raw": 11142.857142857149,
+      "sharpness_bucket": "High"
+    },
+    {
+      "timestamp": 9.21333333333333,
+      "peak_magnitude": 741.1904761904398,
+      "rise_duration": 0.05999999999999339,
+      "max_derivative": 11142.857142857145,
+      "sharpness_raw": 11142.857142857145,
+      "sharpness_bucket": "Low"
+    },
+    {
+      "timestamp": 10.35999999999987,
+      "peak_magnitude": 741.1904761904398,
+      "rise_duration": 0.05999999999999339,
+      "max_derivative": 11142.857142857145,
+      "sharpness_raw": 11142.857142857145,
+      "sharpness_bucket": "Low"
+    },
+    {
+      "timestamp": 11.50666666666641,
+      "peak_magnitude": 741.1904761904398,
+      "rise_duration": 0.05999999999999339,
+      "max_derivative": 11142.857142857145,
+      "sharpness_raw": 11142.857142857145,
+      "sharpness_bucket": "Low"
+    }
+  ]
+}
