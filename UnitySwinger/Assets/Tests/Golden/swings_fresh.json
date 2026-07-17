@@ -1,0 +1,191 @@
+{
+  "case": "swings_fresh",
+  "input_sample_count": 1324,
+  "event_count": 23,
+  "events": [
+    {
+      "timestamp": 62601.3813055,
+      "peak_magnitude": 6257.682411555577,
+      "rise_duration": 0.22545260000333656,
+      "max_derivative": 65906.62531711328,
+      "sharpness_raw": 65906.62531711328,
+      "sharpness_bucket": "Low"
+    },
+    {
+      "timestamp": 62603.0592453,
+      "peak_magnitude": 20619.278723834064,
+      "rise_duration": 0.1667553000006592,
+      "max_derivative": 288456.1926690062,
+      "sharpness_raw": 288456.1926690062,
+      "sharpness_bucket": "Mid"
+    },
+    {
+      "timestamp": 62603.5425025,
+      "peak_magnitude": 22060.939947552164,
+      "rise_duration": 0.12312399999791523,
+      "max_derivative": 382183.86350388004,
+      "sharpness_raw": 382183.86350388004,
+      "sharpness_bucket": "High"
+    },
+    {
+      "timestamp": 62603.9892207,
+      "peak_magnitude": 23417.342639216455,
+      "rise_duration": 0.10490529999515275,
+      "max_derivative": 421762.7133799323,
+      "sharpness_raw": 421762.7133799323,
+      "sharpness_bucket": "High"
+    },
+    {
+      "timestamp": 62604.4420608,
+      "peak_magnitude": 20540.70984564097,
+      "rise_duration": 0.10499669999990147,
+      "max_derivative": 309124.71636647027,
+      "sharpness_raw": 309124.71636647027,
+      "sharpness_bucket": "Mid"
+    },
+    {
+      "timestamp": 62604.8450282,
+      "peak_magnitude": 23575.169144042502,
+      "rise_duration": 0.11971439999615541,
+      "max_derivative": 253901.48676459244,
+      "sharpness_raw": 253901.48676459244,
+      "sharpness_bucket": "Low"
+    },
+    {
+      "timestamp": 62605.3711495,
+      "peak_magnitude": 27517.46043001931,
+      "rise_duration": 0.18047729999670992,
+      "max_derivative": 358253.9563304962,
+      "sharpness_raw": 358253.9563304962,
+      "sharpness_bucket": "Mid"
+    },
+    {
+      "timestamp": 62605.8492436,
+      "peak_magnitude": 26835.77805207599,
+      "rise_duration": 0.10982820000208449,
+      "max_derivative": 424199.26479077287,
+      "sharpness_raw": 424199.26479077287,
+      "sharpness_bucket": "High"
+    },
+    {
+      "timestamp": 62606.3149332,
+      "peak_magnitude": 26406.70670471018,
+      "rise_duration": 0.0774265000000014,
+      "max_derivative": 412867.92339876015,
+      "sharpness_raw": 412867.92339876015,
+      "sharpness_bucket": "High"
+    },
+    {
+      "timestamp": 62606.7656812,
+      "peak_magnitude": 25889.186289339268,
+      "rise_duration": 0.10502409999753581,
+      "max_derivative": 349113.99870794656,
+      "sharpness_raw": 349113.99870794656,
+      "sharpness_bucket": "Mid"
+    },
+    {
+      "timestamp": 62607.2019562,
+      "peak_magnitude": 24350.908464511183,
+      "rise_duration": 0.16319429999566637,
+      "max_derivative": 353470.9077416064,
+      "sharpness_raw": 353470.9077416064,
+      "sharpness_bucket": "Mid"
+    },
+    {
+      "timestamp": 62607.6806381,
+      "peak_magnitude": 23998.154350092937,
+      "rise_duration": 0.19443079999473412,
+      "max_derivative": 416909.1290712045,
+      "sharpness_raw": 416909.1290712045,
+      "sharpness_bucket": "High"
+    },
+    {
+      "timestamp": 62608.1029383,
+      "peak_magnitude": 22031.286147203948,
+      "rise_duration": 0.15055109999957494,
+      "max_derivative": 387844.10430097673,
+      "sharpness_raw": 387844.10430097673,
+      "sharpness_bucket": "Mid"
+    },
+    {
+      "timestamp": 62609.074466,
+      "peak_magnitude": 23184.5695088339,
+      "rise_duration": 0.17731920000369428,
+      "max_derivative": 235427.85837875248,
+      "sharpness_raw": 235427.85837875248,
+      "sharpness_bucket": "Low"
+    },
+    {
+      "timestamp": 62609.527093,
+      "peak_magnitude": 24071.77013310716,
+      "rise_duration": 0.12101999999867985,
+      "max_derivative": 312698.29536678374,
+      "sharpness_raw": 312698.29536678374,
+      "sharpness_bucket": "Mid"
+    },
+    {
+      "timestamp": 62609.9621565,
+      "peak_magnitude": 19642.519804622,
+      "rise_duration": 0.15084360000037123,
+      "max_derivative": 289164.0294367643,
+      "sharpness_raw": 289164.0294367643,
+      "sharpness_bucket": "Low"
+    },
+    {
+      "timestamp": 62610.45778,
+      "peak_magnitude": 22089.942380687928,
+      "rise_duration": 0.20652420000260463,
+      "max_derivative": 397843.53105152934,
+      "sharpness_raw": 397843.53105152934,
+      "sharpness_bucket": "High"
+    },
+    {
+      "timestamp": 62612.9579069,
+      "peak_magnitude": 24274.118610334157,
+      "rise_duration": 0.25527989999682177,
+      "max_derivative": 326236.71772081254,
+      "sharpness_raw": 326236.71772081254,
+      "sharpness_bucket": "Mid"
+    },
+    {
+      "timestamp": 62613.3075463,
+      "peak_magnitude": 19785.60953254468,
+      "rise_duration": 0.027863000002980698,
+      "max_derivative": 173409.30091026032,
+      "sharpness_raw": 173409.30091026032,
+      "sharpness_bucket": "Low"
+    },
+    {
+      "timestamp": 62613.8741284,
+      "peak_magnitude": 20825.781539319825,
+      "rise_duration": 0.13383429999521468,
+      "max_derivative": 277996.48515376286,
+      "sharpness_raw": 277996.48515376286,
+      "sharpness_bucket": "Low"
+    },
+    {
+      "timestamp": 62614.2673523,
+      "peak_magnitude": 25528.180597192877,
+      "rise_duration": 0.04468889999407111,
+      "max_derivative": 285876.2000448011,
+      "sharpness_raw": 285876.2000448011,
+      "sharpness_bucket": "Low"
+    },
+    {
+      "timestamp": 62616.2912548,
+      "peak_magnitude": 17265.726090941716,
+      "rise_duration": 0.1779588000063086,
+      "max_derivative": 196537.92240867176,
+      "sharpness_raw": 196537.92240867176,
+      "sharpness_bucket": "Low"
+    },
+    {
+      "timestamp": 62618.0913202,
+      "peak_magnitude": 20395.595880383422,
+      "rise_duration": 0.1799001000035787,
+      "max_derivative": 202672.81611618918,
+      "sharpness_raw": 202672.81611618918,
+      "sharpness_bucket": "Low"
+    }
+  ]
+}

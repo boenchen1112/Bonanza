@@ -12,3 +12,6 @@ src/swings.csv
 # Machine-specific shortcut to the real primer.md (now committed at repo
 # root); the .lnk only resolves on the machine that created it.
 primer.md.lnk
+
+# Unity CLI batchmode log files (project setup logs, not source)
+UnitySwinger_*.log
