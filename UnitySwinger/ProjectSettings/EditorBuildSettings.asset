@@ -4,5 +4,8 @@
 EditorBuildSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 2
-  m_Scenes: []
+  m_Scenes:
+  - enabled: 1
+    path: Assets/Scenes/MetronomeTest.unity
+    guid: 5e57b3d82f0c31f46b5c45da1a881447
   m_configObjects: {}
