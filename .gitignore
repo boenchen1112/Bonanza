@@ -1,0 +1,14 @@
+# Runtime-only artifacts (per Swinger_Build_Plan_v1.md 4a) -- not source.
+calibration.json
+
+__pycache__/
+*.pyc
+
+# Superseded, scale-suspect capture (see scoring.py / primer.md) -- kept on
+# disk for reference but not tracked; swings_fresh.csv/swings_counted.csv
+# are the current real captures code comments reference.
+src/swings.csv
+
+# Machine-specific shortcut to the real primer.md (now committed at repo
+# root); the .lnk only resolves on the machine that created it.
+primer.md.lnk
