@@ -170,6 +170,16 @@ namespace Swinger.Presentation
             {
                 ShowSummary();
             }
+
+            // Surface a lost Joy-Con signal instead of silently scoring an
+            // unbroken string of Misses with no explanation (Phase A.3,
+            // Swinger_Build_Plan_v4.md / J2 Unity-side equivalent). Only
+            // shown outside an active judgment popup so it doesn't clobber
+            // a fresh Perfect/Miss result.
+            if (!_gameOver && inputSource != null && inputSource.IsSignalLost && now >= _popupUntil && judgmentText != null)
+            {
+                judgmentText.text = "Joy-Con signal lost";
+            }
         }
 
         private void ScheduleUpcomingClicks(double now)
@@ -291,6 +301,20 @@ namespace Swinger.Presentation
                     locked = null;
                     measureIdx++;
                     if (judgmentText != null) judgmentText.text = $"Calibrating...\n{measureIdx}/{practiceMeasures}";
+                }
+
+                // Signal-lost feedback during calibration too (Phase A.3):
+                // this loop already advances on wall-clock time regardless
+                // of whether samples arrive, so it can't literally hang --
+                // but with no input at all it would otherwise tick through
+                // all practiceMeasures silently recording misses, with
+                // nothing telling the player *why* calibration is about to
+                // fail (they'd only find out afterward via the "not enough
+                // swings detected" result). Skip whenever the per-measure
+                // "N/10" text was just written above so it isn't clobbered.
+                if (inputSource != null && inputSource.IsSignalLost && judgmentText != null)
+                {
+                    judgmentText.text = $"Joy-Con signal lost\nCalibrating... {measureIdx}/{practiceMeasures}";
                 }
 
                 yield return null;

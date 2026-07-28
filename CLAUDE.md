@@ -12,29 +12,35 @@ analysis tool.
 
 ## Platform roadmap
 
-1. **v1 (current):** Python rule-based prototype. `pygame` for game
-   loop/visuals/audio, `joycon-python`/`hid` for right Joy-Con gyro input.
-   Flat 2D placeholder visuals — the goal is validating detection,
-   calibration, and scoring, not final look.
-2. **Next:** 2.5D port to Unity — 3D characters/environment on a fixed
-   camera, no free player movement (Super Mario Party style). Detection/
-   calibration/scoring logic ports to C# largely as-is.
-3. **Long-term:** VR, converging with the existing VR chord-game project.
+1. **v1 (superseded as a product):** Python rule-based prototype. `pygame`
+   for game loop/visuals/audio, `joycon-python`/`hid` for right Joy-Con
+   gyro input. Validated detection, calibration, and scoring before the
+   Unity port existed.
+2. **v3 (current product):** 2.5D Unity port — 3D characters/environment
+   on a fixed camera, no free player movement (Super Mario Party style).
+   Detection/calibration/scoring logic ported to C# largely as-is.
+   **Unity is the sole game as of `Swinger_Build_Plan_v4.md` Phase A** —
+   `src/game.py`'s pygame loop is retired as a product and is not
+   developed in parallel with the Unity build; see "`src/` is tooling, not
+   a product" below.
+3. **v4 (current focus):** pivot from a timing-verdict minigame to a
+   conducting-trace trainer — see `Swinger_Build_Plan_v4.md`.
+4. **Long-term:** VR, converging with the existing VR chord-game project.
 
-**Unity port readiness (confirmed post-bugfix, `Swinger_Build_Plan_v2.md`
-Phase 6):** the module split needed for a "logic ports largely as-is" claim
-still holds. Pure logic, no `pygame`/hardware import: `beat_schedule.py`,
-`ictus_detector.py`, `scoring.py`, `session_log.py`, `calibration.py`
-(file I/O only — reading/writing `calibration.json`, no rendering).
-Presentation/input, `pygame`-dependent: `game.py` (render loop, audio
-playback via `metronome.py`), `metronome.py` (click playback), and
-`settings_menu.py` (menu rendering/keyboard nav) — these are what the Unity
-port actually replaces (pygame draws → Unity scene, keyboard menu → Unity
-UI). `joycon_stream.py` is the hardware input layer, replaced by Unity's
-input system regardless of pygame. Nothing in the detection/scoring/
-calibration path (the part validated by `tests/`) depends on pygame or on
-`joycon_stream.py`'s specific device API — only on the `(timestamp,
-magnitude)` sample shape those modules already consume.
+**`src/` is tooling, not a product (Build Plan v4 Phase A):** with Unity as
+the sole game, `src/` exists only to support it: real-hardware capture
+(`joycon_stream.py`, `joycon_udp_bridge.py` — the latter is what Unity's
+input path actually depends on for the UDP-bridge fallback), offline
+replay/tuning (`ictus_detector.py`, `scoring.py`, `calibration.py`,
+`beat_schedule.py`, `session_log.py`), and the frozen `tests/` suite that
+validates that logic. `game.py` and `settings_menu.py` (the pygame render
+loop and its menu) are **not maintained as a product going forward** — do
+not add gameplay features there; fix only what capture/tuning work
+actually needs. Unity's C# logic (`UnitySwinger/Assets/Scripts/Logic/`) is
+the canonical port target and must be kept in sync with fixes made to the
+Python logic modules (see `reviews/Bug_Audit_2026-07-28.md` — Unity's
+`MeasureJudge.cs` had forked out of sync with Python's fixes before v4
+Phase A closed that gap).
 
 ## v1 scope
 
@@ -60,11 +66,21 @@ Section 6 — explicitly deferred items).
 - `Backup/` — manual backups
 - `media/` — art, audio, and other binary assets
 - `reviews/` — playtest notes, design reviews
-- `src/` — game source (`joycon_stream.py`, `metronome.py`,
-  `beat_schedule.py`, `ictus_detector.py`, `game.py`, `settings_menu.py`,
-  `session_log.py`)
-- `tests/` — validation scripts (e.g. offline ictus-detection replay/plots)
-- `tools/` — one-off/dev utilities
+- `src/` — capture/tuning tooling only, not a maintained product (see
+  "Platform roadmap" above): `joycon_stream.py`, `joycon_udp_bridge.py`,
+  `metronome.py`, `beat_schedule.py`, `ictus_detector.py`, `calibration.py`,
+  `scoring.py`, `session_log.py`, plus the retired `game.py`/
+  `settings_menu.py` pygame prototype (fix only what tooling needs)
+- `archive/` (under `src/`) — stale/contaminated captures kept for
+  provenance, not for re-deriving anything from
+- `tests/` — frozen Python validation suite (offline, no hardware/pygame
+  required except where noted) backing the logic modules above
+- `tools/` — one-off/dev utilities (e.g. `generate_golden_traces.py`,
+  which the Unity port's golden-trace parity tests consume)
+- `UnitySwinger/` — the Unity project; `Assets/Scripts/Logic/` is the
+  canonical, UnityEngine-free ported logic (keep in sync with `src/`'s
+  logic modules); `Assets/Scripts/Presentation/` and `Assets/Scripts/
+  Input/` are Unity-specific (rendering, UDP receive, calibration flow)
 
 ## Definition of "v0 prototype-ready"
 

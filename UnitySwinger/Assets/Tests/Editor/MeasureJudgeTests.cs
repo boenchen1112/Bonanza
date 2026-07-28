@@ -14,13 +14,21 @@ namespace Swinger.Logic.Tests
             var config = new BeatScheduleConfig(80.0);
             var schedule = new BeatSchedule(config, 0.0, numMeasures: 4);
             var judge = new MeasureJudge(schedule, calibrationOffsetS: 0.0, sharpnessRef: new SharpnessReference());
-            // tick() waits window_end + JudgeGraceS before judging -- ticks in
-            // this test need to clear that grace period too, not just window_end.
+            // windowEnd + JudgeGraceS is only the wait for the no-event
+            // (Miss) case since G1 -- a locked event judges immediately
+            // regardless of `now`. pastWindow still needs to clear the
+            // grace period for measure 1 (genuinely no swing submitted) to
+            // land on a Miss rather than returning null.
             double pastWindow = schedule.BeatInterval / 2.0 + MeasureJudge.DefaultJudgeGraceS + 0.001;
 
-            // Measure 0: dead-on-time, sharp swing -> expect Perfect
+            // Measure 0: dead-on-time, sharp swing -> expect Perfect.
+            // MaxDerivative set explicitly (T1, Bug_Audit_2026-07-28.md):
+            // leaving it at IctusEvent's 0.0 default made the shipped
+            // `evt.MaxDerivative != 0.0 ? ... : null` fall through to the
+            // legacy peak/rise-duration fallback metric, so this test
+            // validated a code path the real game never uses.
             double beat1M0 = schedule.MeasureBeat1Time(0);
-            judge.SubmitIctus(new IctusEvent(beat1M0 + 0.01, 800.0, 0.05));
+            judge.SubmitIctus(new IctusEvent(beat1M0 + 0.01, 25000.0, 0.05, 300000.0));
             var r0 = judge.Tick(beat1M0 + pastWindow);
             Assert.IsNotNull(r0);
             Assert.AreEqual("Perfect", r0.TimingTier);
@@ -38,7 +46,7 @@ namespace Swinger.Logic.Tests
             // Measure 2: late but inside window (300ms late, half-beat window
             // is 375ms) -> Miss (timing) but not out-of-window.
             double beat1M2 = schedule.MeasureBeat1Time(2);
-            judge.SubmitIctus(new IctusEvent(beat1M2 + 0.3, 800.0, 0.05));
+            judge.SubmitIctus(new IctusEvent(beat1M2 + 0.3, 25000.0, 0.05, 300000.0));
             var r2 = judge.Tick(beat1M2 + pastWindow);
             Assert.AreEqual("Miss", r2.TimingTier);
             Assert.IsNotNull(r2.IctusTime);
@@ -59,12 +67,14 @@ namespace Swinger.Logic.Tests
             {
                 double beat1 = schedule.MeasureBeat1Time(measureIndex);
                 // On-time, sharp swing every measure -> never an out.
-                judge.SubmitIctus(new IctusEvent(beat1 + 0.005, 25000.0, 0.05));
+                // MaxDerivative set explicitly (T1) so this exercises the
+                // shipped sharpness metric, not the fallback.
+                judge.SubmitIctus(new IctusEvent(beat1 + 0.005, 25000.0, 0.05, 300000.0));
                 // Beat-2 rebound wind-up ictus, well outside the scoring
                 // window -- this is what the old blocking-wait bug used to
                 // systematically lose (F4).
                 double beat2 = schedule.MeasureBeat1Time(measureIndex) + schedule.BeatInterval;
-                judge.SubmitIctus(new IctusEvent(beat2, 5000.0, 0.03));
+                judge.SubmitIctus(new IctusEvent(beat2, 5000.0, 0.03, 60000.0));
 
                 var record = judge.Tick(beat1 + schedule.BeatInterval * 2); // past both beats of the measure
                 Assert.IsNotNull(record);
