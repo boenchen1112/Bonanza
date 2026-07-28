@@ -187,5 +187,22 @@ namespace Swinger.Logic.Tests
             var actual = RunCase(samples);
             AssertMatchesGolden(actual, golden);
         }
+
+        // Phase 4: first real-hardware capture recorded through Unity's own
+        // input path (JoyConUdpReceiver -> CaptureLogger), not the Python
+        // joycon_stream.py capture path used by the two cases above. Confirms
+        // the port matches Python bit-for-bit even when the samples never
+        // touched Python at capture time, and that Unity's gyro units need no
+        // rescaling (idle ~15-27, swing peaks ~1.5k-28k, same order of
+        // magnitude as the pyjoycon-sourced captures).
+        [Test]
+        public void UnityCaptureCapture_MatchesPythonGolden()
+        {
+            var golden = LoadGolden("unity_capture");
+            var samples = LoadCaptureCsv("unity_capture.csv");
+            Assert.AreEqual(golden.input_sample_count, samples.Count, "sample count mismatch vs Python CSV load");
+            var actual = RunCase(samples);
+            AssertMatchesGolden(actual, golden);
+        }
     }
 }

@@ -106,7 +106,7 @@ def main():
     )
     cases.append(("synthetic_10_swings", synthetic))
 
-    for csv_name in ("swings_fresh.csv", "swings_counted.csv"):
+    for csv_name in ("swings_fresh.csv", "swings_counted.csv", "unity_capture.csv"):
         csv_path = os.path.join(SRC, csv_name)
         if os.path.exists(csv_path):
             samples = load_capture_csv(csv_path)

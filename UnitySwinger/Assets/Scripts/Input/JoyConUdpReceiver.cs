@@ -120,14 +120,15 @@ namespace Swinger.Input
 
                 double now = _clock.Elapsed.TotalSeconds;
                 WirePacket packet;
+                string json = Encoding.UTF8.GetString(data);
                 try
                 {
-                    string json = Encoding.UTF8.GetString(data);
                     packet = JsonUtility.FromJson<WirePacket>(json);
                 }
                 catch (Exception e)
                 {
-                    Debug.LogWarning($"[JoyConUdpReceiver] malformed packet: {e.Message}");
+                    string hex = BitConverter.ToString(data);
+                    Debug.LogWarning($"[JoyConUdpReceiver] malformed packet: {e.Message} len={data.Length} from={remote} hex={hex}");
                     continue;
                 }
 
@@ -137,17 +138,9 @@ namespace Swinger.Input
                 _lastGy = packet.gy;
                 _lastGz = packet.gz;
 
-                _queue.Enqueue(new GyroSample(now, packet.gx, packet.gy, packet.gz));
-            }
-        }
+                var sample = new GyroSample(now, packet.gx, packet.gy, packet.gz);
+                _queue.Enqueue(sample);
 
-        private void Update()
-        {
-            // Drain on the main thread; logging only, no game logic yet --
-            // this satisfies Phase 1's exit criterion (visible magnitude
-            // spikes on a deliberate swing) before any detector porting.
-            while (_queue.TryDequeue(out var sample))
-            {
                 if (logSpikes && sample.magnitude >= spikeLogThreshold)
                 {
                     Debug.Log($"[JoyConUdpReceiver] spike mag={sample.magnitude:F1} t={sample.timestamp:F3}");
