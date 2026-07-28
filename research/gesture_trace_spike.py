@@ -40,50 +40,124 @@ from ictus_detector import IctusDetector  # noqa: E402
 from joycon_stream import combined_magnitude  # noqa: E402
 
 
+def _quat_mult(q1: tuple, q2: tuple) -> tuple:
+    w1, x1, y1, z1 = q1
+    w2, x2, y2, z2 = q2
+    return (
+        w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2,
+        w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2,
+        w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2,
+        w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2,
+    )
+
+
+def _quat_from_angvel_deg(wx_deg: float, wy_deg: float, wz_deg: float, dt: float) -> tuple:
+    """Exponential-map (axis-angle) quaternion for one timestep's rotation,
+    from body-frame angular velocity in deg/s -- correctly composes 3D
+    rotations regardless of how far the device has tumbled, unlike summing
+    each axis as an independent scalar angle."""
+    wx, wy, wz = math.radians(wx_deg), math.radians(wy_deg), math.radians(wz_deg)
+    norm = math.sqrt(wx * wx + wy * wy + wz * wz)
+    if norm < 1e-12:
+        return (1.0, 0.0, 0.0, 0.0)
+    angle = norm * dt
+    half = angle / 2.0
+    s = math.sin(half) / norm
+    return (math.cos(half), wx * s, wy * s, wz * s)
+
+
+def _quat_to_pitch_yaw_deg(q: tuple) -> tuple[float, float]:
+    """Tait-Bryan pitch/yaw extraction (ZYX order) from a body-to-world
+    quaternion -- a physically meaningful 2D projection of orientation
+    (which way the device is pointing), unlike raw per-axis angle sums."""
+    w, x, y, z = q
+    pitch = math.asin(max(-1.0, min(1.0, 2.0 * (w * y - z * x))))
+    yaw = math.atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z))
+    return math.degrees(pitch), math.degrees(yaw)
+
+
 def integrate_orientation(
     samples: list[tuple[float, float, float, float]],
     reset_times: list[float],
     axis_x: str = "gx",
     axis_y: str = "gy",
+    method: str = "quat",
 ) -> list[tuple[float, float, float]]:
-    """Gyro-only orientation integration (Euler, no accelerometer fusion),
-    reset to (0, 0) at each time in reset_times (the detected-downbeat
-    reset Phase B's spike plan calls for, bounding drift to within one
-    measure instead of the whole session).
+    """Gyro-only orientation integration (no accelerometer fusion), reset
+    to (0, 0) at each time in reset_times (the detected-downbeat reset
+    Phase B's spike plan calls for, bounding drift to within one measure
+    instead of the whole session).
 
     samples: list of (t, gx, gy, gz) in the canonical clock domain, gyro in
-    deg/s (pyjoycon convention). axis_x/axis_y select which two gyro axes
-    become the 2D trace's x/y -- deliberately parameterized rather than
-    hardcoded: which two axes correspond to "pitch"/"yaw" for the real
-    conducting grip is exactly the kind of thing Phase B needs real data to
-    confirm, not something to assume here (Build Plan v4 Phase B, "roll/
-    pitch depending on grip").
+    deg/s (pyjoycon convention).
 
-    Returns (t, angle_x_deg, angle_y_deg) triples -- the live trace.
+    method="quat" (default): proper 3D rotation composition via quaternion
+    exponential-map integration of the full (gx,gy,gz) vector, projected to
+    a 2D (pitch, yaw) trace. Fixed after a real capture (2026-07-28) showed
+    tangled, self-crossing loops that didn't match the conducted pattern's
+    actual shape -- the previous method (below) summed two raw gyro axes
+    as independent scalars, which only approximates true orientation for
+    small rotations; a real conducting stroke rotates the hand through a
+    large enough arc that this breaks down and produces exactly that kind
+    of artifact, layered on top of whatever the real gesture looks like.
+
+    method="naive": the original per-axis-sum approach (axis_x/axis_y
+    select which two raw gyro axes to sum independently). Kept only for
+    comparison against "quat" on the same capture, not recommended.
+
+    Returns (t, x_deg, y_deg) triples -- the live trace.
     """
-    axis_idx = {"gx": 1, "gy": 2, "gz": 3}
-    ix, iy = axis_idx[axis_x], axis_idx[axis_y]
+    if method == "naive":
+        axis_idx = {"gx": 1, "gy": 2, "gz": 3}
+        ix, iy = axis_idx[axis_x], axis_idx[axis_y]
+
+        reset_times_sorted = sorted(reset_times)
+        reset_ptr = 0
+        angle_x = angle_y = 0.0
+        prev_t = None
+        trace = []
+
+        for row in samples:
+            t = row[0]
+            while reset_ptr < len(reset_times_sorted) and t >= reset_times_sorted[reset_ptr]:
+                angle_x = angle_y = 0.0
+                prev_t = t
+                reset_ptr += 1
+
+            if prev_t is not None:
+                dt = t - prev_t
+                if dt > 0:
+                    angle_x += row[ix] * dt
+                    angle_y += row[iy] * dt
+            prev_t = t
+            trace.append((t, angle_x, angle_y))
+
+        return trace
+
+    if method != "quat":
+        raise ValueError(f"unknown method: {method}")
 
     reset_times_sorted = sorted(reset_times)
     reset_ptr = 0
-    angle_x = angle_y = 0.0
+    q = (1.0, 0.0, 0.0, 0.0)
     prev_t = None
     trace = []
 
     for row in samples:
-        t = row[0]
+        t, gx, gy, gz = row
         while reset_ptr < len(reset_times_sorted) and t >= reset_times_sorted[reset_ptr]:
-            angle_x = angle_y = 0.0
-            prev_t = t  # don't integrate the gap that straddles the reset
+            q = (1.0, 0.0, 0.0, 0.0)
+            prev_t = t
             reset_ptr += 1
 
         if prev_t is not None:
             dt = t - prev_t
             if dt > 0:
-                angle_x += row[ix] * dt
-                angle_y += row[iy] * dt
+                dq = _quat_from_angvel_deg(gx, gy, gz, dt)
+                q = _quat_mult(q, dq)
         prev_t = t
-        trace.append((t, angle_x, angle_y))
+        pitch, yaw = _quat_to_pitch_yaw_deg(q)
+        trace.append((t, pitch, yaw))
 
     return trace
 
@@ -139,10 +213,11 @@ def score_repetition(
     beats_per_measure: int,
     axis_x: str = "gx",
     axis_y: str = "gy",
+    method: str = "quat",
 ) -> tuple[float, list[tuple[float, float]]]:
     """Integrates one measure's worth of samples and scores it against the
     canonical pattern for beats_per_measure. Returns (score, trace_xy)."""
-    trace = integrate_orientation(samples, reset_times, axis_x, axis_y)
+    trace = integrate_orientation(samples, reset_times, axis_x, axis_y, method=method)
     trace_xy = [(x, y) for t, x, y in trace if measure_start <= t <= measure_end]
     if len(trace_xy) < 2:
         return float("nan"), trace_xy
@@ -173,6 +248,7 @@ def score_all_repetitions(
     beats_per_measure: int,
     axis_x: str = "gx",
     axis_y: str = "gy",
+    method: str = "quat",
 ) -> list[tuple[float, list[tuple[float, float]]]]:
     """Splits a capture into one repetition per beats_per_measure
     consecutive downbeats and scores each independently -- Phase B's "per
@@ -185,7 +261,7 @@ def score_all_repetitions(
         score, trace_xy = score_repetition(
             samples, measure_start=start, measure_end=end,
             reset_times=downbeats, beats_per_measure=beats_per_measure,
-            axis_x=axis_x, axis_y=axis_y,
+            axis_x=axis_x, axis_y=axis_y, method=method,
         )
         results.append((score, trace_xy))
     return results
@@ -230,11 +306,17 @@ def _load_capture_csv(path: str) -> list[tuple[float, float, float, float]]:
     return rows
 
 
-def _self_test() -> None:
-    """Synthetic sanity check ONLY -- proves the integration/scoring
-    arithmetic is internally consistent, not that this representation
-    works on a real conducting gesture. See module docstring."""
-    print("Running synthetic self-test (NOT a Phase B verdict -- see module docstring)...")
+def _self_test_naive() -> None:
+    """Synthetic sanity check for method="naive" ONLY -- proves the
+    integration/scoring arithmetic is internally consistent for that
+    method, not that this representation works on a real conducting
+    gesture. See module docstring. Does NOT validate method="quat" -- see
+    _self_test_quat() below, which uses a construction that actually makes
+    physical sense for quaternion integration (this one doesn't: it feeds
+    raw gx/gy directly as if they map 1:1 to x/y trace coordinates, which
+    is method="naive"'s semantics specifically, not "quat"'s pitch/yaw
+    extraction)."""
+    print("Running synthetic self-test [naive] (NOT a Phase B verdict -- see module docstring)...")
 
     reference = CANONICAL_PATTERNS[4].points
     # Build a synthetic gyro trace whose integral traces the 4/4 reference
@@ -255,15 +337,48 @@ def _self_test() -> None:
             t += dt
 
     score, trace_xy = score_repetition(
-        samples, measure_start=0.0, measure_end=t, reset_times=[0.0], beats_per_measure=4
+        samples, measure_start=0.0, measure_end=t, reset_times=[0.0], beats_per_measure=4, method="naive"
     )
     print(f"Synthetic near-perfect trace shape_distance = {score:.4f} (expect close to 0)")
     assert score < 0.05, f"self-test failed: expected near-zero distance, got {score}"
 
     out_dir = os.path.join(os.path.dirname(__file__), "self_test_plots")
     os.makedirs(out_dir, exist_ok=True)
-    plot_repetition(trace_xy, reference, score, os.path.join(out_dir, "synthetic_4beat.png"))
-    print(f"PASS. Plot written to {out_dir}/synthetic_4beat.png")
+    plot_repetition(trace_xy, reference, score, os.path.join(out_dir, "synthetic_4beat_naive.png"))
+    print(f"PASS. Plot written to {out_dir}/synthetic_4beat_naive.png")
+
+
+def _self_test_quat() -> None:
+    """Correctness check for method="quat"'s quaternion integration,
+    independent of the pattern-matching test above (whose synthetic
+    construction only makes sense for "naive"'s different semantics).
+    Applies a known constant angular velocity purely about the body Y axis
+    (a pure "pitch" rotation) for a known duration, and checks that the
+    recovered pitch matches the expected angle while yaw stays ~0 --
+    confirms the quaternion math and pitch/yaw extraction are both
+    correct, not just "some numbers came out"."""
+    print("Running synthetic self-test [quat] (NOT a Phase B verdict -- see module docstring)...")
+
+    rate_deg_s = 90.0  # constant rotation rate about body Y
+    duration_s = 1.0  # -> 90 degrees total rotation
+    dt = 0.001
+    samples = []
+    t = 0.0
+    while t < duration_s:
+        samples.append((t, 0.0, rate_deg_s, 0.0))
+        t += dt
+
+    trace = integrate_orientation(samples, reset_times=[0.0], method="quat")
+    final_pitch, final_yaw = trace[-1][1], trace[-1][2]
+    print(f"After {duration_s}s at {rate_deg_s} deg/s about Y: pitch={final_pitch:.2f} (expect ~90), yaw={final_yaw:.2f} (expect ~0)")
+    assert abs(final_pitch - 90.0) < 1.0, f"quat self-test failed: pitch={final_pitch}, expected ~90"
+    assert abs(final_yaw) < 1.0, f"quat self-test failed: yaw={final_yaw}, expected ~0"
+    print("PASS.")
+
+
+def _self_test() -> None:
+    _self_test_naive()
+    _self_test_quat()
 
 
 def main():
@@ -271,8 +386,11 @@ def main():
     parser.add_argument("--capture", type=str, default=None, help="CSV path (joycon_stream.py format)")
     parser.add_argument("--downbeats", type=str, default=None, help="Comma-separated downbeat reset timestamps")
     parser.add_argument("--signature", type=int, default=4, choices=[2, 3, 4])
-    parser.add_argument("--axis-x", type=str, default="gx")
-    parser.add_argument("--axis-y", type=str, default="gy")
+    parser.add_argument("--axis-x", type=str, default="gx", help="Only used with --method naive")
+    parser.add_argument("--axis-y", type=str, default="gy", help="Only used with --method naive")
+    parser.add_argument("--method", type=str, default="quat", choices=["quat", "naive"],
+                         help="quat (default): proper 3D rotation composition. naive: sum two raw "
+                              "gyro axes independently -- kept only for comparison, not recommended.")
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args()
 
@@ -290,7 +408,7 @@ def main():
     reference = CANONICAL_PATTERNS[args.signature].points
     base_path = os.path.splitext(args.capture)[0]
 
-    repetitions = score_all_repetitions(samples, downbeats, args.signature, args.axis_x, args.axis_y)
+    repetitions = score_all_repetitions(samples, downbeats, args.signature, args.axis_x, args.axis_y, method=args.method)
     if not repetitions:
         print(f"Not enough downbeats ({len(downbeats)}) for even one {args.signature}-beat repetition.")
         return
