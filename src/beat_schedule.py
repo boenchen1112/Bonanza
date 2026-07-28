@@ -13,7 +13,11 @@ from dataclasses import dataclass
 @dataclass(frozen=True)
 class BeatScheduleConfig:
     bpm: float = 80.0
-    beats_per_measure: int = 2  # 2/4 time signature, v1 scope
+    # Defaults to 2/4 (v1 scope), but BeatSchedule below has no 2/4-specific
+    # logic -- is_downbeat()/measure_beat1_time() are already generic on
+    # this value, so 3 (3/4) or 4 (4/4) work without further changes
+    # (Build Plan v4 Phase C: confirmed by reading, not re-derived).
+    beats_per_measure: int = 2
 
 
 class BeatSchedule:

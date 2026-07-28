@@ -10,7 +10,11 @@ namespace Swinger.Logic
     public sealed class BeatScheduleConfig
     {
         public double Bpm { get; }
-        public int BeatsPerMeasure { get; } // 2/4 time signature, v1 scope
+        // Defaults to 2/4 (v1 scope), but BeatSchedule below has no
+        // 2/4-specific logic -- IsDownbeat()/MeasureBeat1Time() are
+        // already generic on this value, so 3 (3/4) or 4 (4/4) work
+        // without further changes (Build Plan v4 Phase C).
+        public int BeatsPerMeasure { get; }
 
         public BeatScheduleConfig(double bpm = 80.0, int beatsPerMeasure = 2)
         {
