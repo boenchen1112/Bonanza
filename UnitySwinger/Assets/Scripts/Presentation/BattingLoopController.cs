@@ -207,10 +207,48 @@ namespace Swinger.Presentation
             _popupUntil = _clock.CanonicalNow() + popupDurationSeconds;
         }
 
+        // Persists the round's data on the way out (Unity-side H3:
+        // SessionLog.ExportJson()/ExportCsv() already existed but nothing
+        // ever called them, the exact same bug Python's H3 fix addressed --
+        // ported the fix, not just the methods). Written under
+        // Application.persistentDataPath/session_logs/ alongside
+        // calibration.json's own persistence location.
+        private void ExportSessionLog()
+        {
+            if (_sessionLog == null || (_sessionLog.Swings.Count == 0 && _sessionLog.WindupSamples.Count == 0))
+            {
+                return;
+            }
+            string outDir = System.IO.Path.Combine(Application.persistentDataPath, "session_logs");
+            System.IO.Directory.CreateDirectory(outDir);
+            string stamp = System.DateTime.Now.ToString("yyyyMMdd-HHmmss");
+            _sessionLog.ExportJson(System.IO.Path.Combine(outDir, $"session_{stamp}.json"));
+            _sessionLog.ExportCsv(System.IO.Path.Combine(outDir, $"session_{stamp}_swings.csv"));
+        }
+
+        // Covers the "quit/stop mid-round" path too, not just a normal
+        // round ending in ShowSummary() -- mirrors Python's QUIT-path
+        // export (H3/J2, Bug_Audit_2026-07-28.md: a crash/quit losing the
+        // whole SessionLog was exactly the symptom that fix closed).
+        // OnApplicationQuit covers a real built player quitting;
+        // OnDisable additionally covers stopping Play Mode in the Editor
+        // (which does NOT raise OnApplicationQuit) -- the actual
+        // playtesting workflow this project uses.
+        private void OnApplicationQuit()
+        {
+            ExportSessionLog();
+        }
+
+        private void OnDisable()
+        {
+            ExportSessionLog();
+        }
+
         private void ShowSummary()
         {
             if (_summaryShown) return;
             _summaryShown = true;
+            ExportSessionLog();
 
             if (summaryPanel != null) summaryPanel.SetActive(true);
             if (judgmentText != null) judgmentText.text = "";
