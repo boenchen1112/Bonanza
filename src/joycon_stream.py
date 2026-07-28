@@ -62,21 +62,62 @@ class JoyConStream:
         gyro = status["gyro"]
         return t, float(gyro["x"]), float(gyro["y"]), float(gyro["z"])
 
-    def stream(self, duration_s: float, poll_interval_s: float = POLL_INTERVAL_S):
-        """Yields (timestamp, gx, gy, gz, magnitude) for duration_s seconds.
+    def close(self) -> None:
+        """Releases the underlying HID connection (J1, Bug_Audit_2026-07-28.md).
+        Without this, opening a second JoyConStream on the same physical
+        device (e.g. Settings -> Calibrate after a round) held two
+        concurrent HID handles -- a classic source of silent read failures
+        on Windows HID. Call once; the wrapped device has no is-open check.
 
-        Skips consecutive duplicate reads (the device's internal buffer
-        returns the same cached reading across multiple polls at its native
-        ~66Hz update rate) so downstream dedup counts and event timing don't
-        depend on how fast the caller happens to poll (A5/F3)."""
+        Swallows disconnect failures on purpose: callers invoke this from a
+        `finally` block, often right after stream() already reported the
+        device as lost (J2). Letting disconnect_device() raise there would
+        propagate out of the finally and skip whatever cleanup follows
+        (session log export, summary draw) -- reinstating the exact
+        "crash mid-round loses the SessionLog" symptom J2 fixed, just moved
+        one level up."""
+        try:
+            self._joycon.disconnect_device()
+        except Exception as e:
+            print(f"[JoyConStream] close() failed (device likely already gone): {e}")
+
+    def __enter__(self) -> "JoyConStream":
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        self.close()
+
+    def stream(self, duration_s: float, poll_interval_s: float = POLL_INTERVAL_S):
+        """Yields (timestamp, gx, gy, gz, magnitude, is_new) once per
+        poll_interval_s for duration_s seconds, regardless of whether the
+        device returned new data (J2, Bug_Audit_2026-07-28.md).
+
+        is_new distinguishes a genuinely fresh reading from a repeated
+        cached read at the device's native ~66Hz update rate; callers
+        should feed only is_new samples to IctusDetector.process_sample()
+        (duplicates carry no new information and skew dt-based thresholds,
+        A5/F3), but should still treat every yielded row as a loop tick.
+        Previously, skipping duplicate rows entirely skipped the tick too:
+        a still controller or a Bluetooth hiccup silently stalled the whole
+        caller loop -- no judging, no QUIT handling -- until duration_s
+        expired.
+
+        On a mid-stream device loss (unplugged / BT drop), ends the
+        generator cleanly instead of letting the exception escape and kill
+        the process (and the caller's whole SessionLog with it)."""
         end_time = time.perf_counter() + duration_s
         last_reading: tuple[float, float, float] | None = None
         while time.perf_counter() < end_time:
-            t, gx, gy, gz = self.read_sample()
+            try:
+                t, gx, gy, gz = self.read_sample()
+            except OSError as e:
+                print(f"[JoyConStream] device lost, ending stream: {e}")
+                return
             reading = (gx, gy, gz)
-            if reading != last_reading:
+            is_new = reading != last_reading
+            if is_new:
                 last_reading = reading
-                yield t, gx, gy, gz, combined_magnitude(gx, gy, gz)
+            yield t, gx, gy, gz, combined_magnitude(gx, gy, gz), is_new
             if poll_interval_s > 0:
                 time.sleep(poll_interval_s)
 
@@ -105,9 +146,13 @@ def main():
 
     rows = []
     print(f"Logging {args.seconds}s of gyro data to {args.out} ... swing the Joy-Con now.")
-    for t, gx, gy, gz, mag in stream.stream(args.seconds):
+    for t, gx, gy, gz, mag, is_new in stream.stream(args.seconds):
+        if not is_new:
+            continue
         rows.append((t, gx, gy, gz, mag))
         print(f"t={t:.4f} gx={gx:.2f} gy={gy:.2f} gz={gz:.2f} mag={mag:.2f}")
+
+    stream.close()
 
     with open(args.out, "w", newline="") as f:
         writer = csv.writer(f)

@@ -92,7 +92,12 @@ class Metronome:
             if remaining > COARSE_SLEEP_MARGIN_S:
                 time.sleep(remaining - COARSE_SLEEP_MARGIN_S)
             else:
-                pass  # spin for the final stretch
+                # Spin for the final stretch, but yield the timeslice each
+                # pass (H8, Bug_Audit_2026-07-28.md) -- a bare `pass` here is
+                # a tight no-yield spin that can starve the sampling loop on
+                # a single-core or heavily loaded machine; sleep(0) costs
+                # nothing and removes that risk.
+                time.sleep(0)
 
     def drift_report(self) -> dict:
         """Delta between expected and actual play() time per beat. Measures

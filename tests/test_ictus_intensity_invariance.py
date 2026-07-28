@@ -11,6 +11,7 @@ should land at the same offset-from-rise-start for all three.
 """
 
 import os
+import random
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
@@ -19,27 +20,41 @@ from ictus_detector import IctusDetector
 
 
 def build_single_swing(sample_rate_hz, peak_mag, rise_s, fall_s, baseline=20.0,
-                        pre_idle_s=0.3, post_idle_s=0.3):
+                        pre_idle_s=0.3, post_idle_s=0.3, dt_jitter_frac=0.2, rng_seed=1234):
+    """dt_jitter_frac perturbs each inter-sample interval by up to +-20% of
+    nominal (T1, reviews/Bug_Audit_2026-07-28.md): real captures measured a
+    ~1.6x spread between p05 and p95 dt (swings_fresh.csv: 10.82/17.27ms;
+    swings_counted.csv: 10.93/17.27ms), and max_derivative -- the shipped
+    sharpness metric -- is a max-over-per-sample-rate, so it's maximally
+    sensitive to exactly this jitter (S2). The previous perfectly uniform
+    dt was a property real hardware never has, so a clean pass here wasn't
+    evidence the real signal is invariant. rng_seed keeps this
+    deterministic across runs."""
+    rng = random.Random(rng_seed)
     dt = 1.0 / sample_rate_hz
+
+    def next_dt():
+        return dt * (1.0 + rng.uniform(-dt_jitter_frac, dt_jitter_frac))
+
     samples = []
     t = 0.0
     while t < pre_idle_s:
         samples.append((t, baseline))
-        t += dt
+        t += next_dt()
     rise_start = t
     while t < rise_start + rise_s:
         frac = (t - rise_start) / rise_s
         samples.append((t, baseline + frac * (peak_mag - baseline)))
-        t += dt
+        t += next_dt()
     fall_start = t
     while t < fall_start + fall_s:
         frac = (t - fall_start) / fall_s
         samples.append((t, peak_mag - frac * (peak_mag - baseline)))
-        t += dt
+        t += next_dt()
     post_idle_end = t + post_idle_s
     while t < post_idle_end:
         samples.append((t, baseline))
-        t += dt
+        t += next_dt()
     return samples, rise_start
 
 
@@ -50,8 +65,12 @@ def main():
     intensities = {"soft": 300.0, "medium": 550.0, "hard": 800.0}
 
     offsets_from_rise_start = {}
-    for label, peak in intensities.items():
-        samples, rise_start = build_single_swing(sample_rate, peak, rise_s, fall_s)
+    for idx, (label, peak) in enumerate(intensities.items()):
+        # Distinct seed per intensity -- a shared seed gives every intensity
+        # the byte-identical dt sequence, which structurally guarantees
+        # zero spread regardless of whether the detector is actually
+        # jitter-robust (would have made the earlier "fix" a no-op).
+        samples, rise_start = build_single_swing(sample_rate, peak, rise_s, fall_s, rng_seed=1234 + idx)
         detector = IctusDetector()
         events = []
         for t, mag in samples:

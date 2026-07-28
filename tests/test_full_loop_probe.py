@@ -33,12 +33,18 @@ def main():
     measure_index = 0
     while measure_index < config.max_measures:
         beat1 = schedule.measure_beat1_time(measure_index)
-        # On-time, sharp swing every measure -> never an out.
-        judge.submit_ictus(IctusEvent(timestamp=beat1 + 0.005, peak_magnitude=25000.0, rise_duration=0.05))
+        # On-time, sharp swing every measure -> never an out. max_derivative
+        # set explicitly (T1, reviews/Bug_Audit_2026-07-28.md) so this
+        # exercises the shipped sharpness metric, not the fallback.
+        judge.submit_ictus(
+            IctusEvent(timestamp=beat1 + 0.005, peak_magnitude=25000.0, rise_duration=0.05, max_derivative=300000.0)
+        )
         # Beat-2 rebound wind-up ictus, well outside the scoring window --
         # this is what F4's blocking wait used to systematically lose.
         beat2 = schedule.measure_beat1_time(measure_index) + schedule.beat_interval
-        judge.submit_ictus(IctusEvent(timestamp=beat2, peak_magnitude=5000.0, rise_duration=0.03))
+        judge.submit_ictus(
+            IctusEvent(timestamp=beat2, peak_magnitude=5000.0, rise_duration=0.03, max_derivative=60000.0)
+        )
 
         record = judge.tick(beat1 + schedule.beat_interval * 2)  # past both beats of the measure
         assert record is not None

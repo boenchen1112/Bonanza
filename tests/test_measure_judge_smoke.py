@@ -20,15 +20,23 @@ def main():
     start = 0.0
     schedule = BeatSchedule(config, start, num_measures=4)
     judge = MeasureJudge(schedule, calibration_offset_s=0.0, sharpness_ref=SharpnessReference(values=[]))
-    # tick() now waits window_end + JUDGE_GRACE_S before judging (found via
-    # real-hardware playtest: the detector can legitimately take up to
-    # ~150-200ms after the true ictus to deliver the event) -- ticks in
-    # this test need to clear that grace period too, not just window_end.
+    # window_end + JUDGE_GRACE_S is only the wait for the no-event (Miss)
+    # case since G1 (Bug_Audit_2026-07-28.md) -- a locked event judges
+    # immediately regardless of `now`. past_window still needs to clear the
+    # grace period for measure 1 (genuinely no swing submitted) to land on
+    # a Miss rather than returning None.
     past_window = schedule.beat_interval / 2.0 + JUDGE_GRACE_S + 0.001
 
     # Measure 0: dead-on-time, sharp swing -> expect Perfect/Home Run
+    # max_derivative set explicitly (T1, reviews/Bug_Audit_2026-07-28.md):
+    # leaving it at IctusEvent's 0.0 default made game.py's
+    # `event.max_derivative or None` fall through to the legacy
+    # peak/rise_duration fallback metric, so this test validated a code
+    # path the shipped game never uses.
     beat1_m0 = schedule.measure_beat1_time(0)
-    judge.submit_ictus(IctusEvent(timestamp=beat1_m0 + 0.01, peak_magnitude=800.0, rise_duration=0.05))
+    judge.submit_ictus(
+        IctusEvent(timestamp=beat1_m0 + 0.01, peak_magnitude=25000.0, rise_duration=0.05, max_derivative=300000.0)
+    )
     r0 = judge.tick(beat1_m0 + past_window)
     assert r0 is not None and r0.timing_tier == "Perfect", r0
 
@@ -41,7 +49,9 @@ def main():
 
     # Measure 2: late but inside window (300ms late, half-beat window is 375ms) -> Miss (timing) but not out-of-window
     beat1_m2 = schedule.measure_beat1_time(2)
-    judge.submit_ictus(IctusEvent(timestamp=beat1_m2 + 0.3, peak_magnitude=800.0, rise_duration=0.05))
+    judge.submit_ictus(
+        IctusEvent(timestamp=beat1_m2 + 0.3, peak_magnitude=25000.0, rise_duration=0.05, max_derivative=300000.0)
+    )
     r2 = judge.tick(beat1_m2 + past_window)
     assert r2.timing_tier == "Miss" and r2.ictus_time is not None, r2
 

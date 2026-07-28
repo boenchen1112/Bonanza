@@ -6,12 +6,14 @@ so it can be driven by synthetic events for offline verification without
 hardware or a display -- see tests/test_measure_judge_smoke.py.
 """
 
+import os
 import time
 from dataclasses import dataclass, field
 
 import pygame
 
 import calibration
+import ictus_detector
 from beat_schedule import BeatSchedule, BeatScheduleConfig
 from ictus_detector import IctusDetector, IctusEvent
 from metronome import Metronome
@@ -20,16 +22,26 @@ from session_log import SessionLog, SwingRecord, WindupSample
 
 MISSES_TO_OUT = 3
 SCREEN_SIZE = (800, 480)
+# G3 (Bug_Audit_2026-07-28.md): draw on elapsed wall-clock time, not a
+# modulo on sample count -- at the device's real ~66Hz rate, every-5th-
+# sample was ~13fps (75ms/frame), so popups could appear up to 75ms after
+# they were decided, on top of any judging latency.
+RENDER_INTERVAL_S = 1.0 / 60.0
 
-# Grace period tick() waits past a measure's window_end before judging.
-# ictus_detector's POST_DROP_SEEK_MIN can legitimately take up to
-# MIN_SEEK_TIMEOUT_S (150ms) plus smoothing lag (~20ms at typical rates)
-# after the true local min before it finalizes and returns the IctusEvent
-# -- without this margin, a genuinely in-window swing near the later half
-# of the window can get judged (and misfiled as the *next* measure's
-# windup sample once it finally arrives) before its own event is even
-# delivered. Found via real-hardware playtest; see primer.md.
-JUDGE_GRACE_S = 0.25
+# Grace period tick() waits past a measure's window_end before ruling a Miss
+# -- only reached when no ictus locked in-window at all; a locked event is
+# now judged immediately (G1, Bug_Audit_2026-07-28.md), so this only bounds
+# how long the "nothing arrived" case waits to be sure. Derived from the
+# detector's own worst-case delivery lag (G2) instead of a flat, unscaled
+# 250ms guess: ictus_detector's POST_DROP_SEEK_MIN can legitimately take up
+# to MIN_SEEK_TIMEOUT_S after the true local min to finalize, plus
+# SMOOTHING_WINDOW's inherent lag, plus one more sample of scheduling slop.
+# Device rate measured at ~66Hz in real captures (F3,
+# reviews/Bug_Audit_2026-07-17.md).
+MEASURED_DEVICE_RATE_HZ = 66.0
+_SMOOTHING_LAG_S = (ictus_detector.SMOOTHING_WINDOW - 1) / 2 / MEASURED_DEVICE_RATE_HZ
+_ONE_SAMPLE_MARGIN_S = 1.0 / MEASURED_DEVICE_RATE_HZ
+JUDGE_GRACE_S = ictus_detector.MIN_SEEK_TIMEOUT_S + _SMOOTHING_LAG_S + _ONE_SAMPLE_MARGIN_S
 
 
 @dataclass
@@ -57,7 +69,22 @@ class MeasureJudge:
         self.calibration_offset_s = calibration_offset_s
         self.sharpness_ref = sharpness_ref
         self.half_beat_window_s = schedule.beat_interval / 2.0
-        self.judge_grace_s = judge_grace_s
+        # Clamp to half_beat_window_s (G2, Bug_Audit_2026-07-28.md): an
+        # unclamped grace larger than the inter-window gap lets it extend
+        # past the *next* measure's window opening, and submit_ictus()
+        # always tests against the current measure_index's window (which
+        # hasn't advanced yet) -- genuinely in-window swings for the next
+        # measure would get filed as wind-up samples and lost, producing
+        # phantom Misses. Only reachable at high BPM with the default grace.
+        if judge_grace_s > self.half_beat_window_s:
+            import warnings
+
+            warnings.warn(
+                f"judge_grace_s ({judge_grace_s * 1000:.0f}ms) exceeds half_beat_window_s "
+                f"({self.half_beat_window_s * 1000:.0f}ms) at this tempo; clamping. "
+                "Grace can no longer fully cover the detector's worst-case delivery lag."
+            )
+        self.judge_grace_s = min(judge_grace_s, self.half_beat_window_s)
         self.measure_index = 0
         self._locked_event: IctusEvent | None = None
         self.finished_measures: list[SwingRecord] = []
@@ -80,10 +107,21 @@ class MeasureJudge:
             self.windup_samples.append(WindupSample(self.measure_index, event.timestamp))
 
     def tick(self, now: float) -> SwingRecord | None:
-        """Call periodically with the current time. Returns a SwingRecord
-        once the current measure's window has closed AND judge_grace_s has
-        passed -- the grace period gives the detector pipeline time to
-        actually deliver an in-window event before judging locks it out."""
+        """Call periodically with the current time. Judges immediately once
+        an event has locked in-window (G1, Bug_Audit_2026-07-28.md):
+        submit_ictus() locks only the *first* in-window event and ignores
+        everything after, so the outcome is already fully determined the
+        moment _locked_event is set -- waiting for window_end + grace after
+        a lock only delays the result, it can't change it. That wait is
+        still needed for the no-event case: only there does the grace
+        period matter, to give the detector pipeline time to actually
+        deliver an in-window event before ruling a Miss."""
+        if self._locked_event is not None:
+            record = self._judge()
+            self.measure_index += 1
+            self._locked_event = None
+            return record
+
         _, window_end = self._window_bounds(self.measure_index)
         if now < window_end + self.judge_grace_s:
             return None
@@ -194,7 +232,29 @@ def _joycon_stream_factory():
     return JoyConStream()
 
 
-def run_game() -> SessionLog:
+def _fmt(x: float | None) -> str:
+    return f"{x:8.1f}" if x is not None else "    None"
+
+
+def _export_session_log(session_log: SessionLog) -> None:
+    """Persist the round's data on the way out (H3, Bug_Audit_2026-07-28.md).
+    export_csv()/export_json() existed but were never called, so every
+    round's data -- including the evidence a latency investigation needs --
+    died with the process, even on the QUIT path."""
+    if not session_log.swings and not session_log.windup_samples:
+        return
+    out_dir = os.path.join(os.path.dirname(__file__), "..", "session_logs")
+    os.makedirs(out_dir, exist_ok=True)
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    session_log.export_json(os.path.join(out_dir, f"session_{stamp}.json"))
+    session_log.export_csv(os.path.join(out_dir, f"session_{stamp}_swings.csv"))
+
+
+def run_game(log_swings: bool = True) -> SessionLog:
+    """log_swings prints per-swing scoring-vs-latency diagnostics live (not
+    just at end-of-round) -- added for Swinger_Build_Plan_v3.md Phase 0's
+    latency investigation. Defaults on since `python game.py` is currently
+    how that investigation gets run."""
     from metronome import init_mixer
 
     init_mixer()
@@ -232,55 +292,99 @@ def run_game() -> SessionLog:
     popup_until = 0.0
     game_over = False
 
-    frame_counter = 0
-    for t, gx, gy, gz, mag in joycon_stream.stream(duration_s=config.max_measures * schedule.beat_interval * 2):
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                metronome.stop()
-                pygame.quit()
-                return session_log
+    last_draw_time = 0.0
+    try:
+        # stream() now yields once per poll interval regardless of whether
+        # the device returned new data (J2, Bug_Audit_2026-07-28.md): a
+        # still controller or a Bluetooth hiccup used to yield nothing at
+        # all, so judge.tick()/pygame.event.get()/QUIT handling all silently
+        # stalled until the whole stream duration expired. is_new tells new
+        # samples (fed to the detector) apart from repeated cached reads
+        # (loop-tick only, detector untouched).
+        for t, gx, gy, gz, mag, is_new in joycon_stream.stream(
+            duration_s=config.max_measures * schedule.beat_interval * 2
+        ):
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    metronome.stop()
+                    _export_session_log(session_log)
+                    pygame.quit()
+                    return session_log
 
-        ev = detector.process_sample(t, mag)
-        if ev is not None:
-            judge.submit_ictus(ev)
+            if is_new:
+                ev = detector.process_sample(t, mag)
+                if ev is not None:
+                    judge.submit_ictus(ev)
+                    if log_swings:
+                        # Detector-pipeline lag: how long after the true ictus
+                        # (ev.timestamp, the local-min sample) did process_sample()
+                        # actually hand back the event, in real wall-clock time (t
+                        # is the current sample's read time, i.e. "now" here).
+                        # Bounded by SMOOTHING_WINDOW lag + MIN_SEEK_TIMEOUT_S.
+                        print(f"    [detector] event t={ev.timestamp:.3f} delivered_lag_ms={(t - ev.timestamp) * 1000:.1f}")
 
-        now = time.perf_counter()
-        # Never call judge.tick() once max_measures is reached -- the
-        # schedule only holds max_measures*beats_per_measure timestamps, so
-        # judging one measure past that indexes off the end (A4).
-        if not game_over and judge.measure_index < config.max_measures:
-            record = judge.tick(now)
-            if record is not None:
-                session_log.swings.append(record)
-                popup_record = record
-                popup_until = now + POPUP_DURATION_S
-                if judge.is_out(config.misses_to_out):
-                    game_over = True
-        elif not game_over:
-            game_over = True
+            now = time.perf_counter()
+            # Never call judge.tick() once max_measures is reached -- the
+            # schedule only holds max_measures*beats_per_measure timestamps, so
+            # judging one measure past that indexes off the end (A4).
+            if not game_over and judge.measure_index < config.max_measures:
+                record = judge.tick(now)
+                if record is not None:
+                    if log_swings:
+                        # Two separate numbers on purpose (Phase 0,
+                        # Swinger_Build_Plan_v3.md): corrected_offset_ms is
+                        # SCORING correctness (was the swing actually on time,
+                        # per calibration); popup_lag_ms is FELT latency (real
+                        # wall-clock delay from the swing to this judgment
+                        # being available at all, including judge_grace_s).
+                        # A "too laggy" complaint could be either -- these
+                        # numbers tell them apart instead of guessing.
+                        popup_lag_ms = (now - record.ictus_time) * 1000 if record.ictus_time is not None else None
+                        print(
+                            f"[measure {record.measure_index}] tier={record.timing_tier:8s} hit={record.hit_tier:10s} "
+                            f"corrected_offset_ms={_fmt(record.corrected_offset_ms)} "
+                            f"popup_lag_ms={_fmt(popup_lag_ms)} "
+                            f"judge_grace_s={judge.judge_grace_s}"
+                        )
+                    session_log.swings.append(record)
+                    popup_record = record
+                    popup_until = now + POPUP_DURATION_S
+                    if judge.is_out(config.misses_to_out):
+                        game_over = True
+            elif not game_over:
+                game_over = True
 
-        for w in judge.windup_samples:
-            session_log.windup_samples.append(w)
-        judge.windup_samples.clear()
+            for w in judge.windup_samples:
+                session_log.windup_samples.append(w)
+            judge.windup_samples.clear()
 
-        frame_counter += 1
-        if frame_counter % 5 == 0:
-            # Popup rendering is a "visible until" flag inside the normal
-            # sampling loop rather than a blocking pygame.time.wait(), so
-            # samples (and QUIT events) keep flowing while it's shown --
-            # otherwise the ~600ms freeze swallows every beat-2 wind-up
-            # ictus and every measure's detector timing (F4).
-            if popup_record is not None and now < popup_until:
-                _draw_popup(screen, font, popup_record)
-            else:
-                popup_record = None
-                screen.fill((20, 20, 40))
-                pygame.display.flip()
+            if now - last_draw_time >= RENDER_INTERVAL_S:
+                # Popup rendering is a "visible until" flag inside the normal
+                # sampling loop rather than a blocking pygame.time.wait(), so
+                # samples (and QUIT events) keep flowing while it's shown --
+                # otherwise the ~600ms freeze swallows every beat-2 wind-up
+                # ictus and every measure's detector timing (F4). Cadence is
+                # elapsed wall-clock time, not a modulo on sample count (G3).
+                last_draw_time = now
+                if popup_record is not None and now < popup_until:
+                    _draw_popup(screen, font, popup_record)
+                else:
+                    popup_record = None
+                    screen.fill((20, 20, 40))
+                    pygame.display.flip()
 
-        if game_over and (popup_record is None or now >= popup_until):
-            break
+            if game_over and (popup_record is None or now >= popup_until):
+                break
+    finally:
+        # Release the HID handle before Settings potentially opens its own
+        # (J1, Bug_Audit_2026-07-28.md) -- two concurrent JoyCon connections
+        # on Windows HID is a classic source of "calibration silently reads
+        # nothing", and it landed precisely on the path a player is directed
+        # to when timing feels wrong.
+        joycon_stream.close()
 
     metronome.stop()
+    _export_session_log(session_log)
     _draw_summary(screen, font, session_log)
 
     waiting = True

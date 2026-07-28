@@ -459,13 +459,17 @@ detail.
 **Update (post-audit, `reviews/Bug_Audit_2026-07-17.md` / `Swinger_Build_Plan_v2.md`
 F3 fix):** the one real Phase 0 capture on file (`src/swings.csv`) showed the
 device's native update rate is ~66Hz (below the "roughly 60-200Hz" this
-document originally assumed as a range, closer to its floor) and a
-resting/idle combined magnitude around ~10,000 units, not near-zero — i.e.
-the raw gyro axes carry a large constant bias even at rest. This doesn't
-block v1 (F3's rate-unification and F2's max-derivative sharpness metric
-both work regardless of the absolute baseline), but it's a concrete data
-point for **per-axis/dominant-axis calibration** above: a per-axis zero-bias
-subtraction, when that item is eventually built, will need to account for a
-bias on the order of the swing signal itself, not a small offset. Noted here
-so it isn't rediscovered from scratch. Still just one player's one capture —
-treat as a lead, not a spec.
+document originally assumed as a range, closer to its floor).
+
+**Correction (H2, `reviews/Bug_Audit_2026-07-28.md`):** the "~10,000-unit
+resting magnitude" figure above was wrong -- it was the *median* of the
+pre-F3, rate-contaminated `src/archive/swings.csv` (10,748; moved there
+from `src/swings.csv` by H5, same audit), i.e. a median of active swinging
+on a duplicate-inflated file, not a resting measurement. Replaying
+the clean post-F3 capture (`src/swings_counted.csv`) gives a real resting
+magnitude of p05=6, p10=53 -- far lower, near-zero as originally assumed.
+This doesn't block v1 either way (F3's rate-unification and F2's
+max-derivative sharpness metric both work regardless of the absolute
+baseline), but the lead for **per-axis/dominant-axis calibration** above
+should use this corrected figure, not the original ~10,000 one, if that item
+is ever built.

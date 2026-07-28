@@ -23,7 +23,18 @@ SMOOTHING_WINDOW = 4  # samples; kills single-sample jitter without flattening t
 # rate; see F3 in reviews/Bug_Audit_2026-07-17.md). 7500.0 preserves the
 # previous per-sample-at-150Hz behavior (50.0/sample / (1/150)s ~= 7500/s).
 RISE_RATE_THRESHOLD = 7500.0
-PEAK_MIN_THRESHOLD = 200.0  # mag units; filters small hand jitter from counting as a swing
+# mag units; filters small hand jitter from counting as a swing.
+# Effectively vestigial as shipped (H4, Bug_Audit_2026-07-28.md): real
+# resting magnitude is single digits to ~50 (swings_counted.csv p05=6,
+# p10=53) and real swing peaks are 20,000-33,000, so 200 filters nothing
+# RISE_RATE_THRESHOLD hasn't already caught on real hardware. Left
+# unchanged rather than raised to match real-hardware scale, because the
+# existing test fixtures (test_ictus_detector_smoke.py,
+# test_ictus_intensity_invariance.py) use small synthetic peak magnitudes
+# (300-800) not to-scale with real captures; raising this without also
+# rescaling those fixtures would just replace one untested threshold with a
+# broken test suite. Re-derive together if this is ever tightened.
+PEAK_MIN_THRESHOLD = 200.0
 DROP_FRACTION = 0.6  # qualifying drop: mag falls below this fraction of tracked peak
 DROP_WINDOW_S = 0.08  # drop must happen within this long of the peak
 REFRACTORY_S = 0.175  # after an ictus, ignore new rises for this long
@@ -102,10 +113,16 @@ class IctusDetector:
 
         if self._state == _State.REFRACTORY:
             if t >= self._refractory_until:
+                # Fall through to ARMED handling below instead of returning
+                # early (H6, Bug_Audit_2026-07-28.md): the old early-return
+                # meant the very sample that ends the refractory period was
+                # never rise-tested, costing up to one sample (~15ms) of
+                # detection latency on rapid repeat swings.
                 self._state = _State.ARMED
-            self._prev_smoothed = mag
-            self._prev_t = t
-            return None
+            else:
+                self._prev_smoothed = mag
+                self._prev_t = t
+                return None
 
         dt = (t - self._prev_t) if self._prev_t is not None else None
         rate = None
@@ -144,7 +161,12 @@ class IctusDetector:
             # far rather than stalling until the *next* swing's rise, which
             # would let the refractory window swallow it).
             timed_out = (t - self._seek_entered_t) > self.min_seek_timeout_s
-            if mag <= self._seeking_min_val and not timed_out:
+            # Strict '<' (D1, Bug_Audit_2026-07-28.md): '<=' let a flat
+            # bottom keep advancing _seeking_min_t on every tying sample, so
+            # the reported ictus timestamp slid to the *end* of the plateau
+            # instead of its start -- a bias that varies with swing style
+            # rather than a constant calibration can absorb.
+            if mag < self._seeking_min_val and not timed_out:
                 self._seeking_min_val = mag
                 self._seeking_min_t = t
             else:

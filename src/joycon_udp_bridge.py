@@ -38,12 +38,19 @@ def run_bridge(duration_s: float, host: str, port: int) -> None:
     sent = 0
     print(f"Streaming to {host}:{port} for {duration_s}s ... swing the Joy-Con now.")
     try:
-        for t, gx, gy, gz, _mag in stream.stream(duration_s):
+        # is_new: forward only genuinely fresh readings, not every poll tick
+        # (J2's stream() now heartbeats at POLL_INTERVAL_S regardless of
+        # duplicates) -- otherwise this would flood UDP at 200Hz instead of
+        # the device's real ~66Hz unique-sample rate.
+        for t, gx, gy, gz, _mag, is_new in stream.stream(duration_s):
+            if not is_new:
+                continue
             packet = json.dumps({"t": t, "gx": gx, "gy": gy, "gz": gz}).encode("utf-8")
             sock.sendto(packet, addr)
             sent += 1
     finally:
         sock.close()
+        stream.close()
     print(f"Done. Sent {sent} samples.")
 
 

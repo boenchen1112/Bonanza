@@ -93,27 +93,35 @@ def run_calibration(screen, clock, joycon_stream_factory, config: BeatScheduleCo
 
     end_time = schedule.all_timestamps()[-1] + config.beats_per_measure * (60.0 / config.bpm)
     frame_counter = 0
-    for t, gx, gy, gz, mag in joycon_stream.stream(duration_s=end_time - time.perf_counter()):
-        ev = detector.process_sample(t, mag)
-        if ev is not None:
-            detected_ictuses.append(ev)
+    try:
+        # is_new: stream() now heartbeats every poll interval regardless of
+        # duplicates (J2, Bug_Audit_2026-07-28.md) so QUIT handling and
+        # rendering keep running even on a still controller; only feed
+        # genuinely fresh samples to the detector.
+        for t, gx, gy, gz, mag, is_new in joycon_stream.stream(duration_s=end_time - time.perf_counter()):
+            if is_new:
+                ev = detector.process_sample(t, mag)
+                if ev is not None:
+                    detected_ictuses.append(ev)
 
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                metronome.stop()
-                return
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    metronome.stop()
+                    return
 
-        # Draw at a fixed cadence rather than gating the sample loop on
-        # clock.tick() -- stream() already paces polling (F3); throttling
-        # the sampling loop itself here re-introduces the below-device-rate
-        # drop that motivated this fix.
-        frame_counter += 1
-        if frame_counter % 10 == 0:
-            _draw_menu(
-                screen, font,
-                [f"Calibrating... swing on beat 1 ({len(detected_ictuses)} detected)"],
-                -1, "Calibrate",
-            )
+            # Draw at a fixed cadence rather than gating the sample loop on
+            # clock.tick() -- stream() already paces polling (F3); throttling
+            # the sampling loop itself here re-introduces the below-device-rate
+            # drop that motivated this fix.
+            frame_counter += 1
+            if frame_counter % 10 == 0:
+                _draw_menu(
+                    screen, font,
+                    [f"Calibrating... swing on beat 1 ({len(detected_ictuses)} detected)"],
+                    -1, "Calibrate",
+                )
+    finally:
+        joycon_stream.close()
 
     metronome.stop()
 
@@ -127,9 +135,17 @@ def run_calibration(screen, clock, joycon_stream_factory, config: BeatScheduleCo
     closest_times = [ev.timestamp if ev is not None else None for ev in closest_event_per_measure]
 
     result = calibration.compute_offset(closest_times, beat1_times, 60.0 / config.bpm)
-    matched_events = [ev for ev in closest_event_per_measure if ev is not None]
+    # Drive the sharpness seed and the save-guard off the events
+    # compute_offset() actually used (survived the +-half-beat outlier
+    # filter), not every closest-per-measure match (C1, Bug_Audit_2026-07-28.md).
+    # The old matched_events was pre-filter, so a wildly mistimed swing that
+    # compute_offset() correctly rejected for the offset was still admitted
+    # into the sharpness reference, and a calibration where only one swing
+    # survived the outlier bound but three matched loosely could still
+    # overwrite calibration.json.
+    used_events = [closest_event_per_measure[i] for i in result.used_indices]
 
-    if result.from_default or len(matched_events) < 3:
+    if result.from_default or len(used_events) < 3:
         # Don't clobber a previously saved good calibration with an empty
         # or noise-derived one (F5) -- leave calibration.json untouched.
         _draw_menu(
@@ -148,7 +164,7 @@ def run_calibration(screen, clock, joycon_stream_factory, config: BeatScheduleCo
     # Seed the sharpness reference only from the swings actually matched to
     # a beat-1 window, not every detected ictus (rebounds/noise) -- F6.
     sharpness_seed = [
-        raw_sharpness(ev.peak_magnitude, ev.rise_duration, ev.max_derivative or None) for ev in matched_events
+        raw_sharpness(ev.peak_magnitude, ev.rise_duration, ev.max_derivative or None) for ev in used_events
     ]
     calibration.save_calibration(result.offset_s, sharpness_seed)
 
