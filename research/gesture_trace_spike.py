@@ -12,15 +12,19 @@ here. Do not treat the synthetic self-test's numbers as a Phase B verdict;
 they only prove this script's own arithmetic is self-consistent.
 
 To actually run Phase B once real captures exist:
-    python research/gesture_trace_spike.py --capture path/to/capture.csv \\
-        --downbeats 1.0,2.5,4.0,... --signature 4
+    python research/gesture_trace_spike.py --capture path/to/capture.csv --signature 4
 
 `capture.csv` must have the same columns joycon_stream.py's CLI writes:
-timestamp, gx, gy, gz, magnitude. `--downbeats` is a comma-separated list
-of canonical-clock timestamps for each detected downbeat (reset points) --
-in the real pipeline these come from IctusDetector events, matched the same
-way calibration.py already matches practice-measure ictuses to expected
-beat-1 times.
+timestamp, gx, gy, gz, magnitude. Downbeats are auto-detected by default,
+reusing the exact same IctusDetector already validated for the baseball
+minigame (applied to the capture's own magnitude column) -- no manual
+timestamp-hunting needed. Pass --downbeats 1.0,2.5,4.0,... to override with
+your own timestamps instead (e.g. from a metronome-driven capture where you
+already know the expected beat times).
+
+With auto-detected downbeats, the capture is automatically split into one
+repetition per inter-downbeat measure and each is scored separately --
+matching Phase B's "report this number per repetition, not just a plot".
 """
 
 import argparse
@@ -32,6 +36,8 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from conducting_patterns import CANONICAL_PATTERNS, resample_path  # noqa: E402
+from ictus_detector import IctusDetector  # noqa: E402
+from joycon_stream import combined_magnitude  # noqa: E402
 
 
 def integrate_orientation(
@@ -122,6 +128,47 @@ def score_repetition(
     return shape_distance(trace_xy, reference), trace_xy
 
 
+def detect_downbeats(samples: list[tuple[float, float, float, float]]) -> list[float]:
+    """Auto-detects downbeat (ictus) timestamps from a raw capture by
+    reusing IctusDetector against the capture's own gyro magnitude --
+    the same detection already validated for the baseball minigame,
+    applied here to a free-form conducting capture instead of a
+    metronome-scheduled swing. Removes the manual timestamp-hunting step
+    from running a real Phase B capture session."""
+    detector = IctusDetector()
+    downbeats = []
+    for t, gx, gy, gz in samples:
+        mag = combined_magnitude(gx, gy, gz)
+        ev = detector.process_sample(t, mag)
+        if ev is not None:
+            downbeats.append(ev.timestamp)
+    return downbeats
+
+
+def score_all_repetitions(
+    samples: list[tuple[float, float, float, float]],
+    downbeats: list[float],
+    beats_per_measure: int,
+    axis_x: str = "gx",
+    axis_y: str = "gy",
+) -> list[tuple[float, list[tuple[float, float]]]]:
+    """Splits a capture into one repetition per beats_per_measure
+    consecutive downbeats and scores each independently -- Phase B's "per
+    repetition, not just a plot" requirement. Returns [(score, trace_xy), ...],
+    one entry per complete measure found."""
+    results = []
+    for i in range(0, len(downbeats) - beats_per_measure, beats_per_measure):
+        start = downbeats[i]
+        end = downbeats[i + beats_per_measure]
+        score, trace_xy = score_repetition(
+            samples, measure_start=start, measure_end=end,
+            reset_times=downbeats, beats_per_measure=beats_per_measure,
+            axis_x=axis_x, axis_y=axis_y,
+        )
+        results.append((score, trace_xy))
+    return results
+
+
 def plot_repetition(trace_xy: list[tuple[float, float]], reference_points: list[tuple[float, float]], score: float, out_path: str) -> None:
     import matplotlib
     matplotlib.use("Agg")
@@ -202,21 +249,29 @@ def main():
         return
 
     samples = _load_capture_csv(args.capture)
-    reset_times = [float(x) for x in args.downbeats.split(",")] if args.downbeats else [samples[0][0]]
-    score, trace_xy = score_repetition(
-        samples,
-        measure_start=samples[0][0],
-        measure_end=samples[-1][0],
-        reset_times=reset_times,
-        beats_per_measure=args.signature,
-        axis_x=args.axis_x,
-        axis_y=args.axis_y,
-    )
-    print(f"shape_distance = {score:.4f}")
+    if args.downbeats:
+        downbeats = [float(x) for x in args.downbeats.split(",")]
+    else:
+        downbeats = detect_downbeats(samples)
+        print(f"Auto-detected {len(downbeats)} downbeats.")
+
     reference = CANONICAL_PATTERNS[args.signature].points
-    out_path = os.path.splitext(args.capture)[0] + "_trace.png"
-    plot_repetition(trace_xy, reference, score, out_path)
-    print(f"Plot written to {out_path}")
+    base_path = os.path.splitext(args.capture)[0]
+
+    repetitions = score_all_repetitions(samples, downbeats, args.signature, args.axis_x, args.axis_y)
+    if not repetitions:
+        print(f"Not enough downbeats ({len(downbeats)}) for even one {args.signature}-beat repetition.")
+        return
+
+    scores = [s for s, _ in repetitions if not math.isnan(s)]
+    for i, (score, trace_xy) in enumerate(repetitions):
+        print(f"repetition {i}: shape_distance = {score:.4f}")
+        plot_repetition(trace_xy, reference, score, f"{base_path}_rep{i}_trace.png")
+    if scores:
+        mean = sum(scores) / len(scores)
+        variance = sum((s - mean) ** 2 for s in scores) / len(scores) if len(scores) > 1 else 0.0
+        print(f"\n{len(scores)} scored repetitions: mean={mean:.4f} stdev={variance ** 0.5:.4f}")
+    print(f"Plots written to {base_path}_rep*_trace.png")
 
 
 if __name__ == "__main__":
