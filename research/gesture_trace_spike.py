@@ -88,19 +88,41 @@ def integrate_orientation(
     return trace
 
 
+def _bounding_size(points: list[tuple[float, float]]) -> float:
+    xs = [p[0] for p in points]
+    ys = [p[1] for p in points]
+    return max(max(xs) - min(xs), max(ys) - min(ys))
+
+
 def shape_distance(trace_points: list[tuple[float, float]], reference_points: list[tuple[float, float]], n: int = 50) -> float:
     """Phase B's scoring method: resample both paths to n points by arc
     length, then average point-to-nearest-reference-point distance,
-    normalized by the reference pattern's own bounding size so the number
-    is scale- and sample-count-independent."""
+    normalized so the number is scale- and sample-count-independent.
+
+    Bug found from a real capture (2026-07-28): the canonical reference is
+    normalized to a max bounding-box extent of 1.0
+    (conducting_patterns.py), but a real integrated gyro trace comes out in
+    real degrees -- hundreds, not ~1. An earlier version of this function
+    only divided the *distance sum* by the reference's bounding size,
+    without ever rescaling the trace itself, so the score was dominated by
+    that scale mismatch (shape_distance in the hundreds) rather than shape
+    (dis)similarity -- confirmed by looking at the plot: the reference dot
+    was invisibly tiny next to a trace hundreds of units across. Both
+    paths are now rescaled to the same bounding size before comparing, so
+    this actually measures shape, not units.
+    """
     resampled_trace = resample_path(trace_points, n)
     resampled_ref = resample_path(reference_points, n)
 
-    ref_xs = [p[0] for p in resampled_ref]
-    ref_ys = [p[1] for p in resampled_ref]
-    ref_size = max(max(ref_xs) - min(ref_xs), max(ref_ys) - min(ref_ys))
+    ref_size = _bounding_size(resampled_ref)
     if ref_size == 0:
         ref_size = 1.0
+
+    trace_size = _bounding_size(resampled_trace)
+    if trace_size == 0:
+        trace_size = 1.0
+    scale = ref_size / trace_size
+    resampled_trace = [(x * scale, y * scale) for x, y in resampled_trace]
 
     total = 0.0
     for tx, ty in resampled_trace:
@@ -170,20 +192,30 @@ def score_all_repetitions(
 
 
 def plot_repetition(trace_xy: list[tuple[float, float]], reference_points: list[tuple[float, float]], score: float, out_path: str) -> None:
+    """Plots the trace rescaled to the reference's own bounding size (same
+    rescaling shape_distance() uses internally) so the two are actually
+    overlaid at comparable scale -- plotting raw units made the reference
+    an invisible dot next to a trace hundreds of units across and the plot
+    unreadable (found from a real capture, 2026-07-28)."""
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    fig, ax = plt.subplots(figsize=(4, 4))
-    tx = [p[0] for p in trace_xy]
-    ty = [p[1] for p in trace_xy]
+    ref_size = _bounding_size(reference_points) or 1.0
+    trace_size = _bounding_size(trace_xy) or 1.0
+    scale = ref_size / trace_size
+
+    fig, ax = plt.subplots(figsize=(4.5, 4.5))
+    tx = [p[0] * scale for p in trace_xy]
+    ty = [p[1] * scale for p in trace_xy]
     rx = [p[0] for p in reference_points]
     ry = [p[1] for p in reference_points]
-    ax.plot(rx, ry, "--o", color="gray", label="reference", alpha=0.6)
-    ax.plot(tx, ty, "-", color="tab:red", label="recovered trace")
+    ax.plot(rx, ry, "--o", color="gray", linewidth=2, markersize=8, label="reference (target shape)", alpha=0.7, zorder=3)
+    ax.plot(tx, ty, "-", color="tab:red", label=f"your trace (rescaled {scale:.4g}x)", zorder=2)
+    ax.plot(tx[0], ty[0], "^", color="darkred", markersize=8, zorder=4)
     ax.set_aspect("equal")
-    ax.set_title(f"shape_distance={score:.3f}")
-    ax.legend()
+    ax.set_title(f"shape_distance={score:.3f}\n(0=identical shape, lower=better)", fontsize=10)
+    ax.legend(fontsize=8)
     fig.tight_layout()
     fig.savefig(out_path, dpi=120)
     plt.close(fig)
