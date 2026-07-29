@@ -6,96 +6,116 @@ conducting-rhythm baseball prototype (`Swinger_Build_Plan_v1.md`), ported
 to Unity as v3 (`UnitySwinger/`, 2.5D fixed-camera, Super Mario Party
 style). v4 (`Swinger_Build_Plan_v4.md`) pivoted the *design* from a
 timing-verdict minigame to a conducting-gesture trace trainer; v4 Phases A
-and C are done. v4 Phase B (can motion be tracked well enough to show a
-student their own conducting shape?) asked the right question but got the
+and C are done. v4 Phase B asked the right question (can motion be tracked
+well enough to show a student their own conducting shape?) but got the
 wrong first answer: Joy-Con gyro orientation integration was tried and
 correctly diagnosed as wrong (gyro measures rotation, not the hand's
 actual position; real hardware showed tremor at thousands of deg/s, no
 stable shape signal). The pivot to webcam hand-position tracking worked.
 
-**`Swinger_Build_Plan_v5.md` is now the active plan.** It reframes the
+**`Swinger_Build_Plan_v5.md` is now the active plan**, reframing the
 validated web hand-tracking tool (`research/hand_tracking_web/`) as the
 thing to build into a complete playable game, not a research spike. **The
 baseball minigame and the Unity/Joy-Con port are paused, not abandoned** —
 parked in their current Unity state until v5 reaches its own "complete"
-bar. v5 also folds in an audit of the current tool (Phase 0 fixes) before
-the four requested feature changes (Phase 1) and further polish (Phase 2).
+bar. **v5 Phases 0 and 1 are both done this session.** Phase 2 is next.
 
 ## Completed (chronological, most recent last)
-- v1: 17-bug audit fully fixed, offline tests green (see git history —
-  this file used to describe only this phase and had gone stale by 2 weeks
-  and 4 build-plan-versions; that staleness is exactly what v5's audit
-  finding A1 flagged and this rewrite fixes).
-- v3: Unity port of the v1 logic (`Assets/Scripts/Logic/` — engine-free,
-  kept in sync with `src/`'s Python modules).
-- v4 Phase A: G1/G2/G3/J1/J2/etc. bug-audit fixes ported into
-  `MeasureJudge.cs`/`JoyConUdpReceiver.cs`, signal-loss UI, Unity session
-  log export. Verified via Unity batch-mode tests (8/8 green) and a real
-  playtest (6 Perfect/5 Great/3 Miss, no drift).
-- v4 Phase C: canonical 2/4, 3/4, 4/4 conducting reference patterns in
-  `src/conducting_patterns.py` (`resample_path()`, `CANONICAL_PATTERNS`).
-  2/4 later corrected against a real hand-drawn diagram the user supplied
-  (prep top-left → down to beat 1, the lowest point → rebound up-right to
-  beat 2). 3/4 and 4/4 remain unverified schematic guesses — no real
-  diagrams for those two yet.
-- v4 Phase B (superseded, see above): `research/gesture_trace_spike.py`'s
-  `integrate_orientation()` and `research/live_trace_view.py` implement
-  the gyro approach — **both now explicitly marked dead/superseded in
-  file-header comments** (v5 Phase 0, audit A6). `shape_distance()` and
-  `resample_path()` in the same spike file are still alive and reused by
-  the web tool.
-- Pivot validated: `research/live_position_view.py` (OpenCV color-blob,
-  proof of concept) → `research/hand_tracking_web/` (MediaPipe
-  `HandLandmarker`, the real tool). Iterated through real bugs found by
-  live testing: non-mirrored feed, wrong reference shape, origin landing
-  wherever a timer caught the hand (fixed via an explicit calibration
-  hold), a live "top-detection" approach that double-fired per measure
-  (replaced by the calibration + metronome-driven reset), 3 separate UI
-  panels merged into one canvas. Latest tool commit before v5: `3231252`.
-- **v5 Phase 0 (this session, in progress)**: dead-code files labeled
-  (`live_trace_view.py`, `integrate_orientation()`); `.catch()` added
-  around `ensureModelAndCamera()` so a denied/missing camera shows a
-  message instead of hanging on "Loading model..." forever; this file
-  rewritten for real. **Still open**: committing/triaging the working
-  tree (see below) and the rest of Phase 0's exit criterion.
+- v1/v3/v4 Phases A+C: see prior entries in git history if needed — the
+  short version is bug-audit fixes ported into Unity's `MeasureJudge.cs`
+  etc. (Phase A) and canonical 2/4/3/4/4/4 conducting reference patterns
+  in `src/conducting_patterns.py` (Phase C, 2/4 later corrected against a
+  real hand-drawn diagram; 3/4 and 4/4 remain unverified schematic
+  guesses — still no real diagrams for those two).
+- v4 Phase B (superseded): gyro-orientation approach correctly abandoned;
+  `research/live_trace_view.py` and `integrate_orientation()` in
+  `gesture_trace_spike.py` are explicitly marked dead/superseded in
+  file-header comments (v5 Phase 0, audit A6) — don't build on them.
+  `shape_distance()`/`resample_path()` in the same spike file are still
+  alive and now also ported into the web tool (see Phase 1 below).
+- Pivot validated: `research/live_position_view.py` (OpenCV color-blob
+  spike) → `research/hand_tracking_web/` (MediaPipe `HandLandmarker`, the
+  real tool) — calibration-based origin, metronome-driven per-measure
+  reset, merged single-canvas view.
+- **v5 Phase 0 (commits `88d20e0`, `330a8c5`, `418b746`)**: committed the
+  Unity 6000.4.1f1→6000.5.5f1 migration fallout (confirmed mechanical,
+  not feature work — user approved after seeing the diff), deleted
+  `Assets/_Recovery/` (confirmed crash-autosave junk), labeled the two
+  dead gyro-orientation files, added a `.catch()` around
+  `ensureModelAndCamera()` so a denied/missing camera shows a message
+  instead of hanging forever, and rewrote this file (it had gone stale
+  describing only the original 17-bug v1 pass — 2 weeks and 4 build-plan-
+  versions out of date, per audit A1). `Swinger_Build_Plan_v5.md` and a
+  real 2/4 capture take (`conduct_24_take2*`) committed too.
+  **Left alone per explicit user answer**: `service.conf.lock` and
+  `system.conf.lock` (two empty root files of unknown origin — user said
+  leave them, not junk to delete or gitignore).
+- **v5 Phase 1 (commit `75ca32b`)** — the four requested changes:
+  1. **Reference image calibration (audit A3)**: `find_anchors.py` locates
+     the two red dots in `reference_2_4.png` (beat 1/beat 2) via HSV
+     thresholding; a 2-point complex-number similarity solve (scale + ~13°
+     rotation + translation — NOT a bounding-box approximation, per
+     advisor guidance) maps the image's pixel space exactly onto
+     `REFERENCE[2]`'s logical units. Baked into `REFERENCE_IMAGE_ANCHORS`
+     in `index.html`; verified numerically (both anchor points map back
+     exactly).
+  2. Image now draws directly into `mainCanvas` (semi-transparent,
+     centered on the calibrated origin, one composed affine transform via
+     `ctx.setTransform`) — replaces the gray vector line for 2/4. 3/4 and
+     4/4 still have no real diagram, so they keep the vector line, now
+     explicitly labeled on-screen as a placeholder.
+  3. **Real bug caught along the way**: `REFERENCE[2]`'s prep point wasn't
+     at logical (0,0), but calibration puts the trace's own start there —
+     recentered the whole 2/4 pattern by its prep offset (translation-
+     invariant for `shape_distance`, so scoring wasn't affected, only the
+     drawing).
+  4. Trace color changed cream (`#f5f0e0`) → gray (`#b0b0b0`).
+  5. `shape_distance()`/`resample_path()` ported into JS (in-browser, no
+     network round-trip), scoring each measure the instant its trace
+     resets, shown live as a match % plus a session summary (average,
+     best measure) at the end. **Another real bug caught**: MediaPipe
+     landmark x/y normalize against width/height separately, so a 640×480
+     (4:3) feed read every trace ~33% taller than it really was —
+     `VIDEO_ASPECT` now corrects `nx`. Per-measure scores persist to disk
+     via a new `/score` endpoint in `server.py` (standing rule: live tools
+     must log, not just render). **No fail state**, per v5's recommended
+     default — formative practice, not survival.
 
 ## Exact next step
-Finish v5 Phase 0, then move to Phase 1 (see `Swinger_Build_Plan_v5.md`):
-1. **Triage the working tree** (v5 audit A2) — needs a user decision on:
-   Unity `Packages/manifest.json`, `packages-lock.json`,
-   `ProjectSettings/PackageManagerSettings.asset`, `ProjectVersion.txt`,
-   untracked `ProjectSettings/PhysicsCoreProjectSettings2D.asset` (side
-   effects of an earlier 6000.4.1f1→6000.5.5f1 migration, never
-   confirmed deliberate); untracked `Assets/_Recovery/` (Unity crash-
-   autosave debris); two empty untracked root files, `service.conf.lock`
-   and `system.conf.lock`, of unknown origin — not created by any tool
-   used this session, don't delete blindly. `Swinger_Build_Plan_v5.md`
-   itself and `research/captures/conduct_24_take2*` are real deliberate
-   artifacts and should just be committed.
-2. **Phase 1** — the four requested changes to `hand_tracking_web/`:
-   calibrate the reference image's pixel space into the same logical unit
-   space `REFERENCE` uses (audit A3 — currently just a decorative
-   thumbnail), render it centered/semi-transparent on the canvas in place
-   of the gray vector line (only for signatures with a real photo — 2/4
-   only, so far), change the trace color to gray, and port
-   `shape_distance()`/`resample_path()` into JS for real per-measure
-   scoring + a session summary.
-3. **Phase 2** — real 3/4 and 4/4 reference diagrams, a closing note on
-   v4 Phase B's now-superseded question, an explicit decision on whether
-   this stays a browser tool or eventually ports to Unity, remaining UX
-   polish (calibration countdown audible cue, replay-without-reload flow).
+Move to **v5 Phase 2** (see `Swinger_Build_Plan_v5.md` Section 4):
+1. **Get real 3/4 and 4/4 reference diagrams** from the user — the same
+   hand-drawn-photo treatment 2/4 got, needed for both a real image
+   reference and a complete anchor-calibrated experience across all three
+   signatures.
+2. **Write a closing note on v4 Phase B** — its gyro-orientation question
+   is superseded by the working webcam pivot; update or replace
+   `reviews/Phase_B_Spike_Status_2026-07-28.md` so it doesn't sit open
+   forever.
+3. **Explicit decision needed**: does this stay a browser tool, or
+   eventually port to Unity (MediaPipe has Unity plugins, but that's its
+   own bring-up effort)? Don't let v3/v4's "Unity is the platform" premise
+   keep being assumed by default now that the working prototype is a web
+   page — ask the user.
+4. **Remaining UX polish**: calibration countdown vs. calibrating-hold
+   currently reads as two identical waits with no audible distinction
+   (audit A8); a replay/practice-again flow that doesn't need a full page
+   reload.
+5. Try the tool live at least once this session's Phase 1 changes haven't
+   been playtested yet — confirm the anchor-mapped image actually looks
+   right centered on a live hand, and that per-measure scores feel
+   reasonable/legible, before treating Phase 1 as fully proven rather
+   than just "compiles and the math checks out."
 
 ## Open blockers / notes
 - **Standing rules** (memory, not in this repo): commit automatically per
   verified bug fix or phase; always persist logs + final-state snapshots
-  for live/interactive tools, never just print/show. Both were already
-  being followed in `hand_tracking_web/` before v5 started.
-- Unity migration files and `Assets/_Recovery/` (see step 1 above) have
-  been sitting uncommitted/untriaged across at least two sessions now —
-  don't keep deferring without at least asking the user directly.
+  for live/interactive tools, never just print/show.
 - `src/swings_counted.csv` — still an unexplained standing local
   modification, never touch without being asked.
+- `service.conf.lock` / `system.conf.lock` at repo root — leave alone,
+  per explicit user answer this session (not junk, not to be gitignored).
 - Python: use `C:\Users\user\AppData\Local\Programs\Python\Python313\
-  python.exe` for anything needing pygame — default `python`/`py -3`
-  resolves to 3.14, no pygame wheel yet. Not needed for the web tool
-  itself (pure browser JS + a stdlib-only `server.py`).
+  python.exe` for anything needing pygame/OpenCV (used this session for
+  `find_anchors.py`) — default `python`/`py -3` resolves to 3.14, no
+  pygame wheel yet. Not needed for the web tool itself (pure browser JS +
+  a stdlib-only `server.py`).
