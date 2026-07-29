@@ -34,6 +34,7 @@
   <label>Seconds <input id="seconds" type="number" value="60"></label>
   <label>Scale (px/unit) <input id="scale" type="number" value="150"></label>
   <button id="startBtn">Calibrate &amp; Start</button>
+  <button id="stopBtn" disabled>Stop</button>
 </div>
 <div id="status">Idle. Click "Calibrate &amp; Start", allow camera access, then hold your hand with fingers
   together (like pinching a baton) at the TOP/prep position, then at the BOTTOM (beat 1's lowest
@@ -140,6 +141,7 @@ let measureIndex = -1;
 let measureStartWall = null;
 let running = false;
 let stopAt = 0;
+let stopRequested = false; // UX polish: explicit Stop button, no reload needed
 
 // Calibration (feedback 2026-07-29: detecting "the top" live turned out
 // unreliable -- it fired on every direction change instead of once per
@@ -189,6 +191,29 @@ let metronomeTimer = null;
 const SCHEDULE_AHEAD_S = 0.12;
 
 function beatIntervalS() { return 60 / bpm; }
+
+function ensureAudioCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+
+// UX polish (v5 Phase 2, feedback "final adjustment"): the countdown
+// ("get ready, hold still") and the calibrating hold ("we're sampling now")
+// previously read as two identical silent waits -- audit A8. Distinct tones
+// per phase let the user calibrate without staring at the screen text.
+function playTone(freq, durationS, whenOffsetS = 0) {
+  const ac = ensureAudioCtx();
+  const t = ac.currentTime + whenOffsetS;
+  const osc = ac.createOscillator();
+  const gain = ac.createGain();
+  osc.frequency.value = freq;
+  gain.gain.setValueAtTime(0.0001, t);
+  gain.gain.exponentialRampToValueAtTime(0.4, t + 0.01);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t + durationS);
+  osc.connect(gain).connect(ac.destination);
+  osc.start(t);
+  osc.stop(t + durationS + 0.02);
+}
 
 function scheduleClick(time, isDownbeat) {
   const osc = audioCtx.createOscillator();
@@ -500,6 +525,7 @@ function stopRun() {
   running = false;
   appState = "idle";
   stopMetronome();
+  setButtonsForState();
 
   let summary = "";
   if (sessionScores.length > 0) {
@@ -507,7 +533,7 @@ function stopRun() {
     const best = sessionScores.reduce((a, b) => (b.matchPct > a.matchPct ? b : a));
     summary = ` ${sessionScores.length} measures scored -- average match ${avg.toFixed(0)}%, best measure ${best.measureIndex} at ${best.matchPct}%.`;
   }
-  statusEl.textContent = `Done. Log + snapshot saved server-side under logs/ (run ${runId}).${summary}`;
+  statusEl.textContent = `Done. Log + snapshot saved server-side under logs/ (run ${runId}).${summary} Click "Calibrate & Start" to run again.`;
   saveSnapshot();
 }
 
@@ -552,17 +578,47 @@ async function calibratePoint(label) {
   calibLabel = label;
   appState = "countdown";
   statusEl.textContent = `Hold your hand at the ${label} and stay still...`;
+  playTone(440, 0.15); // single low beep = get-ready countdown
   await new Promise(r => setTimeout(r, CALIBRATION_HOLD_MS));
+  if (stopRequested) return null;
 
   appState = "calibrating";
   calibSamples = [];
   statusEl.textContent = `Calibrating ${label}...`;
+  playTone(880, 0.1); playTone(880, 0.1, 0.15); // two quick high beeps = sampling now
   await new Promise(r => setTimeout(r, CALIBRATION_HOLD_MS));
+  if (stopRequested) return null;
 
   if (calibSamples.length === 0) return null;
+  playTone(1200, 0.25); // longer confirm chime = point captured
   const ox = calibSamples.reduce((s, p) => s + p[0], 0) / calibSamples.length;
   const oy = calibSamples.reduce((s, p) => s + p[1], 0) / calibSamples.length;
   return [ox, oy];
+}
+
+function setButtonsForState() {
+  const busy = appState !== "idle";
+  startBtn.disabled = busy;
+  stopBtn.disabled = !busy;
+}
+
+// Ends a run early (mid-measure) or aborts an in-progress calibration hold,
+// without a page reload -- previously the only way to end/restart was
+// letting the fixed `seconds` timer run out or reloading the page (audit
+// A8's "replay-without-reload" item).
+function requestStop() {
+  stopRequested = true;
+  if (running) {
+    stopAt = 0; // detectLoop's existing check ends the run -> stopRun()
+  } else if (appState !== "idle") {
+    // still mid-calibration -- calibratePoint()'s own stopRequested checks
+    // will unwind it, but bail the UI immediately rather than waiting out
+    // the current hold.
+    appState = "idle";
+    stopMetronome();
+    statusEl.textContent = "Stopped. Click \"Calibrate & Start\" to run again.";
+    setButtonsForState();
+  }
 }
 
 async function start() {
@@ -571,9 +627,11 @@ async function start() {
   seconds = parseFloat(document.getElementById("seconds").value);
   scalePxPerUnit = parseFloat(document.getElementById("scale").value) || 150;
   sessionScores = []; lastScoreText = ""; lastCompletedTraceXY = []; calibScaleFactor = 1;
+  stopRequested = false;
 
   statusEl.textContent = "Loading model...";
   appState = "countdown";
+  setButtonsForState();
   requestAnimationFrame(detectLoop); // drives rendering + detection through calibration too
   try {
     await ensureModelAndCamera();
@@ -583,21 +641,24 @@ async function start() {
     // UI just sat on "Loading model..." forever with no explanation.
     appState = "idle";
     statusEl.textContent = `Camera or model failed to load (${err.name || "error"}: ${err.message || err}). Check camera permissions and reload, then try again.`;
+    setButtonsForState();
     return;
   }
 
   const top = await calibratePoint("TOP/prep position");
   if (!top) {
-    statusEl.textContent = "Calibration failed: no hand detected. Click the button to try again.";
+    statusEl.textContent = stopRequested ? "Stopped." : "Calibration failed: no hand detected. Click the button to try again.";
     appState = "idle";
+    setButtonsForState();
     return;
   }
   origin = top;
 
   const bottom = await calibratePoint("BOTTOM (beat 1's lowest point)");
   if (!bottom) {
-    statusEl.textContent = "Calibration failed: no hand detected at BOTTOM. Click the button to try again.";
+    statusEl.textContent = stopRequested ? "Stopped." : "Calibration failed: no hand detected at BOTTOM. Click the button to try again.";
     appState = "idle";
+    setButtonsForState();
     return;
   }
 
@@ -609,6 +670,7 @@ async function start() {
   if (physDelta < 0.01) {
     statusEl.textContent = "Calibration failed: TOP and BOTTOM looked the same position. Move your hand further between the two holds, then try again.";
     appState = "idle";
+    setButtonsForState();
     return;
   }
   calibScaleFactor = refDelta / physDelta;
@@ -618,12 +680,16 @@ async function start() {
   running = true;
   appState = "running";
   stopAt = performance.now() + seconds * 1000;
+  setButtonsForState();
   startMetronome();
 
   statusEl.textContent = `Running: ${signature}/4 @ ${bpm} BPM for ${seconds}s. Calibrated to your range; trace resets on every metronome downbeat.`;
 }
 
-document.getElementById("startBtn").addEventListener("click", () => { start(); });
+const startBtn = document.getElementById("startBtn");
+const stopBtn = document.getElementById("stopBtn");
+startBtn.addEventListener("click", () => { start(); });
+stopBtn.addEventListener("click", () => { requestStop(); });
 </script>
 </body>
 </html>
