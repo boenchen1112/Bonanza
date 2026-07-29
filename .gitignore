@@ -15,3 +15,8 @@ primer.md.lnk
 
 # Unity CLI batchmode log files (project setup logs, not source)
 UnitySwinger_*.log
+
+# Per-run diagnostic logs/snapshots from research/live_*.py -- auto-written
+# every run (feedback, 2026-07-29), not meaningful named data like
+# research/captures/ which is committed deliberately.
+research/logs/

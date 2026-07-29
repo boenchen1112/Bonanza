@@ -23,6 +23,7 @@ window, then press any key to start tracking.
 """
 
 import argparse
+import csv
 import os
 import sys
 import time
@@ -172,15 +173,32 @@ def main():
 
     color_bounds = calibrate_color(cap)
 
+    # Always log to disk (feedback, 2026-07-29): live/interactive tools must
+    # persist a record automatically, not rely on the user transcribing a
+    # live window afterward.
+    log_dir = os.path.join(os.path.dirname(__file__), "logs")
+    os.makedirs(log_dir, exist_ok=True)
+    run_stamp = time.strftime("%Y%m%d-%H%M%S")
+    log_path = os.path.join(log_dir, f"live_position_{run_stamp}.csv")
+    trace_snapshot_path = os.path.join(log_dir, f"live_position_{run_stamp}_trace_final.png")
+    camera_snapshot_path = os.path.join(log_dir, f"live_position_{run_stamp}_camera_final.png")
+    log_file = open(log_path, "w", newline="")
+    log_writer = csv.writer(log_file)
+    log_writer.writerow(["t", "measure_index", "found", "px", "py", "nx", "ny"])
+
     print(f"Reference: {args.signature}/4, strokes {CANONICAL_PATTERNS[args.signature].strokes}")
     print(f"Resetting every {measure_interval_s:.2f}s ({args.bpm} BPM x {args.signature} beats/measure) on a wall-clock timer.")
     print("Tracking window shows the raw camera feed with a marker on the detected position; "
           "Trace window shows the reference (gray) vs. your traced path (red). Press 'q' or ESC in either to quit.")
+    print(f"Logging every frame to {log_path}")
 
     trace_xy = []
     origin = None
     measure_start_wall = None
+    measure_index = -1
     start_time = time.perf_counter()
+    display = None
+    canvas = draw_canvas(reference, [], 0.0, measure_interval_s)
 
     try:
         while time.perf_counter() - start_time < args.seconds:
@@ -191,15 +209,18 @@ def main():
 
             target = find_target(frame, color_bounds)
             display = frame.copy()
+            nx = ny = None
             if target is not None:
                 px, py = target
                 cv2.circle(display, (int(px), int(py)), 10, (0, 255, 0), 2)
 
                 if measure_start_wall is None:
                     measure_start_wall = now
+                    measure_index = 0
                 if now - measure_start_wall >= measure_interval_s:
                     trace_xy = []
                     measure_start_wall = now
+                    measure_index += 1
                     origin = (px, py)
                 if origin is None:
                     origin = (px, py)
@@ -213,16 +234,34 @@ def main():
                 ny = -(py - origin[1]) / frame_h
                 trace_xy.append((nx, ny))
 
+            log_writer.writerow([
+                f"{now:.4f}", measure_index, target is not None,
+                f"{target[0]:.1f}" if target else "", f"{target[1]:.1f}" if target else "",
+                f"{nx:.4f}" if nx is not None else "", f"{ny:.4f}" if ny is not None else "",
+            ])
+
             cv2.imshow("Camera (tracking marker in green)", display)
             elapsed = (now - measure_start_wall) if measure_start_wall is not None else 0.0
-            cv2.imshow("Trace: reference (gray) vs. you (red)", draw_canvas(reference, trace_xy, elapsed, measure_interval_s))
+            canvas = draw_canvas(reference, trace_xy, elapsed, measure_interval_s)
+            cv2.imshow("Trace: reference (gray) vs. you (red)", canvas)
 
             key = cv2.waitKey(1) & 0xFF
             if key in (ord("q"), 27):
                 break
     finally:
+        # Always persist a record, even on early quit ('q'/ESC) or a
+        # mid-run exception -- nothing to "check afterward" is not an
+        # acceptable failure mode for a live diagnostic tool.
+        log_file.close()
+        cv2.imwrite(trace_snapshot_path, canvas)
+        if display is not None:
+            cv2.imwrite(camera_snapshot_path, display)
         cap.release()
         cv2.destroyAllWindows()
+        print(f"Log saved: {log_path}")
+        print(f"Final trace snapshot saved: {trace_snapshot_path}")
+        if display is not None:
+            print(f"Final camera snapshot saved: {camera_snapshot_path}")
 
     print("Done.")
 

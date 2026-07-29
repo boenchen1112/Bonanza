@@ -18,6 +18,7 @@ Requires a paired right Joy-Con (same as joycon_stream.py) and a display
 """
 
 import argparse
+import csv
 import math
 import os
 import sys
@@ -49,6 +50,19 @@ def main():
     measure_interval_s = beat_interval_s * args.signature
     reference = CANONICAL_PATTERNS[args.signature].points
 
+    # Always log to disk (feedback, 2026-07-29): live/interactive tools must
+    # persist a record automatically, not rely on the user transcribing a
+    # live window or console output afterward.
+    log_dir = os.path.join(os.path.dirname(__file__), "logs")
+    os.makedirs(log_dir, exist_ok=True)
+    run_stamp = time.strftime("%Y%m%d-%H%M%S")
+    log_path = os.path.join(log_dir, f"live_trace_{run_stamp}.csv")
+    snapshot_path = os.path.join(log_dir, f"live_trace_{run_stamp}_final.png")
+    log_file = open(log_path, "w", newline="")
+    log_writer = csv.writer(log_file)
+    log_writer.writerow(["t", "measure_index", "raw_gx", "raw_gy", "raw_gz",
+                          "filt_gx", "filt_gy", "filt_gz", "pitch_deg", "yaw_deg"])
+
     try:
         from joycon_stream import JoyConStream
         stream = JoyConStream()
@@ -79,6 +93,7 @@ def main():
     trace_xy = []
     prev_t = None
     measure_start_wall = None
+    measure_index = -1
     last_draw = 0.0
     last_print = 0.0
     DRAW_INTERVAL_S = 0.05  # ~20fps, throttled so plotting doesn't starve sampling
@@ -90,86 +105,103 @@ def main():
     print(f"Resetting every {measure_interval_s:.2f}s ({args.bpm} BPM x {args.signature} beats/measure) on a wall-clock "
           f"timer -- NOT on detected swings. Swing continuously in time with that pace. Ctrl+C to stop early.")
     print(f"Low-pass cutoff: {args.cutoff_hz} Hz" + (" (disabled, raw gyro)" if args.cutoff_hz <= 0 else ""))
+    print(f"Logging every sample to {log_path}")
 
     filt_gx = filt_gy = filt_gz = 0.0
     filt_prev_t = None
 
     try:
-        # stream() yields (t, gx, gy, gz, magnitude, is_new) -- is_new
-        # distinguishes a genuinely fresh reading from a repeated cached
-        # one at the device's native ~66Hz rate (J2, Bug_Audit_2026-07-28.md).
-        # Skip duplicates for integration the same way game.py does for
-        # detection: a repeated reading isn't a new angular-velocity sample,
-        # integrating it again would double-count that instant's rotation.
-        for t, gx, gy, gz, _mag, is_new in stream.stream(duration_s=args.seconds):
-            if not is_new:
-                continue
+        try:
+            # stream() yields (t, gx, gy, gz, magnitude, is_new) -- is_new
+            # distinguishes a genuinely fresh reading from a repeated cached
+            # one at the device's native ~66Hz rate (J2, Bug_Audit_2026-07-28.md).
+            # Skip duplicates for integration the same way game.py does for
+            # detection: a repeated reading isn't a new angular-velocity sample,
+            # integrating it again would double-count that instant's rotation.
+            for t, gx, gy, gz, _mag, is_new in stream.stream(duration_s=args.seconds):
+                if not is_new:
+                    continue
 
-            # Exponential-moving-average low-pass, applied before
-            # integration: a real capture showed gz reversing sign every
-            # 50-150ms at thousands of deg/s during self-reported gentle
-            # swinging -- likely hand tremor riding on top of the intended
-            # slow gesture. alpha derived from --cutoff-hz and the actual
-            # sample dt so the cutoff means the same thing regardless of
-            # the device's live poll rate.
-            if args.cutoff_hz > 0 and filt_prev_t is not None:
-                dt_f = t - filt_prev_t
-                if dt_f > 0:
-                    alpha = 1.0 - math.exp(-2.0 * math.pi * args.cutoff_hz * dt_f)
-                    filt_gx += alpha * (gx - filt_gx)
-                    filt_gy += alpha * (gy - filt_gy)
-                    filt_gz += alpha * (gz - filt_gz)
-            else:
-                filt_gx, filt_gy, filt_gz = gx, gy, gz
-            filt_prev_t = t
-            if args.cutoff_hz > 0:
-                gx, gy, gz = filt_gx, filt_gy, filt_gz
+                raw_gx, raw_gy, raw_gz = gx, gy, gz
 
-            if measure_start_wall is None:
-                measure_start_wall = t
+                # Exponential-moving-average low-pass, applied before
+                # integration: a real capture showed gz reversing sign every
+                # 50-150ms at thousands of deg/s during self-reported gentle
+                # swinging -- likely hand tremor riding on top of the intended
+                # slow gesture. alpha derived from --cutoff-hz and the actual
+                # sample dt so the cutoff means the same thing regardless of
+                # the device's live poll rate.
+                if args.cutoff_hz > 0 and filt_prev_t is not None:
+                    dt_f = t - filt_prev_t
+                    if dt_f > 0:
+                        alpha = 1.0 - math.exp(-2.0 * math.pi * args.cutoff_hz * dt_f)
+                        filt_gx += alpha * (gx - filt_gx)
+                        filt_gy += alpha * (gy - filt_gy)
+                        filt_gz += alpha * (gz - filt_gz)
+                else:
+                    filt_gx, filt_gy, filt_gz = gx, gy, gz
+                filt_prev_t = t
+                if args.cutoff_hz > 0:
+                    gx, gy, gz = filt_gx, filt_gy, filt_gz
 
-            # Wall-clock reset schedule, independent of swing detection
-            # (the whole point -- IctusDetector under-fires on gentle
-            # continuous motion, so it can't drive this reliably).
-            if t - measure_start_wall >= measure_interval_s:
-                q = (1.0, 0.0, 0.0, 0.0)
-                trace_xy = []
-                measure_start_wall = t
+                if measure_start_wall is None:
+                    measure_start_wall = t
+                    measure_index = 0
+
+                # Wall-clock reset schedule, independent of swing detection
+                # (the whole point -- IctusDetector under-fires on gentle
+                # continuous motion, so it can't drive this reliably).
+                if t - measure_start_wall >= measure_interval_s:
+                    q = (1.0, 0.0, 0.0, 0.0)
+                    trace_xy = []
+                    measure_start_wall = t
+                    measure_index += 1
+                    prev_t = t
+
+                if prev_t is not None:
+                    dt = t - prev_t
+                    if dt > 0:
+                        dq = _quat_from_angvel_deg(gx, gy, gz, dt)
+                        q = _quat_mult(q, dq)
                 prev_t = t
 
-            if prev_t is not None:
-                dt = t - prev_t
-                if dt > 0:
-                    dq = _quat_from_angvel_deg(gx, gy, gz, dt)
-                    q = _quat_mult(q, dq)
-            prev_t = t
+                pitch, yaw = _quat_to_pitch_yaw_deg(q)
+                trace_xy.append((pitch, yaw))
 
-            pitch, yaw = _quat_to_pitch_yaw_deg(q)
-            trace_xy.append((pitch, yaw))
+                log_writer.writerow([f"{t:.4f}", measure_index, f"{raw_gx:.2f}", f"{raw_gy:.2f}", f"{raw_gz:.2f}",
+                                      f"{filt_gx:.2f}", f"{filt_gy:.2f}", f"{filt_gz:.2f}", f"{pitch:.3f}", f"{yaw:.3f}"])
 
-            if t - last_print >= PRINT_INTERVAL_S:
-                last_print = t
-                print(f"raw gx={gx:8.1f} gy={gy:8.1f} gz={gz:8.1f}  |  integrated pitch={pitch:7.2f} yaw={yaw:7.2f}  |  trace points={len(trace_xy)}")
+                if t - last_print >= PRINT_INTERVAL_S:
+                    last_print = t
+                    print(f"raw gx={raw_gx:8.1f} gy={raw_gy:8.1f} gz={raw_gz:8.1f}  |  integrated pitch={pitch:7.2f} yaw={yaw:7.2f}  |  trace points={len(trace_xy)}")
 
-            if t - last_draw >= DRAW_INTERVAL_S and len(trace_xy) >= 2:
-                last_draw = t
-                trace_size = _bounding_size(trace_xy) or 1.0
-                ref_size = _bounding_size(reference) or 1.0
-                scale = ref_size / trace_size
-                tx = [p[0] * scale for p in trace_xy]
-                ty = [p[1] * scale for p in trace_xy]
-                trace_line.set_data(tx, ty)
-                elapsed_in_measure = t - measure_start_wall
-                title.set_text(f"{args.signature}/4 @ {args.bpm} BPM -- {elapsed_in_measure:.1f}/{measure_interval_s:.1f}s into measure")
-                # plt.pause() (not just draw_idle()+flush_events()) --
-                # draw_idle() only *schedules* a redraw and TkAgg doesn't
-                # reliably flush it without pause() actually pumping the
-                # GUI event loop. draw_idle()+flush_events() alone is a
-                # common cause of a live plot window that opens but never
-                # visibly updates.
-                plt.pause(0.001)
-    except KeyboardInterrupt:
-        print("\nStopped.")
+                if t - last_draw >= DRAW_INTERVAL_S and len(trace_xy) >= 2:
+                    last_draw = t
+                    trace_size = _bounding_size(trace_xy) or 1.0
+                    ref_size = _bounding_size(reference) or 1.0
+                    scale = ref_size / trace_size
+                    tx = [p[0] * scale for p in trace_xy]
+                    ty = [p[1] * scale for p in trace_xy]
+                    trace_line.set_data(tx, ty)
+                    elapsed_in_measure = t - measure_start_wall
+                    title.set_text(f"{args.signature}/4 @ {args.bpm} BPM -- {elapsed_in_measure:.1f}/{measure_interval_s:.1f}s into measure")
+                    # plt.pause() (not just draw_idle()+flush_events()) --
+                    # draw_idle() only *schedules* a redraw and TkAgg doesn't
+                    # reliably flush it without pause() actually pumping the
+                    # GUI event loop. draw_idle()+flush_events() alone is a
+                    # common cause of a live plot window that opens but never
+                    # visibly updates.
+                    plt.pause(0.001)
+        except KeyboardInterrupt:
+            print("\nStopped.")
+    finally:
+        # Always persist a record, even on Ctrl+C or a mid-run exception
+        # (feedback, 2026-07-29) -- nothing to "check afterward" is not an
+        # acceptable failure mode for a live diagnostic tool.
+        log_file.close()
+        fig.savefig(snapshot_path, dpi=120)
+        print(f"Log saved: {log_path}")
+        print(f"Final snapshot saved: {snapshot_path}")
 
     print("Done. Close the plot window to exit.")
     plt.ioff()
