@@ -17,6 +17,10 @@
   }
   #traceCanvas { background: #1a1a1a; border: 1px solid #333; }
   button { font-size: 14px; padding: 6px 14px; }
+  #refImgWrap { text-align: center; }
+  #refImgWrap img { max-width: 220px; background: #fff; border-radius: 4px; }
+  #refImgWrap.unavailable img { display: none; }
+  #refImgWrap p { color: #888; font-size: 12px; max-width: 220px; }
 </style>
 </head>
 <body>
@@ -40,6 +44,10 @@
     <canvas id="skelCanvas" class="skel" width="320" height="240"></canvas>
   </div>
   <canvas id="traceCanvas" width="500" height="500"></canvas>
+  <div id="refImgWrap">
+    <img id="refImg" src="assets/reference_2_4.png" alt="real conducting reference diagram">
+    <p id="refImgNote"></p>
+  </div>
 </div>
 
 <script type="module">
@@ -78,6 +86,17 @@ const REFERENCE = {
   4: [[0.0, 0.0], [0.0, -1.0], [-0.7, -0.4], [0.7, -0.4], [0.0, 0.0]],
 };
 
+// Real hand-drawn reference diagrams (user-supplied, 2026-07-29), shown
+// alongside the programmatic line-approximation instead of replacing it --
+// the diagram is what the user actually conducts against; the drawn line
+// is only there because it doubles as this page's scoring overlay. Only
+// 2/4 has a verified real diagram so far; 3/4 and 4/4 fall back to the
+// programmatic shape with an on-page note rather than silently reusing
+// the 2/4 image.
+const REFERENCE_IMAGES = {
+  2: "assets/reference_2_4.png",
+};
+
 // Fingertip landmark indices in MediaPipe Hands' 21-point model: thumb,
 // index, middle, ring, pinky tips. Averaging these tracks the "point" of
 // a fingers-together hand shape (the Italian conducting gesture), not a
@@ -99,12 +118,48 @@ let origin = null;
 let running = false;
 let stopAt = 0;
 
+// Top-of-motion reset detection (feedback 2026-07-29: "the starting point
+// should be from the top", not wherever a wall-clock timer happens to
+// catch the hand). Image-space y increases downward, so the physical top
+// (prep position) is a LOCAL MINIMUM of y -- detected one sample late, as
+// the moment y stops decreasing and starts increasing again (i.e. the
+// hand has started its downstroke toward beat 1). EMA-smoothed to avoid
+// tremor/noise triggering false tops; gated on both a minimum time since
+// the last reset and a minimum travelled range so a hand held nearly
+// still doesn't spam resets.
+let smoothX = null, smoothY = null;
+const Y_SMOOTH_ALPHA = 0.35;
+const Y_FLAT_EPSILON = 0.0015;
+let prevSmoothY = null, prevDir = 0; // dir: -1 moving up (toward top), +1 moving down
+let candidateTopX = null, candidateTopY = null;
+let minYSinceReset = null, maxYSinceReset = null;
+let lastResetPerfMs = 0;
+
 const video = document.getElementById("video");
 const skelCanvas = document.getElementById("skelCanvas");
 const skelCtx = skelCanvas.getContext("2d");
 const traceCanvas = document.getElementById("traceCanvas");
 const traceCtx = traceCanvas.getContext("2d");
 const statusEl = document.getElementById("status");
+const refImgWrap = document.getElementById("refImgWrap");
+const refImg = document.getElementById("refImg");
+const refImgNote = document.getElementById("refImgNote");
+const signatureSelect = document.getElementById("signature");
+
+function updateReferenceImage() {
+  const sig = parseInt(signatureSelect.value);
+  const src = REFERENCE_IMAGES[sig];
+  if (src) {
+    refImg.src = src;
+    refImgWrap.classList.remove("unavailable");
+    refImgNote.textContent = "Real reference diagram.";
+  } else {
+    refImgWrap.classList.add("unavailable");
+    refImgNote.textContent = `No verified real diagram for ${sig}/4 yet -- the gray line on the trace canvas is an unverified programmatic approximation.`;
+  }
+}
+signatureSelect.addEventListener("change", updateReferenceImage);
+updateReferenceImage();
 
 function drawTrace() {
   const W = traceCanvas.width, H = traceCanvas.height;
@@ -184,14 +239,45 @@ function onResults(landmarksList) {
     x = 1.0 - (FINGERTIP_IDX.reduce((s, i) => s + landmarks[i].x, 0) / FINGERTIP_IDX.length);
     y = FINGERTIP_IDX.reduce((s, i) => s + landmarks[i].y, 0) / FINGERTIP_IDX.length;
 
-    if (measureStartWall === null) { measureStartWall = now; measureIndex = 0; }
-    if (now - measureStartWall >= measureIntervalMs) {
-      traceXY = []; measureStartWall = now; measureIndex += 1; origin = [x, y];
-    }
-    if (origin === null) origin = [x, y];
+    if (measureStartWall === null) measureStartWall = now;
 
-    nx = (x - origin[0]);
-    ny = -(y - origin[1]); // image y-down -> plot y-up
+    smoothX = smoothX === null ? x : smoothX + Y_SMOOTH_ALPHA * (x - smoothX);
+    smoothY = smoothY === null ? y : smoothY + Y_SMOOTH_ALPHA * (y - smoothY);
+
+    let dir = prevDir;
+    if (prevSmoothY !== null) {
+      const dy = smoothY - prevSmoothY;
+      if (dy < -Y_FLAT_EPSILON) dir = -1;
+      else if (dy > Y_FLAT_EPSILON) dir = 1;
+    }
+
+    if (minYSinceReset === null) { minYSinceReset = smoothY; maxYSinceReset = smoothY; }
+    minYSinceReset = Math.min(minYSinceReset, smoothY);
+    maxYSinceReset = Math.max(maxYSinceReset, smoothY);
+
+    // A local min just occurred at the *previous* sample: it was moving up
+    // (dir -1) and has now turned to moving down (dir +1). That previous
+    // point -- not this one -- is the true top.
+    if (prevDir === -1 && dir === 1 && candidateTopX !== null) {
+      const rangeSinceReset = maxYSinceReset - minYSinceReset;
+      const minResetGapMs = Math.min(300, measureIntervalMs * 0.4);
+      if (now - lastResetPerfMs > minResetGapMs && rangeSinceReset > 0.03) {
+        origin = [candidateTopX, candidateTopY];
+        traceXY = [];
+        measureIndex += 1;
+        measureStartWall = now;
+        lastResetPerfMs = now;
+        minYSinceReset = smoothY; maxYSinceReset = smoothY;
+      }
+    }
+
+    candidateTopX = smoothX; candidateTopY = smoothY;
+    prevSmoothY = smoothY; prevDir = dir;
+
+    if (origin === null) origin = [smoothX, smoothY]; // fallback until the first real top is found
+
+    nx = (smoothX - origin[0]);
+    ny = -(smoothY - origin[1]); // image y-down -> plot y-up
     traceXY.push([nx, ny]);
   }
 
@@ -235,6 +321,9 @@ async function start() {
   seconds = parseFloat(document.getElementById("seconds").value);
   measureIntervalMs = (60000 / bpm) * signature;
   measureStartWall = null; measureIndex = -1; traceXY = []; origin = null;
+  smoothX = null; smoothY = null; prevSmoothY = null; prevDir = 0;
+  candidateTopX = null; candidateTopY = null;
+  minYSinceReset = null; maxYSinceReset = null; lastResetPerfMs = 0;
   runId = new Date().toISOString().replace(/[:.]/g, "-");
   running = true;
   stopAt = performance.now() + seconds * 1000;
@@ -256,7 +345,7 @@ async function start() {
     video.play();
   }
 
-  statusEl.textContent = `Running: ${signature}/4 @ ${bpm} BPM for ${seconds}s. Reset every ${(measureIntervalMs/1000).toFixed(2)}s (wall clock, not gesture-detected).`;
+  statusEl.textContent = `Running: ${signature}/4 @ ${bpm} BPM for ${seconds}s. Trace resets when your hand reaches the top of its motion (detected), not on a fixed timer.`;
   requestAnimationFrame(detectLoop);
 }
 
