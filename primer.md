@@ -1,98 +1,101 @@
 # Primer
 
 ## Active project
-Swinger — All-Star Swingers (D:\VS Code\Swinger) — conducting-rhythm baseball
-minigame, v1 Python prototype. `CLAUDE.md`, `Swinger_Build_Plan_v1.md`
-(original spec) + `Swinger_Build_Plan_v2.md` (post-audit stabilization plan,
-appeared mid-session — Phase 3.5 bugfix-verification → Phase 4 tuning →
-Phase 5 manual playtest) are source of truth.
+Swinger — All-Star Swingers (D:\VS Code\Swinger). Started as a v1 Python
+conducting-rhythm baseball prototype (`Swinger_Build_Plan_v1.md`), ported
+to Unity as v3 (`UnitySwinger/`, 2.5D fixed-camera, Super Mario Party
+style). v4 (`Swinger_Build_Plan_v4.md`) pivoted the *design* from a
+timing-verdict minigame to a conducting-gesture trace trainer; v4 Phases A
+and C are done. v4 Phase B (can motion be tracked well enough to show a
+student their own conducting shape?) asked the right question but got the
+wrong first answer: Joy-Con gyro orientation integration was tried and
+correctly diagnosed as wrong (gyro measures rotation, not the hand's
+actual position; real hardware showed tremor at thousands of deg/s, no
+stable shape signal). The pivot to webcam hand-position tracking worked.
 
-## Completed
-- All v1 modules code-complete (unchanged from prior session): `src/`'s 9
-  modules + 4 offline tests, all green.
-- **This session: fixed all 17 findings in `reviews/Bug_Audit_2026-07-17.md`**
-  (A4, A5, A8, F1–F10), in the order the audit's "Summary for Sonnet"
-  specified:
-  1. **F3+A5** — unified poll rate (`joycon_stream.POLL_INTERVAL_S`, 200Hz)
-     across all 3 call sites, consecutive-duplicate-read skip in
-     `stream()`, `RISE_RATE_THRESHOLD` re-expressed as units/**second**
-     (was units/sample) computed from actual inter-sample dt in
-     `ictus_detector.py`. Verified: replaying real `src/swings.csv` through
-     the fixed pipeline now yields 10/10 events (was 15 raw / 5 real
-     swings — the ~50% inflation A5 flagged).
-  2. **F2** — `IctusEvent.max_derivative` field, computed during RISING in
-     `ictus_detector.py`, threaded through `game.py::_judge` and
-     `settings_menu.py`'s calibration seed (falls back to peak/rise_duration
-     only when max_derivative is unset, e.g. hand-built synthetic events in
-     tests). Verified: a synthetic `rise_duration==0` violent swing now
-     buckets "High" instead of the old "Low"/Bunt bug.
-  3. **F1** — `FALLBACK_SHARPNESS_LOW_HIGH` changed from placeholder
-     (150–600) to (120000–330000), derived by reprocessing the existing
-     `swings.csv` through the fixed pipeline (**not** a fresh capture — no
-     hardware available; flagged as unverified-until-recaptured in the code
-     comment and must be redone per Build Plan v2 Phase 4).
-  4. **A4** — `game.py::run_game()` now checks `judge.measure_index <
-     config.max_measures` before calling `judge.tick()`, avoiding the
-     `IndexError` past 500 measures.
-  5. **F4** — replaced blocking `pygame.time.wait(600)` after each judgment
-     with a non-blocking "popup visible until t" flag inside the normal
-     sampling loop, so beat-2 wind-up ictuses and QUIT events are no longer
-     lost during the popup.
-  6. **F5+F6** — `settings_menu.run_calibration()` now leaves
-     `calibration.json` untouched when calibration fails/under-matches
-     (`from_default` or <3 matches), and seeds the sharpness reference only
-     from swings matched to a practice measure, not every detected event.
-  7. **F7–F10+A8** — `MeasureJudge`'s window now centers on
-     `beat1 + calibration_offset_s`; `run_calibration()`'s return type is
-     now consistently `None`; `joycon_stream.py`'s `ImportError` message
-     surfaces the real underlying exception + correct Windows package names
-     (`hidapi`, `PyGLM`); install notes added to `Swinger_Build_Plan_v1.md`
-     Phase 0; added `.gitignore` (`calibration.json`, `__pycache__`);
-     `primer.md.lnk` stale-shortcut issue resolved by copying the real
-     `primer.md` into the project root (`.lnk` left in place, unused).
-- **New test**: `tests/test_full_loop_probe.py` — synthetic 500-measure
-  MeasureJudge run (Build Plan v2's Phase 3.5 exit criterion): confirms no
-  IndexError at the max_measures boundary and a non-empty
-  `windup_interval_variance()` (proves F4's fix actually reaches
-  session_log). All 5 offline tests green after the fixes.
+**`Swinger_Build_Plan_v5.md` is now the active plan.** It reframes the
+validated web hand-tracking tool (`research/hand_tracking_web/`) as the
+thing to build into a complete playable game, not a research spike. **The
+baseball minigame and the Unity/Joy-Con port are paused, not abandoned** —
+parked in their current Unity state until v5 reaches its own "complete"
+bar. v5 also folds in an audit of the current tool (Phase 0 fixes) before
+the four requested feature changes (Phase 1) and further polish (Phase 2).
 
-- **Also completed (Build Plan v2 Phase 6 closeout, non-hardware parts
-  only):** added a dated addendum to `Swinger_Build_Plan_v1.md` Section 6
-  noting F3's real-device findings (native rate ~66Hz, ~10,000-unit resting
-  magnitude bias) as a lead for the deferred per-axis-calibration item;
-  added a "Unity port readiness" note to `CLAUDE.md`'s Platform roadmap
-  confirming the pure-logic/presentation split still holds post-bugfix
-  (`beat_schedule.py`/`ictus_detector.py`/`scoring.py`/`session_log.py`/
-  `calibration.py` are pygame-free; `game.py`/`metronome.py`/
-  `settings_menu.py` are the presentation layer Unity replaces).
-  `primer.md` restore and `.gitignore` (Phase 6's other two items) were
-  already done as part of the F7-F10+A8 cleanup pass.
+## Completed (chronological, most recent last)
+- v1: 17-bug audit fully fixed, offline tests green (see git history —
+  this file used to describe only this phase and had gone stale by 2 weeks
+  and 4 build-plan-versions; that staleness is exactly what v5's audit
+  finding A1 flagged and this rewrite fixes).
+- v3: Unity port of the v1 logic (`Assets/Scripts/Logic/` — engine-free,
+  kept in sync with `src/`'s Python modules).
+- v4 Phase A: G1/G2/G3/J1/J2/etc. bug-audit fixes ported into
+  `MeasureJudge.cs`/`JoyConUdpReceiver.cs`, signal-loss UI, Unity session
+  log export. Verified via Unity batch-mode tests (8/8 green) and a real
+  playtest (6 Perfect/5 Great/3 Miss, no drift).
+- v4 Phase C: canonical 2/4, 3/4, 4/4 conducting reference patterns in
+  `src/conducting_patterns.py` (`resample_path()`, `CANONICAL_PATTERNS`).
+  2/4 later corrected against a real hand-drawn diagram the user supplied
+  (prep top-left → down to beat 1, the lowest point → rebound up-right to
+  beat 2). 3/4 and 4/4 remain unverified schematic guesses — no real
+  diagrams for those two yet.
+- v4 Phase B (superseded, see above): `research/gesture_trace_spike.py`'s
+  `integrate_orientation()` and `research/live_trace_view.py` implement
+  the gyro approach — **both now explicitly marked dead/superseded in
+  file-header comments** (v5 Phase 0, audit A6). `shape_distance()` and
+  `resample_path()` in the same spike file are still alive and reused by
+  the web tool.
+- Pivot validated: `research/live_position_view.py` (OpenCV color-blob,
+  proof of concept) → `research/hand_tracking_web/` (MediaPipe
+  `HandLandmarker`, the real tool). Iterated through real bugs found by
+  live testing: non-mirrored feed, wrong reference shape, origin landing
+  wherever a timer caught the hand (fixed via an explicit calibration
+  hold), a live "top-detection" approach that double-fired per measure
+  (replaced by the calibration + metronome-driven reset), 3 separate UI
+  panels merged into one canvas. Latest tool commit before v5: `3231252`.
+- **v5 Phase 0 (this session, in progress)**: dead-code files labeled
+  (`live_trace_view.py`, `integrate_orientation()`); `.catch()` added
+  around `ensureModelAndCamera()` so a denied/missing camera shows a
+  message instead of hanging on "Loading model..." forever; this file
+  rewritten for real. **Still open**: committing/triaging the working
+  tree (see below) and the rest of Phase 0's exit criterion.
 
 ## Exact next step
-Everything reachable without physical hardware or a second human is done.
-What's left is entirely gated on those two things, per
-`Swinger_Build_Plan_v2.md`'s phase order (do not skip ahead):
-1. **Phase 3.5's last item** — a *fresh* Phase 0 CSV recapture on real
-   hardware to confirm F3's raw-vs-deduplicated counts now match 1:1 (the
-   synthetic/reprocessed verification is done; this specific check needs a
-   live device).
-2. **Phase 4** — real threshold tuning against soft/med/hard captures under
-   the fixed pipeline; re-derive `FALLBACK_SHARPNESS_LOW_HIGH` from that
-   fresh data instead of the reprocessed old `swings.csv`.
-3. **Phase 5** — the full manual playtest of `game.py` (stream → detector →
-   judge → render → summary → settings), including handing the controller
-   to a second person per v1 Section 0's actual "v0 prototype-ready" bar.
+Finish v5 Phase 0, then move to Phase 1 (see `Swinger_Build_Plan_v5.md`):
+1. **Triage the working tree** (v5 audit A2) — needs a user decision on:
+   Unity `Packages/manifest.json`, `packages-lock.json`,
+   `ProjectSettings/PackageManagerSettings.asset`, `ProjectVersion.txt`,
+   untracked `ProjectSettings/PhysicsCoreProjectSettings2D.asset` (side
+   effects of an earlier 6000.4.1f1→6000.5.5f1 migration, never
+   confirmed deliberate); untracked `Assets/_Recovery/` (Unity crash-
+   autosave debris); two empty untracked root files, `service.conf.lock`
+   and `system.conf.lock`, of unknown origin — not created by any tool
+   used this session, don't delete blindly. `Swinger_Build_Plan_v5.md`
+   itself and `research/captures/conduct_24_take2*` are real deliberate
+   artifacts and should just be committed.
+2. **Phase 1** — the four requested changes to `hand_tracking_web/`:
+   calibrate the reference image's pixel space into the same logical unit
+   space `REFERENCE` uses (audit A3 — currently just a decorative
+   thumbnail), render it centered/semi-transparent on the canvas in place
+   of the gray vector line (only for signatures with a real photo — 2/4
+   only, so far), change the trace color to gray, and port
+   `shape_distance()`/`resample_path()` into JS for real per-measure
+   scoring + a session summary.
+3. **Phase 2** — real 3/4 and 4/4 reference diagrams, a closing note on
+   v4 Phase B's now-superseded question, an explicit decision on whether
+   this stays a browser tool or eventually ports to Unity, remaining UX
+   polish (calibration countdown audible cue, replay-without-reload flow).
 
-## Open blockers
-- No physical Joy-Con available in this environment — blocks all three
-  remaining Phase 3.5/4/5 items above.
-- `game.py` end-to-end still has never been run once, simulated or
-  otherwise, with real pygame rendering — only `MeasureJudge` (pure logic)
-  has been exercised via synthetic probes.
-- Repo still not committed to git — user hasn't asked for a commit this
-  session either; `.gitignore` was added but nothing staged/committed.
-- `FALLBACK_SHARPNESS_LOW_HIGH` (scoring.py) is explicitly flagged
-  unverified — reprocessed old capture, not a fresh one; don't trust it past
-  "better than the old 3-orders-of-magnitude-off placeholder."
-- Phase 5 additionally needs a second human tester, not just hardware —
-  flag this separately from the hardware blocker when picking this back up.
+## Open blockers / notes
+- **Standing rules** (memory, not in this repo): commit automatically per
+  verified bug fix or phase; always persist logs + final-state snapshots
+  for live/interactive tools, never just print/show. Both were already
+  being followed in `hand_tracking_web/` before v5 started.
+- Unity migration files and `Assets/_Recovery/` (see step 1 above) have
+  been sitting uncommitted/untriaged across at least two sessions now —
+  don't keep deferring without at least asking the user directly.
+- `src/swings_counted.csv` — still an unexplained standing local
+  modification, never touch without being asked.
+- Python: use `C:\Users\user\AppData\Local\Programs\Python\Python313\
+  python.exe` for anything needing pygame — default `python`/`py -3`
+  resolves to 3.14, no pygame wheel yet. Not needed for the web tool
+  itself (pure browser JS + a stdlib-only `server.py`).
