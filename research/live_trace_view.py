@@ -1,4 +1,15 @@
-"""Build Plan v4 Phase B: live real-time gesture trace viewer.
+"""SUPERSEDED / DEAD (2026-07-29, Build Plan v5 Phase 0, audit A6) -- do
+not build on this file. Gyro-orientation tracking was tried and correctly
+abandoned this session: a gyroscope measures angular velocity, not the
+hand's actual position in space, and real hardware data showed tremor at
+thousands of deg/s with no stable shape signal underneath it. The working
+replacement is webcam hand-position tracking
+(`research/live_position_view.py`'s OpenCV spike, then the validated
+`research/hand_tracking_web/` MediaPipe tool). Left in the repo for
+provenance only -- see Swinger_Build_Plan_v5.md Section 0 for the full
+story.
+
+Build Plan v4 Phase B: live real-time gesture trace viewer.
 
 Diagnostic tool, not the Phase D Unity feature -- shows the same
 quaternion-integrated orientation trace gesture_trace_spike.py computes

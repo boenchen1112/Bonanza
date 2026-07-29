@@ -83,7 +83,15 @@ def integrate_orientation(
     axis_y: str = "gy",
     method: str = "quat",
 ) -> list[tuple[float, float, float]]:
-    """Gyro-only orientation integration (no accelerometer fusion), reset
+    """SUPERSEDED / DEAD (2026-07-29, Build Plan v5 Phase 0, audit A6) --
+    do not build on this. Gyro measures angular velocity, not the hand's
+    actual position; real hardware data showed tremor at thousands of
+    deg/s with no stable shape signal underneath. Replaced by webcam
+    hand-position tracking (research/hand_tracking_web/). Left for
+    provenance only -- unlike this function, shape_distance() and
+    resample_path() below are still live and reused by the web tool.
+
+    Gyro-only orientation integration (no accelerometer fusion), reset
     to (0, 0) at each time in reset_times (the detected-downbeat reset
     Phase B's spike plan calls for, bounding drift to within one measure
     instead of the whole session).

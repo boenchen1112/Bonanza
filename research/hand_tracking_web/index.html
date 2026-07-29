@@ -355,7 +355,16 @@ async function start() {
   statusEl.textContent = "Loading model...";
   appState = "countdown";
   requestAnimationFrame(detectLoop); // drives rendering + detection through calibration too
-  await ensureModelAndCamera();
+  try {
+    await ensureModelAndCamera();
+  } catch (err) {
+    // getUserMedia() rejects (permission denied, no camera, HTTPS/localhost
+    // required) or the model fails to load -- previously unhandled, so the
+    // UI just sat on "Loading model..." forever with no explanation.
+    appState = "idle";
+    statusEl.textContent = `Camera or model failed to load (${err.name || "error"}: ${err.message || err}). Check camera permissions and reload, then try again.`;
+    return;
+  }
 
   statusEl.textContent = "Hold your hand at the TOP/prep position and stay still...";
   await new Promise(r => setTimeout(r, CALIBRATION_HOLD_MS));
