@@ -18,6 +18,7 @@ Requires a paired right Joy-Con (same as joycon_stream.py) and a display
 """
 
 import argparse
+import math
 import os
 import sys
 import time
@@ -33,6 +34,15 @@ def main():
     parser.add_argument("--bpm", type=float, default=80.0)
     parser.add_argument("--signature", type=int, default=2, choices=[2, 3, 4])
     parser.add_argument("--seconds", type=float, default=60.0)
+    parser.add_argument(
+        "--cutoff-hz", type=float, default=2.5,
+        help="Low-pass cutoff (Hz) applied to raw gx/gy/gz before integration, via an "
+             "exponential moving average. A real capture (2026-07-29) showed gz reversing "
+             "sign every 50-150ms at thousands of deg/s during a self-reported gentle, "
+             "continuous swing -- a scale/frequency consistent with hand tremor riding on "
+             "top of the intended slow gesture, not the gesture itself. 0 disables filtering "
+             "(raw, same as before this option existed).",
+    )
     args = parser.parse_args()
 
     beat_interval_s = 60.0 / args.bpm
@@ -79,6 +89,10 @@ def main():
     print(f"Reference: {args.signature}/4, strokes {CANONICAL_PATTERNS[args.signature].strokes}")
     print(f"Resetting every {measure_interval_s:.2f}s ({args.bpm} BPM x {args.signature} beats/measure) on a wall-clock "
           f"timer -- NOT on detected swings. Swing continuously in time with that pace. Ctrl+C to stop early.")
+    print(f"Low-pass cutoff: {args.cutoff_hz} Hz" + (" (disabled, raw gyro)" if args.cutoff_hz <= 0 else ""))
+
+    filt_gx = filt_gy = filt_gz = 0.0
+    filt_prev_t = None
 
     try:
         # stream() yields (t, gx, gy, gz, magnitude, is_new) -- is_new
@@ -90,6 +104,26 @@ def main():
         for t, gx, gy, gz, _mag, is_new in stream.stream(duration_s=args.seconds):
             if not is_new:
                 continue
+
+            # Exponential-moving-average low-pass, applied before
+            # integration: a real capture showed gz reversing sign every
+            # 50-150ms at thousands of deg/s during self-reported gentle
+            # swinging -- likely hand tremor riding on top of the intended
+            # slow gesture. alpha derived from --cutoff-hz and the actual
+            # sample dt so the cutoff means the same thing regardless of
+            # the device's live poll rate.
+            if args.cutoff_hz > 0 and filt_prev_t is not None:
+                dt_f = t - filt_prev_t
+                if dt_f > 0:
+                    alpha = 1.0 - math.exp(-2.0 * math.pi * args.cutoff_hz * dt_f)
+                    filt_gx += alpha * (gx - filt_gx)
+                    filt_gy += alpha * (gy - filt_gy)
+                    filt_gz += alpha * (gz - filt_gz)
+            else:
+                filt_gx, filt_gy, filt_gz = gx, gy, gz
+            filt_prev_t = t
+            if args.cutoff_hz > 0:
+                gx, gy, gz = filt_gx, filt_gy, filt_gz
 
             if measure_start_wall is None:
                 measure_start_wall = t
