@@ -54,10 +54,17 @@ def _hue_ranges(hue: float, tolerance: float) -> list[tuple[float, float]]:
     return [(lo, hi)]
 
 
-def calibrate_color(cap: cv2.VideoCapture) -> list[tuple[np.ndarray, np.ndarray]]:
+def calibrate_color(cap: cv2.VideoCapture, mirror: bool = True) -> list[tuple[np.ndarray, np.ndarray]]:
     """Shows one live frame; user clicks the target color; returns a list
     of (hsv_lower, hsv_upper) bounds for cv2.inRange (usually one, two if
-    the sampled hue wraps around 0/179)."""
+    the sampled hue wraps around 0/179).
+
+    mirror flips the displayed/sampled frame horizontally (default on): a
+    raw webcam frame shows what the camera literally sees, not a mirror
+    view -- move your hand right and it appears to move left on screen.
+    That's disorienting for a self-view tool where you're trying to match
+    your motion to what you see, and mirroring is what every other
+    self-facing camera app (video calls, etc.) does by default."""
     sampled = {"hsv": None}
 
     def on_click(event, x, y, flags, param):
@@ -65,6 +72,8 @@ def calibrate_color(cap: cv2.VideoCapture) -> list[tuple[np.ndarray, np.ndarray]
             ret, frame = cap.read()
             if not ret:
                 return
+            if mirror:
+                frame = cv2.flip(frame, 1)
             hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
             y0, y1 = max(0, y - CALIB_PATCH_RADIUS), y + CALIB_PATCH_RADIUS
             x0, x1 = max(0, x - CALIB_PATCH_RADIUS), x + CALIB_PATCH_RADIUS
@@ -80,6 +89,8 @@ def calibrate_color(cap: cv2.VideoCapture) -> list[tuple[np.ndarray, np.ndarray]
         ret, frame = cap.read()
         if not ret:
             continue
+        if mirror:
+            frame = cv2.flip(frame, 1)
         display = frame.copy()
         if sampled["hsv"] is not None:
             cv2.putText(display, "Sampled -- press any key to confirm, or click again", (10, 30),
@@ -162,6 +173,9 @@ def main():
     parser.add_argument("--signature", type=int, default=2, choices=[2, 3, 4])
     parser.add_argument("--seconds", type=float, default=60.0)
     parser.add_argument("--camera-index", type=int, default=0)
+    parser.add_argument("--width", type=int, default=1280, help="Requested capture width (camera may not honor it)")
+    parser.add_argument("--height", type=int, default=720, help="Requested capture height (camera may not honor it)")
+    parser.add_argument("--no-mirror", action="store_true", help="Disable the horizontal mirror flip (on by default)")
     args = parser.parse_args()
 
     measure_interval_s = (60.0 / args.bpm) * args.signature
@@ -170,8 +184,16 @@ def main():
     cap = cv2.VideoCapture(args.camera_index)
     if not cap.isOpened():
         sys.exit(f"ERROR: could not open camera index {args.camera_index}")
+    # Request a larger capture frame -- user reported the tracked range felt
+    # cramped. cv2 silently ignores unsupported resolutions and keeps the
+    # camera's default, so this is a best-effort request, not a guarantee.
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, args.width)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, args.height)
+    actual_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    actual_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    print(f"Capture resolution: requested {args.width}x{args.height}, got {actual_w}x{actual_h}")
 
-    color_bounds = calibrate_color(cap)
+    color_bounds = calibrate_color(cap, mirror=not args.no_mirror)
 
     # Always log to disk (feedback, 2026-07-29): live/interactive tools must
     # persist a record automatically, not rely on the user transcribing a
@@ -200,11 +222,14 @@ def main():
     display = None
     canvas = draw_canvas(reference, [], 0.0, measure_interval_s)
 
+    mirror = not args.no_mirror
     try:
         while time.perf_counter() - start_time < args.seconds:
             ret, frame = cap.read()
             if not ret:
                 continue
+            if mirror:
+                frame = cv2.flip(frame, 1)
             now = time.perf_counter()
 
             target = find_target(frame, color_bounds)
