@@ -62,6 +62,8 @@ def main():
     ax.legend(loc="upper right")
     title = ax.set_title(f"{args.signature}/4 @ {args.bpm} BPM -- swing now")
     fig.tight_layout()
+    plt.show(block=False)
+    plt.pause(0.1)  # force the window to actually appear before the read loop starts
 
     q = (1.0, 0.0, 0.0, 0.0)
     trace_xy = []
@@ -117,8 +119,13 @@ def main():
                 trace_line.set_data(tx, ty)
                 elapsed_in_measure = t - measure_start_wall
                 title.set_text(f"{args.signature}/4 @ {args.bpm} BPM -- {elapsed_in_measure:.1f}/{measure_interval_s:.1f}s into measure")
-                fig.canvas.draw_idle()
-                fig.canvas.flush_events()
+                # plt.pause() (not just draw_idle()+flush_events()) --
+                # draw_idle() only *schedules* a redraw and TkAgg doesn't
+                # reliably flush it without pause() actually pumping the
+                # GUI event loop. draw_idle()+flush_events() alone is a
+                # common cause of a live plot window that opens but never
+                # visibly updates.
+                plt.pause(0.001)
     except KeyboardInterrupt:
         print("\nStopped.")
 
