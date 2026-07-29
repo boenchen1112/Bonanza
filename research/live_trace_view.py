@@ -75,7 +75,16 @@ def main():
           f"timer -- NOT on detected swings. Swing continuously in time with that pace. Ctrl+C to stop early.")
 
     try:
-        for t, gx, gy, gz in stream.stream(duration_s=args.seconds):
+        # stream() yields (t, gx, gy, gz, magnitude, is_new) -- is_new
+        # distinguishes a genuinely fresh reading from a repeated cached
+        # one at the device's native ~66Hz rate (J2, Bug_Audit_2026-07-28.md).
+        # Skip duplicates for integration the same way game.py does for
+        # detection: a repeated reading isn't a new angular-velocity sample,
+        # integrating it again would double-count that instant's rotation.
+        for t, gx, gy, gz, _mag, is_new in stream.stream(duration_s=args.seconds):
+            if not is_new:
+                continue
+
             if measure_start_wall is None:
                 measure_start_wall = t
 
