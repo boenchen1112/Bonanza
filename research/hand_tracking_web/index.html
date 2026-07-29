@@ -13,14 +13,11 @@
 
   /* Single container: camera feed + skeleton + live trace + reference
      pattern are all drawn into one canvas (feedback 2026-07-29: "only 1
-     container with the three functions"); the real reference photo is an
-     absolutely-positioned inset thumbnail inside the SAME wrapper, not a
-     separate layout column. */
+     container with the three functions"). v5 Phase 1: the real reference
+     photo is now drawn INTO the canvas itself (centered/semi-transparent,
+     coordinate-mapped), not a separate absolutely-positioned thumbnail. */
   #stage { position: relative; width: 640px; height: 480px; }
   #mainCanvas { background: #1a1a1a; border: 1px solid #333; }
-  #refThumb { position: absolute; top: 8px; right: 8px; width: 120px; background: #fff;
-    border-radius: 4px; padding: 2px; }
-  #refThumb.unavailable { display: none; }
 </style>
 </head>
 <body>
@@ -43,7 +40,6 @@
 <div id="stage">
   <video id="video" autoplay playsinline muted style="display:none"></video>
   <canvas id="mainCanvas" width="640" height="480"></canvas>
-  <img id="refThumb" class="unavailable" src="assets/reference_2_4.png" alt="real conducting reference diagram">
 </div>
 
 <script type="module">
@@ -74,22 +70,65 @@ const HAND_CONNECTIONS = [
 // Canonical reference patterns, ported from src/conducting_patterns.py.
 // 2/4 corrected 2026-07-29 from a real conducting-pedagogy diagram: prep
 // up-left, down to beat 1 (lowest point), rebound up-right to beat 2.
+//
+// v5 Phase 1 (audit A3/A2): 2/4's points are re-centered so the PREP point
+// sits at logical (0,0) -- calibration puts the trace's own start at
+// (0,0), so without this the reference's prep (originally (-0.2, 0.9))
+// would draw ~135px away from where the live trace actually begins even
+// though both are "the top." 3/4 and 4/4 already had prep at (0,0), so
+// they're unaffected. Re-centering a whole pattern by a constant offset
+// doesn't change shape_distance()'s bounding-size normalization (that's
+// translation invariant) -- only where it's drawn.
 const REFERENCE = {
-  2: [[-0.2, 0.9], [0.0, -1.0], [0.35, -0.3]],
+  2: [[0.0, 0.0], [0.2, -1.9], [0.55, -1.2]],
   3: [[0.0, 0.0], [-0.3, -1.0], [0.8, -0.3], [0.0, 0.0]],
   4: [[0.0, 0.0], [0.0, -1.0], [-0.7, -0.4], [0.7, -0.4], [0.0, 0.0]],
 };
 
 // Real hand-drawn reference diagrams (user-supplied, 2026-07-29). Only 2/4
 // has a verified real diagram so far; 3/4 and 4/4 fall back to the
-// programmatic line drawn on the canvas itself.
+// programmatic line drawn on the canvas itself, labeled as a placeholder.
 const REFERENCE_IMAGES = { 2: "assets/reference_2_4.png" };
+
+// v5 Phase 1 (audit A3): maps reference_2_4.png's pixel space onto the
+// same logical unit space REFERENCE[2] uses, via a similarity transform
+// (uniform scale + rotation + translation) solved from the two red dots
+// in the photo (beat 1 and beat 2) -- NOT a bounding-box approximation.
+// Solved once offline (find_anchors.py + a 2-point complex-number
+// similarity solve, session 2026-07-29) from:
+//   beat1 pixel (77.13, 201.43) -> logical (0.2, -1.9)  [recentered]
+//   beat2 pixel (84.87, 168.40) -> logical (0.55, -1.2) [recentered]
+// Residual on both anchor points is ~0 (exact by construction, 2 point
+// pairs fully determine a similarity transform); the ~13 degree rotation
+// term means the photo isn't quite upright relative to the numeric
+// REFERENCE[2] points above, so a plain bounding-box fit would have been
+// visibly wrong -- this is why anchor points matter here, not just scale.
+// w = A*(u - i*v) + B, where (u,v) is a pixel coord in the image bitmap
+// (v measured downward, as image pixels are) and w = Lx + i*Ly is the
+// logical (x-right, y-up) coordinate.
+const REFERENCE_IMAGE_ANCHORS = {
+  2: {
+    imgWidthPx: 157, imgHeightPx: 255,
+    Ar: 0.02244394038179057, Ai: -0.0053337153750030964,
+    Br: -0.4566924484943166, Bi: 3.0321795683257603,
+  },
+};
 
 // Fingertip landmark indices in MediaPipe Hands' 21-point model: thumb,
 // index, middle, ring, pinky tips. Averaging these tracks the "point" of
 // a fingers-together hand shape (the Italian conducting gesture), not a
 // single-finger pointing gesture.
 const FINGERTIP_IDX = [4, 8, 12, 16, 20];
+
+// getUserMedia is requested at this resolution below. MediaPipe landmark
+// x,y are each normalized 0..1 against their own dimension (width, height
+// separately) -- on a non-square 4:3 frame, a physically square gesture
+// therefore produces a y-delta about 640/480 = 4/3 larger than the
+// same-sized x-delta once both are expressed as fractions. Uncorrected,
+// every trace (and the shape_distance score against it) reads visibly
+// stretched vertically. VIDEO_ASPECT corrects this in onResults() below.
+const VIDEO_W = 640, VIDEO_H = 480;
+const VIDEO_ASPECT = VIDEO_W / VIDEO_H;
 
 let runId = null;
 let bpm = 80, signature = 2, seconds = 60, scalePxPerUnit = 150;
@@ -142,7 +181,82 @@ function scheduleClick(time, isDownbeat) {
   osc.stop(time + 0.09);
 }
 
+// v5 Phase 1 (change 4): shape_distance() / resample_path(), ported
+// faithfully from research/gesture_trace_spike.py -- arc-length resample
+// both paths to n points, then average nearest-point distance, normalized
+// by the reference's bounding size after rescaling the trace to match it
+// (that rescale is scale-invariant by design: it was the fix for a real
+// unit-mismatch bug found against gyro data, and stays useful here since
+// camera distance to the hand varies run to run).
+function resamplePath(points, n) {
+  if (points.length < 2) return points.length ? Array(n).fill(points[0]) : [];
+  const segLens = [];
+  for (let i = 0; i < points.length - 1; i++) {
+    segLens.push(Math.hypot(points[i+1][0]-points[i][0], points[i+1][1]-points[i][1]));
+  }
+  const total = segLens.reduce((a,b) => a+b, 0);
+  if (total === 0) return Array(n).fill(points[0]);
+  const cum = [0];
+  segLens.forEach(l => cum.push(cum[cum.length-1] + l));
+  const result = [];
+  for (let i = 0; i < n; i++) {
+    const target = n > 1 ? (i / (n-1)) * total : 0;
+    let segIdx = 0;
+    while (segIdx < segLens.length - 1 && cum[segIdx+1] < target) segIdx++;
+    const segLen = segLens[segIdx] || 1e-9;
+    const frac = Math.min(Math.max((target - cum[segIdx]) / segLen, 0), 1);
+    const [x0,y0] = points[segIdx], [x1,y1] = points[segIdx+1];
+    result.push([x0 + frac*(x1-x0), y0 + frac*(y1-y0)]);
+  }
+  return result;
+}
+
+function boundingSizeArr(points) {
+  const xs = points.map(p=>p[0]), ys = points.map(p=>p[1]);
+  return Math.max(Math.max(...xs)-Math.min(...xs), Math.max(...ys)-Math.min(...ys));
+}
+
+function shapeDistance(tracePoints, referencePoints, n = 50) {
+  const resampledTrace = resamplePath(tracePoints, n);
+  const resampledRef = resamplePath(referencePoints, n);
+  const refSize = boundingSizeArr(resampledRef) || 1.0;
+  const traceSize = boundingSizeArr(resampledTrace) || 1.0;
+  const scale = refSize / traceSize;
+  const scaledTrace = resampledTrace.map(([x,y]) => [x*scale, y*scale]);
+  let total = 0;
+  scaledTrace.forEach(([tx,ty]) => {
+    let nearest = Infinity;
+    resampledRef.forEach(([rx,ry]) => { nearest = Math.min(nearest, Math.hypot(tx-rx, ty-ry)); });
+    total += nearest;
+  });
+  return (total / scaledTrace.length) / refSize;
+}
+
+let sessionScores = []; // {measureIndex, distance, matchPct}
+let lastScoreText = "";
+
+function scoreMeasure(idx, trace) {
+  const distance = shapeDistance(trace, REFERENCE[signature]);
+  // distance is a normalized average-nearest-point-distance -- 0 is a
+  // perfect match; there's no natural upper bound, so clamp for a
+  // student-facing percentage rather than showing a raw geometric number.
+  const matchPct = Math.max(0, Math.round((1 - Math.min(distance, 1)) * 100));
+  sessionScores.push({ measureIndex: idx, distance, matchPct });
+  lastScoreText = `measure ${idx} match: ${matchPct}%`;
+  fetch("/score", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ run_id: runId, measure_index: idx, distance, match_pct: matchPct }),
+  }).catch(() => {});
+}
+
 function onMeasureBoundary() {
+  // Score the measure that just ended BEFORE clearing its trace. The very
+  // first boundary call transitions measureIndex from -1 to 0 -- that
+  // closes out only a partial fragment collected before the run
+  // stabilized, not a real measure, so it's deliberately not scored.
+  if (measureIndex >= 0 && traceXY.length >= 2) {
+    scoreMeasure(measureIndex, traceXY);
+  }
   traceXY = [];
   measureIndex += 1;
   measureStartWall = performance.now();
@@ -179,21 +293,14 @@ const video = document.getElementById("video");
 const mainCanvas = document.getElementById("mainCanvas");
 const ctx = mainCanvas.getContext("2d");
 const statusEl = document.getElementById("status");
-const refThumb = document.getElementById("refThumb");
-const signatureSelect = document.getElementById("signature");
 
-function updateReferenceThumb() {
-  const sig = parseInt(signatureSelect.value);
-  const src = REFERENCE_IMAGES[sig];
-  if (src) { refThumb.src = src; refThumb.classList.remove("unavailable"); }
-  else { refThumb.classList.add("unavailable"); }
-}
-signatureSelect.addEventListener("change", updateReferenceThumb);
-updateReferenceThumb();
-
-function boundingSize(points) {
-  const xs = points.map(p => p[0]), ys = points.map(p => p[1]);
-  return Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) || 1.0;
+// Reference photos are drawn into mainCanvas directly (v5 Phase 1), so
+// they're loaded as off-DOM Image objects rather than a visible <img>.
+const refImageEls = {};
+for (const [sig, src] of Object.entries(REFERENCE_IMAGES)) {
+  const img = new Image();
+  img.src = src;
+  refImageEls[sig] = img;
 }
 
 function originPx(W, H) {
@@ -226,19 +333,56 @@ function drawSkeleton(landmarks, W, H) {
   ctx.fill();
 }
 
+// v5 Phase 1 (changes 1+2, audit A3): draws the real reference photo
+// directly into mainCanvas, coordinate-mapped via REFERENCE_IMAGE_ANCHORS
+// so it lines up with the live trace instead of floating as a decorative
+// corner thumbnail. Composes image-pixel -> logical (the anchor's A, B)
+// with logical -> screen (origin + scalePxPerUnit) into one canvas affine
+// transform, so ctx.drawImage can blit the raw bitmap directly -- no
+// per-pixel JS loop needed. Deliberately called from drawOverlay(), i.e.
+// AFTER renderFrame()'s video-mirror save/restore block has already been
+// undone -- the image lives in the same unmirrored logical/screen
+// convention as unitToPx() and the skeleton draw, so it must not be drawn
+// inside that mirror transform (that bug has bitten this tool twice
+// already: the trace and the video feed disagreeing on which way is
+// "right").
+function drawReferenceImage(W, H) {
+  const anchor = REFERENCE_IMAGE_ANCHORS[signature];
+  const img = refImageEls[signature];
+  if (!anchor || !img || !img.complete || !origin) return;
+  const [ox, oy] = originPx(W, H);
+  const S = scalePxPerUnit;
+  const { Ar, Ai, Br, Bi } = anchor;
+  ctx.save();
+  ctx.globalAlpha = 0.42;
+  ctx.setTransform(S * Ar, -S * Ai, S * Ai, S * Ar, ox + S * Br, oy - S * Bi);
+  ctx.drawImage(img, 0, 0);
+  ctx.restore();
+}
+
 function drawOverlay(W, H) {
   const ref = REFERENCE[signature];
+  const hasRealImage = !!REFERENCE_IMAGE_ANCHORS[signature];
 
   if (origin) {
-    ctx.strokeStyle = "#aaaaaa"; ctx.lineWidth = 2;
-    ctx.beginPath();
-    ref.forEach((p, i) => { const [x, y] = unitToPx(p, W, H); i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); });
-    ctx.stroke();
-    ctx.fillStyle = "#aaaaaa";
-    ref.forEach(p => { const [x, y] = unitToPx(p, W, H); ctx.beginPath(); ctx.arc(x, y, 5, 0, 7); ctx.fill(); });
+    if (hasRealImage) {
+      drawReferenceImage(W, H);
+    } else {
+      // No verified real diagram for this signature yet -- programmatic
+      // placeholder line, clearly labeled so it's never mistaken for the
+      // calibrated real-photo experience 2/4 gets.
+      ctx.strokeStyle = "#888888"; ctx.lineWidth = 2;
+      ctx.beginPath();
+      ref.forEach((p, i) => { const [x, y] = unitToPx(p, W, H); i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); });
+      ctx.stroke();
+      ctx.fillStyle = "#888888";
+      ref.forEach(p => { const [x, y] = unitToPx(p, W, H); ctx.beginPath(); ctx.arc(x, y, 5, 0, 7); ctx.fill(); });
+      ctx.fillStyle = "#888888cc"; ctx.font = "12px sans-serif";
+      ctx.fillText(`${signature}/4: no reference photo yet -- placeholder line`, 10, 20);
+    }
 
     if (traceXY.length >= 2) {
-      ctx.strokeStyle = "#f5f0e0"; ctx.lineWidth = 2;
+      ctx.strokeStyle = "#b0b0b0"; ctx.lineWidth = 2;
       ctx.beginPath();
       traceXY.forEach((p, i) => { const [x, y] = unitToPx(p, W, H); i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); });
       ctx.stroke();
@@ -253,7 +397,7 @@ function drawOverlay(W, H) {
     ctx.font = "bold 28px sans-serif";
     ctx.fillText("Calibrating...", 20, H / 2);
   } else if (appState === "running") {
-    ctx.fillText(`measure ${measureIndex}  beat ${beatInMeasure + 1}/${signature}`, 10, H - 12);
+    ctx.fillText(`measure ${measureIndex}  beat ${beatInMeasure + 1}/${signature}${lastScoreText ? "  |  " + lastScoreText : ""}`, 10, H - 12);
   }
 }
 
@@ -287,7 +431,10 @@ function onResults(landmarksList) {
     if (appState === "calibrating") {
       calibSamples.push([x, y]);
     } else if (appState === "running" && origin) {
-      nx = x - origin[0];
+      // *VIDEO_ASPECT corrects the 4:3-frame unit mismatch documented
+      // above VIDEO_ASPECT's definition -- without it every trace (and
+      // the score against it) reads stretched taller than it really is.
+      nx = (x - origin[0]) * VIDEO_ASPECT;
       ny = -(y - origin[1]); // image y-down -> logical y-up
       traceXY.push([nx, ny]);
     }
@@ -309,7 +456,14 @@ function stopRun() {
   running = false;
   appState = "idle";
   stopMetronome();
-  statusEl.textContent = `Done. Log + snapshot saved server-side under logs/ (run ${runId}).`;
+
+  let summary = "";
+  if (sessionScores.length > 0) {
+    const avg = sessionScores.reduce((s, m) => s + m.matchPct, 0) / sessionScores.length;
+    const best = sessionScores.reduce((a, b) => (b.matchPct > a.matchPct ? b : a));
+    summary = ` ${sessionScores.length} measures scored -- average match ${avg.toFixed(0)}%, best measure ${best.measureIndex} at ${best.matchPct}%.`;
+  }
+  statusEl.textContent = `Done. Log + snapshot saved server-side under logs/ (run ${runId}).${summary}`;
   saveSnapshot();
 }
 
@@ -339,7 +493,7 @@ async function ensureModelAndCamera() {
     });
   }
   if (!video.srcObject) {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { width: VIDEO_W, height: VIDEO_H } });
     video.srcObject = stream;
     await new Promise(resolve => { video.onloadedmetadata = resolve; });
     video.play();
@@ -351,6 +505,7 @@ async function start() {
   signature = parseInt(document.getElementById("signature").value);
   seconds = parseFloat(document.getElementById("seconds").value);
   scalePxPerUnit = parseFloat(document.getElementById("scale").value) || 150;
+  sessionScores = []; lastScoreText = "";
 
   statusEl.textContent = "Loading model...";
   appState = "countdown";

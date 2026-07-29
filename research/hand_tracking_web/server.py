@@ -32,13 +32,19 @@ os.makedirs(LOG_DIR, exist_ok=True)
 
 _open_logs: dict[str, csv.writer] = {}
 _open_files: dict[str, object] = {}
+_open_score_logs: dict[str, csv.writer] = {}
+_open_score_files: dict[str, object] = {}
 
 
-def _log_writer(run_id: str) -> csv.writer:
+def _sanitize_id(run_id: str) -> str:
     # run_id comes from the browser's own timestamp string, not path
     # components -- still sanitize before using it in a filename to avoid
     # writing outside LOG_DIR if a malformed/malicious value ever arrives.
-    safe_id = "".join(c for c in run_id if c.isalnum() or c in "-_") or "run"
+    return "".join(c for c in run_id if c.isalnum() or c in "-_") or "run"
+
+
+def _log_writer(run_id: str) -> csv.writer:
+    safe_id = _sanitize_id(run_id)
     if safe_id not in _open_logs:
         path = os.path.join(LOG_DIR, f"web_hand_{safe_id}.csv")
         f = open(path, "w", newline="")
@@ -48,6 +54,22 @@ def _log_writer(run_id: str) -> csv.writer:
         _open_logs[safe_id] = w
         print(f"Logging run {safe_id} to {path}")
     return _open_logs[safe_id]
+
+
+def _score_writer(run_id: str) -> csv.writer:
+    # v5 Phase 1 change 4: per-measure shape_distance() scores, in their
+    # own file rather than jammed into the per-sample log (different
+    # granularity -- one row per measure, not one row per video frame).
+    safe_id = _sanitize_id(run_id)
+    if safe_id not in _open_score_logs:
+        path = os.path.join(LOG_DIR, f"web_hand_{safe_id}_scores.csv")
+        f = open(path, "w", newline="")
+        w = csv.writer(f)
+        w.writerow(["measure_index", "distance", "match_pct"])
+        _open_score_files[safe_id] = f
+        _open_score_logs[safe_id] = w
+        print(f"Logging scores for run {safe_id} to {path}")
+    return _open_score_logs[safe_id]
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
@@ -78,6 +100,13 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             ])
             _open_files[safe_id].flush()
             self._respond_ok()
+        elif self.path == "/score":
+            data = self._read_json()
+            safe_id = "".join(c for c in str(data.get("run_id", "run")) if c.isalnum() or c in "-_") or "run"
+            w = _score_writer(safe_id)
+            w.writerow([data.get("measure_index"), data.get("distance"), data.get("match_pct")])
+            _open_score_files[safe_id].flush()
+            self._respond_ok()
         elif self.path == "/snapshot":
             data = self._read_json()
             run_id = "".join(c for c in str(data.get("run_id", "run")) if c.isalnum() or c in "-_") or "run"
@@ -103,4 +132,6 @@ if __name__ == "__main__":
             pass
         finally:
             for f in _open_files.values():
+                f.close()
+            for f in _open_score_files.values():
                 f.close()
