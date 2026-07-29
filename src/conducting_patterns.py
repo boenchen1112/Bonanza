@@ -33,22 +33,28 @@ _STROKE_SEQUENCES = {
     4: ["down", "left", "right", "up"],
 }
 
-# Schematic keyframes per signature: [prep, beat1, beat2, ...], matching
-# standard conducting-pedagogy diagrams (a "J"/hook for 2/4, a triangle for
-# 3/4, a "checkmark" for 4/4 -- beats 2/3 stay below the prep line and
-# offset from each other so the path never retraces itself). x-right,
-# y-up, conductor's own perspective.
+# Keyframes per signature: [prep, beat1, beat2, ...]. x-right, y-up,
+# conductor's own perspective.
 #
-# 2/4 corrected from a straight vertical bounce (2026-07-29, user-supplied
-# reference diagram): prep starts up-left, sweeps down to beat 1 (the
-# lowest point -- the downbeat is lower than the upbeat), rebounds
-# up-and-right to beat 2, continuing up toward the next measure's prep.
-# Not a straight line in either direction, and beat 2 is NOT back at the
-# prep position -- it's a distinct rebound point partway up.
+# v5 Phase 2 (2026-07-29): all three replaced with REAL data extracted
+# from user-supplied reference videos (2_4.mp4, 3_4.mp4, 4_4.mp4 -- see
+# research/extract_pattern_from_video.py), not schematic guesses. The
+# videos are generated diagrams of the pattern being drawn stroke-by-
+# stroke with beat-number labels; extraction uses connected-component
+# analysis plus each label's first-appearance frame to recover true beat
+# order (color-based and pure-geometry approaches were both tried and
+# failed -- see that script's module docstring). Verified visually against
+# research/captures/pattern_*4_overlay.png before being copied in here.
+# 2/4 previously hand-corrected against a real photo (2026-07-29 diagram)
+# is now confirmed by this independent video source: same "J"-hook shape,
+# beat 1 lowest, beat 2 a rebound up-and-right (not back at prep). 3/4 and
+# 4/4 were unverified schematic guesses before this -- 4/4 in particular
+# turned out to be a "cross" (down/left/right/up, strokes crossing near
+# center), not the previous guess's non-crossing checkmark shape.
 _RAW_POINTS = {
-    2: [(-0.2, 0.9), (0.0, -1.0), (0.35, -0.3)],
-    3: [(0.0, 0.0), (-0.3, -1.0), (0.8, -0.3), (0.0, 0.0)],
-    4: [(0.0, 0.0), (0.0, -1.0), (-0.7, -0.4), (0.7, -0.4), (0.0, 0.0)],
+    2: [(0.0, 0.0), (0.5299, -1.0), (0.1272, 0.0044)],
+    3: [(0.0, 0.0), (0.0037, -0.7253), (1.0, -0.6635), (0.0766, -0.0729)],
+    4: [(0.0, 0.0), (0.0, -1.0), (-0.6852, -0.6019), (0.715, -0.535), (0.0751, 0.0185)],
 }
 
 

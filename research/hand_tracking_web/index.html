@@ -69,50 +69,63 @@ const HAND_CONNECTIONS = [
   [9,13],[13,14],[14,15],[15,16], [13,17],[17,18],[18,19],[19,20], [0,17],
 ];
 
-// Canonical reference patterns, ported from src/conducting_patterns.py.
-// 2/4 corrected 2026-07-29 from a real conducting-pedagogy diagram: prep
-// up-left, down to beat 1 (lowest point), rebound up-right to beat 2.
-//
-// v5 Phase 1 (audit A3/A2): 2/4's points are re-centered so the PREP point
-// sits at logical (0,0) -- calibration puts the trace's own start at
-// (0,0), so without this the reference's prep (originally (-0.2, 0.9))
-// would draw ~135px away from where the live trace actually begins even
-// though both are "the top." 3/4 and 4/4 already had prep at (0,0), so
-// they're unaffected. Re-centering a whole pattern by a constant offset
-// doesn't change shape_distance()'s bounding-size normalization (that's
-// translation invariant) -- only where it's drawn.
+// Canonical reference patterns. v5 Phase 2 (2026-07-29): all three replaced
+// with REAL data extracted from user-supplied reference videos (2_4.mp4,
+// 3_4.mp4, 4_4.mp4 -- see research/extract_pattern_from_video.py), ported
+// from the same numbers now in src/conducting_patterns.py's _RAW_POINTS.
+// Already prep-centered at (0,0) by the extraction script's own
+// normalization, matching calibration's own origin convention -- no
+// re-centering needed here (unlike the old schematic 2/4 guess).
 const REFERENCE = {
-  2: [[0.0, 0.0], [0.2, -1.9], [0.55, -1.2]],
-  3: [[0.0, 0.0], [-0.3, -1.0], [0.8, -0.3], [0.0, 0.0]],
-  4: [[0.0, 0.0], [0.0, -1.0], [-0.7, -0.4], [0.7, -0.4], [0.0, 0.0]],
+  2: [[0.0, 0.0], [0.5299, -1.0], [0.1272, 0.0044]],
+  3: [[0.0, 0.0], [0.0037, -0.7253], [1.0, -0.6635], [0.0766, -0.0729]],
+  4: [[0.0, 0.0], [0.0, -1.0], [-0.6852, -0.6019], [0.715, -0.535], [0.0751, 0.0185]],
 };
 
-// Real hand-drawn reference diagrams (user-supplied, 2026-07-29). Only 2/4
-// has a verified real diagram so far; 3/4 and 4/4 fall back to the
-// programmatic line drawn on the canvas itself, labeled as a placeholder.
-const REFERENCE_IMAGES = { 2: "assets/reference_2_4.png" };
+// Real reference diagrams. 2/4 is a user-supplied hand-drawn photo
+// (2026-07-29). v5 Phase 2: 3/4 and 4/4 now also have real images --
+// the max-content frame of their reference videos (3_4.mp4/4_4.mp4),
+// extracted by research/extract_pattern_from_video.py -- completing what
+// was previously a placeholder-line-only gap.
+const REFERENCE_IMAGES = {
+  2: "assets/reference_2_4.png",
+  3: "assets/reference_34.png",
+  4: "assets/reference_44.png",
+};
 
-// v5 Phase 1 (audit A3): maps reference_2_4.png's pixel space onto the
-// same logical unit space REFERENCE[2] uses, via a similarity transform
-// (uniform scale + rotation + translation) solved from the two red dots
-// in the photo (beat 1 and beat 2) -- NOT a bounding-box approximation.
-// Solved once offline (find_anchors.py + a 2-point complex-number
-// similarity solve, session 2026-07-29) from:
-//   beat1 pixel (77.13, 201.43) -> logical (0.2, -1.9)  [recentered]
-//   beat2 pixel (84.87, 168.40) -> logical (0.55, -1.2) [recentered]
-// Residual on both anchor points is ~0 (exact by construction, 2 point
-// pairs fully determine a similarity transform); the ~13 degree rotation
-// term means the photo isn't quite upright relative to the numeric
-// REFERENCE[2] points above, so a plain bounding-box fit would have been
-// visibly wrong -- this is why anchor points matter here, not just scale.
+// Maps each reference image's pixel space onto its REFERENCE[sig]'s
+// logical unit space, via a similarity transform (uniform scale +
+// rotation + translation) solved from 2 known points -- NOT a
+// bounding-box approximation (a plain bounding-box fit is visibly wrong
+// whenever the source photo/frame isn't perfectly upright, as 2/4's ~13
+// degree rotation showed).
 // w = A*(u - i*v) + B, where (u,v) is a pixel coord in the image bitmap
 // (v measured downward, as image pixels are) and w = Lx + i*Ly is the
 // logical (x-right, y-up) coordinate.
+//
+// 2/4: solved from find_anchors.py's red-dot detection (2026-07-29):
+//   beat1 pixel (77.13, 201.43) -> logical (0.2, -1.9)  [recentered]
+//   beat2 pixel (84.87, 168.40) -> logical (0.55, -1.2) [recentered]
+// 3/4 and 4/4 (v5 Phase 2): solved directly from
+// extract_pattern_from_video.py's own prep/beat1 pixel detections against
+// the SAME REFERENCE points now in this file -- no separate anchor-finding
+// step needed, since that script already knows exactly where prep and
+// beat 1 are in pixel space.
 const REFERENCE_IMAGE_ANCHORS = {
   2: {
     imgWidthPx: 157, imgHeightPx: 255,
     Ar: 0.02244394038179057, Ai: -0.0053337153750030964,
     Br: -0.4566924484943166, Bi: 3.0321795683257603,
+  },
+  3: {
+    imgWidthPx: 2558, imgHeightPx: 1308,
+    Ar: 0.0007363452718371553, Ai: 0.00000001855191960834893,
+    Br: -0.5117620973975779, Bi: 0.08466681267714506,
+  },
+  4: {
+    imgWidthPx: 2558, imgHeightPx: 1306,
+    Ar: 0.00102880658436214, Ai: 0.0,
+    Br: -1.3127572016460907, Bi: 0.12962962962962965,
   },
 };
 
