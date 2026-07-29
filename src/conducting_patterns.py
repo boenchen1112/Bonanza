@@ -34,12 +34,19 @@ _STROKE_SEQUENCES = {
 }
 
 # Schematic keyframes per signature: [prep, beat1, beat2, ...], matching
-# standard conducting-pedagogy diagrams (a shallow "V"/bounce for 2/4, a
-# triangle for 3/4, a "checkmark" for 4/4 -- beats 2 and 3 both stay below
-# the prep line and offset from each other so the path never retraces
-# itself). x-right, y-up, conductor's own perspective.
+# standard conducting-pedagogy diagrams (a "J"/hook for 2/4, a triangle for
+# 3/4, a "checkmark" for 4/4 -- beats 2/3 stay below the prep line and
+# offset from each other so the path never retraces itself). x-right,
+# y-up, conductor's own perspective.
+#
+# 2/4 corrected from a straight vertical bounce (2026-07-29, user-supplied
+# reference diagram): prep starts up-left, sweeps down to beat 1 (the
+# lowest point -- the downbeat is lower than the upbeat), rebounds
+# up-and-right to beat 2, continuing up toward the next measure's prep.
+# Not a straight line in either direction, and beat 2 is NOT back at the
+# prep position -- it's a distinct rebound point partway up.
 _RAW_POINTS = {
-    2: [(0.0, 0.0), (0.0, -1.0), (0.0, 0.0)],
+    2: [(-0.2, 0.9), (0.0, -1.0), (0.35, -0.3)],
     3: [(0.0, 0.0), (-0.3, -1.0), (0.8, -0.3), (0.0, 0.0)],
     4: [(0.0, 0.0), (0.0, -1.0), (-0.7, -0.4), (0.7, -0.4), (0.0, 0.0)],
 }
