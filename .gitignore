@@ -20,3 +20,4 @@ UnitySwinger_*.log
 # every run (feedback, 2026-07-29), not meaningful named data like
 # research/captures/ which is committed deliberately.
 research/logs/
+research/hand_tracking_web/logs/

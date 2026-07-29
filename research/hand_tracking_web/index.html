@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Phase B: hand-tracking conducting trace test</title>
+<style>
+  body { background: #111; color: #eee; font-family: sans-serif; margin: 0; padding: 16px; }
+  #controls { margin-bottom: 12px; }
+  #controls label { margin-right: 12px; }
+  #controls input { width: 60px; }
+  #status { margin: 8px 0; color: #9cf; }
+  #layout { display: flex; gap: 16px; align-items: flex-start; }
+  #camWrap { position: relative; width: 320px; height: 240px; }
+  #camWrap video, #camWrap canvas.skel {
+    position: absolute; top: 0; left: 0; width: 320px; height: 240px;
+    transform: scaleX(-1); /* mirror the DISPLAY; landmark x is mirrored separately in JS */
+  }
+  #traceCanvas { background: #1a1a1a; border: 1px solid #333; }
+  button { font-size: 14px; padding: 6px 14px; }
+</style>
+</head>
+<body>
+<h3>Phase B: hand-tracking position test (fingers-together centroid, not index-point)</h3>
+<div id="controls">
+  <label>BPM <input id="bpm" type="number" value="80"></label>
+  <label>Signature
+    <select id="signature">
+      <option value="2">2/4</option>
+      <option value="3">3/4</option>
+      <option value="4">4/4</option>
+    </select>
+  </label>
+  <label>Seconds <input id="seconds" type="number" value="60"></label>
+  <button id="startBtn">Start</button>
+</div>
+<div id="status">Idle. Click Start, allow camera access, hold your hand with fingers together (like pinching a baton).</div>
+<div id="layout">
+  <div id="camWrap">
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="skelCanvas" class="skel" width="320" height="240"></canvas>
+  </div>
+  <canvas id="traceCanvas" width="500" height="500"></canvas>
+</div>
+
+<script type="module">
+// @mediapipe/hands (the legacy CDN package, matching the version string in
+// the user's original reference) is deprecated -- last published ~3 years
+// ago, confirmed via web search 2026-07-29 before building on it, the same
+// class of dead-API problem hit with Python's mediapipe 1.0 earlier this
+// session. Using the actively-maintained replacement instead:
+// @mediapipe/tasks-vision's HandLandmarker (latest published 2026-04-27
+// per npm at time of writing).
+import { FilesetResolver, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
+
+// Pinned to specific versions rather than @latest -- matches the working
+// config in a live reference project (github.com/ericwei97-cloud/gesture-synth,
+// checked 2026-07-29), and is safer against a future breaking release
+// silently changing behavior underneath this page.
+const MODEL_URL = "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task";
+const WASM_URL = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm";
+
+// Standard 21-landmark hand topology (stable across MediaPipe hand-model
+// versions) -- tasks-vision doesn't bundle a drawing-utils equivalent the
+// way the legacy package did, so this is hardcoded rather than imported.
+const HAND_CONNECTIONS = [
+  [0,1],[1,2],[2,3],[3,4], [0,5],[5,6],[6,7],[7,8], [5,9],[9,10],[10,11],[11,12],
+  [9,13],[13,14],[14,15],[15,16], [13,17],[17,18],[18,19],[19,20], [0,17],
+];
+
+// Canonical reference patterns, ported from src/conducting_patterns.py.
+// 2/4 corrected 2026-07-29 from a real conducting-pedagogy diagram: prep
+// up-left, down to beat 1 (lowest point), rebound up-right to beat 2.
+// All three already have max-abs-coordinate == 1.0, so the Python
+// normalization step is a no-op here -- these are the same numbers.
+const REFERENCE = {
+  2: [[-0.2, 0.9], [0.0, -1.0], [0.35, -0.3]],
+  3: [[0.0, 0.0], [-0.3, -1.0], [0.8, -0.3], [0.0, 0.0]],
+  4: [[0.0, 0.0], [0.0, -1.0], [-0.7, -0.4], [0.7, -0.4], [0.0, 0.0]],
+};
+
+// Fingertip landmark indices in MediaPipe Hands' 21-point model: thumb,
+// index, middle, ring, pinky tips. Averaging these tracks the "point" of
+// a fingers-together hand shape (the Italian conducting gesture), not a
+// single-finger pointing gesture.
+const FINGERTIP_IDX = [4, 8, 12, 16, 20];
+
+function boundingSize(points) {
+  const xs = points.map(p => p[0]), ys = points.map(p => p[1]);
+  return Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) || 1.0;
+}
+
+let runId = null;
+let bpm = 80, signature = 2, seconds = 60;
+let measureIntervalMs = 1500;
+let measureStartWall = null;
+let measureIndex = -1;
+let traceXY = [];
+let origin = null;
+let running = false;
+let stopAt = 0;
+
+const video = document.getElementById("video");
+const skelCanvas = document.getElementById("skelCanvas");
+const skelCtx = skelCanvas.getContext("2d");
+const traceCanvas = document.getElementById("traceCanvas");
+const traceCtx = traceCanvas.getContext("2d");
+const statusEl = document.getElementById("status");
+
+function drawTrace() {
+  const W = traceCanvas.width, H = traceCanvas.height;
+  const cx = W / 2, cy = H / 2, pxPerUnit = W * 0.3;
+  const toPx = p => [cx + p[0] * pxPerUnit, cy - p[1] * pxPerUnit]; // y-up -> canvas y-down
+
+  traceCtx.fillStyle = "#1a1a1a";
+  traceCtx.fillRect(0, 0, W, H);
+
+  const ref = REFERENCE[signature];
+  traceCtx.strokeStyle = "#888"; traceCtx.lineWidth = 2;
+  traceCtx.beginPath();
+  ref.forEach((p, i) => { const [x, y] = toPx(p); i === 0 ? traceCtx.moveTo(x, y) : traceCtx.lineTo(x, y); });
+  traceCtx.stroke();
+  traceCtx.fillStyle = "#888";
+  ref.forEach(p => { const [x, y] = toPx(p); traceCtx.beginPath(); traceCtx.arc(x, y, 5, 0, 7); traceCtx.fill(); });
+
+  if (traceXY.length >= 2) {
+    const refSize = boundingSize(ref);
+    const traceSize = boundingSize(traceXY);
+    const scale = refSize / (traceSize || 1.0);
+    traceCtx.strokeStyle = "#f5f0e0"; traceCtx.lineWidth = 2;
+    traceCtx.beginPath();
+    traceXY.forEach((p, i) => {
+      const [x, y] = toPx([p[0] * scale, p[1] * scale]);
+      i === 0 ? traceCtx.moveTo(x, y) : traceCtx.lineTo(x, y);
+    });
+    traceCtx.stroke();
+  }
+
+  const elapsed = measureStartWall !== null ? (performance.now() - measureStartWall) / 1000 : 0;
+  traceCtx.fillStyle = "#ccc"; traceCtx.font = "14px sans-serif";
+  traceCtx.fillText(`measure ${measureIndex}  ${elapsed.toFixed(1)}/${(measureIntervalMs/1000).toFixed(2)}s`, 10, H - 12);
+}
+
+function drawSkeleton(landmarks) {
+  skelCtx.clearRect(0, 0, skelCanvas.width, skelCanvas.height);
+  if (!landmarks) return;
+  const W = skelCanvas.width, H = skelCanvas.height;
+  skelCtx.strokeStyle = "#ffffff55"; skelCtx.lineWidth = 1;
+  HAND_CONNECTIONS.forEach(([a, b]) => {
+    skelCtx.beginPath();
+    skelCtx.moveTo(landmarks[a].x * W, landmarks[a].y * H);
+    skelCtx.lineTo(landmarks[b].x * W, landmarks[b].y * H);
+    skelCtx.stroke();
+  });
+  skelCtx.fillStyle = "#00ff0088";
+  landmarks.forEach(p => { skelCtx.beginPath(); skelCtx.arc(p.x * W, p.y * H, 2, 0, 7); skelCtx.fill(); });
+
+  const cx = FINGERTIP_IDX.reduce((s, i) => s + landmarks[i].x, 0) / FINGERTIP_IDX.length;
+  const cy = FINGERTIP_IDX.reduce((s, i) => s + landmarks[i].y, 0) / FINGERTIP_IDX.length;
+  skelCtx.fillStyle = "#00ff00";
+  skelCtx.beginPath();
+  skelCtx.arc(cx * W, cy * H, 6, 0, 7);
+  skelCtx.fill();
+}
+
+function logSample(t, found, x, y, nx, ny) {
+  fetch("/log", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ run_id: runId, t, measure_index: measureIndex, found, x, y, nx, ny }),
+  }).catch(() => {}); // best-effort -- don't let a dropped log request stall tracking
+}
+
+function onResults(landmarksList) {
+  const landmarks = landmarksList && landmarksList.length > 0 ? landmarksList[0] : null;
+  drawSkeleton(landmarks);
+
+  const now = performance.now();
+  let found = false, x = null, y = null, nx = null, ny = null;
+
+  if (landmarks) {
+    found = true;
+    // Mirror x here (1 - x), matching the mirrored display and the Python
+    // tool's cv2.flip approach, so tracked "right" means the user's real
+    // right, not the camera's unmirrored right.
+    x = 1.0 - (FINGERTIP_IDX.reduce((s, i) => s + landmarks[i].x, 0) / FINGERTIP_IDX.length);
+    y = FINGERTIP_IDX.reduce((s, i) => s + landmarks[i].y, 0) / FINGERTIP_IDX.length;
+
+    if (measureStartWall === null) { measureStartWall = now; measureIndex = 0; }
+    if (now - measureStartWall >= measureIntervalMs) {
+      traceXY = []; measureStartWall = now; measureIndex += 1; origin = [x, y];
+    }
+    if (origin === null) origin = [x, y];
+
+    nx = (x - origin[0]);
+    ny = -(y - origin[1]); // image y-down -> plot y-up
+    traceXY.push([nx, ny]);
+  }
+
+  logSample(now / 1000, found, x, y, nx, ny);
+  drawTrace();
+}
+
+async function saveSnapshot() {
+  const dataUrl = traceCanvas.toDataURL("image/png");
+  await fetch("/snapshot", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ run_id: runId, image: dataUrl }),
+  }).catch(() => {});
+}
+
+function stopRun() {
+  running = false;
+  statusEl.textContent = `Done. Log + snapshot saved server-side under logs/ (run ${runId}).`;
+  saveSnapshot();
+}
+
+let handLandmarker = null;
+let lastVideoTime = -1;
+
+function detectLoop() {
+  if (video.readyState >= 2 && video.currentTime !== lastVideoTime) {
+    lastVideoTime = video.currentTime;
+    const result = handLandmarker.detectForVideo(video, performance.now());
+    onResults(result.landmarks);
+  }
+  if (running && performance.now() < stopAt) {
+    requestAnimationFrame(detectLoop);
+  } else if (running) {
+    stopRun();
+  }
+}
+
+async function start() {
+  bpm = parseFloat(document.getElementById("bpm").value);
+  signature = parseInt(document.getElementById("signature").value);
+  seconds = parseFloat(document.getElementById("seconds").value);
+  measureIntervalMs = (60000 / bpm) * signature;
+  measureStartWall = null; measureIndex = -1; traceXY = []; origin = null;
+  runId = new Date().toISOString().replace(/[:.]/g, "-");
+  running = true;
+  stopAt = performance.now() + seconds * 1000;
+  statusEl.textContent = `Loading model...`;
+
+  if (!handLandmarker) {
+    const vision = await FilesetResolver.forVisionTasks(WASM_URL);
+    handLandmarker = await HandLandmarker.createFromOptions(vision, {
+      baseOptions: { modelAssetPath: MODEL_URL, delegate: "GPU" },
+      runningMode: "VIDEO",
+      numHands: 1,
+    });
+  }
+
+  if (!video.srcObject) {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
+    video.srcObject = stream;
+    await new Promise(resolve => { video.onloadedmetadata = resolve; });
+    video.play();
+  }
+
+  statusEl.textContent = `Running: ${signature}/4 @ ${bpm} BPM for ${seconds}s. Reset every ${(measureIntervalMs/1000).toFixed(2)}s (wall clock, not gesture-detected).`;
+  requestAnimationFrame(detectLoop);
+}
+
+document.getElementById("startBtn").addEventListener("click", () => { start(); });
+</script>
+</body>
+</html>
