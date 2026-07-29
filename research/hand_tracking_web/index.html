@@ -36,7 +36,8 @@
   <button id="startBtn">Calibrate &amp; Start</button>
 </div>
 <div id="status">Idle. Click "Calibrate &amp; Start", allow camera access, then hold your hand with fingers
-  together (like pinching a baton) at the TOP/prep position when asked.</div>
+  together (like pinching a baton) at the TOP/prep position, then at the BOTTOM (beat 1's lowest
+  point) when asked -- this maps your own real range of motion onto the reference.</div>
 <div id="stage">
   <video id="video" autoplay playsinline muted style="display:none"></video>
   <canvas id="mainCanvas" width="640" height="480"></canvas>
@@ -133,6 +134,8 @@ const VIDEO_ASPECT = VIDEO_W / VIDEO_H;
 let runId = null;
 let bpm = 80, signature = 2, seconds = 60, scalePxPerUnit = 150;
 let traceXY = [];
+let lastCompletedTraceXY = []; // previous measure's finished trace, kept
+                                // visible one extra measure (see below)
 let measureIndex = -1;
 let measureStartWall = null;
 let running = false;
@@ -140,15 +143,33 @@ let stopAt = 0;
 
 // Calibration (feedback 2026-07-29: detecting "the top" live turned out
 // unreliable -- it fired on every direction change instead of once per
-// measure. Simpler and more robust: ask the user to hold still at the
-// actual top/prep position for a moment before the run starts, and use
-// that single averaged sample as a FIXED origin for the whole run. Trace
-// resets (below) are then purely a per-measure clear of the point list --
-// they no longer try to re-detect where "the top" is.
+// measure, because the real physical motion bounces roughly once per
+// BEAT, not once per measure. Simpler and more robust: ask the user to
+// hold still at the actual top/prep position for a moment before the run
+// starts, and use that single averaged sample as a FIXED origin for the
+// whole run. Trace resets (below) are then purely a per-measure clear of
+// the point list -- they no longer try to re-detect where "the top" is.
+//
+// v5 follow-up (feedback: "the tracing is too small, cannot match the
+// reference"): REFERENCE's numbers are an abstract shape scale (prep to
+// beat 1 spans about ~1.9 units), but nx/ny were raw camera-frame
+// fractions (real hand motion is more like 0.05-0.2 of the frame) -- two
+// different unit systems sharing one scalePxPerUnit knob, so no single
+// value could make both the reference and the live trace look right at
+// once. Fixed with a SECOND calibration point: after TOP, hold at BOTTOM
+// (beat 1's lowest point -- literally "the lowest point of the check
+// mark," per the user's own framing) and derive calibScaleFactor from the
+// ratio of the user's own real top-to-bottom range to REFERENCE's
+// prep-to-beat1 distance. This maps the user's actual physical amplitude
+// onto REFERENCE's unit scale, so scalePxPerUnit (still user-tunable) is
+// now a pure visual zoom, not also secretly compensating for a unit
+// mismatch.
 const CALIBRATION_HOLD_MS = 1200;
 let appState = "idle"; // idle | countdown | calibrating | running
 let origin = null; // [logicalX, logicalY], fixed once calibrated
 let calibSamples = [];
+let calibScaleFactor = 1;
+let calibLabel = "";
 
 function currentLogicalXY(landmarks) {
   // Mirror x here (1 - x) so tracked "right" means the user's real right,
@@ -254,8 +275,16 @@ function onMeasureBoundary() {
   // first boundary call transitions measureIndex from -1 to 0 -- that
   // closes out only a partial fragment collected before the run
   // stabilized, not a real measure, so it's deliberately not scored.
+  //
+  // feedback 2026-07-29: the reset instant IS the bottom of the stroke
+  // (the downbeat click fires right as/just after the hand reaches beat
+  // 1), so clearing traceXY here erased the top-to-bottom stroke at
+  // exactly the moment it became visible. Fix: keep it as
+  // lastCompletedTraceXY, drawn faded underneath the new live trace for
+  // one full extra measure instead of vanishing immediately.
   if (measureIndex >= 0 && traceXY.length >= 2) {
     scoreMeasure(measureIndex, traceXY);
+    lastCompletedTraceXY = traceXY;
   }
   traceXY = [];
   measureIndex += 1;
@@ -381,6 +410,17 @@ function drawOverlay(W, H) {
       ctx.fillText(`${signature}/4: no reference photo yet -- placeholder line`, 10, 20);
     }
 
+    // Last measure's finished trace, faded, drawn BEHIND the live one --
+    // keeps the just-completed top-to-bottom stroke visible for a full
+    // extra measure instead of vanishing the instant it's done (see
+    // onMeasureBoundary()).
+    if (lastCompletedTraceXY.length >= 2) {
+      ctx.strokeStyle = "#b0b0b055"; ctx.lineWidth = 2;
+      ctx.beginPath();
+      lastCompletedTraceXY.forEach((p, i) => { const [x, y] = unitToPx(p, W, H); i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); });
+      ctx.stroke();
+    }
+
     if (traceXY.length >= 2) {
       ctx.strokeStyle = "#b0b0b0"; ctx.lineWidth = 2;
       ctx.beginPath();
@@ -392,10 +432,10 @@ function drawOverlay(W, H) {
   ctx.fillStyle = "#ffffffcc"; ctx.font = "14px sans-serif";
   if (appState === "countdown") {
     ctx.font = "bold 28px sans-serif";
-    ctx.fillText("Hold at TOP/prep position...", 20, H / 2);
+    ctx.fillText(`Hold at ${calibLabel}...`, 20, H / 2);
   } else if (appState === "calibrating") {
     ctx.font = "bold 28px sans-serif";
-    ctx.fillText("Calibrating...", 20, H / 2);
+    ctx.fillText(`Calibrating ${calibLabel}...`, 20, H / 2);
   } else if (appState === "running") {
     ctx.fillText(`measure ${measureIndex}  beat ${beatInMeasure + 1}/${signature}${lastScoreText ? "  |  " + lastScoreText : ""}`, 10, H - 12);
   }
@@ -434,8 +474,12 @@ function onResults(landmarksList) {
       // *VIDEO_ASPECT corrects the 4:3-frame unit mismatch documented
       // above VIDEO_ASPECT's definition -- without it every trace (and
       // the score against it) reads stretched taller than it really is.
-      nx = (x - origin[0]) * VIDEO_ASPECT;
-      ny = -(y - origin[1]); // image y-down -> logical y-up
+      // *calibScaleFactor maps the user's own real motion range onto
+      // REFERENCE's abstract unit scale (see the calibration comment
+      // above) -- without it the live trace reads far smaller than the
+      // reference it's being compared/drawn against.
+      nx = (x - origin[0]) * VIDEO_ASPECT * calibScaleFactor;
+      ny = -(y - origin[1]) * calibScaleFactor; // image y-down -> logical y-up
       traceXY.push([nx, ny]);
     }
   }
@@ -500,12 +544,33 @@ async function ensureModelAndCamera() {
   }
 }
 
+// Holds still for CALIBRATION_HOLD_MS (get-ready) then CALIBRATION_HOLD_MS
+// again (sampling), averages the sampled points, and returns [x, y] in
+// currentLogicalXY()'s raw (unscaled) units -- or null if no hand was ever
+// detected during sampling.
+async function calibratePoint(label) {
+  calibLabel = label;
+  appState = "countdown";
+  statusEl.textContent = `Hold your hand at the ${label} and stay still...`;
+  await new Promise(r => setTimeout(r, CALIBRATION_HOLD_MS));
+
+  appState = "calibrating";
+  calibSamples = [];
+  statusEl.textContent = `Calibrating ${label}...`;
+  await new Promise(r => setTimeout(r, CALIBRATION_HOLD_MS));
+
+  if (calibSamples.length === 0) return null;
+  const ox = calibSamples.reduce((s, p) => s + p[0], 0) / calibSamples.length;
+  const oy = calibSamples.reduce((s, p) => s + p[1], 0) / calibSamples.length;
+  return [ox, oy];
+}
+
 async function start() {
   bpm = parseFloat(document.getElementById("bpm").value);
   signature = parseInt(document.getElementById("signature").value);
   seconds = parseFloat(document.getElementById("seconds").value);
   scalePxPerUnit = parseFloat(document.getElementById("scale").value) || 150;
-  sessionScores = []; lastScoreText = "";
+  sessionScores = []; lastScoreText = ""; lastCompletedTraceXY = []; calibScaleFactor = 1;
 
   statusEl.textContent = "Loading model...";
   appState = "countdown";
@@ -521,31 +586,41 @@ async function start() {
     return;
   }
 
-  statusEl.textContent = "Hold your hand at the TOP/prep position and stay still...";
-  await new Promise(r => setTimeout(r, CALIBRATION_HOLD_MS));
-
-  appState = "calibrating";
-  calibSamples = [];
-  statusEl.textContent = "Calibrating origin...";
-  await new Promise(r => setTimeout(r, CALIBRATION_HOLD_MS));
-
-  if (calibSamples.length === 0) {
+  const top = await calibratePoint("TOP/prep position");
+  if (!top) {
     statusEl.textContent = "Calibration failed: no hand detected. Click the button to try again.";
     appState = "idle";
     return;
   }
-  const ox = calibSamples.reduce((s, p) => s + p[0], 0) / calibSamples.length;
-  const oy = calibSamples.reduce((s, p) => s + p[1], 0) / calibSamples.length;
-  origin = [ox, oy];
+  origin = top;
 
-  traceXY = []; measureIndex = -1;
+  const bottom = await calibratePoint("BOTTOM (beat 1's lowest point)");
+  if (!bottom) {
+    statusEl.textContent = "Calibration failed: no hand detected at BOTTOM. Click the button to try again.";
+    appState = "idle";
+    return;
+  }
+
+  const ref = REFERENCE[signature];
+  const refDelta = Math.hypot(ref[1][0] - ref[0][0], ref[1][1] - ref[0][1]);
+  const physDx = (bottom[0] - origin[0]) * VIDEO_ASPECT;
+  const physDy = -(bottom[1] - origin[1]);
+  const physDelta = Math.hypot(physDx, physDy);
+  if (physDelta < 0.01) {
+    statusEl.textContent = "Calibration failed: TOP and BOTTOM looked the same position. Move your hand further between the two holds, then try again.";
+    appState = "idle";
+    return;
+  }
+  calibScaleFactor = refDelta / physDelta;
+
+  traceXY = []; lastCompletedTraceXY = []; measureIndex = -1;
   runId = new Date().toISOString().replace(/[:.]/g, "-");
   running = true;
   appState = "running";
   stopAt = performance.now() + seconds * 1000;
   startMetronome();
 
-  statusEl.textContent = `Running: ${signature}/4 @ ${bpm} BPM for ${seconds}s. Origin calibrated; trace resets on every metronome downbeat.`;
+  statusEl.textContent = `Running: ${signature}/4 @ ${bpm} BPM for ${seconds}s. Calibrated to your range; trace resets on every metronome downbeat.`;
 }
 
 document.getElementById("startBtn").addEventListener("click", () => { start(); });
