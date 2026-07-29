@@ -70,7 +70,11 @@ def main():
     prev_t = None
     measure_start_wall = None
     last_draw = 0.0
+    last_print = 0.0
     DRAW_INTERVAL_S = 0.05  # ~20fps, throttled so plotting doesn't starve sampling
+    PRINT_INTERVAL_S = 0.5  # raw-value printout, independent of the plot -- lets you
+    # confirm the gyro data itself is live and responding to swings even if
+    # something about the plot rendering is in doubt.
 
     print(f"Reference: {args.signature}/4, strokes {CANONICAL_PATTERNS[args.signature].strokes}")
     print(f"Resetting every {measure_interval_s:.2f}s ({args.bpm} BPM x {args.signature} beats/measure) on a wall-clock "
@@ -108,6 +112,10 @@ def main():
 
             pitch, yaw = _quat_to_pitch_yaw_deg(q)
             trace_xy.append((pitch, yaw))
+
+            if t - last_print >= PRINT_INTERVAL_S:
+                last_print = t
+                print(f"raw gx={gx:8.1f} gy={gy:8.1f} gz={gz:8.1f}  |  integrated pitch={pitch:7.2f} yaw={yaw:7.2f}  |  trace points={len(trace_xy)}")
 
             if t - last_draw >= DRAW_INTERVAL_S and len(trace_xy) >= 2:
                 last_draw = t
