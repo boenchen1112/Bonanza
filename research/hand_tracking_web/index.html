@@ -5,22 +5,22 @@
 <title>Phase B: hand-tracking conducting trace test</title>
 <style>
   body { background: #111; color: #eee; font-family: sans-serif; margin: 0; padding: 16px; }
-  #controls { margin-bottom: 12px; }
+  #controls { margin-bottom: 12px; display: flex; align-items: center; flex-wrap: wrap; gap: 4px 0; }
   #controls label { margin-right: 12px; }
   #controls input { width: 60px; }
-  #status { margin: 8px 0; color: #9cf; }
-  #layout { display: flex; gap: 16px; align-items: flex-start; }
-  #camWrap { position: relative; width: 320px; height: 240px; }
-  #camWrap video, #camWrap canvas.skel {
-    position: absolute; top: 0; left: 0; width: 320px; height: 240px;
-    transform: scaleX(-1); /* mirror the DISPLAY; landmark x is mirrored separately in JS */
-  }
-  #traceCanvas { background: #1a1a1a; border: 1px solid #333; }
+  #status { margin: 8px 0; color: #9cf; max-width: 640px; }
   button { font-size: 14px; padding: 6px 14px; }
-  #refImgWrap { text-align: center; }
-  #refImgWrap img { max-width: 220px; background: #fff; border-radius: 4px; }
-  #refImgWrap.unavailable img { display: none; }
-  #refImgWrap p { color: #888; font-size: 12px; max-width: 220px; }
+
+  /* Single container: camera feed + skeleton + live trace + reference
+     pattern are all drawn into one canvas (feedback 2026-07-29: "only 1
+     container with the three functions"); the real reference photo is an
+     absolutely-positioned inset thumbnail inside the SAME wrapper, not a
+     separate layout column. */
+  #stage { position: relative; width: 640px; height: 480px; }
+  #mainCanvas { background: #1a1a1a; border: 1px solid #333; }
+  #refThumb { position: absolute; top: 8px; right: 8px; width: 120px; background: #fff;
+    border-radius: 4px; padding: 2px; }
+  #refThumb.unavailable { display: none; }
 </style>
 </head>
 <body>
@@ -35,19 +35,15 @@
     </select>
   </label>
   <label>Seconds <input id="seconds" type="number" value="60"></label>
-  <button id="startBtn">Start</button>
+  <label>Scale (px/unit) <input id="scale" type="number" value="150"></label>
+  <button id="startBtn">Calibrate &amp; Start</button>
 </div>
-<div id="status">Idle. Click Start, allow camera access, hold your hand with fingers together (like pinching a baton).</div>
-<div id="layout">
-  <div id="camWrap">
-    <video id="video" autoplay playsinline muted></video>
-    <canvas id="skelCanvas" class="skel" width="320" height="240"></canvas>
-  </div>
-  <canvas id="traceCanvas" width="500" height="500"></canvas>
-  <div id="refImgWrap">
-    <img id="refImg" src="assets/reference_2_4.png" alt="real conducting reference diagram">
-    <p id="refImgNote"></p>
-  </div>
+<div id="status">Idle. Click "Calibrate &amp; Start", allow camera access, then hold your hand with fingers
+  together (like pinching a baton) at the TOP/prep position when asked.</div>
+<div id="stage">
+  <video id="video" autoplay playsinline muted style="display:none"></video>
+  <canvas id="mainCanvas" width="640" height="480"></canvas>
+  <img id="refThumb" class="unavailable" src="assets/reference_2_4.png" alt="real conducting reference diagram">
 </div>
 
 <script type="module">
@@ -78,24 +74,16 @@ const HAND_CONNECTIONS = [
 // Canonical reference patterns, ported from src/conducting_patterns.py.
 // 2/4 corrected 2026-07-29 from a real conducting-pedagogy diagram: prep
 // up-left, down to beat 1 (lowest point), rebound up-right to beat 2.
-// All three already have max-abs-coordinate == 1.0, so the Python
-// normalization step is a no-op here -- these are the same numbers.
 const REFERENCE = {
   2: [[-0.2, 0.9], [0.0, -1.0], [0.35, -0.3]],
   3: [[0.0, 0.0], [-0.3, -1.0], [0.8, -0.3], [0.0, 0.0]],
   4: [[0.0, 0.0], [0.0, -1.0], [-0.7, -0.4], [0.7, -0.4], [0.0, 0.0]],
 };
 
-// Real hand-drawn reference diagrams (user-supplied, 2026-07-29), shown
-// alongside the programmatic line-approximation instead of replacing it --
-// the diagram is what the user actually conducts against; the drawn line
-// is only there because it doubles as this page's scoring overlay. Only
-// 2/4 has a verified real diagram so far; 3/4 and 4/4 fall back to the
-// programmatic shape with an on-page note rather than silently reusing
-// the 2/4 image.
-const REFERENCE_IMAGES = {
-  2: "assets/reference_2_4.png",
-};
+// Real hand-drawn reference diagrams (user-supplied, 2026-07-29). Only 2/4
+// has a verified real diagram so far; 3/4 and 4/4 fall back to the
+// programmatic line drawn on the canvas itself.
+const REFERENCE_IMAGES = { 2: "assets/reference_2_4.png" };
 
 // Fingertip landmark indices in MediaPipe Hands' 21-point model: thumb,
 // index, middle, ring, pinky tips. Averaging these tracks the "point" of
@@ -103,118 +91,181 @@ const REFERENCE_IMAGES = {
 // single-finger pointing gesture.
 const FINGERTIP_IDX = [4, 8, 12, 16, 20];
 
+let runId = null;
+let bpm = 80, signature = 2, seconds = 60, scalePxPerUnit = 150;
+let traceXY = [];
+let measureIndex = -1;
+let measureStartWall = null;
+let running = false;
+let stopAt = 0;
+
+// Calibration (feedback 2026-07-29: detecting "the top" live turned out
+// unreliable -- it fired on every direction change instead of once per
+// measure. Simpler and more robust: ask the user to hold still at the
+// actual top/prep position for a moment before the run starts, and use
+// that single averaged sample as a FIXED origin for the whole run. Trace
+// resets (below) are then purely a per-measure clear of the point list --
+// they no longer try to re-detect where "the top" is.
+const CALIBRATION_HOLD_MS = 1200;
+let appState = "idle"; // idle | countdown | calibrating | running
+let origin = null; // [logicalX, logicalY], fixed once calibrated
+let calibSamples = [];
+
+function currentLogicalXY(landmarks) {
+  // Mirror x here (1 - x) so tracked "right" means the user's real right,
+  // not the camera's unmirrored right -- matches the Python tool's
+  // cv2.flip approach and the mirrored canvas draw below.
+  const x = 1.0 - (FINGERTIP_IDX.reduce((s, i) => s + landmarks[i].x, 0) / FINGERTIP_IDX.length);
+  const y = FINGERTIP_IDX.reduce((s, i) => s + landmarks[i].y, 0) / FINGERTIP_IDX.length;
+  return [x, y];
+}
+
+// --- Metronome (Web Audio, lookahead scheduler -- standard pattern for
+// sample-accurate timing that setInterval/rAF alone can't provide) ---
+let audioCtx = null;
+let nextBeatTime = 0;
+let beatInMeasure = 0;
+let metronomeTimer = null;
+const SCHEDULE_AHEAD_S = 0.12;
+
+function beatIntervalS() { return 60 / bpm; }
+
+function scheduleClick(time, isDownbeat) {
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.frequency.value = isDownbeat ? 1000 : 700;
+  gain.gain.setValueAtTime(0.0001, time);
+  gain.gain.exponentialRampToValueAtTime(0.5, time + 0.005);
+  gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.08);
+  osc.connect(gain).connect(audioCtx.destination);
+  osc.start(time);
+  osc.stop(time + 0.09);
+}
+
+function onMeasureBoundary() {
+  traceXY = [];
+  measureIndex += 1;
+  measureStartWall = performance.now();
+}
+
+function metronomeSchedulerTick() {
+  while (nextBeatTime < audioCtx.currentTime + SCHEDULE_AHEAD_S) {
+    const isDownbeat = beatInMeasure === 0;
+    scheduleClick(nextBeatTime, isDownbeat);
+    if (isDownbeat) {
+      const delayMs = Math.max(0, (nextBeatTime - audioCtx.currentTime) * 1000);
+      setTimeout(onMeasureBoundary, delayMs);
+    }
+    nextBeatTime += beatIntervalS();
+    beatInMeasure = (beatInMeasure + 1) % signature;
+  }
+}
+
+function startMetronome() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  beatInMeasure = 0;
+  nextBeatTime = audioCtx.currentTime + 0.05;
+  metronomeSchedulerTick();
+  metronomeTimer = setInterval(metronomeSchedulerTick, 25);
+}
+
+function stopMetronome() {
+  if (metronomeTimer) clearInterval(metronomeTimer);
+  metronomeTimer = null;
+}
+
+// --- Rendering: everything drawn into one canvas ---
+const video = document.getElementById("video");
+const mainCanvas = document.getElementById("mainCanvas");
+const ctx = mainCanvas.getContext("2d");
+const statusEl = document.getElementById("status");
+const refThumb = document.getElementById("refThumb");
+const signatureSelect = document.getElementById("signature");
+
+function updateReferenceThumb() {
+  const sig = parseInt(signatureSelect.value);
+  const src = REFERENCE_IMAGES[sig];
+  if (src) { refThumb.src = src; refThumb.classList.remove("unavailable"); }
+  else { refThumb.classList.add("unavailable"); }
+}
+signatureSelect.addEventListener("change", updateReferenceThumb);
+updateReferenceThumb();
+
 function boundingSize(points) {
   const xs = points.map(p => p[0]), ys = points.map(p => p[1]);
   return Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) || 1.0;
 }
 
-let runId = null;
-let bpm = 80, signature = 2, seconds = 60;
-let measureIntervalMs = 1500;
-let measureStartWall = null;
-let measureIndex = -1;
-let traceXY = [];
-let origin = null;
-let running = false;
-let stopAt = 0;
-
-// Top-of-motion reset detection (feedback 2026-07-29: "the starting point
-// should be from the top", not wherever a wall-clock timer happens to
-// catch the hand). Image-space y increases downward, so the physical top
-// (prep position) is a LOCAL MINIMUM of y -- detected one sample late, as
-// the moment y stops decreasing and starts increasing again (i.e. the
-// hand has started its downstroke toward beat 1). EMA-smoothed to avoid
-// tremor/noise triggering false tops; gated on both a minimum time since
-// the last reset and a minimum travelled range so a hand held nearly
-// still doesn't spam resets.
-let smoothX = null, smoothY = null;
-const Y_SMOOTH_ALPHA = 0.35;
-const Y_FLAT_EPSILON = 0.0015;
-let prevSmoothY = null, prevDir = 0; // dir: -1 moving up (toward top), +1 moving down
-let candidateTopX = null, candidateTopY = null;
-let minYSinceReset = null, maxYSinceReset = null;
-let lastResetPerfMs = 0;
-
-const video = document.getElementById("video");
-const skelCanvas = document.getElementById("skelCanvas");
-const skelCtx = skelCanvas.getContext("2d");
-const traceCanvas = document.getElementById("traceCanvas");
-const traceCtx = traceCanvas.getContext("2d");
-const statusEl = document.getElementById("status");
-const refImgWrap = document.getElementById("refImgWrap");
-const refImg = document.getElementById("refImg");
-const refImgNote = document.getElementById("refImgNote");
-const signatureSelect = document.getElementById("signature");
-
-function updateReferenceImage() {
-  const sig = parseInt(signatureSelect.value);
-  const src = REFERENCE_IMAGES[sig];
-  if (src) {
-    refImg.src = src;
-    refImgWrap.classList.remove("unavailable");
-    refImgNote.textContent = "Real reference diagram.";
-  } else {
-    refImgWrap.classList.add("unavailable");
-    refImgNote.textContent = `No verified real diagram for ${sig}/4 yet -- the gray line on the trace canvas is an unverified programmatic approximation.`;
-  }
-}
-signatureSelect.addEventListener("change", updateReferenceImage);
-updateReferenceImage();
-
-function drawTrace() {
-  const W = traceCanvas.width, H = traceCanvas.height;
-  const cx = W / 2, cy = H / 2, pxPerUnit = W * 0.3;
-  const toPx = p => [cx + p[0] * pxPerUnit, cy - p[1] * pxPerUnit]; // y-up -> canvas y-down
-
-  traceCtx.fillStyle = "#1a1a1a";
-  traceCtx.fillRect(0, 0, W, H);
-
-  const ref = REFERENCE[signature];
-  traceCtx.strokeStyle = "#888"; traceCtx.lineWidth = 2;
-  traceCtx.beginPath();
-  ref.forEach((p, i) => { const [x, y] = toPx(p); i === 0 ? traceCtx.moveTo(x, y) : traceCtx.lineTo(x, y); });
-  traceCtx.stroke();
-  traceCtx.fillStyle = "#888";
-  ref.forEach(p => { const [x, y] = toPx(p); traceCtx.beginPath(); traceCtx.arc(x, y, 5, 0, 7); traceCtx.fill(); });
-
-  if (traceXY.length >= 2) {
-    const refSize = boundingSize(ref);
-    const traceSize = boundingSize(traceXY);
-    const scale = refSize / (traceSize || 1.0);
-    traceCtx.strokeStyle = "#f5f0e0"; traceCtx.lineWidth = 2;
-    traceCtx.beginPath();
-    traceXY.forEach((p, i) => {
-      const [x, y] = toPx([p[0] * scale, p[1] * scale]);
-      i === 0 ? traceCtx.moveTo(x, y) : traceCtx.lineTo(x, y);
-    });
-    traceCtx.stroke();
-  }
-
-  const elapsed = measureStartWall !== null ? (performance.now() - measureStartWall) / 1000 : 0;
-  traceCtx.fillStyle = "#ccc"; traceCtx.font = "14px sans-serif";
-  traceCtx.fillText(`measure ${measureIndex}  ${elapsed.toFixed(1)}/${(measureIntervalMs/1000).toFixed(2)}s`, 10, H - 12);
+function originPx(W, H) {
+  return origin ? [origin[0] * W, origin[1] * H] : [W / 2, H / 2];
 }
 
-function drawSkeleton(landmarks) {
-  skelCtx.clearRect(0, 0, skelCanvas.width, skelCanvas.height);
-  if (!landmarks) return;
-  const W = skelCanvas.width, H = skelCanvas.height;
-  skelCtx.strokeStyle = "#ffffff55"; skelCtx.lineWidth = 1;
+// Reference/trace points are stored in "logical" units: x-right, y-up,
+// relative to the calibrated origin. Screen pixels mirror x the same way
+// the video draw below does, so both line up over the live camera feed.
+function unitToPx(p, W, H) {
+  const [ox, oy] = originPx(W, H);
+  return [ox + p[0] * scalePxPerUnit, oy - p[1] * scalePxPerUnit];
+}
+
+function drawSkeleton(landmarks, W, H) {
+  ctx.strokeStyle = "#ffffff55"; ctx.lineWidth = 1;
   HAND_CONNECTIONS.forEach(([a, b]) => {
-    skelCtx.beginPath();
-    skelCtx.moveTo(landmarks[a].x * W, landmarks[a].y * H);
-    skelCtx.lineTo(landmarks[b].x * W, landmarks[b].y * H);
-    skelCtx.stroke();
+    ctx.beginPath();
+    ctx.moveTo((1 - landmarks[a].x) * W, landmarks[a].y * H);
+    ctx.lineTo((1 - landmarks[b].x) * W, landmarks[b].y * H);
+    ctx.stroke();
   });
-  skelCtx.fillStyle = "#00ff0088";
-  landmarks.forEach(p => { skelCtx.beginPath(); skelCtx.arc(p.x * W, p.y * H, 2, 0, 7); skelCtx.fill(); });
+  ctx.fillStyle = "#00ff0088";
+  landmarks.forEach(p => { ctx.beginPath(); ctx.arc((1 - p.x) * W, p.y * H, 2, 0, 7); ctx.fill(); });
 
-  const cx = FINGERTIP_IDX.reduce((s, i) => s + landmarks[i].x, 0) / FINGERTIP_IDX.length;
-  const cy = FINGERTIP_IDX.reduce((s, i) => s + landmarks[i].y, 0) / FINGERTIP_IDX.length;
-  skelCtx.fillStyle = "#00ff00";
-  skelCtx.beginPath();
-  skelCtx.arc(cx * W, cy * H, 6, 0, 7);
-  skelCtx.fill();
+  const [cx, cy] = currentLogicalXY(landmarks);
+  ctx.fillStyle = "#00ff00";
+  ctx.beginPath();
+  ctx.arc(cx * W, cy * H, 6, 0, 7);
+  ctx.fill();
+}
+
+function drawOverlay(W, H) {
+  const ref = REFERENCE[signature];
+
+  if (origin) {
+    ctx.strokeStyle = "#aaaaaa"; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ref.forEach((p, i) => { const [x, y] = unitToPx(p, W, H); i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); });
+    ctx.stroke();
+    ctx.fillStyle = "#aaaaaa";
+    ref.forEach(p => { const [x, y] = unitToPx(p, W, H); ctx.beginPath(); ctx.arc(x, y, 5, 0, 7); ctx.fill(); });
+
+    if (traceXY.length >= 2) {
+      ctx.strokeStyle = "#f5f0e0"; ctx.lineWidth = 2;
+      ctx.beginPath();
+      traceXY.forEach((p, i) => { const [x, y] = unitToPx(p, W, H); i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); });
+      ctx.stroke();
+    }
+  }
+
+  ctx.fillStyle = "#ffffffcc"; ctx.font = "14px sans-serif";
+  if (appState === "countdown") {
+    ctx.font = "bold 28px sans-serif";
+    ctx.fillText("Hold at TOP/prep position...", 20, H / 2);
+  } else if (appState === "calibrating") {
+    ctx.font = "bold 28px sans-serif";
+    ctx.fillText("Calibrating...", 20, H / 2);
+  } else if (appState === "running") {
+    ctx.fillText(`measure ${measureIndex}  beat ${beatInMeasure + 1}/${signature}`, 10, H - 12);
+  }
+}
+
+function renderFrame(landmarks) {
+  const W = mainCanvas.width, H = mainCanvas.height;
+  ctx.save();
+  ctx.scale(-1, 1);
+  ctx.drawImage(video, -W, 0, W, H); // mirrored video draw (selfie view)
+  ctx.restore();
+
+  if (landmarks) drawSkeleton(landmarks, W, H);
+  drawOverlay(W, H);
 }
 
 function logSample(t, found, x, y, nx, ny) {
@@ -226,67 +277,28 @@ function logSample(t, found, x, y, nx, ny) {
 
 function onResults(landmarksList) {
   const landmarks = landmarksList && landmarksList.length > 0 ? landmarksList[0] : null;
-  drawSkeleton(landmarks);
-
   const now = performance.now();
   let found = false, x = null, y = null, nx = null, ny = null;
 
   if (landmarks) {
     found = true;
-    // Mirror x here (1 - x), matching the mirrored display and the Python
-    // tool's cv2.flip approach, so tracked "right" means the user's real
-    // right, not the camera's unmirrored right.
-    x = 1.0 - (FINGERTIP_IDX.reduce((s, i) => s + landmarks[i].x, 0) / FINGERTIP_IDX.length);
-    y = FINGERTIP_IDX.reduce((s, i) => s + landmarks[i].y, 0) / FINGERTIP_IDX.length;
+    [x, y] = currentLogicalXY(landmarks);
 
-    if (measureStartWall === null) measureStartWall = now;
-
-    smoothX = smoothX === null ? x : smoothX + Y_SMOOTH_ALPHA * (x - smoothX);
-    smoothY = smoothY === null ? y : smoothY + Y_SMOOTH_ALPHA * (y - smoothY);
-
-    let dir = prevDir;
-    if (prevSmoothY !== null) {
-      const dy = smoothY - prevSmoothY;
-      if (dy < -Y_FLAT_EPSILON) dir = -1;
-      else if (dy > Y_FLAT_EPSILON) dir = 1;
+    if (appState === "calibrating") {
+      calibSamples.push([x, y]);
+    } else if (appState === "running" && origin) {
+      nx = x - origin[0];
+      ny = -(y - origin[1]); // image y-down -> logical y-up
+      traceXY.push([nx, ny]);
     }
-
-    if (minYSinceReset === null) { minYSinceReset = smoothY; maxYSinceReset = smoothY; }
-    minYSinceReset = Math.min(minYSinceReset, smoothY);
-    maxYSinceReset = Math.max(maxYSinceReset, smoothY);
-
-    // A local min just occurred at the *previous* sample: it was moving up
-    // (dir -1) and has now turned to moving down (dir +1). That previous
-    // point -- not this one -- is the true top.
-    if (prevDir === -1 && dir === 1 && candidateTopX !== null) {
-      const rangeSinceReset = maxYSinceReset - minYSinceReset;
-      const minResetGapMs = Math.min(300, measureIntervalMs * 0.4);
-      if (now - lastResetPerfMs > minResetGapMs && rangeSinceReset > 0.03) {
-        origin = [candidateTopX, candidateTopY];
-        traceXY = [];
-        measureIndex += 1;
-        measureStartWall = now;
-        lastResetPerfMs = now;
-        minYSinceReset = smoothY; maxYSinceReset = smoothY;
-      }
-    }
-
-    candidateTopX = smoothX; candidateTopY = smoothY;
-    prevSmoothY = smoothY; prevDir = dir;
-
-    if (origin === null) origin = [smoothX, smoothY]; // fallback until the first real top is found
-
-    nx = (smoothX - origin[0]);
-    ny = -(smoothY - origin[1]); // image y-down -> plot y-up
-    traceXY.push([nx, ny]);
   }
 
-  logSample(now / 1000, found, x, y, nx, ny);
-  drawTrace();
+  renderFrame(landmarks);
+  if (appState === "running") logSample(now / 1000, found, x, y, nx, ny);
 }
 
 async function saveSnapshot() {
-  const dataUrl = traceCanvas.toDataURL("image/png");
+  const dataUrl = mainCanvas.toDataURL("image/png");
   await fetch("/snapshot", {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ run_id: runId, image: dataUrl }),
@@ -295,6 +307,8 @@ async function saveSnapshot() {
 
 function stopRun() {
   running = false;
+  appState = "idle";
+  stopMetronome();
   statusEl.textContent = `Done. Log + snapshot saved server-side under logs/ (run ${runId}).`;
   saveSnapshot();
 }
@@ -308,27 +322,14 @@ function detectLoop() {
     const result = handLandmarker.detectForVideo(video, performance.now());
     onResults(result.landmarks);
   }
-  if (running && performance.now() < stopAt) {
+  if (appState !== "idle" && (!running || performance.now() < stopAt)) {
     requestAnimationFrame(detectLoop);
   } else if (running) {
     stopRun();
   }
 }
 
-async function start() {
-  bpm = parseFloat(document.getElementById("bpm").value);
-  signature = parseInt(document.getElementById("signature").value);
-  seconds = parseFloat(document.getElementById("seconds").value);
-  measureIntervalMs = (60000 / bpm) * signature;
-  measureStartWall = null; measureIndex = -1; traceXY = []; origin = null;
-  smoothX = null; smoothY = null; prevSmoothY = null; prevDir = 0;
-  candidateTopX = null; candidateTopY = null;
-  minYSinceReset = null; maxYSinceReset = null; lastResetPerfMs = 0;
-  runId = new Date().toISOString().replace(/[:.]/g, "-");
-  running = true;
-  stopAt = performance.now() + seconds * 1000;
-  statusEl.textContent = `Loading model...`;
-
+async function ensureModelAndCamera() {
   if (!handLandmarker) {
     const vision = await FilesetResolver.forVisionTasks(WASM_URL);
     handLandmarker = await HandLandmarker.createFromOptions(vision, {
@@ -337,16 +338,50 @@ async function start() {
       numHands: 1,
     });
   }
-
   if (!video.srcObject) {
     const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
     video.srcObject = stream;
     await new Promise(resolve => { video.onloadedmetadata = resolve; });
     video.play();
   }
+}
 
-  statusEl.textContent = `Running: ${signature}/4 @ ${bpm} BPM for ${seconds}s. Trace resets when your hand reaches the top of its motion (detected), not on a fixed timer.`;
-  requestAnimationFrame(detectLoop);
+async function start() {
+  bpm = parseFloat(document.getElementById("bpm").value);
+  signature = parseInt(document.getElementById("signature").value);
+  seconds = parseFloat(document.getElementById("seconds").value);
+  scalePxPerUnit = parseFloat(document.getElementById("scale").value) || 150;
+
+  statusEl.textContent = "Loading model...";
+  appState = "countdown";
+  requestAnimationFrame(detectLoop); // drives rendering + detection through calibration too
+  await ensureModelAndCamera();
+
+  statusEl.textContent = "Hold your hand at the TOP/prep position and stay still...";
+  await new Promise(r => setTimeout(r, CALIBRATION_HOLD_MS));
+
+  appState = "calibrating";
+  calibSamples = [];
+  statusEl.textContent = "Calibrating origin...";
+  await new Promise(r => setTimeout(r, CALIBRATION_HOLD_MS));
+
+  if (calibSamples.length === 0) {
+    statusEl.textContent = "Calibration failed: no hand detected. Click the button to try again.";
+    appState = "idle";
+    return;
+  }
+  const ox = calibSamples.reduce((s, p) => s + p[0], 0) / calibSamples.length;
+  const oy = calibSamples.reduce((s, p) => s + p[1], 0) / calibSamples.length;
+  origin = [ox, oy];
+
+  traceXY = []; measureIndex = -1;
+  runId = new Date().toISOString().replace(/[:.]/g, "-");
+  running = true;
+  appState = "running";
+  stopAt = performance.now() + seconds * 1000;
+  startMetronome();
+
+  statusEl.textContent = `Running: ${signature}/4 @ ${bpm} BPM for ${seconds}s. Origin calibrated; trace resets on every metronome downbeat.`;
 }
 
 document.getElementById("startBtn").addEventListener("click", () => { start(); });
