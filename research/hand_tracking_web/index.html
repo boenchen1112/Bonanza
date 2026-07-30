@@ -11,18 +11,17 @@
   #status { margin: 8px 0; color: #9cf; max-width: 640px; }
   button { font-size: 14px; padding: 6px 14px; }
 
-  /* Single container: camera feed + skeleton + live trace + reference
-     pattern are all drawn into one canvas (feedback 2026-07-29: "only 1
-     container with the three functions"). v5 Phase 1: the real reference
-     photo is now drawn INTO the canvas itself (centered/semi-transparent,
-     coordinate-mapped), not a separate absolutely-positioned thumbnail. */
+  /* Single container: camera feed + skeleton + live trail are all drawn
+     into one canvas (feedback 2026-07-29: "only 1 container with the three
+     functions"). v5 Phase 2 (feedback 2026-07-30, playtest): the in-canvas
+     reference-image overlay that used to also live here was removed --
+     it read as consistently misaligned with the real hand position; see
+     index.html's JS comment above REFERENCE_VIDEOS for why. */
   #stage { position: relative; width: 640px; height: 480px; }
   #mainCanvas { background: #1a1a1a; border: 1px solid #333; }
 
   /* v5 Phase 2 follow-up: "add the reference video beside the camera
-     display" -- a separate looping clip of the real reference motion,
-     distinct from the still reference image already drawn INTO #mainCanvas
-     (that stays; this is additive, not a replacement). */
+     display" -- a separate looping clip of the real reference motion. */
   #panels { display: flex; align-items: flex-start; gap: 12px; }
   #refVideoWrap { width: 240px; }
   #refVideoWrap video { width: 100%; border: 1px solid #333; background: #1a1a1a; display: block; }
@@ -41,7 +40,6 @@
     </select>
   </label>
   <label>Seconds <input id="seconds" type="number" value="60"></label>
-  <label>Scale (px/unit) <input id="scale" type="number" value="150"></label>
   <button id="startBtn">Calibrate &amp; Start</button>
   <button id="stopBtn" disabled>Stop</button>
 </div>
@@ -56,7 +54,7 @@
   </div>
   <div id="refVideoWrap">
     <video id="refVideo" autoplay loop muted playsinline></video>
-    <p>Reference clip (loops) -- the source this signature's pattern and overlay image were extracted from.</p>
+    <p>Reference clip (loops) -- the source this signature's pattern was extracted from. Watch it, then match the shape with your own hand; the camera view no longer overlays it directly (feedback 2026-07-30: that overlay was unreliably aligned).</p>
   </div>
 </div>
 
@@ -98,9 +96,9 @@ const REFERENCE = {
   4: [[0.0, 0.0], [0.0, -1.0], [-0.6852, -0.6019], [0.715, -0.535], [0.0751, 0.0185]],
 };
 
-// Audit S6 (2026-07-30): REFERENCE is prep-first (index 0), and both
-// drawReferenceImage() and start()'s calibration scale derivation assume
-// that -- so REFERENCE itself must NOT be rolled/reordered. But the scored
+// Audit S6 (2026-07-30): REFERENCE is prep-first (index 0), and start()'s
+// calibration scale derivation assumes that -- so REFERENCE itself must NOT
+// be rolled/reordered. But the scored
 // window (onMeasureBoundary, below) is a closed loop that runs beat1 ->
 // beat2 -> ... -> beat1 of the NEXT measure (the reset instant IS the
 // bottom of the stroke, per that function's own comment) -- a different
@@ -126,46 +124,18 @@ const SCORING_REF = Object.fromEntries(
 // non-repeated beat per measure; 3/4 and 4/4 (2+ intermediate vertices)
 // don't have this degeneracy.
 
-// Real reference diagrams -- all three now sourced from the reference
-// videos' own frames (v5 Phase 2 follow-up: "update the image also for
-// 2/4" replaces the earlier separate hand-drawn-photo treatment, so all
-// three signatures are consistent).
-const REFERENCE_IMAGES = {
-  2: "assets/reference_24.png",
-  3: "assets/reference_34.png",
-  4: "assets/reference_44.png",
-};
+// v5 Phase 2 follow-up (feedback 2026-07-30, playtest): the in-canvas
+// reference-image overlay (drawReferenceImage(), removed) was consistently
+// misaligned with the live hand position badly enough to read as broken --
+// R1/R2's anchor/uniform-scale fixes narrowed the error but didn't close
+// it, because the whole approach routed the visible trail through the
+// calibrated logical/scale pipeline (origin, calibScaleFactor,
+// scalePxPerUnit) instead of drawing where the hand actually is on screen.
+// Removed per explicit feedback ("remove the reference image ... useless").
+// The looping reference VIDEO panel beside the camera (REFERENCE_VIDEOS,
+// below) stays -- it's a real clip, not a coordinate-mapped overlay, so it
+// can't drift out of alignment the same way.
 const REFERENCE_VIDEOS = { 2: "assets/2_4.mp4", 3: "assets/3_4.mp4", 4: "assets/4_4.mp4" };
-
-// Maps each reference image's pixel space onto its REFERENCE[sig]'s logical
-// unit space -- a single UNIFORM scale + translate (no rotation, no
-// independent per-axis scale factors).
-//
-// Audit R1 (2026-07-30): the previous 2/4 anchors here were hand-guessed
-// pixel coordinates that turned out to be materially wrong -- prep off by
-// (-84,-38)px, beat1 off by (-198,+83)px against
-// research/captures/pattern_24_vertices_px.csv (the ground-truth vertices
-// extract_pattern_from_video.py measured directly in this same bitmap, and
-// the exact source REFERENCE's own numbers came from). That error alone
-// stretched the drawn 2/4 diagram 48.8% too wide. Anchors below are read
-// straight from that CSV for all three signatures (3/4 and 4/4's
-// hand-supplied points already matched the CSV closely; only 2/4 diverged).
-//
-// Audit R2: the earlier version also split scale into independent x/y
-// factors ("axisMode"), reasoning that avoiding rotation required it. It
-// doesn't -- extract_pattern_from_video.py::to_logical() normalizes by a
-// SINGLE max_extent, so REFERENCE's logical coordinates already preserve
-// the source image's true aspect ratio, and a per-axis fit is guaranteed to
-// distort it (that's exactly what let the bad 2/4 anchors above hide as a
-// stretch instead of an obviously-wrong size). A single uniform scale +
-// translate satisfies "don't rotate the image" without that distortion --
-// confirmed on the corrected numbers below, 2/4's own independently-derived
-// x-scale and y-scale now agree to four decimal places anyway.
-const REFERENCE_IMAGE_ANCHORS = {
-  2: { imgWidthPx: 2558, imgHeightPx: 1306, prepPx: [984, 113], beat1Px: [1463, 1017] },
-  3: { imgWidthPx: 2558, imgHeightPx: 1308, prepPx: [695, 115], beat1Px: [700, 1100] },
-  4: { imgWidthPx: 2558, imgHeightPx: 1306, prepPx: [1276, 126], beat1Px: [1276, 1098] },
-};
 
 // Fingertip landmark indices in MediaPipe Hands' 21-point model: thumb,
 // index, middle, ring, pinky tips. Averaging these tracks the "point" of
@@ -192,10 +162,24 @@ const VIDEO_W = 640, VIDEO_H = 480;
 let VIDEO_ASPECT = VIDEO_W / VIDEO_H;
 
 let runId = null;
-let bpm = 80, signature = 2, seconds = 60, scalePxPerUnit = 150;
+let bpm = 80, signature = 2, seconds = 60;
+// traceXY: calibrated logical (nx,ny) points -- SCORING ONLY, compared
+// against SCORING_REF via shapeDistance(). NOT used for drawing (see
+// traceScreenXY below) -- feedback 2026-07-30: the calibrated/scaled
+// drawing pipeline (origin, calibScaleFactor) was exactly what made the
+// visible trail drift from where the hand actually is, since any
+// imprecision in the TOP/BOTTOM calibration hold got baked into where
+// every subsequent point was drawn.
 let traceXY = [];
-let lastCompletedTraceXY = []; // previous measure's finished trace, kept
-                                // visible one extra measure (see below)
+// traceScreenXY: raw on-screen pixel positions (mirrored, same convention
+// as the skeleton dot), pushed every frame directly from the tracked
+// fingertip -- this is what's actually drawn. Airdrawer-style: the trail
+// is wherever MediaPipe detected the hand, full stop, no calibration math
+// between detection and pixel.
+let traceScreenXY = [];
+let lastCompletedTraceXY = []; // previous measure's finished SCORING trace
+let lastCompletedScreenXY = []; // previous measure's finished trail, kept
+                                 // visible one extra measure (see below)
 let measureIndex = -1;
 let measureStartWall = null;
 let running = false;
@@ -216,16 +200,17 @@ let logFlushTimer = null; // audit D1: batches logSample() writes, see flushLogS
 // reference"): REFERENCE's numbers are an abstract shape scale (prep to
 // beat 1 spans about ~1.9 units), but nx/ny were raw camera-frame
 // fractions (real hand motion is more like 0.05-0.2 of the frame) -- two
-// different unit systems sharing one scalePxPerUnit knob, so no single
-// value could make both the reference and the live trace look right at
-// once. Fixed with a SECOND calibration point: after TOP, hold at BOTTOM
-// (beat 1's lowest point -- literally "the lowest point of the check
-// mark," per the user's own framing) and derive calibScaleFactor from the
-// ratio of the user's own real top-to-bottom range to REFERENCE's
+// different unit systems. Fixed with a SECOND calibration point: after TOP,
+// hold at BOTTOM (beat 1's lowest point -- literally "the lowest point of
+// the check mark," per the user's own framing) and derive calibScaleFactor
+// from the ratio of the user's own real top-to-bottom range to REFERENCE's
 // prep-to-beat1 distance. This maps the user's actual physical amplitude
-// onto REFERENCE's unit scale, so scalePxPerUnit (still user-tunable) is
-// now a pure visual zoom, not also secretly compensating for a unit
-// mismatch.
+// onto REFERENCE's unit scale for SCORING (shapeDistance() against
+// SCORING_REF). v5 Phase 2 follow-up (feedback 2026-07-30, playtest): this
+// calibrated/scaled space used to also drive what was drawn on screen --
+// removed (see traceScreenXY) after the calibrated overlay proved
+// unreliably aligned to the real hand position; calibScaleFactor is scoring
+// -only now.
 // v5 Phase 2 follow-up (feedback 2026-07-30: "calibration time is too
 // short"): a fixed 1.2s hold sampled starting the instant the countdown
 // ended, even if the hand was still settling into position. Replaced with
@@ -402,10 +387,7 @@ function scoreMeasure(idx, trace) {
   const matchPct = Math.round((1 - Math.min(distance, 1)) * 100);
   sessionScores.push({ measureIndex: idx, distance, drift, matchPct });
   lastScoreText = `measure ${idx} match: ${matchPct}% (drift ${Math.round(drift*100)}%)`;
-  fetch("/score", {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ run_id: runId, measure_index: idx, distance, drift, match_pct: matchPct }),
-  }).catch(() => {});
+  postJSON("/score", { run_id: runId, measure_index: idx, distance, drift, match_pct: matchPct });
 }
 
 function onMeasureBoundary() {
@@ -423,8 +405,10 @@ function onMeasureBoundary() {
   if (measureIndex >= 0 && traceXY.length >= 2) {
     scoreMeasure(measureIndex, traceXY);
     lastCompletedTraceXY = traceXY;
+    lastCompletedScreenXY = traceScreenXY;
   }
   traceXY = [];
+  traceScreenXY = [];
   measureIndex += 1;
   measureStartWall = performance.now();
 }
@@ -461,15 +445,6 @@ const mainCanvas = document.getElementById("mainCanvas");
 const ctx = mainCanvas.getContext("2d");
 const statusEl = document.getElementById("status");
 
-// Reference photos are drawn into mainCanvas directly (v5 Phase 1), so
-// they're loaded as off-DOM Image objects rather than a visible <img>.
-const refImageEls = {};
-for (const [sig, src] of Object.entries(REFERENCE_IMAGES)) {
-  const img = new Image();
-  img.src = src;
-  refImageEls[sig] = img;
-}
-
 // v5 Phase 2 follow-up: the looping reference clip beside the camera --
 // separate from (and in addition to) the still image drawn INTO the
 // canvas above. Swaps source when the signature dropdown changes.
@@ -485,16 +460,16 @@ function updateRefVideo() {
 signatureSelect.addEventListener("change", updateRefVideo);
 updateRefVideo();
 
-function originPx(W, H) {
-  return origin ? [origin[0] * W, origin[1] * H] : [W / 2, H / 2];
-}
-
-// Reference/trace points are stored in "logical" units: x-right, y-up,
-// relative to the calibrated origin. Screen pixels mirror x the same way
-// the video draw below does, so both line up over the live camera feed.
-function unitToPx(p, W, H) {
-  const [ox, oy] = originPx(W, H);
-  return [ox + p[0] * scalePxPerUnit, oy - p[1] * scalePxPerUnit];
+// Screen-space point for the tracked fingertip -- mirrored the same way as
+// the video draw and the skeleton dots below, so it lines up pixel-for-pixel
+// with where the hand visually is. This is what traceScreenXY stores each
+// frame (see onResults()) -- no calibration/scale math between detection
+// and pixel, which is exactly what AirDrawer-style air-drawing tools do
+// (github.com/Axshatt/AirDrawer: draw directly at the tracked fingertip's
+// live screen position, no separate coordinate space).
+function trackedPointPx(landmarks, W, H) {
+  const [x, y] = currentLogicalXY(landmarks);
+  return [x * W, y * H];
 }
 
 function drawSkeleton(landmarks, W, H) {
@@ -515,85 +490,28 @@ function drawSkeleton(landmarks, W, H) {
   ctx.fill();
 }
 
-// v5 Phase 1 (changes 1+2, audit A3): draws the real reference photo
-// directly into mainCanvas, coordinate-mapped via REFERENCE_IMAGE_ANCHORS
-// so it lines up with the live trace instead of floating as a decorative
-// corner thumbnail. Composes image-pixel -> logical (the anchor's A, B)
-// with logical -> screen (origin + scalePxPerUnit) into one canvas affine
-// transform, so ctx.drawImage can blit the raw bitmap directly -- no
-// per-pixel JS loop needed. Deliberately called from drawOverlay(), i.e.
-// AFTER renderFrame()'s video-mirror save/restore block has already been
-// undone -- the image lives in the same unmirrored logical/screen
-// convention as unitToPx() and the skeleton draw, so it must not be drawn
-// inside that mirror transform (that bug has bitten this tool twice
-// already: the trace and the video feed disagreeing on which way is
-// "right").
-function drawReferenceImage(W, H) {
-  const anchor = REFERENCE_IMAGE_ANCHORS[signature];
-  const img = refImageEls[signature];
-  if (!anchor || !img || !img.complete || !origin) return;
-  const [ox, oy] = originPx(W, H);
-  const S = scalePxPerUnit;
-  const ref = REFERENCE[signature];
-  const { prepPx, beat1Px } = anchor;
-  const dxPx = beat1Px[0] - prepPx[0];
-  const dyPx = beat1Px[1] - prepPx[1];
-  const pxDelta = Math.hypot(dxPx, dyPx);
-  const dxLogical = ref[1][0] - ref[0][0];
-  const dyLogical = ref[1][1] - ref[0][1];
-  const logicalDelta = Math.hypot(dxLogical, dyLogical);
-  // Single uniform scale magnitude (audit R2) -- no independent x/y factors,
-  // no rotation. Sign note: image v increases downward, logical y increases
-  // upward, so the x scale keeps its sign (A = +scale*S) while the y scale
-  // flips (D = -scale*S).
-  const scale = logicalDelta / pxDelta;
-  const A = scale * S;
-  const D = -scale * S;
-  ctx.save();
-  ctx.globalAlpha = 0.42;
-  ctx.setTransform(A, 0, 0, D, ox - A * prepPx[0], oy - D * prepPx[1]);
-  ctx.drawImage(img, 0, 0);
-  ctx.restore();
-}
-
+// Airdrawer-style live trail: drawn directly from traceScreenXY (raw
+// on-screen fingertip positions, pushed in onResults() every frame while
+// running) -- no reference image, no calibrated-scale remapping between
+// detection and pixel. Bold/high-contrast on purpose (was a dim #b0b0b0
+// before, easy to lose against a busy background); round joins/caps for a
+// pen-like look.
 function drawOverlay(W, H) {
-  const ref = REFERENCE[signature];
-  const hasRealImage = !!REFERENCE_IMAGE_ANCHORS[signature];
+  // Last measure's finished trail, faded, drawn BEHIND the live one -- keeps
+  // the just-completed stroke visible for a full extra measure instead of
+  // vanishing the instant it's done (see onMeasureBoundary()).
+  if (lastCompletedScreenXY.length >= 2) {
+    ctx.strokeStyle = "#00e5ff55"; ctx.lineWidth = 4; ctx.lineCap = "round"; ctx.lineJoin = "round";
+    ctx.beginPath();
+    lastCompletedScreenXY.forEach(([x, y], i) => { i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); });
+    ctx.stroke();
+  }
 
-  if (origin) {
-    if (hasRealImage) {
-      drawReferenceImage(W, H);
-    } else {
-      // No verified real diagram for this signature yet -- programmatic
-      // placeholder line, clearly labeled so it's never mistaken for the
-      // calibrated real-photo experience 2/4 gets.
-      ctx.strokeStyle = "#888888"; ctx.lineWidth = 2;
-      ctx.beginPath();
-      ref.forEach((p, i) => { const [x, y] = unitToPx(p, W, H); i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); });
-      ctx.stroke();
-      ctx.fillStyle = "#888888";
-      ref.forEach(p => { const [x, y] = unitToPx(p, W, H); ctx.beginPath(); ctx.arc(x, y, 5, 0, 7); ctx.fill(); });
-      ctx.fillStyle = "#888888cc"; ctx.font = "12px sans-serif";
-      ctx.fillText(`${signature}/4: no reference photo yet -- placeholder line`, 10, 20);
-    }
-
-    // Last measure's finished trace, faded, drawn BEHIND the live one --
-    // keeps the just-completed top-to-bottom stroke visible for a full
-    // extra measure instead of vanishing the instant it's done (see
-    // onMeasureBoundary()).
-    if (lastCompletedTraceXY.length >= 2) {
-      ctx.strokeStyle = "#b0b0b055"; ctx.lineWidth = 2;
-      ctx.beginPath();
-      lastCompletedTraceXY.forEach((p, i) => { const [x, y] = unitToPx(p, W, H); i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); });
-      ctx.stroke();
-    }
-
-    if (traceXY.length >= 2) {
-      ctx.strokeStyle = "#b0b0b0"; ctx.lineWidth = 2;
-      ctx.beginPath();
-      traceXY.forEach((p, i) => { const [x, y] = unitToPx(p, W, H); i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); });
-      ctx.stroke();
-    }
+  if (traceScreenXY.length >= 2) {
+    ctx.strokeStyle = "#00e5ff"; ctx.lineWidth = 4; ctx.lineCap = "round"; ctx.lineJoin = "round";
+    ctx.beginPath();
+    traceScreenXY.forEach(([x, y], i) => { i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); });
+    ctx.stroke();
   }
 
   ctx.fillStyle = "#ffffffcc"; ctx.font = "14px sans-serif";
@@ -630,6 +548,30 @@ function renderFrame(landmarks) {
 // paired with server.py switching to ThreadingHTTPServer.
 let pendingLogSamples = [];
 
+// feedback 2026-07-30: a playtest's "Done. Log + snapshot saved
+// server-side..." message turned out to be unearned -- no log file existed
+// afterward. Root cause: every persistence fetch() used .catch(() => {})
+// with no success check, so a network failure, a stale/non-running server,
+// or a non-2xx response were all silently indistinguishable from success,
+// and the end-of-run summary text was unconditional regardless. Fixed by
+// tracking whether ANY /log, /score, or /snapshot call actually failed
+// (network error OR response.ok === false) and reflecting that honestly in
+// stopRun()'s summary -- per the standing rule that live/interactive tools
+// must persist a real record, not just claim to.
+let persistenceFailed = false;
+
+function postJSON(path, body) {
+  return fetch(path, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+  }).then(res => {
+    if (!res.ok) { persistenceFailed = true; console.error(`${path} responded ${res.status}`); }
+    return res;
+  }).catch(err => {
+    persistenceFailed = true;
+    console.error(`${path} failed:`, err);
+  });
+}
+
 function logSample(t, found, x, y, nx, ny) {
   pendingLogSamples.push({ t, measure_index: measureIndex, found, x, y, nx, ny });
 }
@@ -638,10 +580,7 @@ function flushLogSamples() {
   if (pendingLogSamples.length === 0) return;
   const batch = pendingLogSamples;
   pendingLogSamples = [];
-  fetch("/log", {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ run_id: runId, samples: batch }),
-  }).catch(() => {}); // best-effort -- don't let a dropped log request stall tracking
+  postJSON("/log", { run_id: runId, samples: batch });
 }
 
 function onResults(landmarksList) {
@@ -693,7 +632,8 @@ function onResults(landmarksList) {
       // reference it's being compared/drawn against.
       nx = (x - origin[0]) * VIDEO_ASPECT * calibScaleFactor;
       ny = -(y - origin[1]) * calibScaleFactor; // image y-down -> logical y-up
-      traceXY.push([nx, ny]);
+      traceXY.push([nx, ny]); // scoring only, see traceXY's declaration comment
+      traceScreenXY.push(trackedPointPx(landmarks, mainCanvas.width, mainCanvas.height)); // what's actually drawn
     }
   }
 
@@ -703,18 +643,15 @@ function onResults(landmarksList) {
 
 async function saveSnapshot() {
   const dataUrl = mainCanvas.toDataURL("image/png");
-  await fetch("/snapshot", {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ run_id: runId, image: dataUrl }),
-  }).catch(() => {});
+  await postJSON("/snapshot", { run_id: runId, image: dataUrl });
 }
 
-function stopRun() {
+async function stopRun() {
   running = false;
   appState = "idle";
   stopMetronome();
   if (logFlushTimer) { clearInterval(logFlushTimer); logFlushTimer = null; }
-  flushLogSamples(); // final partial batch, don't lose the tail
+  await flushLogSamples(); // final partial batch, don't lose the tail
   setButtonsForState();
 
   let summary = "";
@@ -723,8 +660,14 @@ function stopRun() {
     const best = sessionScores.reduce((a, b) => (b.matchPct > a.matchPct ? b : a));
     summary = ` ${sessionScores.length} measures scored -- average match ${avg.toFixed(0)}%, best measure ${best.measureIndex} at ${best.matchPct}%.`;
   }
-  statusEl.textContent = `Done. Log + snapshot saved server-side under logs/ (run ${runId}).${summary} Click "Calibrate & Start" to run again.`;
-  saveSnapshot();
+  await saveSnapshot();
+  // Only claim persistence succeeded if nothing actually failed along the
+  // way (see persistenceFailed's declaration comment) -- was previously an
+  // unconditional claim regardless of whether any request landed.
+  const persistedText = persistenceFailed
+    ? `WARNING: one or more log/score/snapshot requests failed -- the record under logs/ (run ${runId}) may be incomplete. Check that server.py is running and check its console for errors.`
+    : `Log + snapshot saved server-side under logs/ (run ${runId}).`;
+  statusEl.textContent = `Done. ${persistedText}${summary} Click "Calibrate & Start" to run again.`;
 }
 
 let handLandmarker = null;
@@ -869,9 +812,9 @@ async function start() {
   bpm = parseFloat(document.getElementById("bpm").value);
   signature = parseInt(document.getElementById("signature").value);
   seconds = parseFloat(document.getElementById("seconds").value);
-  scalePxPerUnit = parseFloat(document.getElementById("scale").value) || 150;
-  sessionScores = []; lastScoreText = ""; lastCompletedTraceXY = []; calibScaleFactor = 1;
+  sessionScores = []; lastScoreText = ""; lastCompletedTraceXY = []; lastCompletedScreenXY = []; calibScaleFactor = 1;
   stopRequested = false;
+  persistenceFailed = false;
 
   statusEl.textContent = "Loading model...";
   appState = "countdown";
@@ -919,7 +862,7 @@ async function start() {
   }
   calibScaleFactor = refDelta / physDelta;
 
-  traceXY = []; lastCompletedTraceXY = []; measureIndex = -1;
+  traceXY = []; traceScreenXY = []; lastCompletedTraceXY = []; lastCompletedScreenXY = []; measureIndex = -1;
   runId = new Date().toISOString().replace(/[:.]/g, "-");
   running = true;
   appState = "running";
