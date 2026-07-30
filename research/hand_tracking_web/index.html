@@ -18,6 +18,15 @@
      coordinate-mapped), not a separate absolutely-positioned thumbnail. */
   #stage { position: relative; width: 640px; height: 480px; }
   #mainCanvas { background: #1a1a1a; border: 1px solid #333; }
+
+  /* v5 Phase 2 follow-up: "add the reference video beside the camera
+     display" -- a separate looping clip of the real reference motion,
+     distinct from the still reference image already drawn INTO #mainCanvas
+     (that stays; this is additive, not a replacement). */
+  #panels { display: flex; align-items: flex-start; gap: 12px; }
+  #refVideoWrap { width: 240px; }
+  #refVideoWrap video { width: 100%; border: 1px solid #333; background: #1a1a1a; display: block; }
+  #refVideoWrap p { margin: 4px 0 0; font-size: 12px; color: #999; }
 </style>
 </head>
 <body>
@@ -38,10 +47,17 @@
 </div>
 <div id="status">Idle. Click "Calibrate &amp; Start", allow camera access, then hold your hand with fingers
   together (like pinching a baton) at the TOP/prep position, then at the BOTTOM (beat 1's lowest
-  point) when asked -- this maps your own real range of motion onto the reference.</div>
-<div id="stage">
-  <video id="video" autoplay playsinline muted style="display:none"></video>
-  <canvas id="mainCanvas" width="640" height="480"></canvas>
+  point) when asked -- hold each until it says "stable", then keep holding for the 3-second count --
+  this maps your own real range of motion onto the reference.</div>
+<div id="panels">
+  <div id="stage">
+    <video id="video" autoplay playsinline muted style="display:none"></video>
+    <canvas id="mainCanvas" width="640" height="480"></canvas>
+  </div>
+  <div id="refVideoWrap">
+    <video id="refVideo" autoplay loop muted playsinline></video>
+    <p>Reference clip (loops) -- the source this signature's pattern and overlay image were extracted from.</p>
+  </div>
 </div>
 
 <script type="module">
@@ -82,51 +98,35 @@ const REFERENCE = {
   4: [[0.0, 0.0], [0.0, -1.0], [-0.6852, -0.6019], [0.715, -0.535], [0.0751, 0.0185]],
 };
 
-// Real reference diagrams. 2/4 is a user-supplied hand-drawn photo
-// (2026-07-29). v5 Phase 2: 3/4 and 4/4 now also have real images --
-// the max-content frame of their reference videos (3_4.mp4/4_4.mp4),
-// extracted by research/extract_pattern_from_video.py -- completing what
-// was previously a placeholder-line-only gap.
+// Real reference diagrams -- all three now sourced from the reference
+// videos' own frames (v5 Phase 2 follow-up: "update the image also for
+// 2/4" replaces the earlier separate hand-drawn-photo treatment, so all
+// three signatures are consistent).
 const REFERENCE_IMAGES = {
-  2: "assets/reference_2_4.png",
+  2: "assets/reference_24.png",
   3: "assets/reference_34.png",
   4: "assets/reference_44.png",
 };
+const REFERENCE_VIDEOS = { 2: "assets/2_4.mp4", 3: "assets/3_4.mp4", 4: "assets/4_4.mp4" };
 
 // Maps each reference image's pixel space onto its REFERENCE[sig]'s
-// logical unit space, via a similarity transform (uniform scale +
-// rotation + translation) solved from 2 known points -- NOT a
-// bounding-box approximation (a plain bounding-box fit is visibly wrong
-// whenever the source photo/frame isn't perfectly upright, as 2/4's ~13
-// degree rotation showed).
-// w = A*(u - i*v) + B, where (u,v) is a pixel coord in the image bitmap
-// (v measured downward, as image pixels are) and w = Lx + i*Ly is the
-// logical (x-right, y-up) coordinate.
+// logical unit space -- an AXIS-ALIGNED scale + translate (no rotation),
+// from user-supplied prep/beat1 pixel coordinates (2026-07-30), replacing
+// the earlier auto-detected + rotation-capable similarity transform: the
+// user explicitly asked to not rotate the image, transforming the axes
+// independently instead.
 //
-// 2/4: solved from find_anchors.py's red-dot detection (2026-07-29):
-//   beat1 pixel (77.13, 201.43) -> logical (0.2, -1.9)  [recentered]
-//   beat2 pixel (84.87, 168.40) -> logical (0.55, -1.2) [recentered]
-// 3/4 and 4/4 (v5 Phase 2): solved directly from
-// extract_pattern_from_video.py's own prep/beat1 pixel detections against
-// the SAME REFERENCE points now in this file -- no separate anchor-finding
-// step needed, since that script already knows exactly where prep and
-// beat 1 are in pixel space.
+// 2/4's prep and beat 1 differ in both x and y (it's a diagonal hook), so
+// both axes get their own scale factor from the given points. 3/4 and 4/4's
+// prep-to-beat-1 stroke is a straight vertical drop (same x for both
+// points) -- using only the vertical distance for scale (and reusing it
+// for the horizontal axis too) avoids any rotation from x-detection noise,
+// per the user's explicit instruction to only capture the vertical
+// position for those two.
 const REFERENCE_IMAGE_ANCHORS = {
-  2: {
-    imgWidthPx: 157, imgHeightPx: 255,
-    Ar: 0.02244394038179057, Ai: -0.0053337153750030964,
-    Br: -0.4566924484943166, Bi: 3.0321795683257603,
-  },
-  3: {
-    imgWidthPx: 2558, imgHeightPx: 1308,
-    Ar: 0.0007363452718371553, Ai: 0.00000001855191960834893,
-    Br: -0.5117620973975779, Bi: 0.08466681267714506,
-  },
-  4: {
-    imgWidthPx: 2558, imgHeightPx: 1306,
-    Ar: 0.00102880658436214, Ai: 0.0,
-    Br: -1.3127572016460907, Bi: 0.12962962962962965,
-  },
+  2: { imgWidthPx: 2558, imgHeightPx: 1306, prepPx: [900, 75], beat1Px: [1265, 1100], axisMode: "xy" },
+  3: { imgWidthPx: 2558, imgHeightPx: 1308, prepPx: [700, 115], beat1Px: [700, 1100], axisMode: "yOnly" },
+  4: { imgWidthPx: 2558, imgHeightPx: 1306, prepPx: [1275, 115], beat1Px: [1275, 1100], axisMode: "yOnly" },
 };
 
 // Fingertip landmark indices in MediaPipe Hands' 21-point model: thumb,
@@ -179,12 +179,26 @@ let stopRequested = false; // UX polish: explicit Stop button, no reload needed
 // onto REFERENCE's unit scale, so scalePxPerUnit (still user-tunable) is
 // now a pure visual zoom, not also secretly compensating for a unit
 // mismatch.
-const CALIBRATION_HOLD_MS = 1200;
+// v5 Phase 2 follow-up (feedback 2026-07-30: "calibration time is too
+// short"): a fixed 1.2s hold sampled starting the instant the countdown
+// ended, even if the hand was still settling into position. Replaced with
+// actual stability detection -- keep waiting (no fixed timer) until the
+// hand's position stops moving for STABILITY_WINDOW_MS, THEN start a
+// 3-second hold and sample only that window. CALIBRATION_MAX_WAIT_MS is a
+// safety valve so a hand that never fully stabilizes (tracking jitter,
+// tremor) doesn't hang the run forever.
+const CALIBRATION_HOLD_MS = 3000;
+const STABILITY_WINDOW_MS = 400;
+const STABILITY_THRESHOLD = 0.02; // max x/y spread (normalized frame units) within the window to count as "stable"
+const CALIBRATION_MAX_WAIT_MS = 12000;
 let appState = "idle"; // idle | countdown | calibrating | running
 let origin = null; // [logicalX, logicalY], fixed once calibrated
 let calibSamples = [];
 let calibScaleFactor = 1;
 let calibLabel = "";
+let stabilityBuffer = []; // [{t, x, y}] recent raw samples while waiting for stability
+let calibHoldStart = null; // performance.now() when the 3s hold began
+let calibCompletionResolve = null; // resolves calibratePoint()'s promise once the hold completes
 
 function currentLogicalXY(landmarks) {
   // Mirror x here (1 - x) so tracked "right" means the user's real right,
@@ -370,6 +384,21 @@ for (const [sig, src] of Object.entries(REFERENCE_IMAGES)) {
   refImageEls[sig] = img;
 }
 
+// v5 Phase 2 follow-up: the looping reference clip beside the camera --
+// separate from (and in addition to) the still image drawn INTO the
+// canvas above. Swaps source when the signature dropdown changes.
+const refVideoEl = document.getElementById("refVideo");
+const signatureSelect = document.getElementById("signature");
+function updateRefVideo() {
+  const src = REFERENCE_VIDEOS[signatureSelect.value];
+  if (src && !refVideoEl.src.endsWith(src)) {
+    refVideoEl.src = src;
+    refVideoEl.play().catch(() => {}); // autoplay can be blocked pre-interaction; harmless if so
+  }
+}
+signatureSelect.addEventListener("change", updateRefVideo);
+updateRefVideo();
+
 function originPx(W, H) {
   return origin ? [origin[0] * W, origin[1] * H] : [W / 2, H / 2];
 }
@@ -419,10 +448,28 @@ function drawReferenceImage(W, H) {
   if (!anchor || !img || !img.complete || !origin) return;
   const [ox, oy] = originPx(W, H);
   const S = scalePxPerUnit;
-  const { Ar, Ai, Br, Bi } = anchor;
+  const ref = REFERENCE[signature];
+  const { prepPx, beat1Px, axisMode } = anchor;
+  const dxPx = beat1Px[0] - prepPx[0];
+  const dyPx = beat1Px[1] - prepPx[1];
+  const dxLogical = ref[1][0] - ref[0][0];
+  const dyLogical = ref[1][1] - ref[0][1];
+  // scaleY from vertical distance always; scaleX either from its own
+  // horizontal distance ("xy" mode, e.g. 2/4's diagonal stroke) or reuses
+  // scaleY ("yOnly" mode, e.g. 3/4 and 4/4's straight vertical stroke) --
+  // never a rotation term, per the user's explicit instruction.
+  // Sign note: image v increases downward, logical y increases upward
+  // (logical_y = -(v - prepPx_v) * scaleY), so scaleY is the NEGATED
+  // ratio -- dyLogical and dyPx are otherwise both negative-going-down/
+  // positive-going-down respectively and would cancel out to a
+  // wrong-signed (upside-down) scale without the flip.
+  const scaleY = -dyLogical / dyPx;
+  const scaleX = axisMode === "xy" ? dxLogical / dxPx : scaleY;
+  const A = scaleX * S;
+  const D = scaleY * S;
   ctx.save();
   ctx.globalAlpha = 0.42;
-  ctx.setTransform(S * Ar, -S * Ai, S * Ai, S * Ar, ox + S * Br, oy - S * Bi);
+  ctx.setTransform(A, 0, 0, D, ox - A * prepPx[0], oy - D * prepPx[1]);
   ctx.drawImage(img, 0, 0);
   ctx.restore();
 }
@@ -506,8 +553,27 @@ function onResults(landmarksList) {
     found = true;
     [x, y] = currentLogicalXY(landmarks);
 
-    if (appState === "calibrating") {
+    if (appState === "countdown") {
+      // Waiting for the hand to settle -- see calibratePoint()'s comment.
+      stabilityBuffer.push({ t: now, x, y });
+      stabilityBuffer = stabilityBuffer.filter(s => now - s.t <= STABILITY_WINDOW_MS);
+      if (stabilityBuffer.length >= 3) {
+        const xs = stabilityBuffer.map(s => s.x), ys = stabilityBuffer.map(s => s.y);
+        const spread = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
+        const covered = now - stabilityBuffer[0].t;
+        if (spread < STABILITY_THRESHOLD && covered >= STABILITY_WINDOW_MS * 0.8) {
+          appState = "calibrating";
+          calibSamples = [];
+          calibHoldStart = now;
+          statusEl.textContent = `Stable -- calibrating ${calibLabel}, hold for ${(CALIBRATION_HOLD_MS / 1000).toFixed(0)}s...`;
+          playTone(880, 0.1); playTone(880, 0.1, 0.15); // two quick high beeps = sampling now
+        }
+      }
+    } else if (appState === "calibrating") {
       calibSamples.push([x, y]);
+      if (calibHoldStart !== null && now - calibHoldStart >= CALIBRATION_HOLD_MS && calibCompletionResolve) {
+        calibCompletionResolve();
+      }
     } else if (appState === "running" && origin) {
       // *VIDEO_ASPECT corrects the 4:3-frame unit mismatch documented
       // above VIDEO_ASPECT's definition -- without it every trace (and
@@ -576,33 +642,58 @@ async function ensureModelAndCamera() {
     });
   }
   if (!video.srcObject) {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: { width: VIDEO_W, height: VIDEO_H } });
+    // feedback 2026-07-30: tracking felt slow -- most webcams default to
+    // ~24-30fps unless a higher rate is explicitly requested; asking for
+    // up to 60fps (falling back to whatever the camera actually supports)
+    // raises how often detectLoop's video.currentTime check finds a new
+    // frame to run detection on.
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { width: VIDEO_W, height: VIDEO_H, frameRate: { ideal: 60, min: 30 } },
+    });
     video.srcObject = stream;
     await new Promise(resolve => { video.onloadedmetadata = resolve; });
     video.play();
   }
 }
 
-// Holds still for CALIBRATION_HOLD_MS (get-ready) then CALIBRATION_HOLD_MS
-// again (sampling), averages the sampled points, and returns [x, y] in
-// currentLogicalXY()'s raw (unscaled) units -- or null if no hand was ever
-// detected during sampling.
+// Waits for the hand to hold STILL (detected in onResults() above, not on
+// a blind timer) at `label`'s position, then samples a CALIBRATION_HOLD_MS
+// hold once stability is detected, and returns the averaged [x, y] in
+// currentLogicalXY()'s raw (unscaled) units -- or null if stopped or no
+// hand was ever detected. A watchdog forces the hold to start anyway after
+// CALIBRATION_MAX_WAIT_MS so an unstable hand (tremor, poor lighting)
+// doesn't hang the run forever.
 async function calibratePoint(label) {
   calibLabel = label;
   appState = "countdown";
   statusEl.textContent = `Hold your hand at the ${label} and stay still...`;
-  playTone(440, 0.15); // single low beep = get-ready countdown
-  await new Promise(r => setTimeout(r, CALIBRATION_HOLD_MS));
-  if (stopRequested) return null;
-
-  appState = "calibrating";
+  playTone(440, 0.15); // single low beep = get-ready / waiting-for-stable
+  stabilityBuffer = [];
   calibSamples = [];
-  statusEl.textContent = `Calibrating ${label}...`;
-  playTone(880, 0.1); playTone(880, 0.1, 0.15); // two quick high beeps = sampling now
-  await new Promise(r => setTimeout(r, CALIBRATION_HOLD_MS));
-  if (stopRequested) return null;
+  calibHoldStart = null;
+  const waitStart = performance.now();
+  let forcedStart = false;
 
-  if (calibSamples.length === 0) return null;
+  await new Promise(resolve => {
+    const watchdog = setInterval(() => {
+      if (stopRequested) {
+        clearInterval(watchdog);
+        calibCompletionResolve = null;
+        resolve();
+        return;
+      }
+      if (appState === "countdown" && !forcedStart && performance.now() - waitStart > CALIBRATION_MAX_WAIT_MS) {
+        forcedStart = true;
+        appState = "calibrating";
+        calibSamples = [];
+        calibHoldStart = performance.now();
+        statusEl.textContent = `Taking longer than expected -- calibrating ${label} anyway, hold as still as you can...`;
+      }
+    }, 150);
+    calibCompletionResolve = () => { clearInterval(watchdog); calibCompletionResolve = null; resolve(); };
+  });
+
+  if (stopRequested || calibSamples.length === 0) return null;
   playTone(1200, 0.25); // longer confirm chime = point captured
   const ox = calibSamples.reduce((s, p) => s + p[0], 0) / calibSamples.length;
   const oy = calibSamples.reduce((s, p) => s + p[1], 0) / calibSamples.length;
