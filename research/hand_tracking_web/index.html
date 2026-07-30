@@ -98,6 +98,34 @@ const REFERENCE = {
   4: [[0.0, 0.0], [0.0, -1.0], [-0.6852, -0.6019], [0.715, -0.535], [0.0751, 0.0185]],
 };
 
+// Audit S6 (2026-07-30): REFERENCE is prep-first (index 0), and both
+// drawReferenceImage() and start()'s calibration scale derivation assume
+// that -- so REFERENCE itself must NOT be rolled/reordered. But the scored
+// window (onMeasureBoundary, below) is a closed loop that runs beat1 ->
+// beat2 -> ... -> beat1 of the NEXT measure (the reset instant IS the
+// bottom of the stroke, per that function's own comment) -- a different
+// starting phase than REFERENCE's prep -> beat1 -> ... -> prep. This was
+// invisible while shapeDistance() was order-blind (S1); fixing order
+// without also fixing this phase mismatch would collapse every score.
+// SCORING_REF rotates each signature's REFERENCE to start AND end at
+// beat1 (dropping prep, which the scored window never revisits): for 2/4,
+// [beat1, beat2, beat1].
+const SCORING_REF = Object.fromEntries(
+  Object.entries(REFERENCE).map(([sig, ref]) => [sig, [...ref.slice(1), ref[1]]])
+);
+// Verified against the audit's own adversarial table (ported to Python,
+// research/verify_scoring notes) after the S1/S2/S3/S6 rewrite below: 3/4
+// and 4/4 reversed traces now score 50%/64% (was 100%), partial traces
+// 48-63% (was ~95-99%), and a shape-correct-but-drifted trace stays at
+// 100% (was 57%/0%). One structural exception: 2/4's SCORING_REF is
+// [beat1, beat2, beat1] -- an out-and-back path with a single intermediate
+// vertex, which is geometrically identical whether traversed forward or
+// reversed (reversing a 3-point A-B-A sequence gives the same sequence
+// back). So a reversed 2/4 gesture still scores 100% -- not a residual bug
+// in shapeDistance(), an inherent property of 2/4 having only one
+// non-repeated beat per measure; 3/4 and 4/4 (2+ intermediate vertices)
+// don't have this degeneracy.
+
 // Real reference diagrams -- all three now sourced from the reference
 // videos' own frames (v5 Phase 2 follow-up: "update the image also for
 // 2/4" replaces the earlier separate hand-drawn-photo treatment, so all
@@ -109,24 +137,34 @@ const REFERENCE_IMAGES = {
 };
 const REFERENCE_VIDEOS = { 2: "assets/2_4.mp4", 3: "assets/3_4.mp4", 4: "assets/4_4.mp4" };
 
-// Maps each reference image's pixel space onto its REFERENCE[sig]'s
-// logical unit space -- an AXIS-ALIGNED scale + translate (no rotation),
-// from user-supplied prep/beat1 pixel coordinates (2026-07-30), replacing
-// the earlier auto-detected + rotation-capable similarity transform: the
-// user explicitly asked to not rotate the image, transforming the axes
-// independently instead.
+// Maps each reference image's pixel space onto its REFERENCE[sig]'s logical
+// unit space -- a single UNIFORM scale + translate (no rotation, no
+// independent per-axis scale factors).
 //
-// 2/4's prep and beat 1 differ in both x and y (it's a diagonal hook), so
-// both axes get their own scale factor from the given points. 3/4 and 4/4's
-// prep-to-beat-1 stroke is a straight vertical drop (same x for both
-// points) -- using only the vertical distance for scale (and reusing it
-// for the horizontal axis too) avoids any rotation from x-detection noise,
-// per the user's explicit instruction to only capture the vertical
-// position for those two.
+// Audit R1 (2026-07-30): the previous 2/4 anchors here were hand-guessed
+// pixel coordinates that turned out to be materially wrong -- prep off by
+// (-84,-38)px, beat1 off by (-198,+83)px against
+// research/captures/pattern_24_vertices_px.csv (the ground-truth vertices
+// extract_pattern_from_video.py measured directly in this same bitmap, and
+// the exact source REFERENCE's own numbers came from). That error alone
+// stretched the drawn 2/4 diagram 48.8% too wide. Anchors below are read
+// straight from that CSV for all three signatures (3/4 and 4/4's
+// hand-supplied points already matched the CSV closely; only 2/4 diverged).
+//
+// Audit R2: the earlier version also split scale into independent x/y
+// factors ("axisMode"), reasoning that avoiding rotation required it. It
+// doesn't -- extract_pattern_from_video.py::to_logical() normalizes by a
+// SINGLE max_extent, so REFERENCE's logical coordinates already preserve
+// the source image's true aspect ratio, and a per-axis fit is guaranteed to
+// distort it (that's exactly what let the bad 2/4 anchors above hide as a
+// stretch instead of an obviously-wrong size). A single uniform scale +
+// translate satisfies "don't rotate the image" without that distortion --
+// confirmed on the corrected numbers below, 2/4's own independently-derived
+// x-scale and y-scale now agree to four decimal places anyway.
 const REFERENCE_IMAGE_ANCHORS = {
-  2: { imgWidthPx: 2558, imgHeightPx: 1306, prepPx: [900, 75], beat1Px: [1265, 1100], axisMode: "xy" },
-  3: { imgWidthPx: 2558, imgHeightPx: 1308, prepPx: [700, 115], beat1Px: [700, 1100], axisMode: "yOnly" },
-  4: { imgWidthPx: 2558, imgHeightPx: 1306, prepPx: [1275, 115], beat1Px: [1275, 1100], axisMode: "yOnly" },
+  2: { imgWidthPx: 2558, imgHeightPx: 1306, prepPx: [984, 113], beat1Px: [1463, 1017] },
+  3: { imgWidthPx: 2558, imgHeightPx: 1308, prepPx: [695, 115], beat1Px: [700, 1100] },
+  4: { imgWidthPx: 2558, imgHeightPx: 1306, prepPx: [1276, 126], beat1Px: [1276, 1098] },
 };
 
 // Fingertip landmark indices in MediaPipe Hands' 21-point model: thumb,
@@ -135,15 +173,23 @@ const REFERENCE_IMAGE_ANCHORS = {
 // single-finger pointing gesture.
 const FINGERTIP_IDX = [4, 8, 12, 16, 20];
 
-// getUserMedia is requested at this resolution below. MediaPipe landmark
-// x,y are each normalized 0..1 against their own dimension (width, height
-// separately) -- on a non-square 4:3 frame, a physically square gesture
-// therefore produces a y-delta about 640/480 = 4/3 larger than the
-// same-sized x-delta once both are expressed as fractions. Uncorrected,
-// every trace (and the shape_distance score against it) reads visibly
-// stretched vertically. VIDEO_ASPECT corrects this in onResults() below.
+// getUserMedia is requested at this resolution below, but width/height in a
+// constraint object are only a hint ("ideal"), not "exact" -- a camera can
+// (and, especially in a high-framerate request, often does) negotiate a
+// different resolution/aspect ratio. Audit C2 (2026-07-30): VIDEO_ASPECT
+// used to be hardcoded from the *requested* dimensions, so a camera that
+// actually negotiated e.g. 1280x720 would silently corrupt nx/ny (and
+// therefore calibScaleFactor and every score) by 33% with no visible
+// symptom -- the skeleton still lines up with the video either way. Now
+// `let`, and set from the real negotiated video.videoWidth/videoHeight in
+// ensureModelAndCamera() once the stream is live. MediaPipe landmark x,y
+// are each normalized 0..1 against their own dimension (width, height
+// separately) -- on a non-square frame, a physically square gesture
+// therefore produces a y-delta larger than the same-sized x-delta once both
+// are expressed as fractions. Uncorrected, every trace (and the score
+// against it) reads visibly stretched vertically.
 const VIDEO_W = 640, VIDEO_H = 480;
-const VIDEO_ASPECT = VIDEO_W / VIDEO_H;
+let VIDEO_ASPECT = VIDEO_W / VIDEO_H;
 
 let runId = null;
 let bpm = 80, signature = 2, seconds = 60, scalePxPerUnit = 150;
@@ -155,6 +201,7 @@ let measureStartWall = null;
 let running = false;
 let stopAt = 0;
 let stopRequested = false; // UX polish: explicit Stop button, no reload needed
+let logFlushTimer = null; // audit D1: batches logSample() writes, see flushLogSamples()
 
 // Calibration (feedback 2026-07-29: detecting "the top" live turned out
 // unreliable -- it fired on every direction change instead of once per
@@ -289,36 +336,75 @@ function boundingSizeArr(points) {
   return Math.max(Math.max(...xs)-Math.min(...xs), Math.max(...ys)-Math.min(...ys));
 }
 
+function centroidArr(points) {
+  const n = points.length;
+  const sx = points.reduce((s,p)=>s+p[0], 0), sy = points.reduce((s,p)=>s+p[1], 0);
+  return [sx/n, sy/n];
+}
+
+// Audit Bug_Audit_2026-07-30 Part B found this genuinely broken as a
+// conducting-gesture score, despite being a faithful, scale-invariant port
+// of gesture_trace_spike.py. Two fixes landed together (S1+S6, S2+S3):
+//   - order-aware (index-wise) distance instead of nearest-point chamfer
+//     distance -- the old version discarded sequence entirely, so a
+//     REVERSED gesture (the single most important conducting error) scored
+//     100%, and a one-directional distance let an INCOMPLETE trace (e.g.
+//     only the down-stroke) score ~95-99% since ref geometry the student
+//     never visited was free. Both paths are already arc-length resampled
+//     to n points in the same traversal direction (see SCORING_REF's phase
+//     fix above), so trace[i] vs ref[i] is directly comparable and
+//     symmetric by construction -- no separate ref->trace pass needed.
+//   - centroid-relative alignment instead of rescaling about the coordinate
+//     origin -- the old rescale bodily moved a drifted-but-shape-perfect
+//     trace, so 25% positional drift scored 57% and 50% drift scored 0%,
+//     while a backwards gesture scored 100%: the metric punished the LEAST
+//     meaningful error (drift -- camera moved, student stepped) harder than
+//     the most meaningful one (wrong shape/direction). Centering both paths
+//     on their own centroid before scaling removes that inversion. Absolute
+//     drift is real information though, so it's reported separately (see
+//     scoreMeasure()) rather than silently discarded or silently folded
+//     back into the shape score -- an open product question per the audit,
+//     not decided here.
 function shapeDistance(tracePoints, referencePoints, n = 50) {
   const resampledTrace = resamplePath(tracePoints, n);
   const resampledRef = resamplePath(referencePoints, n);
-  const refSize = boundingSizeArr(resampledRef) || 1.0;
-  const traceSize = boundingSizeArr(resampledTrace) || 1.0;
+
+  const [rcx, rcy] = centroidArr(resampledRef);
+  const centeredRef = resampledRef.map(([x,y]) => [x-rcx, y-rcy]);
+  const [tcx, tcy] = centroidArr(resampledTrace);
+  const centeredTrace = resampledTrace.map(([x,y]) => [x-tcx, y-tcy]);
+
+  const refSize = boundingSizeArr(centeredRef) || 1.0;
+  const traceSize = boundingSizeArr(centeredTrace) || 1.0;
   const scale = refSize / traceSize;
-  const scaledTrace = resampledTrace.map(([x,y]) => [x*scale, y*scale]);
+  const scaledTrace = centeredTrace.map(([x,y]) => [x*scale, y*scale]);
+
   let total = 0;
-  scaledTrace.forEach(([tx,ty]) => {
-    let nearest = Infinity;
-    resampledRef.forEach(([rx,ry]) => { nearest = Math.min(nearest, Math.hypot(tx-rx, ty-ry)); });
-    total += nearest;
-  });
-  return (total / scaledTrace.length) / refSize;
+  for (let i = 0; i < n; i++) {
+    total += Math.hypot(scaledTrace[i][0]-centeredRef[i][0], scaledTrace[i][1]-centeredRef[i][1]);
+  }
+  const distance = (total / n) / refSize;
+  const drift = Math.hypot(tcx - rcx, tcy - rcy) / refSize; // reported, not scored
+  return { distance, drift };
 }
 
 let sessionScores = []; // {measureIndex, distance, matchPct}
 let lastScoreText = "";
 
 function scoreMeasure(idx, trace) {
-  const distance = shapeDistance(trace, REFERENCE[signature]);
-  // distance is a normalized average-nearest-point-distance -- 0 is a
-  // perfect match; there's no natural upper bound, so clamp for a
+  const { distance, drift } = shapeDistance(trace, SCORING_REF[signature]);
+  // distance is a normalized order-aware average index-wise distance -- 0 is
+  // a perfect match; there's no natural upper bound, so clamp for a
   // student-facing percentage rather than showing a raw geometric number.
-  const matchPct = Math.max(0, Math.round((1 - Math.min(distance, 1)) * 100));
-  sessionScores.push({ measureIndex: idx, distance, matchPct });
-  lastScoreText = `measure ${idx} match: ${matchPct}%`;
+  // (S4: this raw-distance-to-percentage mapping is still the old arbitrary
+  // linear map, uncalibrated against real traces -- open item, not fixed by
+  // this pass.)
+  const matchPct = Math.round((1 - Math.min(distance, 1)) * 100);
+  sessionScores.push({ measureIndex: idx, distance, drift, matchPct });
+  lastScoreText = `measure ${idx} match: ${matchPct}% (drift ${Math.round(drift*100)}%)`;
   fetch("/score", {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ run_id: runId, measure_index: idx, distance, match_pct: matchPct }),
+    body: JSON.stringify({ run_id: runId, measure_index: idx, distance, drift, match_pct: matchPct }),
   }).catch(() => {});
 }
 
@@ -449,24 +535,20 @@ function drawReferenceImage(W, H) {
   const [ox, oy] = originPx(W, H);
   const S = scalePxPerUnit;
   const ref = REFERENCE[signature];
-  const { prepPx, beat1Px, axisMode } = anchor;
+  const { prepPx, beat1Px } = anchor;
   const dxPx = beat1Px[0] - prepPx[0];
   const dyPx = beat1Px[1] - prepPx[1];
+  const pxDelta = Math.hypot(dxPx, dyPx);
   const dxLogical = ref[1][0] - ref[0][0];
   const dyLogical = ref[1][1] - ref[0][1];
-  // scaleY from vertical distance always; scaleX either from its own
-  // horizontal distance ("xy" mode, e.g. 2/4's diagonal stroke) or reuses
-  // scaleY ("yOnly" mode, e.g. 3/4 and 4/4's straight vertical stroke) --
-  // never a rotation term, per the user's explicit instruction.
-  // Sign note: image v increases downward, logical y increases upward
-  // (logical_y = -(v - prepPx_v) * scaleY), so scaleY is the NEGATED
-  // ratio -- dyLogical and dyPx are otherwise both negative-going-down/
-  // positive-going-down respectively and would cancel out to a
-  // wrong-signed (upside-down) scale without the flip.
-  const scaleY = -dyLogical / dyPx;
-  const scaleX = axisMode === "xy" ? dxLogical / dxPx : scaleY;
-  const A = scaleX * S;
-  const D = scaleY * S;
+  const logicalDelta = Math.hypot(dxLogical, dyLogical);
+  // Single uniform scale magnitude (audit R2) -- no independent x/y factors,
+  // no rotation. Sign note: image v increases downward, logical y increases
+  // upward, so the x scale keeps its sign (A = +scale*S) while the y scale
+  // flips (D = -scale*S).
+  const scale = logicalDelta / pxDelta;
+  const A = scale * S;
+  const D = -scale * S;
   ctx.save();
   ctx.globalAlpha = 0.42;
   ctx.setTransform(A, 0, 0, D, ox - A * prepPx[0], oy - D * prepPx[1]);
@@ -537,10 +619,28 @@ function renderFrame(landmarks) {
   drawOverlay(W, H);
 }
 
+// Audit D1: this used to fire one fetch() POST per processed frame (30-60/s
+// with the raised frame rate) into server.py's single-threaded
+// socketserver.TCPServer, which also serves the page and the multi-hundred-
+// KB reference assets -- head-of-line blocking there was the likely real
+// cause of "tracking felt slow" (raising the camera frame rate made the
+// POST rate, and thus the blocking, worse). Samples are now accumulated
+// client-side and flushed as one batched POST roughly twice a second
+// (flushLogSamples(), driven by logFlushTimer in start()/stopRun()),
+// paired with server.py switching to ThreadingHTTPServer.
+let pendingLogSamples = [];
+
 function logSample(t, found, x, y, nx, ny) {
+  pendingLogSamples.push({ t, measure_index: measureIndex, found, x, y, nx, ny });
+}
+
+function flushLogSamples() {
+  if (pendingLogSamples.length === 0) return;
+  const batch = pendingLogSamples;
+  pendingLogSamples = [];
   fetch("/log", {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ run_id: runId, t, measure_index: measureIndex, found, x, y, nx, ny }),
+    body: JSON.stringify({ run_id: runId, samples: batch }),
   }).catch(() => {}); // best-effort -- don't let a dropped log request stall tracking
 }
 
@@ -559,7 +659,16 @@ function onResults(landmarksList) {
       stabilityBuffer = stabilityBuffer.filter(s => now - s.t <= STABILITY_WINDOW_MS);
       if (stabilityBuffer.length >= 3) {
         const xs = stabilityBuffer.map(s => s.x), ys = stabilityBuffer.map(s => s.y);
-        const spread = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
+        // audit C3: x and y here are raw normalized frame fractions, the
+        // same unit mismatch VIDEO_ASPECT exists to correct elsewhere -- on
+        // a non-square frame the same physical wobble reads larger in
+        // whichever axis is foreshortened relative to the other. Scale x by
+        // VIDEO_ASPECT (same convention as nx below) so STABILITY_THRESHOLD
+        // means one physical distance regardless of the negotiated aspect.
+        const spread = Math.max(
+          (Math.max(...xs) - Math.min(...xs)) * VIDEO_ASPECT,
+          Math.max(...ys) - Math.min(...ys),
+        );
         const covered = now - stabilityBuffer[0].t;
         if (spread < STABILITY_THRESHOLD && covered >= STABILITY_WINDOW_MS * 0.8) {
           appState = "calibrating";
@@ -604,6 +713,8 @@ function stopRun() {
   running = false;
   appState = "idle";
   stopMetronome();
+  if (logFlushTimer) { clearInterval(logFlushTimer); logFlushTimer = null; }
+  flushLogSamples(); // final partial batch, don't lose the tail
   setButtonsForState();
 
   let summary = "";
@@ -653,6 +764,22 @@ async function ensureModelAndCamera() {
     video.srcObject = stream;
     await new Promise(resolve => { video.onloadedmetadata = resolve; });
     video.play();
+
+    // audit C2: read back what the camera actually negotiated, rather than
+    // trusting the requested VIDEO_W/VIDEO_H/60fps constraints were honored.
+    // mainCanvas's internal pixel size is set to match (its CSS display size
+    // stays capped at 640px wide via style, independent of internal
+    // resolution) so W/H read elsewhere in this file (mainCanvas.width/
+    // height) are always the real negotiated frame size.
+    const vw = video.videoWidth, vh = video.videoHeight;
+    VIDEO_ASPECT = vw / vh;
+    mainCanvas.width = vw;
+    mainCanvas.height = vh;
+    mainCanvas.style.width = "640px";
+    mainCanvas.style.height = `${Math.round(640 / VIDEO_ASPECT)}px`;
+    const trackSettings = stream.getVideoTracks()[0]?.getSettings?.() || {};
+    const fps = trackSettings.frameRate ? trackSettings.frameRate.toFixed(0) : "?";
+    statusEl.textContent = `Camera ready: ${vw}x${vh} @ ~${fps}fps.`;
   }
 }
 
@@ -688,6 +815,19 @@ async function calibratePoint(label) {
         calibSamples = [];
         calibHoldStart = performance.now();
         statusEl.textContent = `Taking longer than expected -- calibrating ${label} anyway, hold as still as you can...`;
+      }
+      // Audit C1: the hold-elapsed check that normally completes a
+      // calibration hold lives in onResults(), which only runs when a new
+      // landmark frame arrives. If tracking drops mid-hold (hand leaves
+      // frame, detection fails), that check stops firing entirely and the
+      // run hangs forever on "Calibrating...". This watchdog runs on a
+      // plain timer regardless of landmark arrival, so it's the guaranteed
+      // fallback -- whichever check (this one or onResults()'s) notices the
+      // hold has elapsed first wins; calibCompletionResolve is nulled out
+      // by the first call, so there's no double-resolve.
+      if (appState === "calibrating" && calibHoldStart !== null &&
+          performance.now() - calibHoldStart >= CALIBRATION_HOLD_MS && calibCompletionResolve) {
+        calibCompletionResolve();
       }
     }, 150);
     calibCompletionResolve = () => { clearInterval(watchdog); calibCompletionResolve = null; resolve(); };
@@ -786,6 +926,7 @@ async function start() {
   stopAt = performance.now() + seconds * 1000;
   setButtonsForState();
   startMetronome();
+  logFlushTimer = setInterval(flushLogSamples, 500);
 
   statusEl.textContent = `Running: ${signature}/4 @ ${bpm} BPM for ${seconds}s. Calibrated to your range; trace resets on every metronome downbeat.`;
 }

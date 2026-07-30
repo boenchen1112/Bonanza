@@ -20,7 +20,7 @@ import csv
 import http.server
 import json
 import os
-import socketserver
+import threading
 import time
 
 # 8080 was requested originally, but is already occupied by an unrelated
@@ -34,6 +34,10 @@ _open_logs: dict[str, csv.writer] = {}
 _open_files: dict[str, object] = {}
 _open_score_logs: dict[str, csv.writer] = {}
 _open_score_files: dict[str, object] = {}
+# Audit D1: the server is now ThreadingHTTPServer (one request no longer
+# blocks the next), so the writer dicts/files above are shared across
+# request-handling threads -- guard creation and writes with one lock.
+_log_lock = threading.Lock()
 
 
 def _sanitize_id(run_id: str) -> str:
@@ -65,7 +69,7 @@ def _score_writer(run_id: str) -> csv.writer:
         path = os.path.join(LOG_DIR, f"web_hand_{safe_id}_scores.csv")
         f = open(path, "w", newline="")
         w = csv.writer(f)
-        w.writerow(["measure_index", "distance", "match_pct"])
+        w.writerow(["measure_index", "distance", "drift", "match_pct"])
         _open_score_files[safe_id] = f
         _open_score_logs[safe_id] = w
         print(f"Logging scores for run {safe_id} to {path}")
@@ -93,19 +97,30 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if self.path == "/log":
             data = self._read_json()
             safe_id = "".join(c for c in str(data.get("run_id", "run")) if c.isalnum() or c in "-_") or "run"
-            w = _log_writer(safe_id)
-            w.writerow([
-                data.get("t"), data.get("measure_index"), data.get("found"),
-                data.get("x"), data.get("y"), data.get("nx"), data.get("ny"),
-            ])
-            _open_files[safe_id].flush()
+            # Audit D1: the browser now batches samples client-side into one
+            # POST every ~0.5s instead of one per frame -- "samples" is a
+            # list; kept backward-compatible with a single unbatched sample
+            # (any old client/replay tooling that posts the legacy shape).
+            samples = data.get("samples")
+            if samples is None:
+                samples = [data]
+            with _log_lock:
+                w = _log_writer(safe_id)
+                for s in samples:
+                    w.writerow([
+                        s.get("t"), s.get("measure_index"), s.get("found"),
+                        s.get("x"), s.get("y"), s.get("nx"), s.get("ny"),
+                    ])
+                if samples:
+                    _open_files[safe_id].flush()
             self._respond_ok()
         elif self.path == "/score":
             data = self._read_json()
             safe_id = "".join(c for c in str(data.get("run_id", "run")) if c.isalnum() or c in "-_") or "run"
-            w = _score_writer(safe_id)
-            w.writerow([data.get("measure_index"), data.get("distance"), data.get("match_pct")])
-            _open_score_files[safe_id].flush()
+            with _log_lock:
+                w = _score_writer(safe_id)
+                w.writerow([data.get("measure_index"), data.get("distance"), data.get("drift"), data.get("match_pct")])
+                _open_score_files[safe_id].flush()
             self._respond_ok()
         elif self.path == "/snapshot":
             data = self._read_json()
@@ -124,7 +139,13 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    with socketserver.TCPServer(("", PORT), Handler) as httpd:
+    # Audit D1: plain socketserver.TCPServer handles one request at a time --
+    # with per-frame /log POSTs (pre-batching) that meant every static-asset
+    # fetch and every CSV write serialized behind the video-tracking loop's
+    # own fetch()es, a likely real cause of "tracking felt slow." Batching
+    # (see index.html's flushLogSamples()) cuts the request rate; threading
+    # removes the remaining head-of-line blocking against page/asset loads.
+    with http.server.ThreadingHTTPServer(("", PORT), Handler) as httpd:
         print(f"Serving {DIR} at http://localhost:{PORT}/  (Ctrl+C to stop)")
         try:
             httpd.serve_forever()
