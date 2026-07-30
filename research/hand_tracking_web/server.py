@@ -61,15 +61,17 @@ def _log_writer(run_id: str) -> csv.writer:
 
 
 def _score_writer(run_id: str) -> csv.writer:
-    # v5 Phase 1 change 4: per-measure shape_distance() scores, in their
-    # own file rather than jammed into the per-sample log (different
-    # granularity -- one row per measure, not one row per video frame).
+    # v5 Phase 1 change 4: per-beat scores, in their own file rather than
+    # jammed into the per-sample log (different granularity -- one row per
+    # beat, not one row per video frame). v6 (2026-07-30): scoring is ictus
+    # TIMING (offset_ms, tier), not shape-distance -- see index.html's
+    # scoreIctus().
     safe_id = _sanitize_id(run_id)
     if safe_id not in _open_score_logs:
         path = os.path.join(LOG_DIR, f"web_hand_{safe_id}_scores.csv")
         f = open(path, "w", newline="")
         w = csv.writer(f)
-        w.writerow(["measure_index", "distance", "drift", "match_pct"])
+        w.writerow(["measure_index", "offset_ms", "tier", "ictus_ny"])
         _open_score_files[safe_id] = f
         _open_score_logs[safe_id] = w
         print(f"Logging scores for run {safe_id} to {path}")
@@ -119,7 +121,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             safe_id = "".join(c for c in str(data.get("run_id", "run")) if c.isalnum() or c in "-_") or "run"
             with _log_lock:
                 w = _score_writer(safe_id)
-                w.writerow([data.get("measure_index"), data.get("distance"), data.get("drift"), data.get("match_pct")])
+                w.writerow([data.get("measure_index"), data.get("offset_ms"), data.get("tier"), data.get("ictus_ny")])
                 _open_score_files[safe_id].flush()
             self._respond_ok()
         elif self.path == "/snapshot":

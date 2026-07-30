@@ -95,34 +95,16 @@ const REFERENCE = {
   3: [[0.0, 0.0], [0.0037, -0.7253], [1.0, -0.6635], [0.0766, -0.0729]],
   4: [[0.0, 0.0], [0.0, -1.0], [-0.6852, -0.6019], [0.715, -0.535], [0.0751, 0.0185]],
 };
+// REFERENCE is prep-first (index 0); start()'s calibration scale derivation
+// assumes that, so it must NOT be rolled/reordered.
 
-// Audit S6 (2026-07-30): REFERENCE is prep-first (index 0), and start()'s
-// calibration scale derivation assumes that -- so REFERENCE itself must NOT
-// be rolled/reordered. But the scored
-// window (onMeasureBoundary, below) is a closed loop that runs beat1 ->
-// beat2 -> ... -> beat1 of the NEXT measure (the reset instant IS the
-// bottom of the stroke, per that function's own comment) -- a different
-// starting phase than REFERENCE's prep -> beat1 -> ... -> prep. This was
-// invisible while shapeDistance() was order-blind (S1); fixing order
-// without also fixing this phase mismatch would collapse every score.
-// SCORING_REF rotates each signature's REFERENCE to start AND end at
-// beat1 (dropping prep, which the scored window never revisits): for 2/4,
-// [beat1, beat2, beat1].
-const SCORING_REF = Object.fromEntries(
-  Object.entries(REFERENCE).map(([sig, ref]) => [sig, [...ref.slice(1), ref[1]]])
-);
-// Verified against the audit's own adversarial table (ported to Python,
-// research/verify_scoring notes) after the S1/S2/S3/S6 rewrite below: 3/4
-// and 4/4 reversed traces now score 50%/64% (was 100%), partial traces
-// 48-63% (was ~95-99%), and a shape-correct-but-drifted trace stays at
-// 100% (was 57%/0%). One structural exception: 2/4's SCORING_REF is
-// [beat1, beat2, beat1] -- an out-and-back path with a single intermediate
-// vertex, which is geometrically identical whether traversed forward or
-// reversed (reversing a 3-point A-B-A sequence gives the same sequence
-// back). So a reversed 2/4 gesture still scores 100% -- not a residual bug
-// in shapeDistance(), an inherent property of 2/4 having only one
-// non-repeated beat per measure; 3/4 and 4/4 (2+ intermediate vertices)
-// don't have this degeneracy.
+// v6 decision 2 (2026-07-30, superseding the audit pass's shape-distance
+// scoring): "the score calculation should be based on the timing... not the
+// shape." The lowest point of the downbeat stroke (the ictus) must land on
+// the beat -- that's the same quantity the parked baseball minigame scored
+// (src/scoring.py). Shape-distance scoring (shapeDistance()/SCORING_REF)
+// was removed entirely, not kept as a secondary number, per that
+// correction. See [[feedback_scoring_is_timing_not_shape]] in memory.
 
 // v5 Phase 2 follow-up (feedback 2026-07-30, playtest): the in-canvas
 // reference-image overlay (drawReferenceImage(), removed) was consistently
@@ -163,13 +145,22 @@ let VIDEO_ASPECT = VIDEO_W / VIDEO_H;
 
 let runId = null;
 let bpm = 80, signature = 2, seconds = 60;
-// traceXY: calibrated logical (nx,ny) points -- SCORING ONLY, compared
-// against SCORING_REF via shapeDistance(). NOT used for drawing (see
+// traceXY: calibrated logical [nx, ny, t] points, t in audioCtx.currentTime
+// seconds -- used to find the ictus (deepest ny minimum) near each downbeat
+// for TIMING scoring (see scoreIctus()). NOT used for drawing (see
 // traceScreenXY below) -- feedback 2026-07-30: the calibrated/scaled
 // drawing pipeline (origin, calibScaleFactor) was exactly what made the
 // visible trail drift from where the hand actually is, since any
 // imprecision in the TOP/BOTTOM calibration hold got baked into where
 // every subsequent point was drawn.
+//
+// NEITHER traceXY nor traceScreenXY is ever cleared mid-run (only at the
+// start of a new run, in start()) -- feedback 2026-07-30, said more than
+// once: the downbeat/ictus is the BOTTOM of the stroke, not the top, so a
+// reset that fires at the downbeat lands mid-shape and destroys/hides the
+// just-drawn top-to-bottom stroke. See
+// [[feedback_conducting_downbeat_is_bottom]] in memory. The trail now
+// simply accumulates for the whole run, AirDrawer-style.
 let traceXY = [];
 // traceScreenXY: raw on-screen pixel positions (mirrored, same convention
 // as the skeleton dot), pushed every frame directly from the tracked
@@ -177,9 +168,6 @@ let traceXY = [];
 // is wherever MediaPipe detected the hand, full stop, no calibration math
 // between detection and pixel.
 let traceScreenXY = [];
-let lastCompletedTraceXY = []; // previous measure's finished SCORING trace
-let lastCompletedScreenXY = []; // previous measure's finished trail, kept
-                                 // visible one extra measure (see below)
 let measureIndex = -1;
 let measureStartWall = null;
 let running = false;
@@ -193,8 +181,7 @@ let logFlushTimer = null; // audit D1: batches logSample() writes, see flushLogS
 // BEAT, not once per measure. Simpler and more robust: ask the user to
 // hold still at the actual top/prep position for a moment before the run
 // starts, and use that single averaged sample as a FIXED origin for the
-// whole run. Trace resets (below) are then purely a per-measure clear of
-// the point list -- they no longer try to re-detect where "the top" is.
+// whole run.
 //
 // v5 follow-up (feedback: "the tracing is too small, cannot match the
 // reference"): REFERENCE's numbers are an abstract shape scale (prep to
@@ -204,13 +191,16 @@ let logFlushTimer = null; // audit D1: batches logSample() writes, see flushLogS
 // hold at BOTTOM (beat 1's lowest point -- literally "the lowest point of
 // the check mark," per the user's own framing) and derive calibScaleFactor
 // from the ratio of the user's own real top-to-bottom range to REFERENCE's
-// prep-to-beat1 distance. This maps the user's actual physical amplitude
-// onto REFERENCE's unit scale for SCORING (shapeDistance() against
-// SCORING_REF). v5 Phase 2 follow-up (feedback 2026-07-30, playtest): this
-// calibrated/scaled space used to also drive what was drawn on screen --
-// removed (see traceScreenXY) after the calibrated overlay proved
-// unreliably aligned to the real hand position; calibScaleFactor is scoring
-// -only now.
+// prep-to-beat1 distance. v6 (2026-07-30): scoring is now ictus TIMING, not
+// shape (see [[feedback_scoring_is_timing_not_shape]]), and finding the
+// deepest ny minimum near a beat doesn't actually need a scale factor --
+// argmin is scale-invariant. calibScaleFactor is kept anyway: the BOTTOM
+// hold is still a useful "confirm you know where beat 1 is" step, and per
+// v6's explicitly deferred list, gesture amplitude may become a scored
+// dimension later, at which point this calibration is what makes it
+// possible cheaply. It no longer drives anything drawn on screen (see
+// traceScreenXY) after the calibrated overlay proved unreliably aligned to
+// the real hand position.
 // v5 Phase 2 follow-up (feedback 2026-07-30: "calibration time is too
 // short"): a fixed 1.2s hold sampled starting the instant the countdown
 // ended, even if the hand was still settling into position. Replaced with
@@ -286,141 +276,90 @@ function scheduleClick(time, isDownbeat) {
   osc.stop(time + 0.09);
 }
 
-// v5 Phase 1 (change 4): shape_distance() / resample_path(), ported
-// faithfully from research/gesture_trace_spike.py -- arc-length resample
-// both paths to n points, then average nearest-point distance, normalized
-// by the reference's bounding size after rescaling the trace to match it
-// (that rescale is scale-invariant by design: it was the fix for a real
-// unit-mismatch bug found against gyro data, and stays useful here since
-// camera distance to the hand varies run to run).
-function resamplePath(points, n) {
-  if (points.length < 2) return points.length ? Array(n).fill(points[0]) : [];
-  const segLens = [];
-  for (let i = 0; i < points.length - 1; i++) {
-    segLens.push(Math.hypot(points[i+1][0]-points[i][0], points[i+1][1]-points[i][1]));
-  }
-  const total = segLens.reduce((a,b) => a+b, 0);
-  if (total === 0) return Array(n).fill(points[0]);
-  const cum = [0];
-  segLens.forEach(l => cum.push(cum[cum.length-1] + l));
-  const result = [];
-  for (let i = 0; i < n; i++) {
-    const target = n > 1 ? (i / (n-1)) * total : 0;
-    let segIdx = 0;
-    while (segIdx < segLens.length - 1 && cum[segIdx+1] < target) segIdx++;
-    const segLen = segLens[segIdx] || 1e-9;
-    const frac = Math.min(Math.max((target - cum[segIdx]) / segLen, 0), 1);
-    const [x0,y0] = points[segIdx], [x1,y1] = points[segIdx+1];
-    result.push([x0 + frac*(x1-x0), y0 + frac*(y1-y0)]);
-  }
-  return result;
+// v6 decision 2 + direct feedback (2026-07-30): score ICTUS TIMING (does
+// the lowest point of the stroke land on the beat?), not gesture shape.
+// Reuses the exact tier vocabulary the parked baseball minigame already
+// established (src/scoring.py) for consistency across the project.
+const PERFECT_MS = 50;
+const GREAT_MS = 100;
+const GOOD_MS = 150;
+
+function timingTier(offsetMs) {
+  if (offsetMs === null) return "Miss";
+  const a = Math.abs(offsetMs);
+  if (a <= PERFECT_MS) return "Perfect";
+  if (a <= GREAT_MS) return "Great";
+  if (a <= GOOD_MS) return "Good";
+  return "Miss";
 }
 
-function boundingSizeArr(points) {
-  const xs = points.map(p=>p[0]), ys = points.map(p=>p[1]);
-  return Math.max(Math.max(...xs)-Math.min(...xs), Math.max(...ys)-Math.min(...ys));
+// v6 1.3: "the click the student hears is later than when it was
+// scheduled" -- the exact problem that produced DEFAULT_OFFSET_S in v1
+// (src/calibration.py) and the latency report v3 Phase 0 closed out. Read
+// once at metronome start via the AudioContext's own reported latency;
+// never auto-recalibrated mid-session, never silently left at an assumed
+// zero without at least trying to read it. A full tap-to-the-click manual
+// calibration UI is a v7 item (per the build plan's explicitly deferred
+// list), not this pass.
+let AUDIO_LATENCY_OFFSET_S = 0;
+function captureAudioLatencyOffset() {
+  AUDIO_LATENCY_OFFSET_S = audioCtx.outputLatency || audioCtx.baseLatency || 0;
 }
 
-function centroidArr(points) {
-  const n = points.length;
-  const sx = points.reduce((s,p)=>s+p[0], 0), sy = points.reduce((s,p)=>s+p[1], 0);
-  return [sx/n, sy/n];
-}
-
-// Audit Bug_Audit_2026-07-30 Part B found this genuinely broken as a
-// conducting-gesture score, despite being a faithful, scale-invariant port
-// of gesture_trace_spike.py. Two fixes landed together (S1+S6, S2+S3):
-//   - order-aware (index-wise) distance instead of nearest-point chamfer
-//     distance -- the old version discarded sequence entirely, so a
-//     REVERSED gesture (the single most important conducting error) scored
-//     100%, and a one-directional distance let an INCOMPLETE trace (e.g.
-//     only the down-stroke) score ~95-99% since ref geometry the student
-//     never visited was free. Both paths are already arc-length resampled
-//     to n points in the same traversal direction (see SCORING_REF's phase
-//     fix above), so trace[i] vs ref[i] is directly comparable and
-//     symmetric by construction -- no separate ref->trace pass needed.
-//   - centroid-relative alignment instead of rescaling about the coordinate
-//     origin -- the old rescale bodily moved a drifted-but-shape-perfect
-//     trace, so 25% positional drift scored 57% and 50% drift scored 0%,
-//     while a backwards gesture scored 100%: the metric punished the LEAST
-//     meaningful error (drift -- camera moved, student stepped) harder than
-//     the most meaningful one (wrong shape/direction). Centering both paths
-//     on their own centroid before scaling removes that inversion. Absolute
-//     drift is real information though, so it's reported separately (see
-//     scoreMeasure()) rather than silently discarded or silently folded
-//     back into the shape score -- an open product question per the audit,
-//     not decided here.
-function shapeDistance(tracePoints, referencePoints, n = 50) {
-  const resampledTrace = resamplePath(tracePoints, n);
-  const resampledRef = resamplePath(referencePoints, n);
-
-  const [rcx, rcy] = centroidArr(resampledRef);
-  const centeredRef = resampledRef.map(([x,y]) => [x-rcx, y-rcy]);
-  const [tcx, tcy] = centroidArr(resampledTrace);
-  const centeredTrace = resampledTrace.map(([x,y]) => [x-tcx, y-tcy]);
-
-  const refSize = boundingSizeArr(centeredRef) || 1.0;
-  const traceSize = boundingSizeArr(centeredTrace) || 1.0;
-  const scale = refSize / traceSize;
-  const scaledTrace = centeredTrace.map(([x,y]) => [x*scale, y*scale]);
-
-  let total = 0;
-  for (let i = 0; i < n; i++) {
-    total += Math.hypot(scaledTrace[i][0]-centeredRef[i][0], scaledTrace[i][1]-centeredRef[i][1]);
-  }
-  const distance = (total / n) / refSize;
-  const drift = Math.hypot(tcx - rcx, tcy - rcy) / refSize; // reported, not scored
-  return { distance, drift };
-}
-
-let sessionScores = []; // {measureIndex, distance, matchPct}
+let sessionScores = []; // {measureIndex, offsetMs, tier}
 let lastScoreText = "";
 
-function scoreMeasure(idx, trace) {
-  const { distance, drift } = shapeDistance(trace, SCORING_REF[signature]);
-  // distance is a normalized order-aware average index-wise distance -- 0 is
-  // a perfect match; there's no natural upper bound, so clamp for a
-  // student-facing percentage rather than showing a raw geometric number.
-  // (S4: this raw-distance-to-percentage mapping is still the old arbitrary
-  // linear map, uncalibrated against real traces -- open item, not fixed by
-  // this pass.)
-  const matchPct = Math.round((1 - Math.min(distance, 1)) * 100);
-  sessionScores.push({ measureIndex: idx, distance, drift, matchPct });
-  lastScoreText = `measure ${idx} match: ${matchPct}% (drift ${Math.round(drift*100)}%)`;
-  postJSON("/score", { run_id: runId, measure_index: idx, distance, drift, match_pct: matchPct });
+// Searches traceXY (continuous, never cleared mid-run -- see its
+// declaration comment) for the deepest ny minimum near `beatTime` (an
+// audioCtx.currentTime downbeat schedule time) and compares its timestamp
+// to when the click was actually HEARD (beatTime + the latency offset
+// above). ny is most NEGATIVE at the lowest physical point (see the sign
+// note on nx/ny's computation in onResults()), so argmin, not argmax.
+// Window is half a beat (capped at 500ms) either side of the beat so a
+// neighboring downbeat's dip can't be picked up by mistake.
+function scoreIctus(beatTime) {
+  const heardBeatTime = beatTime + AUDIO_LATENCY_OFFSET_S;
+  const windowS = Math.min(beatIntervalS() / 2, 0.5);
+  const windowSamples = traceXY.filter(([, , t]) => t >= beatTime - windowS && t <= beatTime + windowS);
+
+  let offsetMs = null, ictusNy = null;
+  if (windowSamples.length > 0) {
+    let best = windowSamples[0];
+    for (const s of windowSamples) if (s[1] < best[1]) best = s;
+    ictusNy = best[1];
+    offsetMs = (best[2] - heardBeatTime) * 1000;
+  }
+
+  const tier = timingTier(offsetMs);
+  sessionScores.push({ measureIndex, offsetMs, tier });
+  lastScoreText = offsetMs === null
+    ? `beat ${measureIndex}: no ictus detected`
+    : `beat ${measureIndex}: ${tier} (${offsetMs >= 0 ? "+" : ""}${Math.round(offsetMs)}ms)`;
+  postJSON("/score", { run_id: runId, measure_index: measureIndex, offset_ms: offsetMs, tier, ictus_ny: ictusNy });
 }
 
-function onMeasureBoundary() {
-  // Score the measure that just ended BEFORE clearing its trace. The very
-  // first boundary call transitions measureIndex from -1 to 0 -- that
-  // closes out only a partial fragment collected before the run
-  // stabilized, not a real measure, so it's deliberately not scored.
-  //
-  // feedback 2026-07-29: the reset instant IS the bottom of the stroke
-  // (the downbeat click fires right as/just after the hand reaches beat
-  // 1), so clearing traceXY here erased the top-to-bottom stroke at
-  // exactly the moment it became visible. Fix: keep it as
-  // lastCompletedTraceXY, drawn faded underneath the new live trace for
-  // one full extra measure instead of vanishing immediately.
-  if (measureIndex >= 0 && traceXY.length >= 2) {
-    scoreMeasure(measureIndex, traceXY);
-    lastCompletedTraceXY = traceXY;
-    lastCompletedScreenXY = traceScreenXY;
+// v6 1.3 (D3, "stops being a P2 and becomes a blocker" once timing IS the
+// score): downbeats used to fire scoring via setTimeout, subject to tens of
+// ms of jitter and background-tab throttling -- jitter in the trigger is
+// measurement error in the score itself once the score is a millisecond
+// offset. Replaced with a polled comparison against audioCtx.currentTime
+// (checkDownbeats(), called every detectLoop/rAF frame) instead of a timer.
+let pendingDownbeats = []; // scheduled audioCtx.currentTime values, FIFO
+
+function checkDownbeats() {
+  while (pendingDownbeats.length && audioCtx && audioCtx.currentTime >= pendingDownbeats[0]) {
+    const beatTime = pendingDownbeats.shift();
+    measureIndex += 1;
+    measureStartWall = performance.now();
+    scoreIctus(beatTime);
   }
-  traceXY = [];
-  traceScreenXY = [];
-  measureIndex += 1;
-  measureStartWall = performance.now();
 }
 
 function metronomeSchedulerTick() {
   while (nextBeatTime < audioCtx.currentTime + SCHEDULE_AHEAD_S) {
     const isDownbeat = beatInMeasure === 0;
     scheduleClick(nextBeatTime, isDownbeat);
-    if (isDownbeat) {
-      const delayMs = Math.max(0, (nextBeatTime - audioCtx.currentTime) * 1000);
-      setTimeout(onMeasureBoundary, delayMs);
-    }
+    if (isDownbeat) pendingDownbeats.push(nextBeatTime);
     nextBeatTime += beatIntervalS();
     beatInMeasure = (beatInMeasure + 1) % signature;
   }
@@ -428,6 +367,8 @@ function metronomeSchedulerTick() {
 
 function startMetronome() {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  captureAudioLatencyOffset();
+  pendingDownbeats = [];
   beatInMeasure = 0;
   nextBeatTime = audioCtx.currentTime + 0.05;
   metronomeSchedulerTick();
@@ -495,18 +436,9 @@ function drawSkeleton(landmarks, W, H) {
 // running) -- no reference image, no calibrated-scale remapping between
 // detection and pixel. Bold/high-contrast on purpose (was a dim #b0b0b0
 // before, easy to lose against a busy background); round joins/caps for a
-// pen-like look.
+// pen-like look. Never cleared mid-run (see traceScreenXY's declaration
+// comment) -- accumulates for the whole session.
 function drawOverlay(W, H) {
-  // Last measure's finished trail, faded, drawn BEHIND the live one -- keeps
-  // the just-completed stroke visible for a full extra measure instead of
-  // vanishing the instant it's done (see onMeasureBoundary()).
-  if (lastCompletedScreenXY.length >= 2) {
-    ctx.strokeStyle = "#00e5ff55"; ctx.lineWidth = 4; ctx.lineCap = "round"; ctx.lineJoin = "round";
-    ctx.beginPath();
-    lastCompletedScreenXY.forEach(([x, y], i) => { i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); });
-    ctx.stroke();
-  }
-
   if (traceScreenXY.length >= 2) {
     ctx.strokeStyle = "#00e5ff"; ctx.lineWidth = 4; ctx.lineCap = "round"; ctx.lineJoin = "round";
     ctx.beginPath();
@@ -632,10 +564,20 @@ function onResults(landmarksList) {
       // reference it's being compared/drawn against.
       nx = (x - origin[0]) * VIDEO_ASPECT * calibScaleFactor;
       ny = -(y - origin[1]) * calibScaleFactor; // image y-down -> logical y-up
-      traceXY.push([nx, ny]); // scoring only, see traceXY's declaration comment
+      // Timestamped in audioCtx.currentTime, the SAME clock domain as
+      // pendingDownbeats/scoreIctus()'s beat times -- performance.now() is a
+      // different clock and comparing across the two would silently corrupt
+      // every timing offset.
+      traceXY.push([nx, ny, audioCtx ? audioCtx.currentTime : 0]);
       traceScreenXY.push(trackedPointPx(landmarks, mainCanvas.width, mainCanvas.height)); // what's actually drawn
     }
   }
+
+  // Outside the `if (landmarks)` block on purpose: a downbeat must still be
+  // checked/scored even on a frame where the hand briefly wasn't detected,
+  // otherwise a tracking dropout stalls timing scoring the same way it used
+  // to stall calibration (audit C1).
+  if (appState === "running") checkDownbeats();
 
   renderFrame(landmarks);
   if (appState === "running") logSample(now / 1000, found, x, y, nx, ny);
@@ -656,9 +598,15 @@ async function stopRun() {
 
   let summary = "";
   if (sessionScores.length > 0) {
-    const avg = sessionScores.reduce((s, m) => s + m.matchPct, 0) / sessionScores.length;
-    const best = sessionScores.reduce((a, b) => (b.matchPct > a.matchPct ? b : a));
-    summary = ` ${sessionScores.length} measures scored -- average match ${avg.toFixed(0)}%, best measure ${best.measureIndex} at ${best.matchPct}%.`;
+    const tierCounts = {};
+    sessionScores.forEach(s => { tierCounts[s.tier] = (tierCounts[s.tier] || 0) + 1; });
+    const tierSummary = ["Perfect", "Great", "Good", "Miss"]
+      .filter(t => tierCounts[t]).map(t => `${tierCounts[t]} ${t}`).join(", ");
+    const scored = sessionScores.filter(s => s.offsetMs !== null);
+    const avgAbsMs = scored.length
+      ? Math.round(scored.reduce((s, m) => s + Math.abs(m.offsetMs), 0) / scored.length)
+      : null;
+    summary = ` ${sessionScores.length} beats scored -- ${tierSummary}${avgAbsMs !== null ? `, avg offset ${avgAbsMs}ms` : ""}.`;
   }
   await saveSnapshot();
   // Only claim persistence succeeded if nothing actually failed along the
@@ -812,7 +760,7 @@ async function start() {
   bpm = parseFloat(document.getElementById("bpm").value);
   signature = parseInt(document.getElementById("signature").value);
   seconds = parseFloat(document.getElementById("seconds").value);
-  sessionScores = []; lastScoreText = ""; lastCompletedTraceXY = []; lastCompletedScreenXY = []; calibScaleFactor = 1;
+  sessionScores = []; lastScoreText = ""; calibScaleFactor = 1;
   stopRequested = false;
   persistenceFailed = false;
 
@@ -862,7 +810,7 @@ async function start() {
   }
   calibScaleFactor = refDelta / physDelta;
 
-  traceXY = []; traceScreenXY = []; lastCompletedTraceXY = []; lastCompletedScreenXY = []; measureIndex = -1;
+  traceXY = []; traceScreenXY = []; measureIndex = -1;
   runId = new Date().toISOString().replace(/[:.]/g, "-");
   running = true;
   appState = "running";
@@ -871,7 +819,7 @@ async function start() {
   startMetronome();
   logFlushTimer = setInterval(flushLogSamples, 500);
 
-  statusEl.textContent = `Running: ${signature}/4 @ ${bpm} BPM for ${seconds}s. Calibrated to your range; trace resets on every metronome downbeat.`;
+  statusEl.textContent = `Running: ${signature}/4 @ ${bpm} BPM for ${seconds}s. The trail draws continuously and never resets mid-run; each downbeat is scored on timing (is the lowest point of your stroke on the beat?).`;
 }
 
 const startBtn = document.getElementById("startBtn");
