@@ -154,29 +154,34 @@ let VIDEO_ASPECT = VIDEO_W / VIDEO_H;
 
 let runId = null;
 let bpm = 80, signature = 2, seconds = 60;
-// traceXY: calibrated logical [nx, ny, t] points, t in audioCtx.currentTime
-// seconds -- used to find the ictus (deepest ny minimum) near each downbeat
-// for TIMING scoring (see scoreIctus()). NOT used for drawing (see
-// traceScreenXY below) -- feedback 2026-07-30: the calibrated/scaled
-// drawing pipeline (origin, calibScaleFactor) was exactly what made the
-// visible trail drift from where the hand actually is, since any
-// imprecision in the TOP/BOTTOM calibration hold got baked into where
-// every subsequent point was drawn.
+// trail: one record per tracked frame while running -- { t, nx, ny,
+// screenX, screenY }. Used to be two parallel arrays (traceXY for scoring,
+// traceScreenXY for drawing) pushed from the same call site but read by
+// different code; nothing enforced they stayed in lockstep, which is
+// exactly the class of bug that produced the misaligned reference-image
+// overlay (removed, see below). One record per frame removes that by
+// construction -- scoring and drawing read the same seam.
 //
-// NEITHER traceXY nor traceScreenXY is ever cleared mid-run (only at the
-// start of a new run, in start()) -- feedback 2026-07-30, said more than
-// once: the downbeat/ictus is the BOTTOM of the stroke, not the top, so a
-// reset that fires at the downbeat lands mid-shape and destroys/hides the
-// just-drawn top-to-bottom stroke. See
-// [[feedback_conducting_downbeat_is_bottom]] in memory. The trail now
-// simply accumulates for the whole run, AirDrawer-style.
-let traceXY = [];
-// traceScreenXY: raw on-screen pixel positions (mirrored, same convention
-// as the skeleton dot), pushed every frame directly from the tracked
-// fingertip -- this is what's actually drawn. Airdrawer-style: the trail
-// is wherever MediaPipe detected the hand, full stop, no calibration math
-// between detection and pixel.
-let traceScreenXY = [];
+// nx/ny: calibrated logical coordinates, t in audioCtx.currentTime seconds
+// -- used to find the ictus (deepest ny minimum) near each downbeat for
+// TIMING scoring (see scoreIctus()). NOT used for drawing -- feedback
+// 2026-07-30: the calibrated/scaled drawing pipeline (origin,
+// calibScaleFactor) was exactly what made the visible trail drift from
+// where the hand actually is, since any imprecision in the TOP/BOTTOM
+// calibration hold got baked into where every subsequent point was drawn.
+//
+// screenX/screenY: raw on-screen pixel positions (mirrored, same
+// convention as the skeleton dot) -- this is what's actually drawn.
+// AirDrawer-style: the trail is wherever MediaPipe detected the hand, full
+// stop, no calibration math between detection and pixel.
+//
+// trail is never cleared mid-run (only at the start of a new run, in
+// start()) -- feedback 2026-07-30, said more than once: the downbeat/ictus
+// is the BOTTOM of the stroke, not the top, so a reset that fires at the
+// downbeat lands mid-shape and destroys/hides the just-drawn top-to-bottom
+// stroke. See [[feedback_conducting_downbeat_is_bottom]] in memory. The
+// trail simply accumulates for the whole run, AirDrawer-style.
+let trail = [];
 let measureIndex = -1;
 let measureStartWall = null;
 let running = false;
@@ -208,8 +213,8 @@ let logFlushTimer = null; // audit D1: batches logSample() writes, see flushLogS
 // v6's explicitly deferred list, gesture amplitude may become a scored
 // dimension later, at which point this calibration is what makes it
 // possible cheaply. It no longer drives anything drawn on screen (see
-// traceScreenXY) after the calibrated overlay proved unreliably aligned to
-// the real hand position.
+// trail's screenX/screenY) after the calibrated overlay proved unreliably
+// aligned to the real hand position.
 // v5 Phase 2 follow-up (feedback 2026-07-30: "calibration time is too
 // short"): a fixed 1.2s hold sampled starting the instant the countdown
 // ended, even if the hand was still settling into position. Replaced with
@@ -301,8 +306,8 @@ function captureAudioLatencyOffset() {
 let sessionScores = []; // {measureIndex, offsetMs, tier}
 let lastScoreText = "";
 
-// Searches traceXY (continuous, never cleared mid-run -- see its
-// declaration comment) for the deepest ny minimum near `beatTime` (an
+// Searches trail (continuous, never cleared mid-run -- see its declaration
+// comment) for the deepest ny minimum near `beatTime` (an
 // audioCtx.currentTime downbeat schedule time) and compares its timestamp
 // to when the click was actually HEARD (beatTime + the latency offset
 // above). ny is most NEGATIVE at the lowest physical point (see the sign
@@ -310,10 +315,13 @@ let lastScoreText = "";
 // Window is half a beat (capped at 500ms) either side of the beat so a
 // neighboring downbeat's dip can't be picked up by mistake. The search
 // itself lives in scoring.mjs's findIctus() -- see scoring.test.mjs for
-// its regression coverage.
+// its regression coverage. findIctus takes [nx, ny, t] triples (its own
+// tested contract); trail carries richer records, so project down to that
+// shape here rather than changing the already-verified pure function.
 function scoreIctus(beatTime) {
   const heardBeatTime = beatTime + AUDIO_LATENCY_OFFSET_S;
   const windowS = Math.min(beatIntervalS() / 2, 0.5);
+  const traceXY = trail.map(r => [r.nx, r.ny, r.t]);
   const { offsetMs, ictusNy } = findIctus(traceXY, beatTime, heardBeatTime, windowS);
 
   const tier = timingTier(offsetMs);
@@ -389,9 +397,9 @@ updateRefVideo();
 
 // Screen-space point for the tracked fingertip -- mirrored the same way as
 // the video draw and the skeleton dots below, so it lines up pixel-for-pixel
-// with where the hand visually is. This is what traceScreenXY stores each
-// frame (see onResults()) -- no calibration/scale math between detection
-// and pixel, which is exactly what AirDrawer-style air-drawing tools do
+// with where the hand visually is. This is what trail's screenX/screenY
+// store each frame (see onResults()) -- no calibration/scale math between
+// detection and pixel, which is exactly what AirDrawer-style air-drawing tools do
 // (github.com/Axshatt/AirDrawer: draw directly at the tracked fingertip's
 // live screen position, no separate coordinate space).
 function trackedPointPx(landmarks, W, H) {
@@ -417,18 +425,18 @@ function drawSkeleton(landmarks, W, H) {
   ctx.fill();
 }
 
-// Airdrawer-style live trail: drawn directly from traceScreenXY (raw
-// on-screen fingertip positions, pushed in onResults() every frame while
-// running) -- no reference image, no calibrated-scale remapping between
-// detection and pixel. Bold/high-contrast on purpose (was a dim #b0b0b0
-// before, easy to lose against a busy background); round joins/caps for a
-// pen-like look. Never cleared mid-run (see traceScreenXY's declaration
-// comment) -- accumulates for the whole session.
+// Airdrawer-style live trail: drawn directly from trail's screenX/screenY
+// (raw on-screen fingertip positions, pushed in onResults() every frame
+// while running) -- no reference image, no calibrated-scale remapping
+// between detection and pixel. Bold/high-contrast on purpose (was a dim
+// #b0b0b0 before, easy to lose against a busy background); round
+// joins/caps for a pen-like look. Never cleared mid-run (see trail's
+// declaration comment) -- accumulates for the whole session.
 function drawOverlay(W, H) {
-  if (traceScreenXY.length >= 2) {
+  if (trail.length >= 2) {
     ctx.strokeStyle = "#00e5ff"; ctx.lineWidth = 4; ctx.lineCap = "round"; ctx.lineJoin = "round";
     ctx.beginPath();
-    traceScreenXY.forEach(([x, y], i) => { i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); });
+    trail.forEach(({ screenX, screenY }, i) => { i === 0 ? ctx.moveTo(screenX, screenY) : ctx.lineTo(screenX, screenY); });
     ctx.stroke();
   }
 
@@ -554,8 +562,12 @@ function onResults(landmarksList) {
       // pendingDownbeats/scoreIctus()'s beat times -- performance.now() is a
       // different clock and comparing across the two would silently corrupt
       // every timing offset.
-      traceXY.push([nx, ny, audioCtx ? audioCtx.currentTime : 0]);
-      traceScreenXY.push(trackedPointPx(landmarks, mainCanvas.width, mainCanvas.height)); // what's actually drawn
+      //
+      // One push, one record -- nx/ny (for scoring) and screenX/screenY
+      // (for drawing, "what's actually drawn") can't drift out of lockstep
+      // the way two separately-pushed arrays could.
+      const [screenX, screenY] = trackedPointPx(landmarks, mainCanvas.width, mainCanvas.height);
+      trail.push({ t: audioCtx ? audioCtx.currentTime : 0, nx, ny, screenX, screenY });
     }
   }
 
@@ -802,7 +814,7 @@ async function start() {
   }
   calibScaleFactor = scaleFactor;
 
-  traceXY = []; traceScreenXY = []; measureIndex = -1;
+  trail = []; measureIndex = -1;
   runId = new Date().toISOString().replace(/[:.]/g, "-");
   running = true;
   appState = "running";
