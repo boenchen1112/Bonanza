@@ -90,3 +90,13 @@ Miss), a sharpness tier (Bunt/Line Drive/Home Run), an out count, and an
 end-of-round summary of timing offsets and sharpness — with calibration
 available from Settings after the round. Sections 1–5 of the build plan must
 be functional, not stubbed.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live as GitHub issues in boenchen1112/Swinger (private repo). See `docs/agents/issue-tracker.md`.
+
+### Domain docs
+
+Single-context — `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
