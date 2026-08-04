@@ -85,18 +85,21 @@ const HAND_CONNECTIONS = [
 
 // Canonical reference patterns. v5 Phase 2 (2026-07-29): all three replaced
 // with REAL data extracted from user-supplied reference videos (2_4.mp4,
-// 3_4.mp4, 4_4.mp4 -- see research/extract_pattern_from_video.py), ported
-// from the same numbers now in src/conducting_patterns.py's _RAW_POINTS.
+// 3_4.mp4, 4_4.mp4 -- see research/extract_pattern_from_video.py). Loaded
+// from assets/reference_patterns.json rather than hand-typed here -- this
+// used to be a second hand-typed copy of the same numbers as
+// src/conducting_patterns.py's _RAW_POINTS, which already caused one
+// shipped bug (2/4 drawn 48.8% too wide from the two copies drifting).
+// Both now read the one generated JSON; see reference_patterns.json's own
+// header comment for how to regenerate it. Fetch starts immediately here,
+// in parallel with model/camera setup, but is only awaited where it's used
+// (start(), at calibration-scale time) -- see referencePatternsPromise.
 // Already prep-centered at (0,0) by the extraction script's own
 // normalization, matching calibration's own origin convention -- no
 // re-centering needed here (unlike the old schematic 2/4 guess).
-const REFERENCE = {
-  2: [[0.0, 0.0], [0.5299, -1.0], [0.1272, 0.0044]],
-  3: [[0.0, 0.0], [0.0037, -0.7253], [1.0, -0.6635], [0.0766, -0.0729]],
-  4: [[0.0, 0.0], [0.0, -1.0], [-0.6852, -0.6019], [0.715, -0.535], [0.0751, 0.0185]],
-};
-// REFERENCE is prep-first (index 0); start()'s calibration scale derivation
-// assumes that, so it must NOT be rolled/reordered.
+// Prep-first (index 0) per signature; start()'s calibration scale
+// derivation assumes that, so the JSON must NOT be rolled/reordered.
+const referencePatternsPromise = fetch("assets/reference_patterns.json").then(r => r.json());
 
 // v6 decision 2 (2026-07-30, superseding the audit pass's shape-distance
 // scoring): "the score calculation should be based on the timing... not the
@@ -797,7 +800,16 @@ async function start() {
     return;
   }
 
-  const ref = REFERENCE[signature];
+  let referencePatterns;
+  try {
+    referencePatterns = await referencePatternsPromise;
+  } catch (err) {
+    statusEl.textContent = `Failed to load reference patterns (${err.message || err}). Check the server is running and reload.`;
+    appState = "idle";
+    setButtonsForState();
+    return;
+  }
+  const ref = referencePatterns[signature];
   const refDelta = Math.hypot(ref[1][0] - ref[0][0], ref[1][1] - ref[0][1]);
   const physDx = (bottom[0] - origin[0]) * VIDEO_ASPECT;
   const physDy = -(bottom[1] - origin[1]);

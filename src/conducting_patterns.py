@@ -13,7 +13,9 @@ Convention: x-right, y-up, origin at the neutral/preparatory position,
 normalized so each pattern's bounding box has a max half-extent of 1.0.
 """
 
+import json
 import math
+import os
 from dataclasses import dataclass
 
 # The classic beat-pattern vocabulary per time signature (Swinger_Build_Plan_v4.md
@@ -51,11 +53,24 @@ _STROKE_SEQUENCES = {
 # 4/4 were unverified schematic guesses before this -- 4/4 in particular
 # turned out to be a "cross" (down/left/right/up, strokes crossing near
 # center), not the previous guess's non-crossing checkmark shape.
-_RAW_POINTS = {
-    2: [(0.0, 0.0), (0.5299, -1.0), (0.1272, 0.0044)],
-    3: [(0.0, 0.0), (0.0037, -0.7253), (1.0, -0.6635), (0.0766, -0.0729)],
-    4: [(0.0, 0.0), (0.0, -1.0), (-0.6852, -0.6019), (0.715, -0.535), (0.0751, 0.0185)],
-}
+#
+# Loaded from research/hand_tracking_web/assets/reference_patterns.json --
+# used to be a second hand-typed copy of these numbers (the first is
+# index.html's own REFERENCE), which already caused one shipped bug (2/4
+# drawn 48.8% too wide from the two copies drifting). Both now read the
+# one generated JSON.
+_REFERENCE_PATTERNS_PATH = os.path.join(
+    os.path.dirname(__file__), "..", "research", "hand_tracking_web", "assets", "reference_patterns.json"
+)
+
+
+def _load_raw_points() -> dict[int, list[tuple[float, float]]]:
+    with open(_REFERENCE_PATTERNS_PATH) as f:
+        data = json.load(f)
+    return {int(sig): [tuple(pt) for pt in points] for sig, points in data.items()}
+
+
+_RAW_POINTS = _load_raw_points()
 
 
 @dataclass(frozen=True)
