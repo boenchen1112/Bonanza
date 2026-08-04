@@ -73,6 +73,7 @@ import { FilesetResolver, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@m
 // scoring.test.mjs. Behavior unchanged from the pre-extraction inline
 // versions; only the extraction is new.
 import { timingTier, findIctus, deriveCalibScaleFactor } from "./scoring.mjs";
+import { averageSamples, prunedStabilityBuffer, isStable } from "./calibration.mjs";
 
 // Pinned to specific versions rather than @latest -- matches the working
 // config in a live reference project (github.com/ericwei97-cloud/gesture-synth,
@@ -529,28 +530,20 @@ function onResults(landmarksList) {
 
     if (appState === "countdown") {
       // Waiting for the hand to settle -- see calibratePoint()'s comment.
+      // Buffer pruning and the stability check itself live in
+      // calibration.mjs (isStable/prunedStabilityBuffer) -- see
+      // calibration.test.mjs for their regression coverage, including the
+      // audit C3 VIDEO_ASPECT correction (same unit mismatch nx/ny correct
+      // elsewhere: on a non-square frame the same physical wobble reads
+      // larger in whichever axis is foreshortened).
       stabilityBuffer.push({ t: now, x, y });
-      stabilityBuffer = stabilityBuffer.filter(s => now - s.t <= STABILITY_WINDOW_MS);
-      if (stabilityBuffer.length >= 3) {
-        const xs = stabilityBuffer.map(s => s.x), ys = stabilityBuffer.map(s => s.y);
-        // audit C3: x and y here are raw normalized frame fractions, the
-        // same unit mismatch VIDEO_ASPECT exists to correct elsewhere -- on
-        // a non-square frame the same physical wobble reads larger in
-        // whichever axis is foreshortened relative to the other. Scale x by
-        // VIDEO_ASPECT (same convention as nx below) so STABILITY_THRESHOLD
-        // means one physical distance regardless of the negotiated aspect.
-        const spread = Math.max(
-          (Math.max(...xs) - Math.min(...xs)) * VIDEO_ASPECT,
-          Math.max(...ys) - Math.min(...ys),
-        );
-        const covered = now - stabilityBuffer[0].t;
-        if (spread < STABILITY_THRESHOLD && covered >= STABILITY_WINDOW_MS * 0.8) {
-          appState = "calibrating";
-          calibSamples = [];
-          calibHoldStart = now;
-          statusEl.textContent = `Stable -- calibrating ${calibLabel}, hold for ${(CALIBRATION_HOLD_MS / 1000).toFixed(0)}s...`;
-          playTone(880, 0.1); playTone(880, 0.1, 0.15); // two quick high beeps = sampling now
-        }
+      stabilityBuffer = prunedStabilityBuffer(stabilityBuffer, now, STABILITY_WINDOW_MS);
+      if (isStable(stabilityBuffer, now, { windowMs: STABILITY_WINDOW_MS, threshold: STABILITY_THRESHOLD, videoAspect: VIDEO_ASPECT })) {
+        appState = "calibrating";
+        calibSamples = [];
+        calibHoldStart = now;
+        statusEl.textContent = `Stable -- calibrating ${calibLabel}, hold for ${(CALIBRATION_HOLD_MS / 1000).toFixed(0)}s...`;
+        playTone(880, 0.1); playTone(880, 0.1, 0.15); // two quick high beeps = sampling now
       }
     } else if (appState === "calibrating") {
       calibSamples.push([x, y]);
@@ -739,9 +732,7 @@ async function calibratePoint(label) {
 
   if (stopRequested || calibSamples.length === 0) return null;
   playTone(1200, 0.25); // longer confirm chime = point captured
-  const ox = calibSamples.reduce((s, p) => s + p[0], 0) / calibSamples.length;
-  const oy = calibSamples.reduce((s, p) => s + p[1], 0) / calibSamples.length;
-  return [ox, oy];
+  return averageSamples(calibSamples);
 }
 
 function setButtonsForState() {
