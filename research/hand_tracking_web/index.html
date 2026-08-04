@@ -486,8 +486,15 @@ let pendingLogSamples = [];
 // must persist a real record, not just claim to.
 let persistenceFailed = false;
 
+// Every postJSON() call is tracked here until it settles -- scoreIctus()'s
+// /score POST is fire-and-forget (not awaited by its caller), so without
+// this a slow request could resolve (and set persistenceFailed) AFTER
+// stopRun() already read persistenceFailed and reported success. stopRun()
+// awaits Promise.allSettled(inFlightRequests) before reading the flag.
+let inFlightRequests = new Set();
+
 function postJSON(path, body) {
-  return fetch(path, {
+  const promise = fetch(path, {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
   }).then(res => {
     if (!res.ok) { persistenceFailed = true; console.error(`${path} responded ${res.status}`); }
@@ -495,7 +502,9 @@ function postJSON(path, body) {
   }).catch(err => {
     persistenceFailed = true;
     console.error(`${path} failed:`, err);
-  });
+  }).finally(() => { inFlightRequests.delete(promise); });
+  inFlightRequests.add(promise);
+  return promise;
 }
 
 function logSample(t, found, x, y, nx, ny) {
@@ -607,6 +616,12 @@ async function stopRun() {
     summary = ` ${sessionScores.length} beats scored -- ${tierSummary}${avgAbsMs !== null ? `, avg offset ${avgAbsMs}ms` : ""}.`;
   }
   await saveSnapshot();
+  // scoreIctus()'s /score POSTs are fire-and-forget, so some may still be
+  // in flight even after flushLogSamples()/saveSnapshot() (both awaited
+  // above) have settled -- wait for every tracked request before reading
+  // persistenceFailed, or a late one could flip it after this point reads
+  // it (see inFlightRequests' declaration comment).
+  await Promise.allSettled([...inFlightRequests]);
   // Only claim persistence succeeded if nothing actually failed along the
   // way (see persistenceFailed's declaration comment) -- was previously an
   // unconditional claim regardless of whether any request landed.
