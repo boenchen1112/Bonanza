@@ -433,11 +433,28 @@ function drawSkeleton(landmarks, W, H) {
 // #b0b0b0 before, easy to lose against a busy background); round
 // joins/caps for a pen-like look. Never cleared mid-run (see trail's
 // declaration comment) -- accumulates for the whole session.
+//
+// 2026-08-04 (user-reported: "arc looks linear, capture rate too low"):
+// most webcams cap at ~30fps regardless of what's requested (confirmed via
+// the achievedFps readout below matching the negotiated camera fps -- a
+// hardware ceiling, not a MediaPipe/inference bottleneck). Rather than
+// straight lineTo() segments between sparse raw samples (which read as
+// faceted/polygonal on a fast stroke), draw a quadratic curve through the
+// midpoints of consecutive samples -- a standard smooth-freehand-line
+// technique. Purely cosmetic: does NOT change what's captured or scored
+// (scoreIctus/findIctus still read the raw, unsmoothed trail records).
 function drawOverlay(W, H) {
   if (trail.length >= 2) {
     ctx.strokeStyle = "#00e5ff"; ctx.lineWidth = 4; ctx.lineCap = "round"; ctx.lineJoin = "round";
     ctx.beginPath();
-    trail.forEach(({ screenX, screenY }, i) => { i === 0 ? ctx.moveTo(screenX, screenY) : ctx.lineTo(screenX, screenY); });
+    ctx.moveTo(trail[0].screenX, trail[0].screenY);
+    for (let i = 1; i < trail.length - 1; i++) {
+      const midX = (trail[i].screenX + trail[i + 1].screenX) / 2;
+      const midY = (trail[i].screenY + trail[i + 1].screenY) / 2;
+      ctx.quadraticCurveTo(trail[i].screenX, trail[i].screenY, midX, midY);
+    }
+    const last = trail[trail.length - 1];
+    ctx.lineTo(last.screenX, last.screenY);
     ctx.stroke();
   }
 
@@ -449,7 +466,7 @@ function drawOverlay(W, H) {
     ctx.font = "bold 28px sans-serif";
     ctx.fillText(`Calibrating ${calibLabel}...`, 20, H / 2);
   } else if (appState === "running") {
-    ctx.fillText(`measure ${measureIndex}  beat ${beatInMeasure + 1}/${signature}${lastScoreText ? "  |  " + lastScoreText : ""}`, 10, H - 12);
+    ctx.fillText(`measure ${measureIndex}  beat ${beatInMeasure + 1}/${signature}${lastScoreText ? "  |  " + lastScoreText : ""}  |  ~${achievedFps.toFixed(0)}fps tracked`, 10, H - 12);
   }
 }
 
@@ -627,11 +644,33 @@ async function stopRun() {
 let handLandmarker = null;
 let lastVideoTime = -1;
 
+// Diagnostic only (2026-08-04, user-reported "arc gestures look linear --
+// too few points captured"): tracks the ACHIEVED detectForVideo rate, not
+// the camera's negotiated rate (already shown once at "Camera ready:..." --
+// see ensureModelAndCamera()). If achieved fps sits well below the
+// negotiated camera fps, MediaPipe inference (CPU fallback, WASM without
+// SIMD, GPU delegate silently failing) is the bottleneck, not the camera --
+// distinguishes hardware from software without guessing. Doesn't affect
+// scoring/drawing, only the status-line readout in drawOverlay().
+let detectionCount = 0;
+let detectionRateWindowStart = null;
+let achievedFps = 0;
+
 function detectLoop() {
   if (video.readyState >= 2 && video.currentTime !== lastVideoTime) {
     lastVideoTime = video.currentTime;
     const result = handLandmarker.detectForVideo(video, performance.now());
     onResults(result.landmarks);
+
+    detectionCount += 1;
+    const now = performance.now();
+    if (detectionRateWindowStart === null) {
+      detectionRateWindowStart = now;
+    } else if (now - detectionRateWindowStart >= 1000) {
+      achievedFps = detectionCount / ((now - detectionRateWindowStart) / 1000);
+      detectionCount = 0;
+      detectionRateWindowStart = now;
+    }
   }
   if (appState !== "idle" && (!running || performance.now() < stopAt)) {
     requestAnimationFrame(detectLoop);
@@ -821,6 +860,7 @@ async function start() {
   calibScaleFactor = scaleFactor;
 
   trail = []; measureIndex = -1;
+  detectionCount = 0; detectionRateWindowStart = null; achievedFps = 0;
   runId = new Date().toISOString().replace(/[:.]/g, "-");
   running = true;
   appState = "running";
