@@ -1,9 +1,9 @@
 {
   "title": "Beat Bash Bonanza",
   "subtitle": "An original browser rhythm-party series, built to a Nintendo first-party bar",
-  "updated": "2026-08-08 06:15",
-  "wave": "Wave 2 \u2014 the five minigames",
-  "note": "Five builders are running in parallel, one per minigame, each owning exactly one directory. Each was told the generic autoplay cannot exercise its mechanic \u2014 holds, call-and-response, four-lane chords, a tempo ramp \u2014 and must write its own verification that drives the real gesture and proves the mechanic works. Critics follow, one per game, blind A/B against the Mario Party rhythm minigames.",
+  "updated": "2026-08-08 06:48",
+  "wave": "Wave 2 \u2014 integrated, unverified",
+  "note": "All five minigames now exist and load clean \u2014 the placeholder cubes are gone. But Wave 2 was also cut short by the spend limit, so no critic has reviewed them and the per-game mechanic verification scripts have not been run. For every game, \"it loads and draws\" is the whole of what is known. docs/HANDOFF.md \u00a74 lists what to do next, cheapest and highest-risk first.",
   "pieces": [
     {
       "id": "F1",
@@ -90,17 +90,17 @@
       "id": "G1",
       "group": "Minigames",
       "name": "Swing Kings",
-      "status": "building",
-      "detail": "One swing. One beat. Send it.",
+      "status": "reviewing",
+      "detail": "Batter, pitching machine, ball in flight, conducting trace, hit tiers. 73 draw calls.",
       "rounds": 0,
-      "critic": null
+      "critic": "Hit-tier callout is dark-on-dark against the crowd; the conducting trace reads as a vertical curtain rather than a gesture."
     },
     {
       "id": "G2",
       "group": "Minigames",
       "name": "Drumline Dash",
-      "status": "building",
-      "detail": "Hear it. Hit it back.",
+      "status": "reviewing",
+      "detail": "Call-and-response race against three CPU marchers.",
       "rounds": 0,
       "critic": null
     },
@@ -108,8 +108,8 @@
       "id": "G3",
       "group": "Minigames",
       "name": "Bounce Brigade",
-      "status": "building",
-      "detail": "Land every landing.",
+      "status": "reviewing",
+      "detail": "Instrument platforms \u2014 the layout is the melody.",
       "rounds": 0,
       "critic": null
     },
@@ -117,8 +117,8 @@
       "id": "G4",
       "group": "Minigames",
       "name": "Chomp Chorus",
-      "status": "building",
-      "detail": "Four lanes. One groove.",
+      "status": "reviewing",
+      "detail": "Four singers on lane pads, direction arrows showing the mapping. 109 draw calls.",
       "rounds": 0,
       "critic": null
     },
@@ -126,10 +126,10 @@
       "id": "G5",
       "group": "Minigames",
       "name": "Finale Fever",
-      "status": "building",
-      "detail": "It only gets faster.",
+      "status": "reviewing",
+      "detail": "Tempo-ramp duel with a conductor-boss.",
       "rounds": 0,
-      "critic": null
+      "critic": "Tempo-ramp chart alignment is unverified \u2014 the most likely real bug in the codebase."
     },
     {
       "id": "X1",
@@ -160,6 +160,10 @@
     }
   ],
   "log": [
+    {
+      "t": "2026-08-08 06:48",
+      "msg": "Wave 2 integrated: five real minigames replace the placeholder cubes; _stub.js deleted. Fixed a load-order crash in Bounce Brigade and made scene failures non-fatal \u2014 one throwing scene used to hang the entire app."
+    },
     {
       "t": "2026-08-08 06:15",
       "msg": "Wave 2 fanned out: Swing Kings, Drumline Dash, Bounce Brigade, Chomp Chorus, Finale Fever \u2014 five builders in parallel."

@@ -28,10 +28,10 @@ verbatim.
 | Runs | yes — all 8 registered scenes load with a clean console |
 | Tests | 27/27 green (`npm --prefix web test`) |
 | Critic rounds completed | **zero** |
-| Minigames built | **zero** — all five are placeholder spinning cubes |
+| Minigames built | **five, all loading clean** — none reviewed, none verified beyond "it runs" |
 
-Wave 1 (six parallel engine builders) was terminated part-way by a monthly
-API spend limit. Their partial work was recovered and integrated, so the
+Wave 1 (six engine builders) and Wave 2 (five minigame builders) were BOTH
+terminated part-way by a monthly API spend limit. Their partial work was recovered and integrated, so the
 engine is real but **nothing has passed the quality bar you set, because no
 critic has run.** Treat every "shipped" claim below as "exists and runs",
 not as "reviewed".
@@ -53,18 +53,26 @@ not as "reviewed".
   trails, confetti, decals, in-world callouts, plus a `fx.verdict()` that
   composes a layered response and a combo-escalation system.
 - **Characters** (`web/src/chars/`) — procedural rig, beat-driven animation,
-  instanced crowd. **Not registered as a scene and never rendered by the
-  harness** (see §5).
+  instanced crowd. Reviewable via the registered `chars-demo` scene: four
+  distinct builds plus the crowd, 105 draw calls, clean console.
 - **Shell** (`web/src/shell/`) — animated title with cast, crowd and attract
   mode; roster; free-play carousel with live canvas previews; a play wrapper
   with pause; save/profile state.
 
 ### What is missing
 
-- **The five minigames.** `web/src/games/*/index.js` all re-export
-  `makeStub()` — a metronome with a cube. This is the top priority and it
-  blocks every critic round, because a critic cannot judge Swing Kings by
-  looking at a cube.
+- **Per-game mechanic verification.** Every builder was told to write a
+  script driving its real gesture — hold/release, call-and-response, four-lane
+  chords, the tempo ramp — because the generic autoplay cannot exercise any of
+  them. Only `swingKings/verify.mjs` and `chompChorus/verify.mjs` exist, and
+  NEITHER HAS BEEN RUN. So for all five games, "it loads and draws" is the
+  entire extent of what is known. In particular **nobody has confirmed the
+  Finale Fever tempo ramp keeps its chart aligned with the transport**, which
+  is the single most likely real bug in the codebase right now.
+- **Chomp Chorus scores 0% under the standard harness run, and that is
+  expected**: autoplay presses only 'a', that game uses four direction keys.
+  Do not "fix" it by collapsing the lanes onto one button. Use its own
+  verify script.
 - **UI (P5) is half-wired.** `web/src/ui/font.js` (procedural typeface) and
   `styles.js` landed, but `ui/index.js` was never rewritten to use them. The
   HUD is still the original debug overlay.
@@ -105,25 +113,31 @@ game ids. Anything not in `web/src/shell/registry.js` is invisible to review.
 
 ## 4. Next actions, in order
 
-1. **Wave 2 — build the five minigames.** Five parallel builders, one per
-   game, against `docs/design/minigames.md`, which specifies each game's
-   verb, twist, escalation and why it is in the set. Each owns exactly
-   `web/src/games/<dir>/`. Delete `web/src/games/_stub.js` when the last
-   one lands.
+1. **Run the per-game verify scripts, and write the three that are missing.**
+   This is now the top priority and it is cheap. `swingKings/verify.mjs` and
+   `chompChorus/verify.mjs` exist but have never been executed; drumlineDash,
+   bounceBrigade and finaleFever have none. Until these run, no claim about
+   any game's mechanic is supported by anything. Start with **finaleFever**:
+   its chart must be scheduled incrementally against a ramping tempo, and if
+   accuracy degrades as the tempo climbs the chart is drifting against the
+   transport. That is the most likely real bug in the codebase.
 2. **Wave 2 critics.** One fresh critic per game, `critic-brief.md` verbatim,
    blind A/B against the Mario Party rhythm minigames. Loop until PASS.
+   Known cosmetic defects already visible in frames, for their triage:
+   Swing Kings' hit-tier callout ("BUNT") is dark-on-dark against the crowd
+   and its conducting trace reads as a vertical curtain rather than a gesture.
 3. **Finish P5 (UI).** Wire `font.js`/`styles.js` into `ui/index.js`; build
    the real HUD, timing bar, rules card and transitions.
-4. **Register a `chars-demo` scene** so the character work becomes
-   reviewable. It exists at `web/src/chars/demo.js`; add
-   `{ id: 'chars-demo', kind: 'shell', load: () => import('../chars/demo.js') }`
-   to the registry and verify it loads.
-5. **Audio verification.** Nobody has heard this game. Render a track through
+4. **Audio verification.** Nobody has heard this game. Render a track through
    `OfflineAudioContext` in the browser and assert peak <= 1.0 and non-silence
    per layer, or the whole soundtrack remains unvalidated.
-6. **Real-hardware perf pass.** `cpuMs` currently reads ~11ms against a 4ms
-   budget, but SwiftShader contaminates it. Needs a real GPU to separate.
-7. **Coherence pass**, then `party`/`options`, calibration, accessibility.
+5. **Real-hardware perf pass.** `cpuMs` reads ~11ms against a 4ms budget, but
+   SwiftShader contaminates it. Needs a real GPU to separate. Draw calls are
+   measured and trustworthy: 73 (swing-kings) to 109 (chomp-chorus) against a
+   120 budget — chomp-chorus is close to the ceiling.
+6. **`select.js` / `results.js`** are still integrator placeholders, and
+   `party`/`options` have no scene files. Then coherence, calibration,
+   accessibility.
 
 ## 5. Traps already paid for — do not re-introduce
 
@@ -142,6 +156,10 @@ game ids. Anything not in `web/src/shell/registry.js` is invisible to review.
   count — ten of fifteen callouts were unrenderable and nothing errored.
 - **Parallel agents and git.** Builders must never run git commands in a
   shared tree. The integrator commits.
+- **A scene throwing in `load()` used to kill the whole app** — `ready` never
+  resolved and the harness reported a 20s timeout pointing nowhere near the
+  cause. `activate()` now contains scene failures and records them on
+  `window.__BBB__.lastError`. If a scene seems to hang, read that field.
 
 ## 6. Conventions
 
