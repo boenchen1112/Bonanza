@@ -132,11 +132,28 @@ async function activate(id, opts = {}) {
   });
 
   stage.attach(scene, camera);
-  await mod.load?.(currentCtx);
-  current = mod;
-  mod.start?.(currentCtx);
-  bus.emit('scene:active', id);
-  window.__BBB__.scene = id;
+
+  // A scene that throws in load() must not take the application down with it.
+  // Before this, one game reading a null field during load left `ready`
+  // permanently unresolved: the whole app hung at a black screen, and the
+  // harness reported a timeout rather than the actual error. A broken scene
+  // should be a broken scene, not a broken product.
+  try {
+    await mod.load?.(currentCtx);
+    current = mod;
+    mod.start?.(currentCtx);
+    bus.emit('scene:active', id);
+    window.__BBB__.scene = id;
+  } catch (e) {
+    console.error('scene failed to start:', id, e);
+    current = null;
+    window.__BBB__.scene = null;
+    window.__BBB__.lastError = { scene: id, message: String(e && e.message || e) };
+    bus.emit('scene:error', id, e);
+    // Fall back to the title screen so the player is never stranded — unless
+    // the title is what failed, in which case stop rather than loop forever.
+    if (id !== 'title') pendingScene = { id: 'title', opts: {} };
+  }
 }
 
 // ---------------------------------------------------------------- main loop
@@ -338,7 +355,11 @@ window.__BBB__ = {
   if (q) stage.setQuality?.(q);
   await audio.init();
   const startScene = new URLSearchParams(location.search).get('scene') || 'title';
-  await activate(startScene, Object.fromEntries(new URLSearchParams(location.search)));
+  try {
+    await activate(startScene, Object.fromEntries(new URLSearchParams(location.search)));
+  } catch (e) {
+    console.error('boot scene failed:', e);
+  }
   requestAnimationFrame((t) => { last = t; frame(t); });
   resolveReady(true);
 })();
