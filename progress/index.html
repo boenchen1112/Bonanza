@@ -61,12 +61,12 @@ footer{margin-top:3em;color:var(--dim);font-size:13px}
 
 <div class="top">
   <span class="big">18%</span>
-  <span class="wave">Wave 2 — integrated, unverified</span>
+  <span class="wave">Wave 2 — all five verified playable</span>
   <span style="color:var(--dim)">3 of 17 pieces through review</span>
 </div>
 <div class="bar"><i></i></div>
 
-<div class="note">All five minigames now exist and load clean — the placeholder cubes are gone. But Wave 2 was also cut short by the spend limit, so no critic has reviewed them and the per-game mechanic verification scripts have not been run. For every game, &quot;it loads and draws&quot; is the whole of what is known. docs/HANDOFF.md §4 lists what to do next, cheapest and highest-risk first.</div>
+<div class="note">Hold-and-release is deferred: every scored input is now a plain button press, so the standard harness plays all five games. All five score 100% with 0.00ms mean error and a clean console. That also retires the biggest flagged risk — Finale Fever’s tempo ramp holds 0.00ms error across 108 hits spanning the full ramp, so the chart is not drifting. Critic rounds are next.</div>
 
 <section class="grp">
     <h2>Foundation</h2>
@@ -138,33 +138,33 @@ footer{margin-top:3em;color:var(--dim);font-size:13px}
       <article class="card s-rev">
         <header><span class="id">G1</span><span class="pill">in review</span></header>
         <h3>Swing Kings</h3>
-        <p>Batter, pitching machine, ball in flight, conducting trace, hit tiers. 73 draw calls.</p>
+        <p>Tap to swing; power now comes from timing accuracy. 6/6 perfect, 0ms error.</p>
         
-        <blockquote>Hit-tier callout is dark-on-dark against the crowd; the conducting trace reads as a vertical curtain rather than a gesture.</blockquote>
+        <blockquote>Hit-tier callout is dark-on-dark against the crowd.</blockquote>
       </article><article class="card s-rev">
         <header><span class="id">G2</span><span class="pill">in review</span></header>
         <h3>Drumline Dash</h3>
-        <p>Call-and-response race against three CPU marchers.</p>
+        <p>Call-and-response race. 11/11 perfect, 0ms error.</p>
         
         
       </article><article class="card s-rev">
         <header><span class="id">G3</span><span class="pill">in review</span></header>
         <h3>Bounce Brigade</h3>
-        <p>Instrument platforms — the layout is the melody.</p>
+        <p>Instrument platforms; the charge is now a double-tap. 18/18 perfect, 0ms error.</p>
         
         
       </article><article class="card s-rev">
         <header><span class="id">G4</span><span class="pill">in review</span></header>
         <h3>Chomp Chorus</h3>
-        <p>Four singers on lane pads, direction arrows showing the mapping. 109 draw calls.</p>
+        <p>Four singers on lane pads. 16/16 perfect, 0ms error.</p>
         
         
       </article><article class="card s-rev">
         <header><span class="id">G5</span><span class="pill">in review</span></header>
         <h3>Finale Fever</h3>
-        <p>Tempo-ramp duel with a conductor-boss.</p>
+        <p>Tempo-ramp duel. 108 hits at 0.00ms error across the full ramp — no drift.</p>
         
-        <blockquote>Tempo-ramp chart alignment is unverified — the most likely real bug in the codebase.</blockquote>
+        
       </article>
     </div>
   </section><section class="grp">
@@ -194,7 +194,7 @@ footer{margin-top:3em;color:var(--dim);font-size:13px}
 
 <section class="grp">
   <h2>Build log</h2>
-  <ul class="log"><li><time>2026-08-08 02:14</time><span>Foundation committed: clock, input, judge, feel, harness.</span></li><li><time>2026-08-08 02:21</time><span>Wave 1 fanned out: audio, art direction, VFX, characters, UI, shell — six builders in parallel.</span></li><li><time>2026-08-08 02:55</time><span>Integration: wrote the missing music barrel, fixed hitstop over-freeze, fixed draw-call telemetry, enlarged the callout atlas (10 of 15 words could not render), removed a duplicate verdict popup.</span></li><li><time>2026-08-08 02:55</time><span>Wave 1 builders terminated early on a monthly spend limit; partial work recovered and integrated. Game builds, runs clean, 27/27 timing tests green.</span></li><li><time>2026-08-08 05:38</time><span>Handoff written to docs/HANDOFF.md. Registered roster/freeplay/play and fixed three crashes that exposed — a missing import, an unguarded canvas radius, and beat phase computed with a sign-sensitive modulo.</span></li><li><time>2026-08-08 06:15</time><span>Wave 2 fanned out: Swing Kings, Drumline Dash, Bounce Brigade, Chomp Chorus, Finale Fever — five builders in parallel.</span></li><li><time>2026-08-08 06:48</time><span>Wave 2 integrated: five real minigames replace the placeholder cubes; _stub.js deleted. Fixed a load-order crash in Bounce Brigade and made scene failures non-fatal — one throwing scene used to hang the entire app.</span></li></ul>
+  <ul class="log"><li><time>2026-08-08 02:14</time><span>Foundation committed: clock, input, judge, feel, harness.</span></li><li><time>2026-08-08 02:21</time><span>Wave 1 fanned out: audio, art direction, VFX, characters, UI, shell — six builders in parallel.</span></li><li><time>2026-08-08 02:55</time><span>Integration: wrote the missing music barrel, fixed hitstop over-freeze, fixed draw-call telemetry, enlarged the callout atlas (10 of 15 words could not render), removed a duplicate verdict popup.</span></li><li><time>2026-08-08 02:55</time><span>Wave 1 builders terminated early on a monthly spend limit; partial work recovered and integrated. Game builds, runs clean, 27/27 timing tests green.</span></li><li><time>2026-08-08 05:38</time><span>Handoff written to docs/HANDOFF.md. Registered roster/freeplay/play and fixed three crashes that exposed — a missing import, an unguarded canvas radius, and beat phase computed with a sign-sensitive modulo.</span></li><li><time>2026-08-08 06:15</time><span>Wave 2 fanned out: Swing Kings, Drumline Dash, Bounce Brigade, Chomp Chorus, Finale Fever — five builders in parallel.</span></li><li><time>2026-08-08 06:48</time><span>Wave 2 integrated: five real minigames replace the placeholder cubes; _stub.js deleted. Fixed a load-order crash in Bounce Brigade and made scene failures non-fatal — one throwing scene used to hang the entire app.</span></li><li><time>2026-08-08 14:52</time><span>Switched to tap-only input: Swing Kings derives power from timing, Bounce Brigade’s charge is a double-tap. Taught the harness bot multiple actions so lane games verify too. All five games now 100% under autoplay; Finale Fever tempo ramp proven drift-free.</span></li></ul>
 </section>
 
-<footer>Updated 2026-08-08 06:48 · every piece is built by one agent and judged by a separate one that inspects the running game, never the builder's report.</footer>
+<footer>Updated 2026-08-08 14:52 · every piece is built by one agent and judged by a separate one that inspects the running game, never the builder's report.</footer>

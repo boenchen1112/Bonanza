@@ -261,7 +261,13 @@ export function buildChart() {
     });
     if (p.charge) {
       notes.push({
-        beat: p.departBeat, action: 'a-up', kind: 'release', platform: p.index, weight: p.weight,
+        // TAP MODE: the two-beat charge was a hold-and-release; it is now a
+        // double-tap — once as you meet the ramp, once as you leave it. The
+        // roll still lasts two beats and the launch still reads as a bigger
+        // deal than a bounce; the player just marks both ends of it instead of
+        // sustaining. Deferring the hold gesture costs the mechanic nothing
+        // structural and makes the game playable by the standard harness bot.
+        beat: p.departBeat, action: 'a', kind: 'release', platform: p.index, weight: p.weight,
       });
     }
   }

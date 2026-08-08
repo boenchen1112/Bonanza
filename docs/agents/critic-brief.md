@@ -39,6 +39,14 @@ The harness renders through SwiftShader (software GPU) at roughly 2-3fps at
    so `meanAbsErrMs` is a true measure of the judge. It should read ~0 under
    `--play perfect`; anything else IS a real defect.
 
+4. **More bot coverage is not better coverage.** `--actions` presses every
+   listed action and `--division 4` presses every sixteenth. Over-pressing
+   makes accuracy look WORSE, not better: a press one subdivision early is
+   still inside the claim window, so it claims the note before the on-time
+   press arrives. Finale Fever reads 0.00ms mean error at `--division 2` and
+   92ms at `--division 4` — the game did not change. Use the coarsest grid
+   that covers the chart.
+
 ## The comparison
 
 Hold the piece against the Mario Party rhythm minigames you know

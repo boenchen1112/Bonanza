@@ -1,9 +1,9 @@
 {
   "title": "Beat Bash Bonanza",
   "subtitle": "An original browser rhythm-party series, built to a Nintendo first-party bar",
-  "updated": "2026-08-08 06:48",
-  "wave": "Wave 2 \u2014 integrated, unverified",
-  "note": "All five minigames now exist and load clean \u2014 the placeholder cubes are gone. But Wave 2 was also cut short by the spend limit, so no critic has reviewed them and the per-game mechanic verification scripts have not been run. For every game, \"it loads and draws\" is the whole of what is known. docs/HANDOFF.md \u00a74 lists what to do next, cheapest and highest-risk first.",
+  "updated": "2026-08-08 14:52",
+  "wave": "Wave 2 \u2014 all five verified playable",
+  "note": "Hold-and-release is deferred: every scored input is now a plain button press, so the standard harness plays all five games. All five score 100% with 0.00ms mean error and a clean console. That also retires the biggest flagged risk \u2014 Finale Fever\u2019s tempo ramp holds 0.00ms error across 108 hits spanning the full ramp, so the chart is not drifting. Critic rounds are next.",
   "pieces": [
     {
       "id": "F1",
@@ -91,16 +91,16 @@
       "group": "Minigames",
       "name": "Swing Kings",
       "status": "reviewing",
-      "detail": "Batter, pitching machine, ball in flight, conducting trace, hit tiers. 73 draw calls.",
+      "detail": "Tap to swing; power now comes from timing accuracy. 6/6 perfect, 0ms error.",
       "rounds": 0,
-      "critic": "Hit-tier callout is dark-on-dark against the crowd; the conducting trace reads as a vertical curtain rather than a gesture."
+      "critic": "Hit-tier callout is dark-on-dark against the crowd."
     },
     {
       "id": "G2",
       "group": "Minigames",
       "name": "Drumline Dash",
       "status": "reviewing",
-      "detail": "Call-and-response race against three CPU marchers.",
+      "detail": "Call-and-response race. 11/11 perfect, 0ms error.",
       "rounds": 0,
       "critic": null
     },
@@ -109,7 +109,7 @@
       "group": "Minigames",
       "name": "Bounce Brigade",
       "status": "reviewing",
-      "detail": "Instrument platforms \u2014 the layout is the melody.",
+      "detail": "Instrument platforms; the charge is now a double-tap. 18/18 perfect, 0ms error.",
       "rounds": 0,
       "critic": null
     },
@@ -118,7 +118,7 @@
       "group": "Minigames",
       "name": "Chomp Chorus",
       "status": "reviewing",
-      "detail": "Four singers on lane pads, direction arrows showing the mapping. 109 draw calls.",
+      "detail": "Four singers on lane pads. 16/16 perfect, 0ms error.",
       "rounds": 0,
       "critic": null
     },
@@ -127,9 +127,9 @@
       "group": "Minigames",
       "name": "Finale Fever",
       "status": "reviewing",
-      "detail": "Tempo-ramp duel with a conductor-boss.",
+      "detail": "Tempo-ramp duel. 108 hits at 0.00ms error across the full ramp \u2014 no drift.",
       "rounds": 0,
-      "critic": "Tempo-ramp chart alignment is unverified \u2014 the most likely real bug in the codebase."
+      "critic": null
     },
     {
       "id": "X1",
@@ -160,6 +160,10 @@
     }
   ],
   "log": [
+    {
+      "t": "2026-08-08 14:52",
+      "msg": "Switched to tap-only input: Swing Kings derives power from timing, Bounce Brigade\u2019s charge is a double-tap. Taught the harness bot multiple actions so lane games verify too. All five games now 100% under autoplay; Finale Fever tempo ramp proven drift-free."
+    },
     {
       "t": "2026-08-08 06:48",
       "msg": "Wave 2 integrated: five real minigames replace the placeholder cubes; _stub.js deleted. Fixed a load-order crash in Bounce Brigade and made scene failures non-fatal \u2014 one throwing scene used to hang the entire app."

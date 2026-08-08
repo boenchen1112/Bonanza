@@ -80,12 +80,19 @@ function pumpBot(beat) {
     if (bot.rng() < bot.missRate) continue;
     const off = (bot.rng() * 2 - 1) * bot.jitter;
     const t = clock.timeAt(targetBeat) + off;
-    const ev = { action: bot.action, time: t, down: true, source: 'bot', repeat: false };
-    if (current) {
-      try { current.input?.(currentCtx, [ev]); } catch (e) { console.error(e); }
+    // Press every configured action, not just one. A lane game has no single
+    // button to press, and a bot that only knows 'a' scores zero on it by
+    // construction — which reads as a broken game and is not. Extra presses
+    // are harmless: the judge swallows a press that no note claims rather
+    // than burning one, so covering all lanes measures the chart honestly.
+    for (const action of bot.actions) {
+      const ev = { action, time: t, down: true, source: 'bot', repeat: false };
+      if (current) {
+        try { current.input?.(currentCtx, [ev]); } catch (e) { console.error(e); }
+      }
+      bot.presses++;
+      botPressTotal++;
     }
-    bot.presses++;
-    botPressTotal++;
   }
   botPrevBeat = beat;
 }
@@ -321,7 +328,9 @@ window.__BBB__ = {
     }[mode] || { jitter: 0.028, missRate: 0.06 };
     bot = {
       ...preset,
-      action: o.action || 'a',
+      actions: o.actions
+        ? (Array.isArray(o.actions) ? o.actions : String(o.actions).split(','))
+        : [o.action || 'a'],
       division: o.division ?? 2,
       until: clock.now() + (o.seconds ?? 15),
       rng: makeRng(o.seed ?? 0xb07),

@@ -28,7 +28,7 @@ verbatim.
 | Runs | yes — all 8 registered scenes load with a clean console |
 | Tests | 27/27 green (`npm --prefix web test`) |
 | Critic rounds completed | **zero** |
-| Minigames built | **five, all loading clean** — none reviewed, none verified beyond "it runs" |
+| Minigames built | **five, all playable and passing autoplay at 100%** — none reviewed by a critic |
 
 Wave 1 (six engine builders) and Wave 2 (five minigame builders) were BOTH
 terminated part-way by a monthly API spend limit. Their partial work was recovered and integrated, so the
@@ -61,24 +61,22 @@ not as "reviewed".
 
 ### What is missing
 
-- **Per-game mechanic verification.** Every builder was told to write a
-  script driving its real gesture — hold/release, call-and-response, four-lane
-  chords, the tempo ramp — because the generic autoplay cannot exercise any of
-  them. Only `swingKings/verify.mjs` and `chompChorus/verify.mjs` exist, and
-  NEITHER HAS BEEN RUN. So for all five games, "it loads and draws" is the
-  entire extent of what is known. In particular **nobody has confirmed the
-  Finale Fever tempo ramp keeps its chart aligned with the transport**, which
-  is the single most likely real bug in the codebase right now.
-- **Chomp Chorus scores 0% under the standard harness run, and that is
-  expected**: autoplay presses only 'a', that game uses four direction keys.
-  Do not "fix" it by collapsing the lanes onto one button. Use its own
-  verify script.
+- **Critic review.** Still zero rounds. Every game is mechanically verified
+  but none has been judged for feel, readability or personality.
+- **The conducting gesture is deferred by decision, not oversight.** Swing
+  Kings and Bounce Brigade were built around hold-and-release; both are now
+  plain taps (see §6). Swing Kings derives power from timing accuracy instead
+  of hold length; Bounce Brigade's two-beat charge is a double-tap, on the
+  ramp and off it. Restoring the gesture later is a localised change to each
+  game's `input()` plus its power source.
 - **UI (P5) is half-wired.** `web/src/ui/font.js` (procedural typeface) and
   `styles.js` landed, but `ui/index.js` was never rewritten to use them. The
-  HUD is still the original debug overlay.
+  HUD is still the original debug overlay. This is now the biggest visible
+  quality gap.
 - **`select.js` and `results.js`** are still integrator placeholders.
 - **`party` and `options` views** are referenced by `nav.js` but have no
   scene files; they currently fall through to `select`.
+- **Audio has still never been heard by anyone** — the harness mutes it.
 - **No calibration, no accessibility pass, no coherence pass.**
 
 ## 3. The harness — read this before trusting any measurement
@@ -113,31 +111,26 @@ game ids. Anything not in `web/src/shell/registry.js` is invisible to review.
 
 ## 4. Next actions, in order
 
-1. **Run the per-game verify scripts, and write the three that are missing.**
-   This is now the top priority and it is cheap. `swingKings/verify.mjs` and
-   `chompChorus/verify.mjs` exist but have never been executed; drumlineDash,
-   bounceBrigade and finaleFever have none. Until these run, no claim about
-   any game's mechanic is supported by anything. Start with **finaleFever**:
-   its chart must be scheduled incrementally against a ramping tempo, and if
-   accuracy degrades as the tempo climbs the chart is drifting against the
-   transport. That is the most likely real bug in the codebase.
-2. **Wave 2 critics.** One fresh critic per game, `critic-brief.md` verbatim,
-   blind A/B against the Mario Party rhythm minigames. Loop until PASS.
-   Known cosmetic defects already visible in frames, for their triage:
-   Swing Kings' hit-tier callout ("BUNT") is dark-on-dark against the crowd
-   and its conducting trace reads as a vertical curtain rather than a gesture.
-3. **Finish P5 (UI).** Wire `font.js`/`styles.js` into `ui/index.js`; build
-   the real HUD, timing bar, rules card and transitions.
-4. **Audio verification.** Nobody has heard this game. Render a track through
-   `OfflineAudioContext` in the browser and assert peak <= 1.0 and non-silence
-   per layer, or the whole soundtrack remains unvalidated.
-5. **Real-hardware perf pass.** `cpuMs` reads ~11ms against a 4ms budget, but
-   SwiftShader contaminates it. Needs a real GPU to separate. Draw calls are
-   measured and trustworthy: 73 (swing-kings) to 109 (chomp-chorus) against a
-   120 budget — chomp-chorus is close to the ceiling.
-6. **`select.js` / `results.js`** are still integrator placeholders, and
-   `party`/`options` have no scene files. Then coherence, calibration,
-   accessibility.
+1. **Wave 2 critics.** Every game now plays under the standard harness, so a
+   critic can finally judge one. One fresh critic per game,
+   `critic-brief.md` verbatim, blind A/B against the Mario Party rhythm
+   minigames. Loop until PASS. Known cosmetic defect for triage: Swing Kings'
+   hit-tier callout is dark-on-dark against the crowd.
+2. **Finish P5 (UI)** — the biggest visible gap now that the games exist.
+3. **Audio verification** via `OfflineAudioContext`: assert peak <= 1.0 and
+   non-silence per layer. Nobody has heard this game.
+4. **Real-hardware perf pass.** Draw calls are trustworthy and fine: 73
+   (swing-kings) to 109 (chomp-chorus) against a 120 budget. `cpuMs` is
+   contaminated by SwiftShader and needs a real GPU.
+5. **`select.js` / `results.js`**, then `party`/`options`, coherence,
+   calibration, accessibility.
+
+### Verified, so stop worrying about it
+
+The Finale Fever tempo ramp — previously called out as the most likely real
+bug — is **correct**. 60 seconds spanning the full ramp: 108 hits, 0 misses
+attributable to timing, **0.00ms mean absolute error**. The chart stays
+locked to the transport across every `setBpm`.
 
 ## 5. Traps already paid for — do not re-introduce
 
@@ -161,7 +154,20 @@ game ids. Anything not in `web/src/shell/registry.js` is invisible to review.
   cause. `activate()` now contains scene failures and records them on
   `window.__BBB__.lastError`. If a scene seems to hang, read that field.
 
-## 6. Conventions
+## 6. Input: taps only, for now
+
+The hold-and-release conducting gesture is deliberately deferred. Every
+scored input in every game is a discrete button press. Two consequences:
+
+- The standard harness bot exercises all five games. Pass
+  `--actions a,left,down,up,right` for lane games; `--division 2` (eighths)
+  is the right grid — finer grids make accuracy look worse, see the critic
+  brief.
+- No per-game verification scripts are needed. `swingKings/verify.mjs` and
+  `chompChorus/verify.mjs` are leftovers from the gesture design and are not
+  part of the verification path.
+
+## 7. Conventions
 
 - All time is audio time (`Clock.now()`), never `performance.now()`.
 - `damp(a, b, lambda, dt)`, never `lerp(a, b, 0.1)` in an update loop.

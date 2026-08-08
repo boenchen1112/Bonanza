@@ -38,6 +38,12 @@ const PLAY = argv.play || 'auto';
 // false miss. Default to the low tier so timing is measurable; pass
 // --quality high when the point of the run is to look at the grade.
 const QUALITY = argv.quality || 'low';
+// Which actions the bot presses. Lane games need more than 'a'; the judge
+// swallows unclaimed presses, so covering every lane is safe for all games.
+const ACTIONS = argv.actions || 'a';
+// Bot subdivision: 2 = eighths (default), 4 = sixteenths. A chart denser than
+// the bot's grid shows up as misses that are coverage gaps, not defects.
+const DIVISION = Number(argv.division || 2);
 const WEB = path.resolve(argv.web || 'web');
 // Parallel agents each verify against their own build directory, so two
 // harness runs can never race on the same dist/ while one is mid-write.
@@ -134,11 +140,11 @@ const PORT = Number(argv.port || 5321 + (process.pid % 900));
   // is beatable and shows the top-end feedback; `sloppy` shows what a real
   // human's mediocre run looks like, which is what most players will see.
   if (PLAY !== 'none') {
-    await page.evaluate(({ mode, secs }) => window.__BBB__.autoplay({ mode, seconds: secs }),
+    await page.evaluate(({ mode, secs, actions, division }) => window.__BBB__.autoplay({ mode, seconds: secs, actions, division }),
       // Generously longer than the capture window: screenshots are slow under
       // software rendering, so wall-clock capture outruns `SECONDS` of audio
       // time and a bot that stopped on time would leave a tail of false misses.
-      { mode: PLAY, secs: SECONDS * 4 });
+      { mode: PLAY, secs: SECONDS * 4, actions: ACTIONS, division: DIVISION });
   }
 
   // ---- capture ----------------------------------------------------------
@@ -170,6 +176,8 @@ const PORT = Number(argv.port || 5321 + (process.pid % 900));
     scene: SCENE,
     play: PLAY,
     quality: QUALITY,
+    actions: ACTIONS,
+    division: DIVISION,
     seconds: SECONDS,
     shots: shots.map((s) => path.relative(OUT, s)),
     // NOTE FOR CRITICS: this harness renders through SwiftShader (software

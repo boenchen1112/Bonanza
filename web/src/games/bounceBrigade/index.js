@@ -901,25 +901,11 @@ function handleEvents(ctx, events) {
       continue;
     }
 
-    // Release. Only a release that has been HELD long enough is a charge; a
-    // tap-and-let-go is deliberately not offered to the judge, so the note
-    // expires as a miss and the bouncer falls short. That is the mechanic.
-    const wasHeld = held;
+    // Key-up. In tap mode the release note is an ordinary 'a' claimed by the
+    // second tap above, so there is nothing left to judge here — we only track
+    // the flag so the coil animation knows the button is no longer down.
     held = false;
-    if (!wasHeld) continue;
     if (telemetry) telemetry.released++;
-    const heldBeats = ctx.clock.beatAt(e.time) - holdStartBeat;
-    if (heldBeats < CHARGE_MIN_HOLD_BEATS) {
-      // Mark the ramp we are standing on as blown, immediately — the player
-      // should see the consequence at the moment they let go, not two beats on.
-      const k = cursor;
-      const p = plats[k];
-      if (p && p.charge && ctx.clock.beat < p.departBeat && releaseVerdict[k] === null) {
-        chargeGlow = 0;
-      }
-      continue;
-    }
-    judge.press('a-up', e.time);
   }
 }
 

@@ -42,9 +42,9 @@
  */
 
 import * as THREE from 'three';
-import { NoteJudge, rankFor } from '../../core/judge.js';
+import { NoteJudge, rankFor, WINDOWS_MS } from '../../core/judge.js';
 import { FEEL, feelForCombo } from '../../core/feel.js';
-import { clamp01, damp, lerp } from '../../core/util.js';
+import { clamp01, damp, lerp, smoothstep } from '../../core/util.js';
 import { createWorld, LAYOUT } from './world.js';
 import { createTrace } from './trace.js';
 import {
@@ -59,6 +59,20 @@ const GRAV = 15.5;
 // scratch
 const _v = new THREE.Vector3();
 const _dir = new THREE.Vector3();
+
+/**
+ * Timing -> power. Full power inside the PERFECT window, falling to zero at
+ * the edge of what the judge will still claim, with a smooth knee so the tier
+ * boundary never feels like a cliff.
+ */
+function powerFromTiming(time, pitch, clock) {
+  const err = Math.abs(time - pitch.time) * 1000;
+  const full = WINDOWS_MS.perfect;
+  const zero = WINDOWS_MS.good;
+  if (err <= full) return 1;
+  if (err >= zero) return 0;
+  return smoothstep(1 - (err - full) / (zero - full));
+}
 
 export default {
   id: 'swing-kings',
@@ -175,17 +189,29 @@ export default {
 
   // ------------------------------------------------------------------ input
 
+  /**
+   * TAP MODE.
+   *
+   * The hold-and-release conducting gesture is deferred; for now one press is
+   * one swing. That is not a downgrade of the design so much as a different
+   * split of it: power is no longer a second axis the player controls
+   * separately, it is earned by TIMING. Nail the downbeat and you send it;
+   * clip the edge of the window and you bunt it. The tier ladder, the ball
+   * physics, the trace and the crowd all survive unchanged — only the source
+   * of `power` moves.
+   *
+   * The practical win is that the standard harness bot, which emits key-down
+   * only, can now play this game properly, so it is verifiable by the same
+   * path as everything else instead of needing a bespoke script.
+   */
   input(ctx, events) {
     for (const e of events) {
-      if (e.action !== 'a') continue;
-      if (e.down) {
-        // A press while already coiled releases the previous swing FIRST, so
-        // no input is ever silently eaten and rapid pitches stay playable.
-        if (this.holding) this.releaseSwing(ctx, e.time);
-        this.beginWindup(ctx, e.time);
-      } else if (this.holding) {
-        this.releaseSwing(ctx, e.time);
-      }
+      if (e.action !== 'a' || !e.down) continue;
+      // Begin and release on the same timestamp: the windup still runs as an
+      // animation (the batter must not teleport into the follow-through), but
+      // it costs the player no input.
+      this.beginWindup(ctx, e.time);
+      this.releaseSwing(ctx, e.time);
     }
   },
 
@@ -206,7 +232,13 @@ export default {
     const live = this.livePitch();
     const holdBeats = Math.max(0, (time - this.holdStart) / ctx.clock.spb);
     this.pendingHold = holdBeats;
-    this.pendingPower = powerFor(holdBeats, live ? live.ideal : 2);
+    // In tap mode holdBeats is always ~0, so powerFor() would return a flat
+    // zero and every hit would be a bunt. Derive power from how close the
+    // press is to the pitch's contact beat instead: dead-on is full power,
+    // the edge of the claim window is none.
+    this.pendingPower = live
+      ? powerFromTiming(time, live, ctx.clock)
+      : powerFor(holdBeats, 2);
     // Keep drawing for a quarter-second: the release stroke is part of the
     // gesture, and cutting the ribbon at the button-up loses the follow-through.
     this.traceHoldOff = 0.26;
