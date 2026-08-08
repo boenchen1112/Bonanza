@@ -1,6 +1,8 @@
 # Beat Bash Bonanza — handoff
 
 **Written 2026-08-08.** Branch `claude/rhythm-party-game-713xsk`, all pushed.
+**Pull request: [#12](https://github.com/boenchen1112/Swinger/pull/12)** — this
+branch is the PR, so every further push updates it. Do not open a second one.
 
 Read this first, then `web/ARCHITECTURE.md`. This document is the state of
 play and the plan; ARCHITECTURE.md is the contract.
