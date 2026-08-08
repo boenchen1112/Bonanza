@@ -21,6 +21,11 @@ export const SCENES = [
   { id: 'freeplay', kind: 'shell', load: () => import('./freeplay.js') },
   { id: 'play', kind: 'shell', load: () => import('./play.js') },
 
+  // Not reachable in normal play — it exists so the character rig, animation
+  // states and crowd can be reviewed at all. Work no critic can load is, as
+  // far as review is concerned, work that was never done.
+  { id: 'chars-demo', kind: 'debug', load: () => import('../chars/demo.js') },
+
   { id: 'swing-kings', kind: 'game', name: 'Swing Kings', load: () => import('../games/swingKings/index.js') },
   { id: 'drumline-dash', kind: 'game', name: 'Drumline Dash', load: () => import('../games/drumlineDash/index.js') },
   { id: 'bounce-brigade', kind: 'game', name: 'Bounce Brigade', load: () => import('../games/bounceBrigade/index.js') },

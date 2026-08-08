@@ -61,12 +61,12 @@ footer{margin-top:3em;color:var(--dim);font-size:13px}
 
 <div class="top">
   <span class="big">18%</span>
-  <span class="wave">Paused — handoff written</span>
+  <span class="wave">Wave 2 — the five minigames</span>
   <span style="color:var(--dim)">3 of 17 pieces through review</span>
 </div>
 <div class="bar"><i></i></div>
 
-<div class="note">Paused on a monthly API spend limit. The engine is real and every registered scene loads with a clean console, but no critic round has run and the five minigames are still placeholders — so nothing here has passed the quality bar yet. docs/HANDOFF.md has the full state, the ordered next actions, and the traps already paid for.</div>
+<div class="note">Five builders are running in parallel, one per minigame, each owning exactly one directory. Each was told the generic autoplay cannot exercise its mechanic — holds, call-and-response, four-lane chords, a tempo ramp — and must write its own verification that drives the real gesture and proves the mechanic works. Critics follow, one per game, blind A/B against the Mario Party rhythm minigames.</div>
 
 <section class="grp">
     <h2>Foundation</h2>
@@ -135,32 +135,32 @@ footer{margin-top:3em;color:var(--dim);font-size:13px}
   </section><section class="grp">
     <h2>Minigames</h2>
     <div class="cards">
-      <article class="card s-idle">
-        <header><span class="id">G1</span><span class="pill">queued</span></header>
+      <article class="card s-go">
+        <header><span class="id">G1</span><span class="pill">building</span></header>
         <h3>Swing Kings</h3>
         <p>One swing. One beat. Send it.</p>
         
         
-      </article><article class="card s-idle">
-        <header><span class="id">G2</span><span class="pill">queued</span></header>
+      </article><article class="card s-go">
+        <header><span class="id">G2</span><span class="pill">building</span></header>
         <h3>Drumline Dash</h3>
         <p>Hear it. Hit it back.</p>
         
         
-      </article><article class="card s-idle">
-        <header><span class="id">G3</span><span class="pill">queued</span></header>
+      </article><article class="card s-go">
+        <header><span class="id">G3</span><span class="pill">building</span></header>
         <h3>Bounce Brigade</h3>
         <p>Land every landing.</p>
         
         
-      </article><article class="card s-idle">
-        <header><span class="id">G4</span><span class="pill">queued</span></header>
+      </article><article class="card s-go">
+        <header><span class="id">G4</span><span class="pill">building</span></header>
         <h3>Chomp Chorus</h3>
         <p>Four lanes. One groove.</p>
         
         
-      </article><article class="card s-idle">
-        <header><span class="id">G5</span><span class="pill">queued</span></header>
+      </article><article class="card s-go">
+        <header><span class="id">G5</span><span class="pill">building</span></header>
         <h3>Finale Fever</h3>
         <p>It only gets faster.</p>
         
@@ -194,7 +194,7 @@ footer{margin-top:3em;color:var(--dim);font-size:13px}
 
 <section class="grp">
   <h2>Build log</h2>
-  <ul class="log"><li><time>2026-08-08 02:14</time><span>Foundation committed: clock, input, judge, feel, harness.</span></li><li><time>2026-08-08 02:21</time><span>Wave 1 fanned out: audio, art direction, VFX, characters, UI, shell — six builders in parallel.</span></li><li><time>2026-08-08 02:55</time><span>Integration: wrote the missing music barrel, fixed hitstop over-freeze, fixed draw-call telemetry, enlarged the callout atlas (10 of 15 words could not render), removed a duplicate verdict popup.</span></li><li><time>2026-08-08 02:55</time><span>Wave 1 builders terminated early on a monthly spend limit; partial work recovered and integrated. Game builds, runs clean, 27/27 timing tests green.</span></li><li><time>2026-08-08 05:38</time><span>Handoff written to docs/HANDOFF.md. Registered roster/freeplay/play and fixed three crashes that exposed — a missing import, an unguarded canvas radius, and beat phase computed with a sign-sensitive modulo.</span></li></ul>
+  <ul class="log"><li><time>2026-08-08 02:14</time><span>Foundation committed: clock, input, judge, feel, harness.</span></li><li><time>2026-08-08 02:21</time><span>Wave 1 fanned out: audio, art direction, VFX, characters, UI, shell — six builders in parallel.</span></li><li><time>2026-08-08 02:55</time><span>Integration: wrote the missing music barrel, fixed hitstop over-freeze, fixed draw-call telemetry, enlarged the callout atlas (10 of 15 words could not render), removed a duplicate verdict popup.</span></li><li><time>2026-08-08 02:55</time><span>Wave 1 builders terminated early on a monthly spend limit; partial work recovered and integrated. Game builds, runs clean, 27/27 timing tests green.</span></li><li><time>2026-08-08 05:38</time><span>Handoff written to docs/HANDOFF.md. Registered roster/freeplay/play and fixed three crashes that exposed — a missing import, an unguarded canvas radius, and beat phase computed with a sign-sensitive modulo.</span></li><li><time>2026-08-08 06:15</time><span>Wave 2 fanned out: Swing Kings, Drumline Dash, Bounce Brigade, Chomp Chorus, Finale Fever — five builders in parallel.</span></li></ul>
 </section>
 
-<footer>Updated 2026-08-08 05:38 · every piece is built by one agent and judged by a separate one that inspects the running game, never the builder's report.</footer>
+<footer>Updated 2026-08-08 06:15 · every piece is built by one agent and judged by a separate one that inspects the running game, never the builder's report.</footer>

@@ -1,9 +1,9 @@
 {
   "title": "Beat Bash Bonanza",
   "subtitle": "An original browser rhythm-party series, built to a Nintendo first-party bar",
-  "updated": "2026-08-08 05:38",
-  "wave": "Paused \u2014 handoff written",
-  "note": "Paused on a monthly API spend limit. The engine is real and every registered scene loads with a clean console, but no critic round has run and the five minigames are still placeholders \u2014 so nothing here has passed the quality bar yet. docs/HANDOFF.md has the full state, the ordered next actions, and the traps already paid for.",
+  "updated": "2026-08-08 06:15",
+  "wave": "Wave 2 \u2014 the five minigames",
+  "note": "Five builders are running in parallel, one per minigame, each owning exactly one directory. Each was told the generic autoplay cannot exercise its mechanic \u2014 holds, call-and-response, four-lane chords, a tempo ramp \u2014 and must write its own verification that drives the real gesture and proves the mechanic works. Critics follow, one per game, blind A/B against the Mario Party rhythm minigames.",
   "pieces": [
     {
       "id": "F1",
@@ -90,7 +90,7 @@
       "id": "G1",
       "group": "Minigames",
       "name": "Swing Kings",
-      "status": "queued",
+      "status": "building",
       "detail": "One swing. One beat. Send it.",
       "rounds": 0,
       "critic": null
@@ -99,7 +99,7 @@
       "id": "G2",
       "group": "Minigames",
       "name": "Drumline Dash",
-      "status": "queued",
+      "status": "building",
       "detail": "Hear it. Hit it back.",
       "rounds": 0,
       "critic": null
@@ -108,7 +108,7 @@
       "id": "G3",
       "group": "Minigames",
       "name": "Bounce Brigade",
-      "status": "queued",
+      "status": "building",
       "detail": "Land every landing.",
       "rounds": 0,
       "critic": null
@@ -117,7 +117,7 @@
       "id": "G4",
       "group": "Minigames",
       "name": "Chomp Chorus",
-      "status": "queued",
+      "status": "building",
       "detail": "Four lanes. One groove.",
       "rounds": 0,
       "critic": null
@@ -126,7 +126,7 @@
       "id": "G5",
       "group": "Minigames",
       "name": "Finale Fever",
-      "status": "queued",
+      "status": "building",
       "detail": "It only gets faster.",
       "rounds": 0,
       "critic": null
@@ -160,6 +160,10 @@
     }
   ],
   "log": [
+    {
+      "t": "2026-08-08 06:15",
+      "msg": "Wave 2 fanned out: Swing Kings, Drumline Dash, Bounce Brigade, Chomp Chorus, Finale Fever \u2014 five builders in parallel."
+    },
     {
       "t": "2026-08-08 05:38",
       "msg": "Handoff written to docs/HANDOFF.md. Registered roster/freeplay/play and fixed three crashes that exposed \u2014 a missing import, an unguarded canvas radius, and beat phase computed with a sign-sensitive modulo."
