@@ -1,9 +1,9 @@
 {
   "title": "Beat Bash Bonanza",
   "subtitle": "An original browser rhythm-party series, built to a Nintendo first-party bar",
-  "updated": "2026-08-08 02:14",
-  "wave": "Wave 0 \u2014 foundation",
-  "note": "Foundation landed. Engine contracts + automated critic harness are live; every piece below is built by a dedicated agent and judged by a separate, harsher one that inspects the running game.",
+  "updated": "2026-08-08 02:21",
+  "wave": "Wave 1 \u2014 engine pillars",
+  "note": "Six builders are running in parallel on disjoint parts of the engine. Each will be judged by a separate critic that boots the built game in headless Chromium, plays it with machine-precise input, and looks at the frames \u2014 never at the builder\u2019s own account of the work.",
   "pieces": [
     {
       "id": "F1",
@@ -36,7 +36,7 @@
       "id": "P1",
       "group": "Engine pillars",
       "name": "Audio engine & original music",
-      "status": "queued",
+      "status": "building",
       "detail": "Synthesised score, adaptive layers, SFX kit. No files, no fetches.",
       "rounds": 0,
       "critic": null
@@ -45,7 +45,7 @@
       "id": "P2",
       "group": "Engine pillars",
       "name": "Art direction & render",
-      "status": "queued",
+      "status": "building",
       "detail": "Toon/gradient look, lighting, post, palette system.",
       "rounds": 0,
       "critic": null
@@ -54,7 +54,7 @@
       "id": "P3",
       "group": "Engine pillars",
       "name": "VFX & juice",
-      "status": "queued",
+      "status": "building",
       "detail": "Impact, trails, confetti, screen effects \u2014 pooled, zero per-frame allocation.",
       "rounds": 0,
       "critic": null
@@ -63,7 +63,7 @@
       "id": "P4",
       "group": "Engine pillars",
       "name": "Characters & animation",
-      "status": "queued",
+      "status": "building",
       "detail": "Procedural rigs, squash/stretch, reactions, crowd.",
       "rounds": 0,
       "critic": null
@@ -72,7 +72,7 @@
       "id": "P5",
       "group": "Engine pillars",
       "name": "UI, HUD & typography",
-      "status": "queued",
+      "status": "building",
       "detail": "HUD, verdict popups, transitions, rules cards.",
       "rounds": 0,
       "critic": null
@@ -81,7 +81,7 @@
       "id": "P6",
       "group": "Engine pillars",
       "name": "Shell & party flow",
-      "status": "queued",
+      "status": "building",
       "detail": "Title, select, results, party mode, save.",
       "rounds": 0,
       "critic": null
@@ -160,6 +160,10 @@
     }
   ],
   "log": [
+    {
+      "t": "2026-08-08 02:21",
+      "msg": "Wave 1 fanned out: audio, art direction, VFX, characters, UI, shell \u2014 six builders in parallel."
+    },
     {
       "t": "2026-08-08 02:14",
       "msg": "Foundation committed: clock, input, judge, feel, harness."
