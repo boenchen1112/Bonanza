@@ -56,10 +56,26 @@ export const gameById = (id) => CATALOG.find((g) => g.id === id) || CATALOG[0];
  * @param {number} w @param {number} h
  * @param {number} beat float beat  @param {number} t seconds
  */
+/**
+ * Fractional part, always in [0,1).
+ *
+ * `x % 1` keeps the sign of the dividend, and the transport runs NEGATIVE beat
+ * numbers through the lead-in bars. A raw `beat % 1` therefore goes negative
+ * before the round starts, which turns a radius into a negative number and
+ * makes Canvas2D throw IndexSizeError — taking the scene's whole update loop
+ * down with it. Every beat-phase value in this file goes through here.
+ */
+const frac1 = (x) => x - Math.floor(x);
+
 export function drawPreview(id, g, w, h, beat, t) {
+  // Every preview derives its radii from `h`. A card that is measured before
+  // layout has sized it reports 0 or a negative height, and Canvas2D throws
+  // IndexSizeError on the first arc() rather than drawing nothing — which
+  // takes the whole scene's update loop down with it. Bail instead.
+  if (!(w > 0) || !(h > 0)) return;
   const meta = gameById(id);
   const col = '#' + meta.color.toString(16).padStart(6, '0');
-  const bf = beat - Math.floor(beat);
+  const bf = frac1(beat);
   const pulse = Math.exp(-bf * 5);
 
   g.clearRect(0, 0, w, h);
@@ -102,7 +118,7 @@ function previewSwing(g, w, h, beat, t, col, pulse) {
   g.fillStyle = col;
   g.beginPath(); g.arc(bx, ground - h * 0.34, h * 0.10, 0, Math.PI * 2); g.fill();
   // bat sweeps through the downbeat
-  const sw = Math.min(1, Math.max(0, (beat - Math.floor(beat)) * 3));
+  const sw = Math.min(1, Math.max(0, frac1(beat) * 3));
   const ang = -2.1 + sw * 2.6;
   g.save();
   g.translate(bx, ground - h * 0.26);
@@ -111,7 +127,7 @@ function previewSwing(g, w, h, beat, t, col, pulse) {
   g.fillRect(0, -h * 0.022, w * 0.20, h * 0.044);
   g.restore();
   // ball flies out after the hit
-  const bt = (beat % 1);
+  const bt = frac1(beat);
   const fly = Math.max(0, bt - 0.33) / 0.67;
   const px = bx + fly * w * 0.62;
   const py = ground - h * 0.26 - Math.sin(fly * Math.PI) * h * 0.5;
@@ -133,7 +149,7 @@ function previewDrum(g, w, h, beat, t, col, pulse) {
     g.fillRect(x - w * 0.055, 0, w * 0.11, hitY);
     // notes fall on a 2-beat loop, offset per lane
     for (let k = 0; k < 2; k++) {
-      const p = ((beat * 0.5 + i * 0.27 + k * 0.5) % 1);
+      const p = frac1(beat * 0.5 + i * 0.27 + k * 0.5);
       const y = p * hitY;
       const near = 1 - Math.abs(y - hitY) / (h * 0.2);
       g.fillStyle = near > 0 ? '#fff' : col;
@@ -179,7 +195,7 @@ function previewChomp(g, w, h, beat, t, col, pulse) {
   g.beginPath(); g.arc(cx + r * 0.15, cy - r * 0.42, r * 0.12, 0, Math.PI * 2); g.fill();
   // notes queued to be eaten
   for (let i = 0; i < 4; i++) {
-    const p = ((beat * 0.5 + i * 0.25) % 1);
+    const p = frac1(beat * 0.5 + i * 0.25);
     const x = w * (1.05 - p * 0.85);
     if (x < cx + r * 0.4) continue;
     g.fillStyle = i % 2 ? '#fff' : rgba(col, 0.85);

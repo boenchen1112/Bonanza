@@ -19,7 +19,7 @@
 
 import { getScene } from './registry.js';
 import { createPause } from './pause.js';
-import { mountRoot, sfx } from './theme.js';
+import { mountRoot, sfx, PAL } from './theme.js';
 import { session } from './state.js';
 import { CATALOG } from './games.js';
 import { goView } from './nav.js';
