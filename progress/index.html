@@ -1,0 +1,200 @@
+<title>Beat Bash Bonanza — build progress</title>
+<style>
+:root{
+  --bg:#f7f7fb; --panel:#fff; --ink:#14141f; --dim:#5d5d76; --line:#e4e4ee;
+  --ok:#1f9d55; --go:#2f6fed; --rev:#b8860b; --bad:#d1425a; --idle:#9aa0b4;
+  --accent:#5b3df5;
+}
+:root:not([data-theme="light"]){ }
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0c0b14; --panel:#15142270; --ink:#f2f2f8; --dim:#a2a2bd; --line:#2a2840;
+    --ok:#49d888; --go:#7aa2ff; --rev:#ffd166; --bad:#ff6b83; --idle:#666a85;
+    --accent:#a48bff;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0c0b14; --panel:#15142270; --ink:#f2f2f8; --dim:#a2a2bd; --line:#2a2840;
+  --ok:#49d888; --go:#7aa2ff; --rev:#ffd166; --bad:#ff6b83; --idle:#666a85;
+  --accent:#a48bff;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:16px/1.55 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  padding:clamp(20px,4vw,56px);max-width:1180px;margin-inline:auto;}
+h1{font-size:clamp(28px,5vw,46px);letter-spacing:-.03em;margin:0 0 .2em;line-height:1.05}
+.sub{color:var(--dim);margin:0 0 1.6em;font-size:clamp(15px,2vw,19px);max-width:60ch}
+.bar{height:10px;border-radius:99px;background:var(--line);overflow:hidden;margin:.4em 0 .5em}
+.bar i{display:block;height:100%;width:18%;background:linear-gradient(90deg,var(--accent),var(--ok));border-radius:99px}
+.top{display:flex;flex-wrap:wrap;gap:12px 28px;align-items:baseline;margin-bottom:.5em}
+.big{font-size:clamp(30px,5vw,44px);font-weight:800;letter-spacing:-.03em}
+.wave{display:inline-block;padding:.25em .8em;border-radius:99px;background:var(--accent);color:#fff;
+  font-weight:700;font-size:14px;letter-spacing:.01em}
+.note{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px 18px;
+  color:var(--dim);margin:1.2em 0 2.2em}
+.grp{margin:0 0 2.4em}
+.grp h2{font-size:13px;text-transform:uppercase;letter-spacing:.12em;color:var(--dim);
+  margin:0 0 .9em;font-weight:700}
+.cards{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(270px,1fr))}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px 17px;
+  border-left:4px solid var(--idle)}
+.card.s-ok{border-left-color:var(--ok)} .card.s-go{border-left-color:var(--go)}
+.card.s-rev{border-left-color:var(--rev)} .card.s-bad{border-left-color:var(--bad)}
+.card header{display:flex;justify-content:space-between;align-items:center;margin-bottom:.5em}
+.id{font:600 12px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--dim);letter-spacing:.06em}
+.pill{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--dim)}
+.s-ok .pill{color:var(--ok)} .s-go .pill{color:var(--go)}
+.s-rev .pill{color:var(--rev)} .s-bad .pill{color:var(--bad)}
+.card h3{margin:0 0 .35em;font-size:17px;letter-spacing:-.01em}
+.card p{margin:0;color:var(--dim);font-size:14px}
+.meta{margin-top:.6em;font-size:12px;color:var(--dim);font-weight:600}
+blockquote{margin:.7em 0 0;padding:.55em .8em;border-radius:10px;background:color-mix(in srgb,var(--bad) 10%,transparent);
+  font-size:13px;color:var(--ink);border-left:2px solid var(--bad)}
+ul.log{list-style:none;padding:0;margin:0;border-top:1px solid var(--line)}
+ul.log li{display:flex;gap:16px;padding:.6em 0;border-bottom:1px solid var(--line);font-size:14px}
+ul.log time{color:var(--dim);font:500 12px ui-monospace,Menlo,monospace;flex:0 0 148px;padding-top:.2em}
+footer{margin-top:3em;color:var(--dim);font-size:13px}
+</style>
+
+<h1>Beat Bash Bonanza</h1>
+<p class="sub">An original browser rhythm-party series, built to a Nintendo first-party bar</p>
+
+<div class="top">
+  <span class="big">18%</span>
+  <span class="wave">Wave 0 — foundation</span>
+  <span style="color:var(--dim)">3 of 17 pieces through review</span>
+</div>
+<div class="bar"><i></i></div>
+
+<div class="note">Foundation landed. Engine contracts + automated critic harness are live; every piece below is built by a dedicated agent and judged by a separate, harsher one that inspects the running game.</div>
+
+<section class="grp">
+    <h2>Foundation</h2>
+    <div class="cards">
+      <article class="card s-ok">
+        <header><span class="id">F1</span><span class="pill">shipped</span></header>
+        <h3>Audio-time clock &amp; transport</h3>
+        <p>All time in the AudioContext domain, latency-compensated, smoothed DOM-event bridge.</p>
+        
+        
+      </article><article class="card s-ok">
+        <header><span class="id">F2</span><span class="pill">shipped</span></header>
+        <h3>Input &amp; judgement</h3>
+        <p>Abstract actions with true press timestamps; ms windows; nearest-note claiming.</p>
+        
+        
+      </article><article class="card s-ok">
+        <header><span class="id">F3</span><span class="pill">shipped</span></header>
+        <h3>Critic harness</h3>
+        <p>Headless Chromium boots the built game, plays it at exact audio times, dumps frames + telemetry.</p>
+        
+        
+      </article>
+    </div>
+  </section><section class="grp">
+    <h2>Engine pillars</h2>
+    <div class="cards">
+      <article class="card s-idle">
+        <header><span class="id">P1</span><span class="pill">queued</span></header>
+        <h3>Audio engine &amp; original music</h3>
+        <p>Synthesised score, adaptive layers, SFX kit. No files, no fetches.</p>
+        
+        
+      </article><article class="card s-idle">
+        <header><span class="id">P2</span><span class="pill">queued</span></header>
+        <h3>Art direction &amp; render</h3>
+        <p>Toon/gradient look, lighting, post, palette system.</p>
+        
+        
+      </article><article class="card s-idle">
+        <header><span class="id">P3</span><span class="pill">queued</span></header>
+        <h3>VFX &amp; juice</h3>
+        <p>Impact, trails, confetti, screen effects — pooled, zero per-frame allocation.</p>
+        
+        
+      </article><article class="card s-idle">
+        <header><span class="id">P4</span><span class="pill">queued</span></header>
+        <h3>Characters &amp; animation</h3>
+        <p>Procedural rigs, squash/stretch, reactions, crowd.</p>
+        
+        
+      </article><article class="card s-idle">
+        <header><span class="id">P5</span><span class="pill">queued</span></header>
+        <h3>UI, HUD &amp; typography</h3>
+        <p>HUD, verdict popups, transitions, rules cards.</p>
+        
+        
+      </article><article class="card s-idle">
+        <header><span class="id">P6</span><span class="pill">queued</span></header>
+        <h3>Shell &amp; party flow</h3>
+        <p>Title, select, results, party mode, save.</p>
+        
+        
+      </article>
+    </div>
+  </section><section class="grp">
+    <h2>Minigames</h2>
+    <div class="cards">
+      <article class="card s-idle">
+        <header><span class="id">G1</span><span class="pill">queued</span></header>
+        <h3>Swing Kings</h3>
+        <p>One swing. One beat. Send it.</p>
+        
+        
+      </article><article class="card s-idle">
+        <header><span class="id">G2</span><span class="pill">queued</span></header>
+        <h3>Drumline Dash</h3>
+        <p>Hear it. Hit it back.</p>
+        
+        
+      </article><article class="card s-idle">
+        <header><span class="id">G3</span><span class="pill">queued</span></header>
+        <h3>Bounce Brigade</h3>
+        <p>Land every landing.</p>
+        
+        
+      </article><article class="card s-idle">
+        <header><span class="id">G4</span><span class="pill">queued</span></header>
+        <h3>Chomp Chorus</h3>
+        <p>Four lanes. One groove.</p>
+        
+        
+      </article><article class="card s-idle">
+        <header><span class="id">G5</span><span class="pill">queued</span></header>
+        <h3>Finale Fever</h3>
+        <p>It only gets faster.</p>
+        
+        
+      </article>
+    </div>
+  </section><section class="grp">
+    <h2>Cross-cutting</h2>
+    <div class="cards">
+      <article class="card s-idle">
+        <header><span class="id">X1</span><span class="pill">queued</span></header>
+        <h3>Calibration &amp; accessibility</h3>
+        <p>Latency calibration, reduced motion, colourblind-safe verdicts, one-button mode.</p>
+        
+        
+      </article><article class="card s-idle">
+        <header><span class="id">X2</span><span class="pill">queued</span></header>
+        <h3>Coherence pass</h3>
+        <p>A fresh agent plays the whole game end to end and smooths it into one product.</p>
+        
+        
+      </article><article class="card s-idle">
+        <header><span class="id">X3</span><span class="pill">queued</span></header>
+        <h3>Performance</h3>
+        <p>CPU budget, draw calls, no GC in hot paths.</p>
+        
+        
+      </article>
+    </div>
+  </section>
+
+<section class="grp">
+  <h2>Build log</h2>
+  <ul class="log"><li><time>2026-08-08 02:14</time><span>Foundation committed: clock, input, judge, feel, harness.</span></li></ul>
+</section>
+
+<footer>Updated 2026-08-08 02:14 · every piece is built by one agent and judged by a separate one that inspects the running game, never the builder's report.</footer>

@@ -1,0 +1,168 @@
+{
+  "title": "Beat Bash Bonanza",
+  "subtitle": "An original browser rhythm-party series, built to a Nintendo first-party bar",
+  "updated": "2026-08-08 02:14",
+  "wave": "Wave 0 \u2014 foundation",
+  "note": "Foundation landed. Engine contracts + automated critic harness are live; every piece below is built by a dedicated agent and judged by a separate, harsher one that inspects the running game.",
+  "pieces": [
+    {
+      "id": "F1",
+      "group": "Foundation",
+      "name": "Audio-time clock & transport",
+      "status": "done",
+      "detail": "All time in the AudioContext domain, latency-compensated, smoothed DOM-event bridge.",
+      "rounds": 0,
+      "critic": null
+    },
+    {
+      "id": "F2",
+      "group": "Foundation",
+      "name": "Input & judgement",
+      "status": "done",
+      "detail": "Abstract actions with true press timestamps; ms windows; nearest-note claiming.",
+      "rounds": 0,
+      "critic": null
+    },
+    {
+      "id": "F3",
+      "group": "Foundation",
+      "name": "Critic harness",
+      "status": "done",
+      "detail": "Headless Chromium boots the built game, plays it at exact audio times, dumps frames + telemetry.",
+      "rounds": 0,
+      "critic": null
+    },
+    {
+      "id": "P1",
+      "group": "Engine pillars",
+      "name": "Audio engine & original music",
+      "status": "queued",
+      "detail": "Synthesised score, adaptive layers, SFX kit. No files, no fetches.",
+      "rounds": 0,
+      "critic": null
+    },
+    {
+      "id": "P2",
+      "group": "Engine pillars",
+      "name": "Art direction & render",
+      "status": "queued",
+      "detail": "Toon/gradient look, lighting, post, palette system.",
+      "rounds": 0,
+      "critic": null
+    },
+    {
+      "id": "P3",
+      "group": "Engine pillars",
+      "name": "VFX & juice",
+      "status": "queued",
+      "detail": "Impact, trails, confetti, screen effects \u2014 pooled, zero per-frame allocation.",
+      "rounds": 0,
+      "critic": null
+    },
+    {
+      "id": "P4",
+      "group": "Engine pillars",
+      "name": "Characters & animation",
+      "status": "queued",
+      "detail": "Procedural rigs, squash/stretch, reactions, crowd.",
+      "rounds": 0,
+      "critic": null
+    },
+    {
+      "id": "P5",
+      "group": "Engine pillars",
+      "name": "UI, HUD & typography",
+      "status": "queued",
+      "detail": "HUD, verdict popups, transitions, rules cards.",
+      "rounds": 0,
+      "critic": null
+    },
+    {
+      "id": "P6",
+      "group": "Engine pillars",
+      "name": "Shell & party flow",
+      "status": "queued",
+      "detail": "Title, select, results, party mode, save.",
+      "rounds": 0,
+      "critic": null
+    },
+    {
+      "id": "G1",
+      "group": "Minigames",
+      "name": "Swing Kings",
+      "status": "queued",
+      "detail": "One swing. One beat. Send it.",
+      "rounds": 0,
+      "critic": null
+    },
+    {
+      "id": "G2",
+      "group": "Minigames",
+      "name": "Drumline Dash",
+      "status": "queued",
+      "detail": "Hear it. Hit it back.",
+      "rounds": 0,
+      "critic": null
+    },
+    {
+      "id": "G3",
+      "group": "Minigames",
+      "name": "Bounce Brigade",
+      "status": "queued",
+      "detail": "Land every landing.",
+      "rounds": 0,
+      "critic": null
+    },
+    {
+      "id": "G4",
+      "group": "Minigames",
+      "name": "Chomp Chorus",
+      "status": "queued",
+      "detail": "Four lanes. One groove.",
+      "rounds": 0,
+      "critic": null
+    },
+    {
+      "id": "G5",
+      "group": "Minigames",
+      "name": "Finale Fever",
+      "status": "queued",
+      "detail": "It only gets faster.",
+      "rounds": 0,
+      "critic": null
+    },
+    {
+      "id": "X1",
+      "group": "Cross-cutting",
+      "name": "Calibration & accessibility",
+      "status": "queued",
+      "detail": "Latency calibration, reduced motion, colourblind-safe verdicts, one-button mode.",
+      "rounds": 0,
+      "critic": null
+    },
+    {
+      "id": "X2",
+      "group": "Cross-cutting",
+      "name": "Coherence pass",
+      "status": "queued",
+      "detail": "A fresh agent plays the whole game end to end and smooths it into one product.",
+      "rounds": 0,
+      "critic": null
+    },
+    {
+      "id": "X3",
+      "group": "Cross-cutting",
+      "name": "Performance",
+      "status": "queued",
+      "detail": "CPU budget, draw calls, no GC in hot paths.",
+      "rounds": 0,
+      "critic": null
+    }
+  ],
+  "log": [
+    {
+      "t": "2026-08-08 02:14",
+      "msg": "Foundation committed: clock, input, judge, feel, harness."
+    }
+  ]
+}

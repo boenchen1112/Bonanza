@@ -34,6 +34,9 @@ const W = Number(argv.width || 1280);
 const H = Number(argv.height || 720);
 const PLAY = argv.play || 'auto';
 const WEB = path.resolve(argv.web || 'web');
+// Parallel agents each verify against their own build directory, so two
+// harness runs can never race on the same dist/ while one is mid-write.
+const DIST = argv.dist || 'dist';
 
 function parseArgs(a) {
   const o = {};
@@ -49,7 +52,7 @@ function parseArgs(a) {
 async function ensureBuild() {
   if (argv['no-build']) return;
   await new Promise((res, rej) => {
-    const p = spawn('npm', ['run', 'build'], { cwd: WEB, stdio: 'pipe' });
+    const p = spawn('npx', ['vite', 'build', '--outDir', DIST], { cwd: WEB, stdio: 'pipe' });
     let err = '';
     p.stderr.on('data', (d) => { err += d; });
     p.stdout.on('data', (d) => { err += d; });
@@ -67,14 +70,15 @@ function serve(dir, port) {
   });
 }
 
-const PORT = 5321 + (process.pid % 500);
+// pid-derived so concurrent harness runs never fight over a port.
+const PORT = Number(argv.port || 5321 + (process.pid % 900));
 
 (async () => {
   await ensureBuild();
   if (existsSync(OUT)) await rm(OUT, { recursive: true, force: true });
   await mkdir(OUT, { recursive: true });
 
-  const server = await serve(path.join(WEB, 'dist'), PORT);
+  const server = await serve(path.join(WEB, DIST), PORT);
 
   // The sandbox ships a pinned Chromium that may not match the Playwright
   // build's expected revision, so point at it explicitly. The full `chrome`
