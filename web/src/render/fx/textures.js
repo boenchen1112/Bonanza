@@ -311,8 +311,16 @@ export function spriteAtlas() {
 // -------------------------------------------------------------- word atlas
 
 const WORD_W = 1024;
-const WORD_ROW = 96;
-const WORD_H = 512;
+// One row per word, sized to the whole vocabulary with headroom. The previous
+// 512px atlas fitted five rows for a fifteen-word vocabulary, so ten callouts —
+// every combo milestone above x5, plus COMBO!/NICE!/ON FIRE!/UNREAL! — resolved
+// to no atlas entry and silently never drew.
+const WORD_ROW = 112;
+const WORD_H = 2048;   // 18 rows
+// Painted glyph + stroke reaches ~90px inside a 112px row. Sampling the full
+// row with LinearFilter and no guard pulls in the neighbouring word's stroke,
+// which reads on screen as a second, offset copy of the callout.
+const WORD_PAD = 8;
 
 let _wordTex = null;
 /** @type {Map<string, {rect:number[], aspect:number}>} */
@@ -355,10 +363,10 @@ export function wordAtlas(words) {
     g.fillText(w, x, y);
 
     const bw = tw + stroke * 2 + 8;
-    const bh = WORD_ROW;
+    const bh = WORD_ROW - WORD_PAD * 2;
     const u0 = (x - stroke - 4) / WORD_W;
     const du = bw / WORD_W;
-    const v1 = 1 - (i * WORD_ROW) / WORD_H;
+    const v1 = 1 - (i * WORD_ROW + WORD_PAD) / WORD_H;
     const dv = bh / WORD_H;
     _words.set(w, { rect: [u0, v1 - dv, du, dv], aspect: bw / bh });
   }

@@ -62,7 +62,11 @@ export function makeStub({ id, name, blurb, bpm = 120, bars = 16, color = 0xffd9
         ctx.stage.shake(f.shake, [1, 0.3, 0]);
         ctx.stage.flash(f.flash, '#' + f.color.toString(16).padStart(6, '0'));
         ctx.hitstop(f.hitstop);
-        ctx.ui.popup(f.label, { color: f.color });
+        // No ui.popup() here. fx bridges the `judge` bus event into a full
+        // layered response including an in-world callout at the hit position,
+        // and a second DOM callout dead-centre both duplicated the word and
+        // covered the thing the player is trying to watch. One callout, and it
+        // lives where the eye already is.
         if (verdict !== 'miss') ctx.fx.burst([0, 0.4, 0], { color: f.color, count: 16 });
         ctx.bus.emit('judge', { verdict, errMs, beat: ctx.clock.beatAt(note.time) });
         ctx.ui.hud.setScore(judge.stats.score);

@@ -1,9 +1,9 @@
 {
   "title": "Beat Bash Bonanza",
   "subtitle": "An original browser rhythm-party series, built to a Nintendo first-party bar",
-  "updated": "2026-08-08 02:21",
-  "wave": "Wave 1 \u2014 engine pillars",
-  "note": "Six builders are running in parallel on disjoint parts of the engine. Each will be judged by a separate critic that boots the built game in headless Chromium, plays it with machine-precise input, and looks at the frames \u2014 never at the builder\u2019s own account of the work.",
+  "updated": "2026-08-08 02:55",
+  "wave": "Wave 1 \u2014 integrated, review pending",
+  "note": "Wave 1 landed ~40 modules and the game now boots as a real product: an animated title with cast and crowd, seven original synthesised tracks, a house art style with post-processing, a layered VFX system and a procedural character rig. The agent run was cut short by a monthly spend limit part-way through, so the pieces are integrated and building but have not yet been through their critic round, and the five minigames are still placeholders.",
   "pieces": [
     {
       "id": "F1",
@@ -36,7 +36,7 @@
       "id": "P1",
       "group": "Engine pillars",
       "name": "Audio engine & original music",
-      "status": "building",
+      "status": "reviewing",
       "detail": "Synthesised score, adaptive layers, SFX kit. No files, no fetches.",
       "rounds": 0,
       "critic": null
@@ -45,7 +45,7 @@
       "id": "P2",
       "group": "Engine pillars",
       "name": "Art direction & render",
-      "status": "building",
+      "status": "reviewing",
       "detail": "Toon/gradient look, lighting, post, palette system.",
       "rounds": 0,
       "critic": null
@@ -54,7 +54,7 @@
       "id": "P3",
       "group": "Engine pillars",
       "name": "VFX & juice",
-      "status": "building",
+      "status": "reviewing",
       "detail": "Impact, trails, confetti, screen effects \u2014 pooled, zero per-frame allocation.",
       "rounds": 0,
       "critic": null
@@ -63,7 +63,7 @@
       "id": "P4",
       "group": "Engine pillars",
       "name": "Characters & animation",
-      "status": "building",
+      "status": "reviewing",
       "detail": "Procedural rigs, squash/stretch, reactions, crowd.",
       "rounds": 0,
       "critic": null
@@ -72,16 +72,16 @@
       "id": "P5",
       "group": "Engine pillars",
       "name": "UI, HUD & typography",
-      "status": "building",
+      "status": "rework",
       "detail": "HUD, verdict popups, transitions, rules cards.",
       "rounds": 0,
-      "critic": null
+      "critic": "Builder stopped before rewriting ui/index.js; the procedural typeface and stylesheet landed but are not wired into the HUD."
     },
     {
       "id": "P6",
       "group": "Engine pillars",
       "name": "Shell & party flow",
-      "status": "building",
+      "status": "reviewing",
       "detail": "Title, select, results, party mode, save.",
       "rounds": 0,
       "critic": null
@@ -160,6 +160,14 @@
     }
   ],
   "log": [
+    {
+      "t": "2026-08-08 02:55",
+      "msg": "Wave 1 builders terminated early on a monthly spend limit; partial work recovered and integrated. Game builds, runs clean, 27/27 timing tests green."
+    },
+    {
+      "t": "2026-08-08 02:55",
+      "msg": "Integration: wrote the missing music barrel, fixed hitstop over-freeze, fixed draw-call telemetry, enlarged the callout atlas (10 of 15 words could not render), removed a duplicate verdict popup."
+    },
     {
       "t": "2026-08-08 02:21",
       "msg": "Wave 1 fanned out: audio, art direction, VFX, characters, UI, shell \u2014 six builders in parallel."

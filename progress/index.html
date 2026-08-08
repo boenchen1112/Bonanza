@@ -61,12 +61,12 @@ footer{margin-top:3em;color:var(--dim);font-size:13px}
 
 <div class="top">
   <span class="big">18%</span>
-  <span class="wave">Wave 1 — engine pillars</span>
+  <span class="wave">Wave 1 — integrated, review pending</span>
   <span style="color:var(--dim)">3 of 17 pieces through review</span>
 </div>
 <div class="bar"><i></i></div>
 
-<div class="note">Six builders are running in parallel on disjoint parts of the engine. Each will be judged by a separate critic that boots the built game in headless Chromium, plays it with machine-precise input, and looks at the frames — never at the builder’s own account of the work.</div>
+<div class="note">Wave 1 landed ~40 modules and the game now boots as a real product: an animated title with cast and crowd, seven original synthesised tracks, a house art style with post-processing, a layered VFX system and a procedural character rig. The agent run was cut short by a monthly spend limit part-way through, so the pieces are integrated and building but have not yet been through their critic round, and the five minigames are still placeholders.</div>
 
 <section class="grp">
     <h2>Foundation</h2>
@@ -94,38 +94,38 @@ footer{margin-top:3em;color:var(--dim);font-size:13px}
   </section><section class="grp">
     <h2>Engine pillars</h2>
     <div class="cards">
-      <article class="card s-go">
-        <header><span class="id">P1</span><span class="pill">building</span></header>
+      <article class="card s-rev">
+        <header><span class="id">P1</span><span class="pill">in review</span></header>
         <h3>Audio engine &amp; original music</h3>
         <p>Synthesised score, adaptive layers, SFX kit. No files, no fetches.</p>
         
         
-      </article><article class="card s-go">
-        <header><span class="id">P2</span><span class="pill">building</span></header>
+      </article><article class="card s-rev">
+        <header><span class="id">P2</span><span class="pill">in review</span></header>
         <h3>Art direction &amp; render</h3>
         <p>Toon/gradient look, lighting, post, palette system.</p>
         
         
-      </article><article class="card s-go">
-        <header><span class="id">P3</span><span class="pill">building</span></header>
+      </article><article class="card s-rev">
+        <header><span class="id">P3</span><span class="pill">in review</span></header>
         <h3>VFX &amp; juice</h3>
         <p>Impact, trails, confetti, screen effects — pooled, zero per-frame allocation.</p>
         
         
-      </article><article class="card s-go">
-        <header><span class="id">P4</span><span class="pill">building</span></header>
+      </article><article class="card s-rev">
+        <header><span class="id">P4</span><span class="pill">in review</span></header>
         <h3>Characters &amp; animation</h3>
         <p>Procedural rigs, squash/stretch, reactions, crowd.</p>
         
         
-      </article><article class="card s-go">
-        <header><span class="id">P5</span><span class="pill">building</span></header>
+      </article><article class="card s-bad">
+        <header><span class="id">P5</span><span class="pill">sent back</span></header>
         <h3>UI, HUD &amp; typography</h3>
         <p>HUD, verdict popups, transitions, rules cards.</p>
         
-        
-      </article><article class="card s-go">
-        <header><span class="id">P6</span><span class="pill">building</span></header>
+        <blockquote>Builder stopped before rewriting ui/index.js; the procedural typeface and stylesheet landed but are not wired into the HUD.</blockquote>
+      </article><article class="card s-rev">
+        <header><span class="id">P6</span><span class="pill">in review</span></header>
         <h3>Shell &amp; party flow</h3>
         <p>Title, select, results, party mode, save.</p>
         
@@ -194,7 +194,7 @@ footer{margin-top:3em;color:var(--dim);font-size:13px}
 
 <section class="grp">
   <h2>Build log</h2>
-  <ul class="log"><li><time>2026-08-08 02:14</time><span>Foundation committed: clock, input, judge, feel, harness.</span></li><li><time>2026-08-08 02:21</time><span>Wave 1 fanned out: audio, art direction, VFX, characters, UI, shell — six builders in parallel.</span></li></ul>
+  <ul class="log"><li><time>2026-08-08 02:14</time><span>Foundation committed: clock, input, judge, feel, harness.</span></li><li><time>2026-08-08 02:21</time><span>Wave 1 fanned out: audio, art direction, VFX, characters, UI, shell — six builders in parallel.</span></li><li><time>2026-08-08 02:55</time><span>Integration: wrote the missing music barrel, fixed hitstop over-freeze, fixed draw-call telemetry, enlarged the callout atlas (10 of 15 words could not render), removed a duplicate verdict popup.</span></li><li><time>2026-08-08 02:55</time><span>Wave 1 builders terminated early on a monthly spend limit; partial work recovered and integrated. Game builds, runs clean, 27/27 timing tests green.</span></li></ul>
 </section>
 
-<footer>Updated 2026-08-08 02:21 · every piece is built by one agent and judged by a separate one that inspects the running game, never the builder's report.</footer>
+<footer>Updated 2026-08-08 02:55 · every piece is built by one agent and judged by a separate one that inspects the running game, never the builder's report.</footer>

@@ -47,6 +47,8 @@ let current = null;
 let currentCtx = null;
 let pendingScene = null;
 let hitstopUntil = 0;
+/** When the current hitstop began, so we only ever subtract time once. */
+let frozenFrom = 0;
 
 /**
  * Harness autoplay.
@@ -97,7 +99,9 @@ const ctxBase = {
   THREE,
   /** Freeze gameplay time briefly to sell an impact. */
   hitstop(seconds) {
-    hitstopUntil = Math.max(hitstopUntil, performance.now() / 1000 + seconds);
+    const now = performance.now() / 1000;
+    if (now >= hitstopUntil) frozenFrom = now;
+    hitstopUntil = Math.max(hitstopUntil, now + seconds);
   },
   /** Ask the shell to move on. */
   go(sceneId, opts) { pendingScene = { id: sceneId, opts }; },
@@ -150,7 +154,17 @@ function frame(nowMs) {
   input.pollGamepads(nowMs);
 
   // Hitstop freezes gameplay, not the transport. The music never stutters.
-  if (nowS < hitstopUntil) dt = 0;
+  //
+  // Subtract only the frozen PORTION of this frame rather than zeroing dt
+  // outright. Zeroing means a 78ms hitstop consumes a whole frame — fine at
+  // 60fps (78ms is ~5 frames), catastrophic on a device dropping to 15fps,
+  // where one hitstop swallows 66ms of animation it was never meant to touch
+  // and callouts visibly pile up on screen.
+  if (nowS < hitstopUntil) {
+    const frameStart = nowS - dt;
+    const frozen = Math.min(hitstopUntil, nowS) - Math.max(frameStart, frozenFrom);
+    dt = Math.max(0, dt - Math.max(0, frozen));
+  }
 
   pumpBot(clock.beat);
 
