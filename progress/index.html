@@ -61,12 +61,12 @@ footer{margin-top:3em;color:var(--dim);font-size:13px}
 
 <div class="top">
   <span class="big">18%</span>
-  <span class="wave">Wave 1 — integrated, review pending</span>
+  <span class="wave">Paused — handoff written</span>
   <span style="color:var(--dim)">3 of 17 pieces through review</span>
 </div>
 <div class="bar"><i></i></div>
 
-<div class="note">Wave 1 landed ~40 modules and the game now boots as a real product: an animated title with cast and crowd, seven original synthesised tracks, a house art style with post-processing, a layered VFX system and a procedural character rig. The agent run was cut short by a monthly spend limit part-way through, so the pieces are integrated and building but have not yet been through their critic round, and the five minigames are still placeholders.</div>
+<div class="note">Paused on a monthly API spend limit. The engine is real and every registered scene loads with a clean console, but no critic round has run and the five minigames are still placeholders — so nothing here has passed the quality bar yet. docs/HANDOFF.md has the full state, the ordered next actions, and the traps already paid for.</div>
 
 <section class="grp">
     <h2>Foundation</h2>
@@ -194,7 +194,7 @@ footer{margin-top:3em;color:var(--dim);font-size:13px}
 
 <section class="grp">
   <h2>Build log</h2>
-  <ul class="log"><li><time>2026-08-08 02:14</time><span>Foundation committed: clock, input, judge, feel, harness.</span></li><li><time>2026-08-08 02:21</time><span>Wave 1 fanned out: audio, art direction, VFX, characters, UI, shell — six builders in parallel.</span></li><li><time>2026-08-08 02:55</time><span>Integration: wrote the missing music barrel, fixed hitstop over-freeze, fixed draw-call telemetry, enlarged the callout atlas (10 of 15 words could not render), removed a duplicate verdict popup.</span></li><li><time>2026-08-08 02:55</time><span>Wave 1 builders terminated early on a monthly spend limit; partial work recovered and integrated. Game builds, runs clean, 27/27 timing tests green.</span></li></ul>
+  <ul class="log"><li><time>2026-08-08 02:14</time><span>Foundation committed: clock, input, judge, feel, harness.</span></li><li><time>2026-08-08 02:21</time><span>Wave 1 fanned out: audio, art direction, VFX, characters, UI, shell — six builders in parallel.</span></li><li><time>2026-08-08 02:55</time><span>Integration: wrote the missing music barrel, fixed hitstop over-freeze, fixed draw-call telemetry, enlarged the callout atlas (10 of 15 words could not render), removed a duplicate verdict popup.</span></li><li><time>2026-08-08 02:55</time><span>Wave 1 builders terminated early on a monthly spend limit; partial work recovered and integrated. Game builds, runs clean, 27/27 timing tests green.</span></li><li><time>2026-08-08 05:38</time><span>Handoff written to docs/HANDOFF.md. Registered roster/freeplay/play and fixed three crashes that exposed — a missing import, an unguarded canvas radius, and beat phase computed with a sign-sensitive modulo.</span></li></ul>
 </section>
 
-<footer>Updated 2026-08-08 02:55 · every piece is built by one agent and judged by a separate one that inspects the running game, never the builder's report.</footer>
+<footer>Updated 2026-08-08 05:38 · every piece is built by one agent and judged by a separate one that inspects the running game, never the builder's report.</footer>

@@ -1,9 +1,9 @@
 {
   "title": "Beat Bash Bonanza",
   "subtitle": "An original browser rhythm-party series, built to a Nintendo first-party bar",
-  "updated": "2026-08-08 02:55",
-  "wave": "Wave 1 \u2014 integrated, review pending",
-  "note": "Wave 1 landed ~40 modules and the game now boots as a real product: an animated title with cast and crowd, seven original synthesised tracks, a house art style with post-processing, a layered VFX system and a procedural character rig. The agent run was cut short by a monthly spend limit part-way through, so the pieces are integrated and building but have not yet been through their critic round, and the five minigames are still placeholders.",
+  "updated": "2026-08-08 05:38",
+  "wave": "Paused \u2014 handoff written",
+  "note": "Paused on a monthly API spend limit. The engine is real and every registered scene loads with a clean console, but no critic round has run and the five minigames are still placeholders \u2014 so nothing here has passed the quality bar yet. docs/HANDOFF.md has the full state, the ordered next actions, and the traps already paid for.",
   "pieces": [
     {
       "id": "F1",
@@ -160,6 +160,10 @@
     }
   ],
   "log": [
+    {
+      "t": "2026-08-08 05:38",
+      "msg": "Handoff written to docs/HANDOFF.md. Registered roster/freeplay/play and fixed three crashes that exposed \u2014 a missing import, an unguarded canvas radius, and beat phase computed with a sign-sensitive modulo."
+    },
     {
       "t": "2026-08-08 02:55",
       "msg": "Wave 1 builders terminated early on a monthly spend limit; partial work recovered and integrated. Game builds, runs clean, 27/27 timing tests green."
