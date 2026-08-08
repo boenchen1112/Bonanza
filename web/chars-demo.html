@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Beat Bash Bonanza — character showcase</title>
+    <style>
+      html, body { margin:0; padding:0; height:100%; background:#07060f; overflow:hidden; }
+      #stage { position:fixed; inset:0; display:block; }
+      #hud {
+        position:fixed; left:14px; top:12px; z-index:9;
+        font:700 15px/1.35 system-ui, sans-serif; color:#fff;
+        text-shadow:0 2px 8px rgba(0,0,0,.8); pointer-events:none; letter-spacing:.04em;
+      }
+      #hud small { display:block; font-weight:500; opacity:.66; letter-spacing:0; }
+    </style>
+  </head>
+  <body>
+    <canvas id="stage"></canvas>
+    <div id="hud">CHARACTER SHOWCASE<small>SPACE strike · S silhouette · ←/→ step</small></div>
+
+    <script type="module">
+      // Standalone host for the character showcase. Deliberately NOT the game
+      // shell: this page exists so the chars piece can be verified on its own,
+      // at exact beat phases, without depending on any other agent's module.
+      import * as THREE from 'three';
+      import demo from '/src/chars/demo.js';
+
+      const canvas = document.getElementById('stage');
+      const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+      renderer.setClearColor(0x0b0a1a, 1);
+      renderer.outputColorSpace = THREE.SRGBColorSpace;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.0;
+
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(50, 16 / 9, 0.1, 200);
+
+      const BPM = demo.bpm;
+      const SPB = 60 / BPM;
+
+      // A stand-in clock: same shape as core/clock.js but driven by the
+      // simulation stepper, so a screenshot at beat N is byte-identical every
+      // run regardless of frame rate.
+      let simT = 0;
+      const clock = {
+        _bpm: BPM, running: true,
+        get bpm() { return this._bpm; },
+        get spb() { return 60 / this._bpm; },
+        setBpm(b) { this._bpm = b; },
+        start() {}, stop() {},
+        now() { return simT; },
+        rawNow() { return simT; },
+        beatAt(t) { return t / this.spb; },
+        timeAt(b) { return b * this.spb; },
+        get beat() { return simT / this.spb; },
+        onBeat() { return () => {}; },
+        at() { return this; },
+      };
+
+      const size = { w: 1, h: 1, dpr: 1 };
+      const ctx = {
+        scene, camera, renderer, clock, size,
+        ui: { banner: () => {}, popup: () => {}, hud: { mount() {}, unmount() {} } },
+        fx: null, audio: null, bus: { emit() {}, on() { return () => {}; } },
+        rng: () => 0.5,
+        players: [],
+        hitstop() {}, go() {}, stage: null,
+      };
+
+      function resize() {
+        size.w = window.innerWidth; size.h = window.innerHeight;
+        size.dpr = Math.min(window.devicePixelRatio || 1, 2);
+        renderer.setPixelRatio(size.dpr);
+        renderer.setSize(size.w, size.h, false);
+        camera.aspect = size.w / size.h;
+        camera.updateProjectionMatrix();
+      }
+      window.addEventListener('resize', resize);
+      resize();
+
+      demo.load(ctx);
+      demo.start(ctx);
+
+      // ---- deterministic stepper -----------------------------------------
+      const H = 1 / 60;
+      let cpuAccum = 0, cpuCount = 0;
+
+      function stepTo(targetT) {
+        let guard = 0;
+        const t0 = performance.now();
+        while (simT < targetT - 1e-9 && guard++ < 20000) {
+          const dt = Math.min(H, targetT - simT);
+          simT += dt;
+          demo.update(ctx, dt, simT / SPB);
+        }
+        cpuAccum += performance.now() - t0;
+        cpuCount += Math.max(1, guard);
+      }
+
+      function draw() { renderer.render(scene, camera); }
+
+      // ---- free-running mode (for a human looking at the page) -----------
+      let playing = true;
+      let last = performance.now();
+      function frame(now) {
+        requestAnimationFrame(frame);
+        const dt = Math.min((now - last) / 1000, 1 / 20);
+        last = now;
+        if (playing) stepTo(simT + dt);
+        draw();
+      }
+      requestAnimationFrame((t) => { last = t; frame(t); });
+
+      // ---- input ----------------------------------------------------------
+      const events = [];
+      window.addEventListener('keydown', (e) => {
+        if (e.repeat) return;
+        if (e.code === 'Space') { events.length = 0; events.push({ action: 'a', down: true, time: simT }); demo.input(ctx, events); }
+        if (e.code === 'KeyS') demo.setSilhouette(!ctx.scene.overrideMaterial);
+        if (e.code === 'ArrowRight') demo.setStep((demo.script.findIndex((s) => s.name === demo.stepName) + 1));
+      });
+
+      // ---- test API --------------------------------------------------------
+      window.__CHARS__ = {
+        ready: Promise.resolve(true),
+        THREE, scene, camera, renderer, demo,
+        get beat() { return simT / SPB; },
+        /** Simulate forward to an exact beat, then draw. Monotonic only. */
+        toBeat(b) {
+          stepTo(Math.max(simT, b * SPB));
+          draw();
+          return simT / SPB;
+        },
+        play(on) { playing = !!on; last = performance.now(); },
+        silhouette(on) { demo.setSilhouette(on); draw(); return on; },
+        step(i) { const n = demo.setStep(i); draw(); return n; },
+        press(action = 'a') { demo.input(ctx, [{ action, down: true, time: simT }]); },
+        telemetry() {
+          const info = renderer.info;
+          return {
+            drawCalls: info.render.calls,
+            triangles: info.render.triangles,
+            geometries: info.memory.geometries,
+            textures: info.memory.textures,
+            programs: info.programs?.length ?? 0,
+            simMsPerStep: cpuCount ? cpuAccum / cpuCount : 0,
+            beat: simT / SPB,
+            step: demo.stepName,
+            crowdCount: demo.crowd?.count ?? 0,
+            castDrawCalls: demo.cast?.drawCalls ?? 0,
+          };
+        },
+        screenshotReady: () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))),
+      };
+
+      window.__CHARS_ERRORS__ = [];
+      window.addEventListener('error', (e) => window.__CHARS_ERRORS__.push(String(e.message)));
+    </script>
+  </body>
+</html>

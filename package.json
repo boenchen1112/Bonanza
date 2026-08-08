@@ -1,0 +1,13 @@
+{
+  "name": "swinger-workspace",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "inspect": "node tools/harness/inspect.mjs",
+    "dev": "npm --prefix web run dev",
+    "build": "npm --prefix web run build"
+  },
+  "devDependencies": {
+    "playwright": "^1.62.1"
+  }
+}

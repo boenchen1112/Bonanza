@@ -1,0 +1,196 @@
+{
+  "title": "Beat Bash Bonanza",
+  "subtitle": "An original browser rhythm-party series, built to a Nintendo first-party bar",
+  "updated": "2026-08-08 14:52",
+  "wave": "Wave 2 \u2014 all five verified playable",
+  "note": "Hold-and-release is deferred: every scored input is now a plain button press, so the standard harness plays all five games. All five score 100% with 0.00ms mean error and a clean console. That also retires the biggest flagged risk \u2014 Finale Fever\u2019s tempo ramp holds 0.00ms error across 108 hits spanning the full ramp, so the chart is not drifting. Critic rounds are next.",
+  "pieces": [
+    {
+      "id": "F1",
+      "group": "Foundation",
+      "name": "Audio-time clock & transport",
+      "status": "done",
+      "detail": "All time in the AudioContext domain, latency-compensated, smoothed DOM-event bridge.",
+      "rounds": 0,
+      "critic": null
+    },
+    {
+      "id": "F2",
+      "group": "Foundation",
+      "name": "Input & judgement",
+      "status": "done",
+      "detail": "Abstract actions with true press timestamps; ms windows; nearest-note claiming.",
+      "rounds": 0,
+      "critic": null
+    },
+    {
+      "id": "F3",
+      "group": "Foundation",
+      "name": "Critic harness",
+      "status": "done",
+      "detail": "Headless Chromium boots the built game, plays it at exact audio times, dumps frames + telemetry.",
+      "rounds": 0,
+      "critic": null
+    },
+    {
+      "id": "P1",
+      "group": "Engine pillars",
+      "name": "Audio engine & original music",
+      "status": "reviewing",
+      "detail": "Synthesised score, adaptive layers, SFX kit. No files, no fetches.",
+      "rounds": 0,
+      "critic": null
+    },
+    {
+      "id": "P2",
+      "group": "Engine pillars",
+      "name": "Art direction & render",
+      "status": "reviewing",
+      "detail": "Toon/gradient look, lighting, post, palette system.",
+      "rounds": 0,
+      "critic": null
+    },
+    {
+      "id": "P3",
+      "group": "Engine pillars",
+      "name": "VFX & juice",
+      "status": "reviewing",
+      "detail": "Impact, trails, confetti, screen effects \u2014 pooled, zero per-frame allocation.",
+      "rounds": 0,
+      "critic": null
+    },
+    {
+      "id": "P4",
+      "group": "Engine pillars",
+      "name": "Characters & animation",
+      "status": "reviewing",
+      "detail": "Procedural rigs, squash/stretch, reactions, crowd.",
+      "rounds": 0,
+      "critic": null
+    },
+    {
+      "id": "P5",
+      "group": "Engine pillars",
+      "name": "UI, HUD & typography",
+      "status": "rework",
+      "detail": "HUD, verdict popups, transitions, rules cards.",
+      "rounds": 0,
+      "critic": "Builder stopped before rewriting ui/index.js; the procedural typeface and stylesheet landed but are not wired into the HUD."
+    },
+    {
+      "id": "P6",
+      "group": "Engine pillars",
+      "name": "Shell & party flow",
+      "status": "reviewing",
+      "detail": "Title, select, results, party mode, save.",
+      "rounds": 0,
+      "critic": null
+    },
+    {
+      "id": "G1",
+      "group": "Minigames",
+      "name": "Swing Kings",
+      "status": "reviewing",
+      "detail": "Tap to swing; power now comes from timing accuracy. 6/6 perfect, 0ms error.",
+      "rounds": 0,
+      "critic": "Hit-tier callout is dark-on-dark against the crowd."
+    },
+    {
+      "id": "G2",
+      "group": "Minigames",
+      "name": "Drumline Dash",
+      "status": "reviewing",
+      "detail": "Call-and-response race. 11/11 perfect, 0ms error.",
+      "rounds": 0,
+      "critic": null
+    },
+    {
+      "id": "G3",
+      "group": "Minigames",
+      "name": "Bounce Brigade",
+      "status": "reviewing",
+      "detail": "Instrument platforms; the charge is now a double-tap. 18/18 perfect, 0ms error.",
+      "rounds": 0,
+      "critic": null
+    },
+    {
+      "id": "G4",
+      "group": "Minigames",
+      "name": "Chomp Chorus",
+      "status": "reviewing",
+      "detail": "Four singers on lane pads. 16/16 perfect, 0ms error.",
+      "rounds": 0,
+      "critic": null
+    },
+    {
+      "id": "G5",
+      "group": "Minigames",
+      "name": "Finale Fever",
+      "status": "reviewing",
+      "detail": "Tempo-ramp duel. 108 hits at 0.00ms error across the full ramp \u2014 no drift.",
+      "rounds": 0,
+      "critic": null
+    },
+    {
+      "id": "X1",
+      "group": "Cross-cutting",
+      "name": "Calibration & accessibility",
+      "status": "queued",
+      "detail": "Latency calibration, reduced motion, colourblind-safe verdicts, one-button mode.",
+      "rounds": 0,
+      "critic": null
+    },
+    {
+      "id": "X2",
+      "group": "Cross-cutting",
+      "name": "Coherence pass",
+      "status": "queued",
+      "detail": "A fresh agent plays the whole game end to end and smooths it into one product.",
+      "rounds": 0,
+      "critic": null
+    },
+    {
+      "id": "X3",
+      "group": "Cross-cutting",
+      "name": "Performance",
+      "status": "queued",
+      "detail": "CPU budget, draw calls, no GC in hot paths.",
+      "rounds": 0,
+      "critic": null
+    }
+  ],
+  "log": [
+    {
+      "t": "2026-08-08 14:52",
+      "msg": "Switched to tap-only input: Swing Kings derives power from timing, Bounce Brigade\u2019s charge is a double-tap. Taught the harness bot multiple actions so lane games verify too. All five games now 100% under autoplay; Finale Fever tempo ramp proven drift-free."
+    },
+    {
+      "t": "2026-08-08 06:48",
+      "msg": "Wave 2 integrated: five real minigames replace the placeholder cubes; _stub.js deleted. Fixed a load-order crash in Bounce Brigade and made scene failures non-fatal \u2014 one throwing scene used to hang the entire app."
+    },
+    {
+      "t": "2026-08-08 06:15",
+      "msg": "Wave 2 fanned out: Swing Kings, Drumline Dash, Bounce Brigade, Chomp Chorus, Finale Fever \u2014 five builders in parallel."
+    },
+    {
+      "t": "2026-08-08 05:38",
+      "msg": "Handoff written to docs/HANDOFF.md. Registered roster/freeplay/play and fixed three crashes that exposed \u2014 a missing import, an unguarded canvas radius, and beat phase computed with a sign-sensitive modulo."
+    },
+    {
+      "t": "2026-08-08 02:55",
+      "msg": "Wave 1 builders terminated early on a monthly spend limit; partial work recovered and integrated. Game builds, runs clean, 27/27 timing tests green."
+    },
+    {
+      "t": "2026-08-08 02:55",
+      "msg": "Integration: wrote the missing music barrel, fixed hitstop over-freeze, fixed draw-call telemetry, enlarged the callout atlas (10 of 15 words could not render), removed a duplicate verdict popup."
+    },
+    {
+      "t": "2026-08-08 02:21",
+      "msg": "Wave 1 fanned out: audio, art direction, VFX, characters, UI, shell \u2014 six builders in parallel."
+    },
+    {
+      "t": "2026-08-08 02:14",
+      "msg": "Foundation committed: clock, input, judge, feel, harness."
+    }
+  ]
+}

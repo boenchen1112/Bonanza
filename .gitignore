@@ -21,3 +21,10 @@ UnitySwinger_*.log
 # research/captures/ which is committed deliberately.
 research/logs/
 research/hand_tracking_web/logs/
+
+# web build + deps
+web/node_modules/
+web/dist/
+node_modules/
+runs/
+web/dist*
