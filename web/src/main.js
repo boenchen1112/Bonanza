@@ -48,6 +48,46 @@ let currentCtx = null;
 let pendingScene = null;
 let hitstopUntil = 0;
 
+/**
+ * Harness autoplay.
+ *
+ * Driven from inside the frame loop rather than from setTimeout, because under
+ * software rendering a frame can take 350ms and a timer-driven bot then
+ * delivers every press hundreds of ms late — turning a perfectly good game into
+ * a wall of false misses. Here the bot emits each press with the audio time it
+ * WAS AIMED AT, so judgement measures the judge, not the frame rate.
+ */
+let bot = null;
+let botPrevBeat = null;
+
+let botPressTotal = 0;
+
+function pumpBot(beat) {
+  if (!bot) return;
+  if (clock.now() > bot.until) { bot = null; botPrevBeat = null; return; }
+  if (botPrevBeat === null) { botPrevBeat = beat; return; }
+
+  // Every subdivision boundary crossed since the last frame gets a press.
+  const div = bot.division;
+  let k = Math.floor(botPrevBeat * div) + 1;
+  const kEnd = Math.floor(beat * div);
+  let guard = 0;
+  while (k <= kEnd && guard++ < 64) {
+    const targetBeat = k / div;
+    k++;
+    if (bot.rng() < bot.missRate) continue;
+    const off = (bot.rng() * 2 - 1) * bot.jitter;
+    const t = clock.timeAt(targetBeat) + off;
+    const ev = { action: bot.action, time: t, down: true, source: 'bot', repeat: false };
+    if (current) {
+      try { current.input?.(currentCtx, [ev]); } catch (e) { console.error(e); }
+    }
+    bot.presses++;
+    botPressTotal++;
+  }
+  botPrevBeat = beat;
+}
+
 const ctxBase = {
   clock, input, bus, audio, ui, fx, stage,
   renderer: stage.renderer,
@@ -112,6 +152,8 @@ function frame(nowMs) {
   // Hitstop freezes gameplay, not the transport. The music never stutters.
   if (nowS < hitstopUntil) dt = 0;
 
+  pumpBot(clock.beat);
+
   const events = input.drain();
   if (current) {
     if (events.length) {
@@ -168,8 +210,11 @@ const telemetry = {
       /** Our JS per frame. THIS is the perf number that survives a software GPU. */
       cpuMs: this._stats(this.cpu),
       render: {
-        drawCalls: info.render.calls,
-        triangles: info.render.triangles,
+        // From the stage, captured before post's fullscreen quads overwrite
+        // renderer.info — otherwise every scene reports "1 draw call".
+        drawCalls: stage.stats?.drawCalls ?? info.render.calls,
+        triangles: stage.stats?.triangles ?? info.render.triangles,
+        postPasses: stage.stats?.postPasses ?? 0,
         programs: info.programs?.length ?? 0,
         geometries: info.memory.geometries,
         textures: info.memory.textures,
@@ -222,6 +267,41 @@ window.__BBB__ = {
   resetTelemetry: () => { telemetry.frames.length = 0; telemetry.judgements.length = 0; },
   goto: (id, opts) => activate(id, opts || {}),
   setSeed: (n) => { ctxBase.rng = makeRng(n); },
+  /**
+   * Render quality. The harness forces 'low' by default: it renders through
+   * SwiftShader, where the post chain costs hundreds of ms per frame and the
+   * resulting frame starvation delays synthetic presses so badly that every
+   * note reads as a miss. That is a measurement artifact, not a game defect —
+   * dropping post restores a real frame rate so timing can actually be judged.
+   */
+  setQuality: (tier) => stage.setQuality?.(tier),
+  /**
+   * Play the game automatically for `seconds`. Frame-rate independent by
+   * construction — see pumpBot.
+   * @param {{mode?:'perfect'|'auto'|'sloppy', seconds?:number,
+   *          division?:number, action?:string, seed?:number}} o
+   */
+  autoplay(o = {}) {
+    const mode = o.mode || 'auto';
+    const preset = {
+      perfect: { jitter: 0, missRate: 0 },
+      auto: { jitter: 0.028, missRate: 0.06 },
+      sloppy: { jitter: 0.075, missRate: 0.22 },
+    }[mode] || { jitter: 0.028, missRate: 0.06 };
+    bot = {
+      ...preset,
+      action: o.action || 'a',
+      division: o.division ?? 2,
+      until: clock.now() + (o.seconds ?? 15),
+      rng: makeRng(o.seed ?? 0xb07),
+      presses: 0,
+    };
+    botPrevBeat = null;
+    botPressTotal = 0;
+    return true;
+  },
+  stopAutoplay() { bot = null; botPrevBeat = null; },
+  botPresses: () => botPressTotal,
   /** Synthetic press at an exact audio time (or beat) — how the harness plays. */
   press(action = 'a', opts = {}) {
     const t = opts.atBeat !== undefined ? clock.timeAt(opts.atBeat)
@@ -240,6 +320,8 @@ window.__BBB__ = {
 
 (async function boot() {
   resize();
+  const q = new URLSearchParams(location.search).get('quality');
+  if (q) stage.setQuality?.(q);
   await audio.init();
   const startScene = new URLSearchParams(location.search).get('scene') || 'title';
   await activate(startScene, Object.fromEntries(new URLSearchParams(location.search)));

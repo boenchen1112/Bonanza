@@ -33,6 +33,11 @@ const SHOTS = Number(argv.shots || 12);
 const W = Number(argv.width || 1280);
 const H = Number(argv.height || 720);
 const PLAY = argv.play || 'auto';
+// SwiftShader cannot afford the post chain: frames hit ~400ms, which starves
+// the setTimeout that drives synthetic presses and turns every note into a
+// false miss. Default to the low tier so timing is measurable; pass
+// --quality high when the point of the run is to look at the grade.
+const QUALITY = argv.quality || 'low';
 const WEB = path.resolve(argv.web || 'web');
 // Parallel agents each verify against their own build directory, so two
 // harness runs can never race on the same dist/ while one is mid-write.
@@ -109,7 +114,7 @@ const PORT = Number(argv.port || 5321 + (process.pid % 900));
   page.on('pageerror', (e) => logs.push(`[pageerror] ${e.message}\n${e.stack || ''}`));
   page.on('requestfailed', (r) => logs.push(`[requestfailed] ${r.url()} ${r.failure()?.errorText}`));
 
-  await page.goto(`http://127.0.0.1:${PORT}/index.html?scene=${encodeURIComponent(SCENE)}`, {
+  await page.goto(`http://127.0.0.1:${PORT}/index.html?scene=${encodeURIComponent(SCENE)}&quality=${encodeURIComponent(QUALITY)}`, {
     waitUntil: 'load', timeout: 30000,
   });
 
@@ -119,6 +124,7 @@ const PORT = Number(argv.port || 5321 + (process.pid % 900));
 
   await page.waitForFunction('window.__BBB__ && window.__BBB__.ready', null, { timeout: 20000 });
   await page.evaluate(() => window.__BBB__.ready);
+  await page.evaluate((q) => window.__BBB__.setQuality?.(q), QUALITY);
   await page.evaluate((s) => window.__BBB__.goto(s), SCENE);
   await page.waitForTimeout(700);
   await page.evaluate(() => window.__BBB__.resetTelemetry());
@@ -128,35 +134,11 @@ const PORT = Number(argv.port || 5321 + (process.pid % 900));
   // is beatable and shows the top-end feedback; `sloppy` shows what a real
   // human's mediocre run looks like, which is what most players will see.
   if (PLAY !== 'none') {
-    await page.evaluate(({ mode, secs }) => {
-      const B = window.__BBB__;
-      const clock = B.clock;
-      const jitter = mode === 'perfect' ? 0 : mode === 'sloppy' ? 0.075 : 0.028;
-      const missRate = mode === 'perfect' ? 0 : mode === 'sloppy' ? 0.22 : 0.06;
-      const end = clock.now() + secs;
-      let n = 0;
-      const step = () => {
-        if (clock.now() > end) return;
-        const beat = clock.beat;
-        const next = Math.ceil(beat * 2) / 2; // presses on 8ths, judge sorts it out
-        const t = clock.timeAt(next);
-        const wait = (t - clock.now()) * 1000;
-        if (wait > 0 && wait < 2000) {
-          setTimeout(() => {
-            if (Math.random() > missRate) {
-              const off = (Math.random() * 2 - 1) * jitter;
-              B.press('a', { atTime: clock.timeAt(next) + off });
-            }
-            n++;
-            step();
-          }, Math.max(0, wait - 4));
-        } else {
-          setTimeout(step, 16);
-        }
-      };
-      step();
-      window.__playCount = () => n;
-    }, { mode: PLAY, secs: SECONDS });
+    await page.evaluate(({ mode, secs }) => window.__BBB__.autoplay({ mode, seconds: secs }),
+      // Generously longer than the capture window: screenshots are slow under
+      // software rendering, so wall-clock capture outruns `SECONDS` of audio
+      // time and a bot that stopped on time would leave a tail of false misses.
+      { mode: PLAY, secs: SECONDS * 4 });
   }
 
   // ---- capture ----------------------------------------------------------
@@ -169,6 +151,7 @@ const PORT = Number(argv.port || 5321 + (process.pid % 900));
     shots.push(f);
   }
 
+  const botPresses = await page.evaluate(() => window.__BBB__.botPresses?.() ?? 0);
   const telemetry = await page.evaluate(() => window.__BBB__.telemetry());
   const domProbe = await page.evaluate(() => ({
     uiNodes: document.getElementById('ui')?.querySelectorAll('*').length ?? 0,
@@ -186,6 +169,7 @@ const PORT = Number(argv.port || 5321 + (process.pid % 900));
   const summary = {
     scene: SCENE,
     play: PLAY,
+    quality: QUALITY,
     seconds: SECONDS,
     shots: shots.map((s) => path.relative(OUT, s)),
     // NOTE FOR CRITICS: this harness renders through SwiftShader (software
@@ -201,6 +185,7 @@ const PORT = Number(argv.port || 5321 + (process.pid % 900));
     outputLatencyMs: telemetry.outputLatencyMs,
     judgementCounts: counts,
     judgementTotal: j.length,
+    botPresses,
     meanAbsErrMs: errs.length ? errs.reduce((a, b) => a + Math.abs(b), 0) / errs.length : null,
     biasMs: errs.length ? errs.reduce((a, b) => a + b, 0) / errs.length : null,
     consoleErrors: logs.filter((l) => l.startsWith('[pageerror]') || l.startsWith('[error]')).length,
