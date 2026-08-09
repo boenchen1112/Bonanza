@@ -18,7 +18,7 @@ import {
   PAL, num, el, mountRoot, panel, sfx, createWipe, beatPulse, reducedMotion,
 } from './theme.js';
 import { createBackdrop } from './backdrop.js';
-import { CHARS, charById, charMesh, charBeat, disposeChar, drawPortrait, preloadChars } from './chars.js';
+import { CHARS, charById, charMesh, charBeat, disposeChar, drawPortrait } from './chars.js';
 import { profile, session } from './state.js';
 import { goView } from './nav.js';
 
@@ -39,7 +39,6 @@ export default {
   name: 'Roster',
 
   load(ctx) {
-    preloadChars();
     const mode = ctx.opts?.mode === 'party' ? 'party' : 'free';
     S = {
       t: 0, mode, stage: mode === 'party' ? 'lineup' : 'chars',
@@ -161,11 +160,11 @@ export default {
     if (S.preview) {
       S.previewSpin += dt * 0.55;
       S.preview.rotation.y = S.previewSpin;
-      charBeat(S.preview, beat, dt, 0.9 * amp);
+      charBeat(S.preview, beat, dt);
       S.preview.rotation.y = S.previewSpin; // charBeat also writes rotation.y
     }
     S.ped.scale.y = 1 + pulse * 0.12;
-    for (let i = 0; i < 4; i++) if (S.cast[i]) charBeat(S.cast[i], beat + i * 0.25, dt, 0.8 * amp);
+    for (let i = 0; i < 4; i++) if (S.cast[i]) charBeat(S.cast[i], beat + i * 0.25, dt);
 
     // grid cards: hovered one lifts, taken ones sit back
     const gridOn = S.stage === 'chars';

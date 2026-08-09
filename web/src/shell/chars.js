@@ -1,19 +1,14 @@
 /**
  * The cast, and how to draw it.  [shell agent owns this file]
  *
- * The characters agent is building `src/chars/`. Until that lands (and if it
- * ever fails to load) the shell still has to show something with a face on it,
- * so this file carries a complete procedural fallback: 2D canvas portraits for
- * menus and low-poly 3D stand-ins for the podium.
- *
- * The hand-off is a single adapter, `charMesh()`. When `chars/index.js` exists
- * it is picked up automatically by the `import.meta.glob` below — a glob that
- * matches nothing compiles to an empty object rather than a build error, which
- * is what lets this file ship before that module does.
+ * 2D canvas portraits for menus (`drawPortrait`) plus a thin binding onto the
+ * real `chars/` rig (`charMesh`/`charBeat`/`disposeChar`) for the 3D podium.
+ * `chars/index.js` is a hard dependency, not an optional one — this file no
+ * longer probes for it or falls back to a stand-in shape when it's absent.
  */
 
-import * as THREE from 'three';
 import { PAL, num } from './theme.js';
+import { makeCast, paletteFor, BUILD_IDS } from '../chars/index.js';
 
 /** @typedef {{id:string,name:string,color:number,accent:number,trait:string,shape:string,crest:string}} CharDef */
 
@@ -31,145 +26,52 @@ export const CHARS = [
 
 export const charById = (id) => CHARS.find((c) => c.id === id) || CHARS[0];
 
-// --------------------------------------------------------------- adapter
+// ------------------------------------------------------------------ 3D cast
 
-const CHAR_MODULE = import.meta.glob('../chars/index.js');
-let charModPromise = null;
-let charMod = null;
-
-/** Kick off the optional chars/ load once; never blocks a screen. */
-export function preloadChars() {
-  if (charModPromise) return charModPromise;
-  const key = Object.keys(CHAR_MODULE)[0];
-  charModPromise = key
-    ? CHAR_MODULE[key]().then((m) => { charMod = m; return m; }).catch(() => null)
-    : Promise.resolve(null);
-  return charModPromise;
-}
+/** Which rig build (silhouette) each 2D character design reads closest to. */
+const BUILD_BY_SHAPE = {
+  round: 'round', beak: 'round', blob: 'round',
+  tall: 'tall',
+  tiny: 'small', star: 'small',
+  spike: 'wide', block: 'wide',
+};
 
 /**
- * Build a 3D character. Uses `chars/` when present, the stand-in otherwise.
- * Swapping the real cast in is exactly this function and nothing else.
+ * Build a single 3D character via `chars/`'s real roster facade (`makeCast`)
+ * rather than a bespoke one-off construction path, so the shell's characters
+ * run through the same rig/animator every minigame's cast does.
  * @returns {THREE.Group}
  */
 export function charMesh(def, opts = {}) {
-  if (charMod) {
-    const factory = charMod.createCharacter || charMod.makeCharacter || charMod.create || charMod.default;
-    if (typeof factory === 'function') {
-      try {
-        const made = factory({ id: def.id, color: def.color, accent: def.accent, THREE, ...opts });
-        const obj = made?.root || made?.object3D || made;
-        if (obj && obj.isObject3D) {
-          obj.userData.charApi = made;
-          obj.userData.def = def;
-          return obj;
-        }
-      } catch { /* fall through to the stand-in */ }
-    }
-  }
-  return standIn(def, opts);
-}
-
-/** Per-frame idle/dance. Delegates if the real character exposes an update. */
-export function charBeat(obj, beat, dt, energy = 1) {
-  if (!obj) return;
-  const api = obj.userData?.charApi;
-  if (api && typeof api.update === 'function') {
-    try { api.update(dt, beat, energy); return; } catch { /* fall through */ }
-  }
-  const ph = obj.userData.phase || 0;
-  const b = beat + ph;
-  const bounce = Math.abs(Math.sin(b * Math.PI));
-  const sq = 1 - bounce * 0.14 * energy;
-  // Squash/stretch around whatever base scale the caller set (userData.baseScale),
-  // not an implicit 1 — otherwise a caller's own scale.setScalar() gets silently
-  // overwritten every frame the moment this bounce animation starts.
-  const base = obj.userData.baseScale || 1;
-  obj.scale.set(base * (1 + (1 - sq) * 0.5), base * sq, base * (1 + (1 - sq) * 0.5));
-  obj.position.y = (obj.userData.baseY || 0) + bounce * 0.34 * energy;
-  obj.rotation.z = Math.sin(b * Math.PI * 0.5) * 0.10 * energy;
-  obj.rotation.y = Math.sin(b * Math.PI * 0.25) * 0.28;
-}
-
-// ------------------------------------------------------------- stand-ins
-
-const GEO = {};
-function geo(key, make) { return GEO[key] || (GEO[key] = make()); }
-
-/** Low-poly stand-in: a body, a face and a crest. 3 draw calls per character. */
-function standIn(def, { scale = 1 } = {}) {
-  const g = new THREE.Group();
-  const mat = new THREE.MeshStandardMaterial({
-    color: def.color, roughness: 0.42, metalness: 0.05, flatShading: true,
+  const idx = Math.max(0, CHARS.findIndex((c) => c.id === def.id));
+  const build = BUILD_BY_SHAPE[def.shape] || BUILD_IDS[idx % BUILD_IDS.length];
+  const cast = makeCast({
+    count: 1,
+    positions: [[0, 0, 0]],
+    builds: [build],
+    players: [{ id: def.id, name: def.name, palette: paletteFor(idx) }],
+    ...opts,
   });
-  const dark = new THREE.MeshStandardMaterial({ color: 0x1a1733, roughness: 0.8, flatShading: true });
-  const accent = new THREE.MeshStandardMaterial({
-    color: def.accent, roughness: 0.35, metalness: 0.1, flatShading: true,
-  });
-
-  let body;
-  switch (def.shape) {
-    case 'block':
-      body = new THREE.Mesh(geo('box', () => new THREE.BoxGeometry(1.05, 1.0, 0.95)), mat); break;
-    case 'tall':
-      body = new THREE.Mesh(geo('tall', () => new THREE.CapsuleGeometry(0.42, 0.8, 3, 8)), mat); break;
-    case 'spike':
-      body = new THREE.Mesh(geo('spike', () => new THREE.OctahedronGeometry(0.72, 0)), mat); break;
-    case 'tiny':
-      body = new THREE.Mesh(geo('tiny', () => new THREE.IcosahedronGeometry(0.46, 0)), mat); break;
-    case 'star':
-      body = new THREE.Mesh(geo('star', () => new THREE.DodecahedronGeometry(0.62, 0)), mat); break;
-    case 'beak':
-      body = new THREE.Mesh(geo('beakb', () => new THREE.SphereGeometry(0.62, 10, 8)), mat); break;
-    case 'blob':
-      body = new THREE.Mesh(geo('blob', () => new THREE.SphereGeometry(0.66, 8, 6)), mat); break;
-    default:
-      body = new THREE.Mesh(geo('round', () => new THREE.IcosahedronGeometry(0.66, 1)), mat);
-  }
-  body.position.y = 0.66;
-  g.add(body);
-
-  // face: one dark visor plate reads as eyes at any distance and costs one call
-  const visor = new THREE.Mesh(geo('visor', () => new THREE.BoxGeometry(0.62, 0.2, 0.1)), dark);
-  visor.position.set(0, 0.78, 0.55);
-  g.add(visor);
-
-  let crest;
-  if (def.crest === 'antenna') {
-    crest = new THREE.Mesh(geo('ant', () => new THREE.ConeGeometry(0.1, 0.5, 6)), accent);
-    crest.position.set(0, 1.42, 0);
-  } else if (def.crest === 'bolt') {
-    crest = new THREE.Mesh(geo('bolt', () => new THREE.TetrahedronGeometry(0.3, 0)), accent);
-    crest.position.set(0, 1.4, 0);
-  } else if (def.crest === 'horns') {
-    crest = new THREE.Mesh(geo('horn', () => new THREE.TorusGeometry(0.34, 0.07, 4, 10, Math.PI)), accent);
-    crest.position.set(0, 1.24, 0);
-  } else if (def.crest === 'cap') {
-    crest = new THREE.Mesh(geo('cap', () => new THREE.CylinderGeometry(0.42, 0.5, 0.22, 8)), accent);
-    crest.position.set(0, 1.28, 0);
-  } else if (def.crest === 'fin') {
-    crest = new THREE.Mesh(geo('fin', () => new THREE.ConeGeometry(0.26, 0.6, 3)), accent);
-    crest.position.set(0, 1.32, -0.05);
-  } else {
-    crest = new THREE.Mesh(geo('plume', () => new THREE.ConeGeometry(0.22, 0.62, 5)), accent);
-    crest.position.set(0, 1.36, -0.1);
-    crest.rotation.x = -0.35;
-  }
-  g.add(crest);
-
-  g.scale.setScalar(scale);
-  g.userData.def = def;
-  g.userData.baseY = 0;
-  g.userData.materials = [mat, dark, accent];
-  return g;
+  const member = cast.get(0);
+  const obj = member.char;
+  obj.userData.charApi = member.anim;
+  obj.userData.def = def;
+  // Kept so disposeChar() can tear down this single-member cast; makeCast's
+  // own dispose() only frees this member's geometry/materials, not the
+  // shared caches other live characters still use.
+  obj.userData.castHandle = cast;
+  return obj;
 }
 
-/** Free the stand-in materials. Shared geometry is cached and kept. */
+/** Per-frame idle/dance, driven by the real beat-phase animator. */
+export function charBeat(obj, beat, dt) {
+  obj?.userData?.charApi?.update(dt, beat);
+}
+
+/** Tear down a character built by `charMesh()`. */
 export function disposeChar(obj) {
-  if (!obj) return;
-  const api = obj.userData?.charApi;
-  if (api && typeof api.dispose === 'function') { try { api.dispose(); } catch { /* ignore */ } }
-  for (const m of obj.userData?.materials || []) m.dispose?.();
+  const cast = obj?.userData?.castHandle;
+  if (cast) { try { cast.dispose(); } catch { /* ignore */ } }
 }
 
 // ------------------------------------------------------------- portraits

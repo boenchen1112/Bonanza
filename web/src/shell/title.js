@@ -20,7 +20,7 @@ import {
   PAL, num, el, mountRoot, panel, sfx, kick, createWipe, beatPulse, fmtScore, reducedMotion,
 } from './theme.js';
 import { createBackdrop } from './backdrop.js';
-import { CHARS, charMesh, charBeat, disposeChar, preloadChars } from './chars.js';
+import { CHARS, charMesh, charBeat, disposeChar } from './chars.js';
 import { CATALOG, drawPreview } from './games.js';
 import { profile } from './state.js';
 import { goView } from './nav.js';
@@ -44,7 +44,6 @@ export default {
   name: 'Title',
 
   load(ctx) {
-    preloadChars();
     S = {
       t: 0, idle: 0, sel: 0, mode: 'menu', selT: 0, confirm: null,
       attractIdx: 0, attractT: 0, attractA: 0, letters: [], items: [], cast: [],
@@ -216,11 +215,8 @@ export default {
     const lg = 1 + down * 0.02 * amp;
     S.logo.style.transform = `translate(-50%,-50%) scale(${lg.toFixed(3)})`;
 
-    // ---- cast dances; the one under the cursor dances harder
-    for (let i = 0; i < S.cast.length; i++) {
-      const energy = (S.mode === 'attract') ? 1.35 : (i === S.sel ? 1.25 : 0.75);
-      charBeat(S.cast[i], beat, dt, energy * (S.reduce ? 0.4 : 1));
-    }
+    // ---- cast dances, driven by the real animator's own beat layer
+    for (let i = 0; i < S.cast.length; i++) charBeat(S.cast[i], beat, dt);
     S.deck.scale.y = 1 + pulse * 0.10;
     S.deck.rotation.y += dt * 0.12;
 

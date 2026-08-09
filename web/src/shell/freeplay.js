@@ -143,7 +143,7 @@ export default {
     const fc = S.cards[focus];
     if (fc?.c2d) drawPreview(fc.g.id, fc.c2d, fc.cv.width, fc.cv.height, beat, S.t);
 
-    for (let i = 0; i < S.cast.length; i++) charBeat(S.cast[i], beat + i * 0.3, dt, S.reduce ? 0.4 : 1);
+    for (let i = 0; i < S.cast.length; i++) charBeat(S.cast[i], beat + i * 0.3, dt);
 
     ctx.camera.position.x = damp(ctx.camera.position.x, (S.pos - S.target) * 0.5 + Math.sin(S.t * 0.3) * 0.25, 3, dt);
     ctx.camera.lookAt(0, 1.2, 0);
