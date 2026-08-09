@@ -146,6 +146,22 @@ export const session = {
     return this.party.games[this.party.index] || null;
   },
 
+  /**
+   * Fold a finished round into party bookkeeping and advance to the next
+   * game. Only the human's own result is recorded — there is no CPU-scoring
+   * model yet (see `results.js`), so `party.scores` is a per-round record of
+   * what was actually played, not a full standings comparison.
+   */
+  recordPartyRound(gameId, result) {
+    if (!this.party) return;
+    this.party.scores.push({ game: gameId, score: result.score, rank: result.rank });
+    this.party.index++;
+  },
+
+  get partyDone() {
+    return !!this.party && this.party.index >= this.party.length;
+  },
+
   /** Standings, best first, with ties broken by wins then id. */
   standings() {
     return this.players.slice().sort((a, b) => (b.points - a.points) || (b.wins - a.wins) || (a.id - b.id));
