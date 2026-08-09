@@ -81,7 +81,11 @@ export function charBeat(obj, beat, dt, energy = 1) {
   const b = beat + ph;
   const bounce = Math.abs(Math.sin(b * Math.PI));
   const sq = 1 - bounce * 0.14 * energy;
-  obj.scale.set(1 + (1 - sq) * 0.5, sq, 1 + (1 - sq) * 0.5);
+  // Squash/stretch around whatever base scale the caller set (userData.baseScale),
+  // not an implicit 1 — otherwise a caller's own scale.setScalar() gets silently
+  // overwritten every frame the moment this bounce animation starts.
+  const base = obj.userData.baseScale || 1;
+  obj.scale.set(base * (1 + (1 - sq) * 0.5), base * sq, base * (1 + (1 - sq) * 0.5));
   obj.position.y = (obj.userData.baseY || 0) + bounce * 0.34 * energy;
   obj.rotation.z = Math.sin(b * Math.PI * 0.5) * 0.10 * energy;
   obj.rotation.y = Math.sin(b * Math.PI * 0.25) * 0.28;

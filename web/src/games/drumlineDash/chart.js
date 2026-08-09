@@ -55,16 +55,23 @@ export const PLAY = [
   [0, 4, 6, 8, 10],
 ];
 
-/** ESCALATE — 10 bars. Missing downbeats, sixteenth pickups, 6-7 notes. */
+/**
+ * ESCALATE — 10 bars. Missing downbeats, sixteenth pickups, capped at 5 notes
+ * (was 6-7) — playtesting found the density plus the off-beat starts too much
+ * at once, especially when a bar's first hit isn't on the downbeat. Every
+ * non-finale bar in the whole chart now tops out at 5 notes; only the finale
+ * is allowed to go higher.
+ */
 export const ESCALATE = [
-  [2, 4, 6, 10, 12, 14],       // no downbeat: the bar starts on a rest
-  [0, 3, 4, 7, 8, 12],         // sixteenth pickups into 2 and 3
-  [0, 2, 6, 8, 10, 14],        // rest where beat 2 should be
-  [2, 6, 8, 11, 12, 14],       // syncopation + a sixteenth, no downbeat
-  [0, 2, 4, 6, 10, 12, 14],    // seven notes, one hole in the middle
+  [2, 4, 10, 12, 14],       // no downbeat: the bar starts on a rest
+  [0, 3, 4, 7, 8],          // sixteenth pickups into 2 and 3
+  [0, 2, 6, 8, 10],         // rest where beat 2 should be
+  [2, 6, 8, 11, 12],        // syncopation + a sixteenth, no downbeat
+  [0, 2, 4, 10, 12],        // one hole in the middle
 ];
 
-/** FINALE — a two-bar call returned whole. Worth double. */
+/** FINALE — a two-bar call returned whole. Worth double. The only phrase
+ *  allowed past the 5-notes-per-bar cap (9 total here, ceiling is 10). */
 export const FINALE = [
   [0, 4, 6, 12],
   [0, 2, 6, 8, 12],

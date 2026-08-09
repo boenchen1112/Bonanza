@@ -722,11 +722,13 @@ function playCall(ctx, t, p, i) {
   const out = ctx.audio.sfxBus;
   const k = i % TOM_HZ.length;
   const big = p.finale ? 1.25 : 1;
+  // Gain raised from 0.62/0.26 — playtesting found the call too quiet to hear
+  // clearly even with the music duck in onCallStart().
   V.tom(t, {
-    freq: TOM_HZ[k], gain: 0.62 * big, decay: 0.26,
+    freq: TOM_HZ[k], gain: 0.85 * big, decay: 0.26,
     pan: 0.24 + k * 0.05, rev: 0.30, dest: out,
   });
-  V.rim(t, { gain: 0.26 * big, pan: 0.34, rev: 0.22, dest: out });
+  V.rim(t, { gain: 0.36 * big, pan: 0.34, rev: 0.22, dest: out });
   if (i === 0) V.hat(t, { gain: 0.18, open: 0.06, pan: 0.4, dest: out });
 }
 

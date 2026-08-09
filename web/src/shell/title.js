@@ -75,6 +75,7 @@ export default {
       m.position.set((i - (castIds.length - 1) / 2) * 1.95, 0.5, -0.4 + (i % 2) * 0.5);
       m.userData.phase = i * 0.37;
       m.userData.baseY = 0.5;
+      m.userData.baseScale = 0.92;
       m.scale.setScalar(0.92);
       stage.add(m);
       S.cast.push(m);
@@ -114,6 +115,22 @@ export default {
     hint.innerHTML = '<span><b class="sh-key">↑↓</b>choose</span><span><b class="sh-key">SPACE</b>select</span>';
     root.appendChild(hint);
     S.hint = hint;
+
+    // The transport (and everything driven by `beat`) is frozen until the
+    // AudioContext unlocks on the first real gesture — browsers block audio
+    // autoplay. Without this the screen looks frozen/broken rather than
+    // waiting for input. Gone the instant that gesture arrives.
+    const startPrompt = el('div', 'sh-display', 'PRESS ANY BUTTON TO START');
+    startPrompt.style.cssText = 'position:absolute;left:50%;bottom:9%;transform:translateX(-50%);'
+      + 'font-size:clamp(14px,2.3vw,28px);letter-spacing:.16em;color:#fff;white-space:nowrap;'
+      + 'text-shadow:0 3px 0 rgba(0,0,0,.6),0 0 22px rgba(255,255,255,.4);z-index:6;';
+    root.appendChild(startPrompt);
+    S.startPrompt = startPrompt;
+    if (ctx.audio?.unlocked) {
+      startPrompt.style.display = 'none';
+    } else {
+      ctx.bus?.once('audio:unlocked', () => { S?.startPrompt && (S.startPrompt.style.display = 'none'); });
+    }
 
     // top-right career line — tiny, but it says "this game remembers you"
     const stats = el('div', 'sh-title__stats');
@@ -175,6 +192,14 @@ export default {
 
     const pulse = beatPulse(beat, 6);
     const down = beatPulse(beat / 4, 2.4);
+
+    // Driven by S.t (real elapsed time), not `beat`, since this must keep
+    // breathing while the transport is frozen pre-audio-unlock.
+    if (S.startPrompt.style.display !== 'none') {
+      const p = 0.5 + 0.5 * Math.sin(S.t * 3.4);
+      S.startPrompt.style.opacity = (0.55 + 0.45 * p).toFixed(2);
+      S.startPrompt.style.transform = `translateX(-50%) scale(${(1 + p * 0.05).toFixed(3)})`;
+    }
 
     // ---- logo: a ripple that crosses the wordmark on every beat
     const amp = S.reduce ? 0.35 : 1;

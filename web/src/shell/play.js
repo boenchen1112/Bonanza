@@ -200,6 +200,7 @@ function quit(ctx) {
   const nav = { go, opts: {} };
   if (session.mode === 'party' && session.party) goView(nav, 'party', { quit: true });
   else if (S.from === 'freeplay') goView(nav, 'freeplay', { game: S.gameId });
+  else if (S.from === 'select') goView(nav, 'select', {});
   else goView(nav, 'title', {});
 }
 

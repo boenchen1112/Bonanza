@@ -337,6 +337,7 @@ function setPreview(ctx, def) {
   S.previewId = def.id;
   if (S.preview) { S.stand.remove(S.preview); disposeChar(S.preview); }
   const m = charMesh(def, {});
+  m.userData.baseScale = 1.55;
   m.scale.setScalar(1.55);
   m.position.y = 0.42;
   m.userData.baseY = 0.42;
@@ -366,6 +367,7 @@ function lockIn(ctx, slot, def, isCpu) {
   m.position.set((slot - 1.5) * 1.6, 0.5, 0);
   m.userData.baseY = 0.5;
   m.userData.phase = slot * 0.3;
+  m.userData.baseScale = 0.8;
   m.scale.setScalar(0.8);
   S.castGroup.add(m);
   if (S.cast[slot]) { S.castGroup.remove(S.cast[slot]); disposeChar(S.cast[slot]); }

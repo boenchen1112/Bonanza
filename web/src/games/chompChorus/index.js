@@ -201,7 +201,9 @@ export default {
       action: LANES[n.lane].action,
       lane: n.lane,
       beat: n.beat,
-      lead: n.lead ?? 1,
+      // Doubled from 1 beat: playtesting found the tempo too fast to react to
+      // the breath-ring telegraph in time.
+      lead: n.lead ?? 2,
       finale: !!n.finale,
       intro: !!n.intro,
       run: n.run ?? null,

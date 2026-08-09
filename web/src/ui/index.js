@@ -1,19 +1,28 @@
 /**
- * UI layer: HUD, verdict popups, banners, countdown.  [ui agent owns this dir]
+ * UI layer: HUD, verdict popups, banners.  [ui agent owns this dir]
  *
  * DOM rather than in-scene text: crisp at every DPI, free layout, and it
  * cannot cost us a draw call on the beat. The only rule is that nothing here
  * may read the clock on its own — the game tells the UI what happened, the UI
  * never guesses.
+ *
+ * Text is rendered with the BASH procedural typeface (`font.js`) rather than
+ * a system font, rasterised once per distinct string+style and cached there —
+ * see `font.js` for why. Small system-ui labels (SCORE, COMBO, ACCURACY) are
+ * the one place a system face is allowed; `styles.js` documents that split.
  */
 
 import { clamp01, backOut, easeOutCubic } from '../core/util.js';
 import { FEEL } from '../core/feel.js';
+import { injectStyles } from './styles.js';
+import { style as fontStyle, textImage } from './font.js';
+
+const toColor = (c) => (typeof c === 'number' ? '#' + (c >>> 0).toString(16).padStart(6, '0') : c);
 
 export function createUI({ root, bus, clock }) {
   root.innerHTML = '';
   const layer = document.createElement('div');
-  layer.style.cssText = 'position:absolute;inset:0;pointer-events:none;';
+  layer.className = 'bbb-layer';
   root.appendChild(layer);
 
   injectStyles();
@@ -28,13 +37,38 @@ export function createUI({ root, bus, clock }) {
     return d;
   }
 
+  /** A `.bbb-t` node showing `text` rasterised in the BASH face. Sizes off the
+   *  `--cap` custom property inherited from its parent — callers size via CSS. */
+  function glyph(text, { styleName = 'display', color = '#fff', extraClass = '' } = {}) {
+    const img = textImage(String(text), fontStyle(styleName, { color: toColor(color) }));
+    const d = document.createElement('div');
+    d.className = extraClass ? `bbb-t ${extraClass}` : 'bbb-t';
+    d.style.backgroundImage = `url(${img.url})`;
+    d.style.setProperty('--ratio', String(img.ratio));
+    d.style.setProperty('--ar', String(img.aspect));
+    return d;
+  }
+
+  /** Replace a mounted glyph node's image in place, skipping work if the text
+   *  didn't actually change — these are called from hot per-frame HUD setters. */
+  function repaint(holder, text, opts) {
+    const s = String(text);
+    if (holder.dataset.text === s) return;
+    holder.dataset.text = s;
+    const img = textImage(s, fontStyle(opts.styleName || 'hud', { color: toColor(opts.color || '#fff') }));
+    holder.style.backgroundImage = `url(${img.url})`;
+    holder.style.setProperty('--ratio', String(img.ratio));
+    holder.style.setProperty('--ar', String(img.aspect));
+  }
+
   /** Verdict popup at a screen position (0..1 normalised). */
   function popup(text, { x = 0.5, y = 0.42, color = '#fff', scale = 1, life = FEEL.popupLife, kind = 'verdict' } = {}) {
-    const d = el('bbb-pop bbb-pop--' + kind, text);
-    d.style.color = typeof color === 'number' ? '#' + color.toString(16).padStart(6, '0') : color;
+    const d = el('bbb-pop bbb-pop--' + kind);
     d.style.left = x * 100 + '%';
     d.style.top = y * 100 + '%';
+    d.style.color = toColor(color);
     d.style.setProperty('--s', String(scale));
+    d.appendChild(glyph(text, { styleName: 'display', color }));
     layer.appendChild(d);
     live.push({ el: d, life: 0, maxLife: life, kind, x, y });
     return d;
@@ -43,9 +77,7 @@ export function createUI({ root, bus, clock }) {
   /** Big centred banner (round title, "GO!", "FINISH!"). */
   function banner(text, { sub = '', life = 1.6, color = '#fff' } = {}) {
     const d = el('bbb-banner');
-    const m = el('bbb-banner__main', text);
-    m.style.color = color;
-    d.appendChild(m);
+    d.appendChild(glyph(text, { styleName: 'title', color, extraClass: 'bbb-banner__main' }));
     if (sub) d.appendChild(el('bbb-banner__sub', sub));
     layer.appendChild(d);
     live.push({ el: d, life: 0, maxLife: life, kind: 'banner', x: 0.5, y: 0.5 });
@@ -63,6 +95,12 @@ export function createUI({ root, bus, clock }) {
       const p = live[i];
       p.life += dt;
       const t = clamp01(p.life / p.maxLife);
+      if (p.kind === 'pulse') {
+        if (t >= 1) { live.splice(i, 1); continue; }
+        const s = 1.35 - 0.35 * backOut(t);
+        p.el.style.transform = `scale(${s})`;
+        continue;
+      }
       if (t >= 1) { p.el.remove(); live.splice(i, 1); continue; }
       if (p.kind === 'verdict') {
         // pop in with overshoot, drift up, fade out only at the very end
@@ -83,65 +121,58 @@ export function createUI({ root, bus, clock }) {
   // --- HUD ------------------------------------------------------------------
   const hud = {
     _root: null,
+    _lastCombo: 0,
     mount() {
       if (this._root) return this._root;
       const d = el('bbb-hud');
       d.innerHTML = `
-        <div class="bbb-hud__left">
-          <div class="bbb-hud__score" data-score>0</div>
-          <div class="bbb-hud__combo" data-combo></div>
+        <div class="bbb-hud__score">
+          <div class="bbb-lab">SCORE</div>
+          <div class="bbb-t bbb-odo" data-score></div>
+          <div class="bbb-combo-wrap"><div class="bbb-combo" data-combo-wrap>
+            <div class="bbb-t bbb-combo__n" data-combo></div>
+            <div class="bbb-combo__lab">COMBO</div>
+          </div></div>
         </div>
-        <div class="bbb-hud__right"><div class="bbb-hud__acc" data-acc></div></div>`;
+        <div class="bbb-hud__acc">
+          <div class="bbb-lab">ACCURACY</div>
+          <div class="bbb-acc__row"><div class="bbb-t bbb-acc__n" data-acc></div></div>
+        </div>`;
       layer.appendChild(d);
       this._root = d;
+      this._lastCombo = 0;
+      repaint(d.querySelector('[data-score]'), '0', { styleName: 'hud' });
+      repaint(d.querySelector('[data-acc]'), '0.0%', { styleName: 'hud', color: '#9fb2ff' });
+      const comboWrap = d.querySelector('[data-combo-wrap]');
+      comboWrap.style.opacity = '0';
       return d;
     },
     setScore(v) {
       const n = this._root?.querySelector('[data-score]');
-      if (n) n.textContent = String(Math.round(v));
+      if (n) repaint(n, String(Math.round(v)), { styleName: 'hud' });
     },
     setCombo(v) {
+      const wrap = this._root?.querySelector('[data-combo-wrap]');
       const n = this._root?.querySelector('[data-combo]');
-      if (!n) return;
-      n.textContent = v >= 2 ? `${v} COMBO` : '';
-      if (v >= 2) { n.classList.remove('pulse'); void n.offsetWidth; n.classList.add('pulse'); }
+      if (!wrap || !n) return;
+      v = Math.round(v);
+      if (v >= 2) {
+        wrap.style.opacity = '1';
+        repaint(n, `${v} `, { styleName: 'hud', color: '#ffd93d' });
+        if (v > this._lastCombo) {
+          live.push({ el: wrap, life: 0, maxLife: 0.28, kind: 'pulse' });
+        }
+      } else {
+        wrap.style.opacity = '0';
+      }
+      this._lastCombo = v;
     },
     setAccuracy(a) {
       const n = this._root?.querySelector('[data-acc]');
-      if (n) n.textContent = (a * 100).toFixed(1) + '%';
+      if (n) repaint(n, (a * 100).toFixed(1) + '%', { styleName: 'hud', color: '#9fb2ff' });
     },
     unmount() { this._root?.remove(); this._root = null; },
   };
 
   return { layer, popup, banner, clear, update, hud, el };
-}
-
-function injectStyles() {
-  if (document.getElementById('bbb-ui-style')) return;
-  const s = document.createElement('style');
-  s.id = 'bbb-ui-style';
-  s.textContent = `
-  .bbb-pop{position:absolute;transform:translate(-50%,-50%);font-weight:900;
-    font-size:clamp(28px,5.2vw,64px);letter-spacing:-.02em;white-space:nowrap;
-    text-shadow:0 4px 0 rgba(0,0,0,.45),0 0 24px currentColor;
-    font-family:system-ui,-apple-system,"Segoe UI",sans-serif;will-change:transform,opacity;}
-  .bbb-banner{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
-    text-align:center;font-family:system-ui,sans-serif;will-change:transform,opacity;}
-  .bbb-banner__main{font-weight:900;font-size:clamp(40px,9vw,120px);color:#fff;
-    letter-spacing:-.03em;text-shadow:0 6px 0 rgba(0,0,0,.5),0 0 40px rgba(255,255,255,.35);}
-  .bbb-banner__sub{font-weight:700;font-size:clamp(14px,2.2vw,26px);color:#cfd3ff;margin-top:.3em;
-    text-shadow:0 2px 0 rgba(0,0,0,.5);}
-  .bbb-hud{position:absolute;inset:0;padding:clamp(12px,2.4vw,32px);display:flex;
-    justify-content:space-between;align-items:flex-start;font-family:system-ui,sans-serif;}
-  .bbb-hud__score{font-weight:900;font-size:clamp(24px,4vw,52px);color:#fff;
-    text-shadow:0 3px 0 rgba(0,0,0,.5);font-variant-numeric:tabular-nums;}
-  .bbb-hud__combo{font-weight:800;font-size:clamp(14px,2.2vw,26px);color:#ffd93d;
-    text-shadow:0 2px 0 rgba(0,0,0,.5);min-height:1.2em;}
-  .bbb-hud__combo.pulse{animation:bbbPulse .28s cubic-bezier(.2,1.6,.4,1);}
-  .bbb-hud__acc{font-weight:800;font-size:clamp(14px,2.2vw,26px);color:#9fb2ff;
-    text-shadow:0 2px 0 rgba(0,0,0,.5);font-variant-numeric:tabular-nums;}
-  @keyframes bbbPulse{0%{transform:scale(1.35)}100%{transform:scale(1)}}
-  @media (prefers-reduced-motion: reduce){.bbb-hud__combo.pulse{animation:none}}
-  `;
-  document.head.appendChild(s);
 }

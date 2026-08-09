@@ -4,6 +4,7 @@
  */
 import * as THREE from 'three';
 import { GAMES } from './registry.js';
+import { goPlay } from './nav.js';
 
 let idx = 0, cards = [], root;
 
@@ -35,7 +36,7 @@ export default {
       if (!e.down) continue;
       if (e.action === 'left') { idx = (idx + GAMES.length - 1) % GAMES.length; ctx.audio.sfx('ui'); render(ctx); }
       else if (e.action === 'right') { idx = (idx + 1) % GAMES.length; ctx.audio.sfx('ui'); render(ctx); }
-      else if (e.action === 'a') { ctx.audio.sfx('ui'); ctx.go(GAMES[idx].id); }
+      else if (e.action === 'a') { ctx.audio.sfx('ui'); goPlay({ go: ctx.go }, GAMES[idx].id, { from: 'select' }); }
       else if (e.action === 'b' || e.action === 'pause') { ctx.audio.sfx('uiBack'); ctx.go('title'); }
     }
   },

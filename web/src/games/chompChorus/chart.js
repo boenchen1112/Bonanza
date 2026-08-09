@@ -173,7 +173,29 @@ export function buildChart() {
   add(FINALE_BEAT, [0, 1, 2, 3], { finale: true, lead: 4, holdBeats: FINALE_END - FINALE_BEAT });
 
   notes.sort((a, b) => a.beat - b.beat || a.lane - b.lane);
-  return notes;
+  return thinCallFrequency(notes);
+}
+
+/**
+ * Halve how often each lane is called on, post-TEACH (bars 0-7 are already
+ * sparse tutorial content and stay untouched). Thins every other note in
+ * chronological order PER LANE, independent of the other lanes in the same
+ * chord — which fits the game's own "a lane that has dropped out leaves a
+ * hole you can hear and point at" design rather than fighting it. Beats
+ * themselves are never moved, so the backing track's chord changes and the
+ * bed/gulp audio cues (keyed off remaining notes) stay in sync. Runs are
+ * exempt — a run is one travelling-wave phrase across all four lanes, not
+ * four independent calls, and thinning it per lane would tear a hole in the
+ * middle of the wave instead of dropping a whole note cleanly.
+ */
+function thinCallFrequency(notes) {
+  const TEACH_END = 8 * 4;
+  const perLaneCount = [0, 0, 0, 0];
+  return notes.filter((n) => {
+    if (n.beat < TEACH_END || n.intro || n.finale || n.run != null) return true;
+    const k = perLaneCount[n.lane]++;
+    return k % 2 === 0;
+  });
 }
 
 /** Per-lane beat lists, for the telegraph lookahead. */
