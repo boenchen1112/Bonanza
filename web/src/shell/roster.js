@@ -21,7 +21,7 @@ import { createBackdrop } from './backdrop.js';
 import { CHARS, charById, charMesh, charBeat, disposeChar, drawPortrait } from './chars.js';
 import { CATALOG } from './games.js';
 import { profile, session } from './state.js';
-import { goView } from './nav.js';
+import { goView, rosterExitRoute } from './nav.js';
 
 const COLS = 4;
 const SLOT_TYPES = [
@@ -466,9 +466,10 @@ function startRun(ctx) {
   sfx(ctx, 'fanfare');
   ctx.stage.flash?.(0.3, PAL.yellow);
   ctx.fx.confetti([0, 1.5, 0], { count: 60 });
+  const r = rosterExitRoute(S.mode);
   S.exit = {
     t: 0, fired: false, color: S.mode === 'party' ? PAL.yellow : PAL.cyan,
-    go: () => goView(ctx, S.mode === 'party' ? 'party' : 'freeplay', {}),
+    go: () => goView(ctx, r.view, r.opts),
   };
 }
 

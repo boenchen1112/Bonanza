@@ -23,7 +23,7 @@ import { createBackdrop } from './backdrop.js';
 import { CHARS, charMesh, charBeat, disposeChar } from './chars.js';
 import { CATALOG, drawPreview } from './games.js';
 import { profile } from './state.js';
-import { goView } from './nav.js';
+import { goView, titleMenuRoute } from './nav.js';
 
 const LOGO_TOP = 'BEAT BASH';
 const LOGO_BOT = 'BONANZA';
@@ -284,10 +284,8 @@ export default {
       if (!S.confirm.fired && S.confirm.t > 0.24) {
         S.confirm.fired = true;
         S.wipe.play(() => {
-          const id = S.confirm.id;
-          if (id === 'party') goView(ctx, 'roster', { mode: 'party' });
-          else if (id === 'free') goView(ctx, 'roster', { mode: 'free' });
-          else goView(ctx, 'options', {});
+          const r = titleMenuRoute(S.confirm.id);
+          goView(ctx, r.view, r.opts);
         }, MENU[S.sel].color);
       }
     }

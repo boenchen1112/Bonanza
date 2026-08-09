@@ -8,7 +8,9 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { resolveActivation } from '../src/shell/nav.js';
+import {
+  resolveActivation, titleMenuRoute, rosterExitRoute, exitRoute, partyConfirmRoute,
+} from '../src/shell/nav.js';
 
 const SCENES = [
   { id: 'title', kind: 'shell' },
@@ -38,4 +40,39 @@ test('a debug-kind target passes through unchanged', () => {
 
 test('an unregistered id is rejected', () => {
   assert.throws(() => resolveActivation('does-not-exist', {}, SCENES));
+});
+
+test('titleMenuRoute maps each menu item to its screen', () => {
+  assert.deepEqual(titleMenuRoute('party'), { view: 'roster', opts: { mode: 'party' } });
+  assert.deepEqual(titleMenuRoute('free'), { view: 'roster', opts: { mode: 'free' } });
+  assert.deepEqual(titleMenuRoute('options'), { view: 'options', opts: {} });
+});
+
+test('rosterExitRoute sends a locked-in lineup to the right next screen', () => {
+  assert.equal(rosterExitRoute('party').view, 'party');
+  assert.equal(rosterExitRoute('free').view, 'freeplay');
+});
+
+test('exitRoute: mid-party always wins, regardless of how the round was reached', () => {
+  assert.equal(exitRoute({ inParty: true, from: 'freeplay', gameId: 'swing-kings' }).view, 'party');
+  assert.equal(exitRoute({ inParty: true, from: 'select', gameId: 'swing-kings' }).view, 'party');
+});
+
+test('exitRoute: free play returns to the carousel focused on the game just played', () => {
+  const r = exitRoute({ inParty: false, from: 'freeplay', gameId: 'swing-kings' });
+  assert.deepEqual(r, { view: 'freeplay', opts: { game: 'swing-kings' } });
+});
+
+test('exitRoute: select and unknown "from" fall back appropriately', () => {
+  assert.equal(exitRoute({ inParty: false, from: 'select' }).view, 'select');
+  assert.equal(exitRoute({ inParty: false, from: undefined }).view, 'title');
+});
+
+test('partyConfirmRoute: not done starts the next round with its game id', () => {
+  const r = partyConfirmRoute({ done: false, gameId: 'chomp-chorus' });
+  assert.deepEqual(r, { view: 'play', opts: { game: 'chomp-chorus', from: 'party' } });
+});
+
+test('partyConfirmRoute: done wraps up to title', () => {
+  assert.deepEqual(partyConfirmRoute({ done: true }), { view: 'title', opts: {} });
 });

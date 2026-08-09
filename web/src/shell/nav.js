@@ -1,32 +1,30 @@
 /**
  * Shell routing.  [shell agent owns this file]
  *
- * The shell needs more screens than the registry currently lists, and the
- * registry is integrator-owned. So navigation goes through one indirection:
- * if a view has its own registered scene id, we route straight to it; if it
- * does not, it is hosted inside `select`, which is a dispatcher.
+ * Every screen the shell can show now has its own registry entry (see
+ * `registry.js`), so `goView()` is a direct dispatch to `ctx.go()` — kept as
+ * its own function only because `resolveActivation()` (below) is where the
+ * real routing contract lives, and every navigation call should go through
+ * one name rather than reaching for `ctx.go()` inconsistently.
  *
- * The upshot is that adding
- *     { id: 'roster', kind: 'shell', load: () => import('./roster.js') }
- * to the registry is a pure upgrade — deep links and `__BBB__.goto('roster')`
- * start working, and nothing else changes.
+ * The `*Route()` functions below are the actual DECISIONS — pure, state in
+ * and `{view, opts}` out, no `ctx`/DOM — that each scene's input handler used
+ * to make inline. Extracted here so the same decision (e.g. "where does a
+ * player land leaving a round") isn't hand-copied between `play.js` and
+ * `results.js`, and so it's unit-testable without booting a scene.
  */
 
 import { SCENES } from './registry.js';
-
-/** Views that live inside `select` until they get their own registry entry. */
-export const HOSTED = ['roster', 'freeplay', 'party', 'options', 'play'];
 
 const registered = (id) => SCENES.some((s) => s.id === id);
 
 /**
  * @param {object} ctx
- * @param {'title'|'roster'|'freeplay'|'party'|'options'|'play'|'results'} view
+ * @param {string} view
  */
 export function goView(ctx, view, opts = {}) {
-  if (view === 'title' || view === 'results') { ctx.go(view, opts); return; }
-  if (registered(view)) { ctx.go(view, opts); return; }
-  ctx.go('select', { ...opts, view });
+  if (!registered(view)) throw new Error(`goView: unregistered view "${view}"`);
+  ctx.go(view, opts);
 }
 
 /** Route into a minigame — through the play wrapper, so pause/party work. */
@@ -34,10 +32,34 @@ export function goPlay(ctx, gameId, opts = {}) {
   goView(ctx, 'play', { ...opts, game: gameId });
 }
 
-/** Read the view this scene should present. */
-export function viewOf(ctx, fallback = 'freeplay') {
-  const v = ctx.opts?.view;
-  return typeof v === 'string' && v ? v : fallback;
+/** `title.js`'s menu confirm -> the next view. */
+export function titleMenuRoute(id) {
+  if (id === 'party') return { view: 'roster', opts: { mode: 'party' } };
+  if (id === 'free') return { view: 'roster', opts: { mode: 'free' } };
+  return { view: 'options', opts: {} };
+}
+
+/** `roster.js`'s startRun() -> the next view once a lineup is locked in. */
+export function rosterExitRoute(mode) {
+  return mode === 'party' ? { view: 'party', opts: {} } : { view: 'freeplay', opts: {} };
+}
+
+/**
+ * Shared by `play.js`'s pause-menu quit() and `results.js`'s confirm(): where
+ * a player leaving a round lands, given how they got there. Mid-party always
+ * wins — the party hub is the one consistent "next up"/wrap-up screen.
+ * @param {{inParty:boolean, from?:string, gameId?:string}} state
+ */
+export function exitRoute({ inParty, from, gameId }) {
+  if (inParty) return { view: 'party', opts: {} };
+  if (from === 'freeplay') return { view: 'freeplay', opts: { game: gameId } };
+  if (from === 'select') return { view: 'select', opts: {} };
+  return { view: 'title', opts: {} };
+}
+
+/** `party.js`'s confirm -> the next view: start the next round, or wrap up. */
+export function partyConfirmRoute({ done, gameId }) {
+  return done ? { view: 'title', opts: {} } : { view: 'play', opts: { game: gameId, from: 'party' } };
 }
 
 /**

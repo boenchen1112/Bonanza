@@ -22,7 +22,7 @@ import { createPause } from './pause.js';
 import { mountRoot, sfx, PAL } from './theme.js';
 import { session } from './state.js';
 import { CATALOG } from './games.js';
-import { goView } from './nav.js';
+import { goView, exitRoute } from './nav.js';
 
 /** Beats of count-in after a pause. Three is the shortest that reads as one. */
 const RESUME_BEATS = 3;
@@ -198,10 +198,9 @@ function quit(ctx) {
   sfx(ctx, 'uiBack');
   const go = S.baseGo;
   const nav = { go, opts: {} };
-  if (session.mode === 'party' && session.party) goView(nav, 'party', { quit: true });
-  else if (S.from === 'freeplay') goView(nav, 'freeplay', { game: S.gameId });
-  else if (S.from === 'select') goView(nav, 'select', {});
-  else goView(nav, 'title', {});
+  const inParty = session.mode === 'party' && !!session.party;
+  const r = exitRoute({ inParty, from: S.from, gameId: S.gameId });
+  goView(nav, r.view, inParty ? { ...r.opts, quit: true } : r.opts);
 }
 
 function blur(ctx) {

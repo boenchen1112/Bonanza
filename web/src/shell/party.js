@@ -16,7 +16,7 @@ import { PAL, num, el, mountRoot, panel, sfx, createWipe, beatPulse, fmtScore, R
 import { createBackdrop } from './backdrop.js';
 import { CATALOG } from './games.js';
 import { session } from './state.js';
-import { goView, goPlay } from './nav.js';
+import { goView, partyConfirmRoute } from './nav.js';
 
 let S = null;
 
@@ -109,16 +109,14 @@ export default {
       if (!e.down) continue;
       if (e.action === 'a') {
         sfx(ctx, 'fanfare');
-        if (S.done) {
-          session.endParty();
-          S.exit = { t: 0, fired: false, color: PAL.violet, go: () => goView(ctx, 'title', {}) };
-        } else {
-          S.exit = { t: 0, fired: false, color: PAL.yellow, go: () => goPlay(ctx, session.currentGame, { from: 'party' }) };
-        }
+        const r = partyConfirmRoute({ done: S.done, gameId: session.currentGame });
+        if (S.done) session.endParty();
+        S.exit = { t: 0, fired: false, color: S.done ? PAL.violet : PAL.yellow, go: () => goView(ctx, r.view, r.opts) };
       } else if (e.action === 'b' || e.action === 'pause') {
         sfx(ctx, 'uiBack');
         session.endParty();
-        S.exit = { t: 0, fired: false, color: PAL.violet, go: () => goView(ctx, 'title', {}) };
+        const r = partyConfirmRoute({ done: true });
+        S.exit = { t: 0, fired: false, color: PAL.violet, go: () => goView(ctx, r.view, r.opts) };
       }
     }
   },

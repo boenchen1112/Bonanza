@@ -14,7 +14,7 @@ import { createBackdrop } from './backdrop.js';
 import { CATALOG } from './games.js';
 import { charById, charMesh, charBeat, disposeChar } from './chars.js';
 import { profile, session } from './state.js';
-import { goView } from './nav.js';
+import { goView, exitRoute } from './nav.js';
 
 /** Rank -> the animator verdict whose reaction pose reads closest to it. */
 const RANK_VERDICT = { S: 'perfect', A: 'great', B: 'good', C: 'good', D: 'miss' };
@@ -141,15 +141,10 @@ export default {
   },
 };
 
-/** Mirrors `play.js`'s pause-menu quit() routing, minus the pause-specific bits. */
 function routeOut(ctx) {
-  if (S.inParty && session.party) {
-    // Always back through the party hub, done or not — it's both the "next
-    // up" transition between rounds and the final recap, never skipped.
-    goView(ctx, 'party', {});
-  } else if (S.from === 'freeplay') goView(ctx, 'freeplay', { game: S.gameId });
-  else if (S.from === 'select') goView(ctx, 'select', {});
-  else goView(ctx, 'title', {});
+  const inParty = S.inParty && !!session.party;
+  const r = exitRoute({ inParty, from: S.from, gameId: S.gameId });
+  goView(ctx, r.view, r.opts);
 }
 
 let cssDone = false;
