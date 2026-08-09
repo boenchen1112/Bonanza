@@ -144,8 +144,9 @@ export default {
 /** Mirrors `play.js`'s pause-menu quit() routing, minus the pause-specific bits. */
 function routeOut(ctx) {
   if (S.inParty && session.party) {
-    if (session.partyDone) goView(ctx, 'party', {});
-    else goView(ctx, 'play', { game: session.currentGame, from: 'party' });
+    // Always back through the party hub, done or not — it's both the "next
+    // up" transition between rounds and the final recap, never skipped.
+    goView(ctx, 'party', {});
   } else if (S.from === 'freeplay') goView(ctx, 'freeplay', { game: S.gameId });
   else if (S.from === 'select') goView(ctx, 'select', {});
   else goView(ctx, 'title', {});

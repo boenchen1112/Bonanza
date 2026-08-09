@@ -19,6 +19,8 @@ export const SCENES = [
   // start working and nothing else changes.
   { id: 'roster', kind: 'shell', load: () => import('./roster.js') },
   { id: 'freeplay', kind: 'shell', load: () => import('./freeplay.js') },
+  { id: 'party', kind: 'shell', load: () => import('./party.js') },
+  { id: 'options', kind: 'shell', load: () => import('./options.js') },
   { id: 'play', kind: 'shell', load: () => import('./play.js') },
 
   // Not reachable in normal play — it exists so the character rig, animation

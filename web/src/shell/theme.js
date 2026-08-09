@@ -10,6 +10,7 @@
  */
 
 import { clamp01 } from '../core/util.js';
+import { profile } from './state.js';
 
 export const PAL = {
   bg: '#0b0a1a',
@@ -107,7 +108,9 @@ export function breathe(t, hz = 0.5) {
 export const stagger = (i, amount = 0.12) => ((i * 0.6180339887) % 1) * amount;
 
 export function reducedMotion() {
-  try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; }
+  let osWants = false;
+  try { osWants = window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { /* no matchMedia */ }
+  return osWants || !!profile?.options?.reduceMotion;
 }
 
 /** Progress helper: seconds since a mark, eased 0..1 over `dur`. */
