@@ -23,6 +23,7 @@ import { createAudio } from './audio/index.js';
 import { createUI } from './ui/index.js';
 import { createFX } from './render/fx/index.js';
 import { SCENES, getScene } from './shell/registry.js';
+import { resolveActivation } from './shell/nav.js';
 
 const canvas = document.getElementById('stage');
 const uiRoot = document.getElementById('ui');
@@ -110,8 +111,18 @@ const ctxBase = {
     if (now >= hitstopUntil) frozenFrom = now;
     hitstopUntil = Math.max(hitstopUntil, now + seconds);
   },
-  /** Ask the shell to move on. */
-  go(sceneId, opts) { pendingScene = { id: sceneId, opts }; },
+  /**
+   * Ask the shell to move on. Routed through `resolveActivation` so a scene
+   * that calls `go(gameId)` directly (as `select.js` used to) gets silently
+   * corrected into the `play` wrapper rather than skipping pause/results.
+   */
+  go(sceneId, opts) {
+    try {
+      pendingScene = resolveActivation(sceneId, opts);
+    } catch (e) {
+      console.error('go: routing rejected', sceneId, e);
+    }
+  },
 };
 
 // --------------------------------------------------------------- scene swap
@@ -171,8 +182,10 @@ function frame(nowMs) {
   requestAnimationFrame(frame);
 
   const nowS = nowMs / 1000;
-  let dt = Math.min((nowMs - last) / 1000, FEEL.maxDt);
+  const rawDt = (nowMs - last) / 1000;
+  let dt = Math.min(rawDt, FEEL.maxDt);
   last = nowMs;
+  if (rawDt > FEEL.maxDt * 1.5) perf.onStall(rawDt);
 
   clock.tick(nowMs);
   input.pollGamepads(nowMs);
@@ -210,6 +223,7 @@ function frame(nowMs) {
   stage.render(dt, nowS);
 
   telemetry.push(nowMs, cpuEnd - nowMs);
+  perf.update(nowMs);
 
   if (pendingScene) {
     const p = pendingScene;
@@ -267,6 +281,57 @@ bus.on('judge', (j) => telemetry.judgements.push({
   verdict: j.verdict, errMs: j.errMs, beat: j.beat ?? null, t: clock.now(),
 }));
 
+// ------------------------------------------------------------------ perf HUD
+//
+// A real-hardware profiling overlay. The critic harness's SwiftShader numbers
+// are known to be meaningless (see docs/HANDOFF.md §3) — this exists so a
+// player hitting real lag/audio-dropout/scoring-drift on real hardware can
+// turn it on, reproduce the problem, and report back what it actually reads.
+// Toggle with the ` (backquote) key, or start visible with ?perf=1.
+
+const perf = (() => {
+  let el = null;
+  let visible = false;
+  let lastPaint = 0;
+  let stallCount = 0;
+  let worstStallMs = 0;
+
+  function ensure() {
+    if (el) return el;
+    el = document.createElement('div');
+    el.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:9999;'
+      + 'font:11px/1.5 ui-monospace,Consolas,monospace;color:#c9ffb0;'
+      + 'background:rgba(4,6,10,.78);border:1px solid rgba(180,255,150,.35);'
+      + 'border-radius:6px;padding:6px 9px;white-space:pre;pointer-events:none;'
+      + 'text-shadow:0 1px 0 rgba(0,0,0,.8);';
+    document.body.appendChild(el);
+    return el;
+  }
+
+  return {
+    onStall(rawDtSeconds) {
+      stallCount++;
+      worstStallMs = Math.max(worstStallMs, rawDtSeconds * 1000);
+    },
+    toggle(force) {
+      visible = force !== undefined ? force : !visible;
+      if (visible) { ensure().style.display = 'block'; } else if (el) { el.style.display = 'none'; }
+    },
+    update(nowMs) {
+      if (!visible || nowMs - lastPaint < 250) return;
+      lastPaint = nowMs;
+      const s = telemetry.snapshot();
+      ensure().textContent =
+        `fps ${s.fps.toFixed(0)}  cpu ${s.cpuMs.mean.toFixed(1)}ms (p95 ${s.cpuMs.p95.toFixed(1)})\n`
+        + `draws ${s.render.drawCalls}  tris ${s.render.triangles}\n`
+        + `audio ${audioCtx.state}  latency ${s.outputLatencyMs.toFixed(0)}ms\n`
+        + `stalls ${stallCount} (worst ${worstStallMs.toFixed(0)}ms)  scene ${s.scene || '-'}`;
+    },
+  };
+})();
+window.addEventListener('keydown', (e) => { if (e.code === 'Backquote') perf.toggle(); }, { passive: true });
+if (new URLSearchParams(location.search).has('perf')) perf.toggle(true);
+
 // ------------------------------------------------------------- resize / focus
 
 function resize() {
@@ -279,6 +344,23 @@ function resize() {
 }
 window.addEventListener('resize', resize, { passive: true });
 window.addEventListener('orientationchange', resize, { passive: true });
+
+// Browser/OS zoom (Ctrl+/-, pinch-zoom) changes devicePixelRatio and the
+// effective viewport without reliably firing 'resize' in every browser. The
+// DOM UI layer re-derives its sizing from vmin on every paint regardless, so
+// it always tracks zoom — but the WebGL canvas only resamples its buffer size
+// and DPR inside resize() above, so without this it drifts out of sync with
+// the DOM and renders stretched or misaligned. visualViewport catches both
+// cases in one shared path, rAF-coalesced so a zoom gesture doesn't spam it.
+if (window.visualViewport) {
+  let queued = false;
+  const onViewport = () => {
+    if (queued) return;
+    queued = true;
+    requestAnimationFrame(() => { queued = false; resize(); });
+  };
+  window.visualViewport.addEventListener('resize', onViewport, { passive: true });
+}
 
 // Autoplay policy: the context starts suspended until a real gesture.
 async function unlock() {

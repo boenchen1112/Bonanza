@@ -39,3 +39,25 @@ export function viewOf(ctx, fallback = 'freeplay') {
   const v = ctx.opts?.view;
   return typeof v === 'string' && v ? v : fallback;
 }
+
+/**
+ * The one routing decision every activation must pass through: a `kind:'game'`
+ * target is never activated directly, only ever wrapped in `play` (so pause
+ * and results are never skippable), a `kind:'shell'`/`'debug'` target passes
+ * through unchanged, and an unregistered id is rejected rather than silently
+ * failing later inside `getScene`.
+ *
+ * Pure — takes the registry's scene list as data, not an import, so it is
+ * unit-testable without a DOM/WebGL context.
+ *
+ * @param {string} id
+ * @param {object} opts
+ * @param {{id:string, kind:string}[]} scenes
+ * @returns {{id:string, opts:object}}
+ */
+export function resolveActivation(id, opts = {}, scenes = SCENES) {
+  const entry = scenes.find((s) => s.id === id);
+  if (!entry) throw new Error(`resolveActivation: unregistered scene "${id}"`);
+  if (entry.kind === 'game') return { id: 'play', opts: { ...opts, game: id } };
+  return { id, opts };
+}
