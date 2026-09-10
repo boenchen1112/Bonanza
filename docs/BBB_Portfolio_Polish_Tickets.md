@@ -45,10 +45,10 @@ Status key: `[ ]` open · `[~]` in progress · `[x]` done · `[-]` cut (with rea
 - [x] `CONTEXT_LOST_WEBGL` re-checked: never occurs on the GPU path; only under `--swiftshader` (browser GPU-process reset, no `loseContext` in source) — documented, not filtered
 - [x] `consoleClean: true` on all 14 registered scenes (`node tools/harness/sweep.mjs`)
 
-## [ ] 05 — `__BBB__` out of the production build; harness builds opt in
+## [x] 05 — `__BBB__` out of the production build; harness builds opt in
 **Blocked by:** 01
-- [ ] Production bundle contains no test API
-- [ ] Harness build mode exposes it; harness runs still green
+- [x] Production bundle contains no test API (verified by grepping a plain `vite build`)
+- [x] Harness build mode exposes it; harness runs still green
 
 ## [ ] 06 — ADR 0003 + first bundled asset renders offline
 **Blocked by:** 01

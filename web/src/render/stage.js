@@ -212,6 +212,10 @@ export function createStage({ canvas, clock }) {
     look.detach();
     scene = null;
     camera = null;
+    // A game's explicit palette choice lasts for that game only; the next
+    // scene goes back to inferring its own.
+    paletteLocked = false;
+    lastAutoName = null;
     shakeAmp = 0;
     push = 0;
     roll = 0;
@@ -225,10 +229,16 @@ export function createStage({ canvas, clock }) {
 
   let paletteLocked = false;
   let lastAutoName = null;
+  /**
+   * Id of the scene that finished loading (set by main.js). Palette and
+   * default-environment inference key on it. This used to be read off the
+   * `window.__BBB__` test API, which production builds don't ship.
+   */
+  let sceneId = null;
 
   function autoPalette(immediate = false) {
     if (paletteLocked) return;
-    const id = scene?.userData?.palette || window.__BBB__?.scene || null;
+    const id = scene?.userData?.palette || sceneId || null;
     if (!id || id === lastAutoName) return;
     lastAutoName = id;
     const named = look.paletteNamed(id);
@@ -262,7 +272,7 @@ export function createStage({ canvas, clock }) {
   function ensureDefaultEnv() {
     if (envs.size || !scene) return;
     if (scene.userData.env === false) return;
-    const id = window.__BBB__?.scene || '';
+    const id = sceneId || '';
     const shell = id === 'title' || id === 'select' || id === 'results';
     const preset = scene.userData.envPreset || (shell ? 'void' : 'arena');
     const env = createEnv(scene);
@@ -475,6 +485,8 @@ export function createStage({ canvas, clock }) {
     shake, flash, punchZoom, setClear,
     get scene() { return scene; },
     get camera() { return camera; },
+    get sceneId() { return sceneId; },
+    set sceneId(v) { sceneId = v; },
 
     // --- look ---
     look, rig, setPalette, createEnv, pulse, chroma, setQuality, dispose,

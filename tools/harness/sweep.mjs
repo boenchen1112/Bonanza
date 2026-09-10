@@ -32,7 +32,7 @@ scenes.forEach((scene, i) => {
   const out = path.join(OUT, scene);
   const args = [inspect, '--scene', scene, '--dist', DIST, '--out', out, '--seconds', SECONDS,
     '--shots', '2', '--play', PLAY];
-  if (i > 0) args.push('--no-build');
+  if (i > 0 || a.includes('--no-build')) args.push('--no-build');
   const r = spawnSync(process.execPath, args, { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 << 20 });
   let s = null;
   try { s = JSON.parse(readFileSync(path.join(ROOT, out, 'summary.json'), 'utf8')); } catch { /* failed run */ }

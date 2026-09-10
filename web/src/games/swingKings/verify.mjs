@@ -45,7 +45,10 @@ function serve(dir, port) {
 
 function build() {
   return new Promise((res, rej) => {
-    const p = spawn('npx', ['vite', 'build', '--outDir', DIST], { cwd: WEB, stdio: 'pipe' });
+    // --mode harness keeps window.__BBB__ in the bundle (production strips it);
+    // vite's JS entry via node, since npx is a .cmd shim spawn() can't run on Windows.
+    const p = spawn(process.execPath, [path.join(WEB, 'node_modules/vite/bin/vite.js'), 'build', '--mode', 'harness', '--outDir', DIST],
+      { cwd: WEB, stdio: 'pipe' });
     let err = '';
     p.stderr.on('data', (d) => { err += d; });
     p.stdout.on('data', (d) => { err += d; });

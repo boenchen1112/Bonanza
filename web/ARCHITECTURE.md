@@ -122,7 +122,10 @@ stop feeling like one product.
 
 `tools/harness/` boots the built game in headless Chromium, drives scripted
 input at exact audio times, and dumps screenshots plus a telemetry JSON.
-The game exposes `window.__BBB__` in dev/test builds:
+The game exposes `window.__BBB__` in dev (`vite`) and harness
+(`vite build --mode harness`) builds only — a plain production build strips
+it, so nothing in game code may depend on it at runtime (pass what you need
+through `ctx`/`stage` instead):
 
 ```js
 window.__BBB__ = {

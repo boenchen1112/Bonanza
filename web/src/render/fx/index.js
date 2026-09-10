@@ -64,7 +64,7 @@ const QUALITY = {
 
 const PENDING = 160;
 
-export function createFX({ stage, clock }) {
+export function createFX({ stage, clock, bus = null }) {
   const rng = makeRng(0xfeed);
   const tex = spriteAtlas();
   let host = null;
@@ -710,9 +710,9 @@ export function createFX({ stage, clock }) {
   let autoCombo = 0;
 
   function tryBridge() {
-    if (bridged || typeof window === 'undefined') return;
-    const bus = window.__BBB__ && window.__BBB__.bus;
-    if (!bus || !bus.on) return;
+    // The bus is injected by main.js; it used to be fished off the
+    // `window.__BBB__` test API, which production builds don't ship.
+    if (bridged || !bus || !bus.on) return;
     bridged = true;
     bus.on('judge', (j) => {
       if (!auto || !host || !j || !j.verdict) return;

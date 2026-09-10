@@ -41,11 +41,21 @@ const bus = new Bus();
 const stage = createStage({ canvas, clock });
 const audio = createAudio({ ctx: audioCtx, clock, bus });
 const ui = createUI({ root: uiRoot, bus, clock });
-const fx = createFX({ stage, clock });
+const fx = createFX({ stage, clock, bus });
+
+/**
+ * `window.__BBB__` (the harness/test API: autoplay, telemetry, goto, the
+ * audio tap) exists in dev and in `vite build --mode harness` builds only.
+ * Vite inlines these as literals, so a production bundle drops the whole
+ * block rather than shipping a remote control for the game.
+ */
+const TEST_API = Boolean(import.meta.env.DEV || import.meta.env.MODE === 'harness');
 
 /** @type {import('./shell/registry.js').SceneModule|null} */
 let current = null;
 let currentCtx = null;
+/** Last scene that threw in load()/start(), for the test API. */
+let lastError = null;
 let pendingScene = null;
 let hitstopUntil = 0;
 /** When the current hitstop began, so we only ever subtract time once. */
@@ -161,12 +171,12 @@ async function activate(id, opts = {}) {
     current = mod;
     mod.start?.(currentCtx);
     bus.emit('scene:active', id);
-    window.__BBB__.scene = id;
+    stage.sceneId = id;
   } catch (e) {
     console.error('scene failed to start:', id, e);
     current = null;
-    window.__BBB__.scene = null;
-    window.__BBB__.lastError = { scene: id, message: String(e && e.message || e) };
+    stage.sceneId = null;
+    lastError = { scene: id, message: String(e && e.message || e) };
     bus.emit('scene:error', id, e);
     // Fall back to the title screen so the player is never stranded — unless
     // the title is what failed, in which case stop rather than loop forever.
@@ -272,7 +282,7 @@ const telemetry = {
         textures: info.memory.textures,
       },
       judgements: this.judgements.slice(-400),
-      scene: window.__BBB__?.scene,
+      scene: stage.sceneId,
       outputLatencyMs: clock.outputLatency * 1000,
     };
   },
@@ -376,10 +386,11 @@ for (const ev of ['pointerdown', 'keydown', 'touchstart']) {
 
 // ------------------------------------------------------------------ test API
 
-let resolveReady;
-window.__BBB__ = {
+let resolveReady = () => {};
+if (TEST_API) window.__BBB__ = {
   ready: new Promise((r) => { resolveReady = r; }),
-  scene: null,
+  get scene() { return stage.sceneId; },
+  get lastError() { return lastError; },
   scenes: SCENES.map((s) => s.id),
   version: '0.1.0',
   clock, input, bus,
