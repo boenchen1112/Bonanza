@@ -24,7 +24,11 @@
  *   shot-000.png ... shot-NNN.png   evenly spaced frames (audio-time spaced)
  *   telemetry.json                  fps, frame-time percentiles, judgements
  *   console.log                     page console + errors (non-empty = bug)
- *   summary.json                    machine-readable verdict inputs
+ *   audio.wav                       the game's master mix, captured in-graph
+ *                                   (skip with --no-audio)
+ *   video/*.webm                    with --video (Playwright, 25fps, silent)
+ *   summary.json                    machine-readable verdict inputs,
+ *                                   including `audio` (level + beat sync)
  */
 
 import { mkdir, writeFile, rm } from 'node:fs/promises';
@@ -33,6 +37,7 @@ import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
+import { checkAudio, encodeWav, mono } from './audiocheck.mjs';
 
 const argv = parseArgs(process.argv.slice(2));
 const SCENE = argv.scene || 'title';
@@ -130,6 +135,85 @@ function launchOptions() {
   };
 }
 
+// ---- audio capture ---------------------------------------------------------
+// An AudioWorklet on the game's master bus. The worklet stamps its first
+// block with `currentTime` — the context time that block was rendered for —
+// and the player schedules every note at ctx time `clock.timeAt(beat)`, so
+// captured audio and the beat grid share one clock with nothing to guess.
+// --mute-audio silences the speakers, not the graph: capture still works.
+const RECORDER_SRC = `
+class BBBRec extends AudioWorkletProcessor {
+  constructor() { super(); this.t0 = null; this.on = true; this.port.onmessage = () => { this.on = false; }; }
+  process(inputs) {
+    if (!this.on) return false;
+    if (this.t0 === null) { this.t0 = currentTime; this.port.postMessage({ t0: currentTime, sr: sampleRate }); }
+    const inp = inputs[0];
+    const L = inp && inp[0] ? inp[0].slice() : new Float32Array(128);
+    const R = inp && inp[1] ? inp[1].slice() : L;
+    this.port.postMessage({ L, R }, [L.buffer].concat(R === L ? [] : [R.buffer]));
+    return true;
+  }
+}
+registerProcessor('bbb-rec', BBBRec);`;
+
+async function startAudioCapture(page) {
+  return page.evaluate(async (src) => {
+    const a = window.__BBB__?.audio;
+    if (!a?.ctx?.audioWorklet) return false;
+    const url = URL.createObjectURL(new Blob([src], { type: 'text/javascript' }));
+    await a.ctx.audioWorklet.addModule(url);
+    const node = new AudioWorkletNode(a.ctx, 'bbb-rec', { numberOfInputs: 1, numberOfOutputs: 1, channelCount: 2, channelCountMode: 'explicit' });
+    const rec = { node, t0: null, sr: a.ctx.sampleRate, L: [], R: [] };
+    node.port.onmessage = (e) => {
+      if (e.data.t0 !== undefined) { rec.t0 = e.data.t0; rec.sr = e.data.sr; return; }
+      rec.L.push(e.data.L); rec.R.push(e.data.R);
+    };
+    a.master.connect(node);
+    // A worklet nobody pulls from never runs; a muted path to the output
+    // keeps it in the render graph without adding anything to the mix.
+    const sink = a.ctx.createGain();
+    sink.gain.value = 0;
+    node.connect(sink).connect(a.ctx.destination);
+    window.__BBB_REC__ = rec;
+    return true;
+  }, RECORDER_SRC);
+}
+
+/** Stop, then pull PCM (as base64 Int16) plus the beat grid the game used. */
+async function stopAudioCapture(page) {
+  return page.evaluate(() => {
+    const rec = window.__BBB_REC__;
+    if (!rec || rec.t0 === null) return null;
+    rec.node.port.postMessage('stop');
+    try { window.__BBB__.audio.master.disconnect(rec.node); } catch { /* already gone */ }
+    const n = rec.L.reduce((s, b) => s + b.length, 0);
+    const pack = (bufs) => {
+      const out = new Int16Array(n);
+      let o = 0;
+      for (const b of bufs) for (let i = 0; i < b.length; i++) out[o++] = Math.max(-32768, Math.min(32767, Math.round(b[i] * 32767)));
+      let s = '';
+      const bytes = new Uint8Array(out.buffer);
+      for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+      return btoa(s);
+    };
+    const c = window.__BBB__.clock;
+    const t1 = rec.t0 + n / rec.sr;
+    const beats = [];
+    if (c.running !== false) {
+      for (let b = Math.ceil(c.beatAt(rec.t0)); b <= Math.floor(c.beatAt(t1)); b++) beats.push(c.timeAt(b));
+    }
+    return { t0: rec.t0, sr: rec.sr, n, bpm: c.bpm, L: pack(rec.L), R: pack(rec.R), beatTimes: beats };
+  });
+}
+
+function decodePcm(b64) {
+  const bytes = Buffer.from(b64, 'base64');
+  const i16 = new Int16Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 2);
+  const f = new Float32Array(i16.length);
+  for (let i = 0; i < i16.length; i++) f[i] = i16[i] / 32768;
+  return f;
+}
+
 // pid-derived so concurrent harness runs never fight over a port.
 const PORT = Number(argv.port || 5321 + (process.pid % 900));
 
@@ -185,6 +269,10 @@ const PORT = Number(argv.port || 5321 + (process.pid % 900));
   // clock-based capture starts.
   await page.evaluate(() => window.__BBB__.screenshotReady());
   await page.evaluate(() => window.__BBB__.resetTelemetry());
+  const capturing = !argv['no-audio'] && await startAudioCapture(page).catch((e) => {
+    logs.push(`[harness] audio capture unavailable: ${e.message}`);
+    return false;
+  });
 
   // ---- autoplay ---------------------------------------------------------
   // Drives synthetic presses at exact audio times. `perfect` proves the game
@@ -212,6 +300,21 @@ const PORT = Number(argv.port || 5321 + (process.pid % 900));
     const f = path.join(OUT, `shot-${String(i).padStart(3, '0')}.png`);
     await page.screenshot({ path: f });
     shots.push(f);
+  }
+
+  // ---- audio: WAV + automatic check -------------------------------------
+  let audio = null;
+  const cap = capturing ? await stopAudioCapture(page) : null;
+  if (cap) {
+    const L = decodePcm(cap.L), R = decodePcm(cap.R);
+    await writeFile(path.join(OUT, 'audio.wav'), encodeWav([L, R], cap.sr));
+    audio = {
+      file: 'audio.wav',
+      seconds: Math.round((cap.n / cap.sr) * 100) / 100,
+      bpm: cap.bpm,
+      beats: cap.beatTimes.length,
+      ...checkAudio({ samples: mono([L, R]), sampleRate: cap.sr, startTime: cap.t0, beatTimes: cap.beatTimes }),
+    };
   }
 
   const botPresses = await page.evaluate(() => window.__BBB__.botPresses?.() ?? 0);
@@ -255,6 +358,10 @@ const PORT = Number(argv.port || 5321 + (process.pid % 900));
     biasMs: errs.length ? errs.reduce((a, b) => a + b, 0) / errs.length : null,
     consoleErrors: logs.filter((l) => l.startsWith('[pageerror]') || l.startsWith('[error]')).length,
     consoleClean: logs.length === 0,
+    // Captured mix vs the game's beat grid (tools/harness/audiocheck.mjs).
+    // `pass` = audible AND onsets sit on a beat/8th/16th grid. A person
+    // should still listen to audio.wav — this proves sync, not taste.
+    audio,
     dom: domProbe,
   };
   await writeFile(path.join(OUT, 'summary.json'), JSON.stringify(summary, null, 2));

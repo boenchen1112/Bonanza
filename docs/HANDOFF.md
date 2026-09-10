@@ -78,7 +78,9 @@ not as "reviewed".
 - **`select.js` and `results.js`** are still integrator placeholders.
 - **`party` and `options` views** are referenced by `nav.js` but have no
   scene files; they currently fall through to `select`.
-- **Audio has still never been heard by anyone** — the harness mutes it.
+- **Audio has still never been heard by a person.** Since 2026-09-11 the
+  harness captures the mix and machine-checks level + beat sync (§3 item 5);
+  Swing Kings passes (on the 8th grid, -4ms bias). Taste is still unjudged.
 - **No calibration, no accessibility pass, no coherence pass.**
 
 ## 3. The harness — read this before trusting any measurement
@@ -119,6 +121,16 @@ trusting a number. Consequences:
    real defect. (The original setTimeout-driven bot delivered presses
    hundreds of ms late and scored 0 hits / 20 misses — that was very nearly
    filed as a broken game.)
+5. **Audio is captured and checked.** An AudioWorklet taps the master bus
+   (on the context clock — `--mute-audio` silences speakers, not the graph)
+   and writes `audio.wav`; `summary.audio` reports level, clipping, and
+   whether onsets sit on the game's beat grid (`pass`, `bestGrid`, `biasMs`
+   — see `tools/harness/audiocheck.mjs`, unit-tested in
+   `web/tests/audiocheck.test.mjs`). That proves sync, not taste: a person
+   still has to listen to the WAV. `--no-audio` skips it.
+6. **`--video`** writes Playwright's screen recording (`video/*.webm`,
+   fixed 25fps, no audio track). Fine for review; portfolio footage should
+   come from a real browser/OBS capture.
 
 Scenes reachable: `title roster freeplay play results select` and the five
 game ids. Anything not in `web/src/shell/registry.js` is invisible to review.

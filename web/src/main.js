@@ -383,6 +383,8 @@ window.__BBB__ = {
   scenes: SCENES.map((s) => s.id),
   version: '0.1.0',
   clock, input, bus,
+  /** The mix graph (`ctx`, `master`, buses) — the harness taps `master`. */
+  audio,
   telemetry: () => telemetry.snapshot(),
   resetTelemetry: () => { telemetry.frames.length = 0; telemetry.judgements.length = 0; },
   goto: (id, opts) => activate(id, opts || {}),

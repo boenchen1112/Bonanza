@@ -33,11 +33,11 @@ Status key: `[ ]` open · `[~]` in progress · `[x]` done · `[-]` cut (with rea
 - [x] Y Bot mesh + skeleton and the 8 clips land as bundled `.glb` with provenance notes
 - [x] Raw FBX never committed
 
-## [ ] 03 — Harness records video + the game's audio mix, with an automatic audio check
+## [x] 03 — Harness records video + the game's audio mix, with an automatic audio check
 **Blocked by:** 01
-- [ ] `--video` gives a usable real-rate webm
-- [ ] Run dumps a WAV of the in-page audio mix
-- [ ] Pure, unit-tested checker: non-silent + onsets aligned to the beat grid (reported in summary)
+- [x] `--video` gives a usable webm (Playwright: fixed 25fps, silent — fine for review; portfolio footage via real browser/OBS later)
+- [x] Run dumps a WAV of the in-page audio mix (AudioWorklet on master, context-clock stamped)
+- [x] Pure, unit-tested checker: non-silent + onsets aligned to the beat grid (reported in summary)
 
 ## [ ] 04 — Console-clean on every registered scene
 **Blocked by:** 01

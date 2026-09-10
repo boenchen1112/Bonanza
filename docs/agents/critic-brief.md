@@ -19,6 +19,12 @@ Then **Read every screenshot**. Reading the JSON is not review; the JSON
 cannot tell you whether the thing looks good. Also read `console.log` —
 anything in it that is not `(clean)` is a defect you must report.
 
+For the Audio dimension you cannot listen, but you are not blind:
+`summary.audio` is the captured mix checked against the game's beat grid.
+`pass: false`, `silent: true`, `clipped: true`, or `|biasMs| > 15` are audio
+defects to report. A `pass` proves level and sync only — say so rather than
+scoring the music's taste you could not hear.
+
 Read the source too, but only after you have looked at the frames. Source
 tells you *why* something is wrong; it must not be how you decide *whether*.
 
