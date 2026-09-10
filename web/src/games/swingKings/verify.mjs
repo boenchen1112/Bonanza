@@ -9,8 +9,13 @@
  * `window.__BBB__.swing` (installed by the game itself in load()) and asserts
  * the two ends of the design:
  *
- *   a long clean windup, released on the beat  ->  HOME RUN
- *   a bare on-time tap                         ->  BUNT, still PERFECT timing
+ *   a long clean windup, released on the beat  ->  HOME RUN (hold power)
+ *   a half windup                              ->  LINE DRIVE
+ *   a bare on-time tap                         ->  HOME RUN — tap mode earns
+ *                                                  power from timing instead
+ *                                                  (it used to be a BUNT, so a
+ *                                                  keyboard player never saw a
+ *                                                  home run)
  *
  * Usage (from the repo root):
  *   node web/src/games/swingKings/verify.mjs [--dist dist-g1] [--port 5599]
@@ -104,10 +109,10 @@ function check(name, ok, detail) {
     // ball's entire flight.
     const script = [
       { note: 0, hold: 2.0, tag: 'full-windup' },     // expect HOME RUN
-      { note: 4, hold: 0.0, tag: 'bare-tap' },        // expect BUNT
+      { note: 4, hold: 0.0, tag: 'bare-tap' },        // expect HOME RUN (tap: timing power)
       { note: 8, hold: 2.0, tag: 'full-windup-2' },   // expect HOME RUN
       { note: 12, hold: 1.0, tag: 'half-windup' },    // expect LINE DRIVE
-      { note: 16, hold: 0.0, tag: 'bare-tap-2' },     // expect BUNT
+      { note: 16, hold: 0.0, tag: 'bare-tap-2' },     // expect HOME RUN (tap: timing power)
       { note: 20, hold: 2.0, tag: 'full-windup-3' },  // expect HOME RUN
     ];
 
@@ -125,8 +130,8 @@ function check(name, ok, detail) {
   const byBeat = new Map(swings.map((s) => [s.beat, s]));
 
   const expect = [
-    [0, 'homer', 'perfect'], [4, 'bunt', 'perfect'], [8, 'homer', 'perfect'],
-    [12, 'liner', 'perfect'], [16, 'bunt', 'perfect'], [20, 'homer', 'perfect'],
+    [0, 'homer', 'perfect'], [4, 'homer', 'perfect'], [8, 'homer', 'perfect'],
+    [12, 'liner', 'perfect'], [16, 'homer', 'perfect'], [20, 'homer', 'perfect'],
   ];
   for (const [beat, tier, verdict] of expect) {
     const s = byBeat.get(beat);
@@ -140,9 +145,12 @@ function check(name, ok, detail) {
   check('release timing exact (|err| < 2ms)', worst < 2, `worst |err| = ${worst}ms`);
 
   const powers = expect.map(([b]) => byBeat.get(b)?.power ?? -1);
-  check('power axis is monotone in hold length',
-    powers[0] > powers[3] && powers[3] > powers[1],
-    `full=${powers[0]} half=${powers[3]} tap=${powers[1]}`);
+  check('hold power is monotone in hold length',
+    powers[0] > powers[3] && powers[3] > 0,
+    `full=${powers[0]} half=${powers[3]}`);
+  check('an on-time tap earns full power from timing',
+    powers[1] === 1 && powers[4] === 1,
+    `tap=${powers[1]} tap2=${powers[4]}`);
 
   const errs = logs.filter((l) => l.startsWith('[pageerror]') || l.startsWith('[error]'));
   check('console clean', errs.length === 0, errs.join('\n') || 'no errors');

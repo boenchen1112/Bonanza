@@ -47,6 +47,11 @@ const SHOTS = Number(argv.shots || 12);
 const W = Number(argv.width || 1280);
 const H = Number(argv.height || 720);
 const PLAY = argv.play || 'auto';
+// --chart: the bot presses the scene's own notes (scenes that implement
+// `testChart()`), one press per note, instead of every grid subdivision.
+const CHART = Boolean(argv.chart);
+// --skip N: play N seconds before the first shot (to look at later sections).
+const SKIP = Number(argv.skip || 0);
 const SOFTWARE = Boolean(argv.swiftshader);
 // On a real GPU the full post chain is affordable, so show the game as a
 // player sees it. SwiftShader cannot afford it (frames hit ~400ms), so the
@@ -298,11 +303,12 @@ const PORT = Number(argv.port || 5321 + (process.pid % 900));
   // Drives synthetic presses at exact audio times. `perfect` proves the game
   // is beatable and shows the top-end feedback; `sloppy` shows what a real
   // human's mediocre run looks like, which is what most players will see.
-  // Capture below is paced by the same audio clock, so a one-second margin
-  // covers the last screenshot without leaving a tail of unplayed notes.
+  // The bot runs until capture ends (stopped explicitly below): a dense
+  // capture can fall behind its audio-time slots — a PNG takes ~0.3s — and a
+  // bot that quit on schedule would leave the tail full of false misses.
   if (PLAY !== 'none') {
-    await page.evaluate(({ mode, secs, actions, division }) => window.__BBB__.autoplay({ mode, seconds: secs, actions, division }),
-      { mode: PLAY, secs: SECONDS + 1, actions: ACTIONS, division: DIVISION });
+    await page.evaluate(({ mode, secs, actions, division, chart }) => window.__BBB__.autoplay({ mode, seconds: secs, actions, division, chart }),
+      { mode: PLAY, secs: 600, actions: ACTIONS, division: DIVISION, chart: CHART });
   }
 
   // ---- capture ----------------------------------------------------------
@@ -310,17 +316,19 @@ const PORT = Number(argv.port || 5321 + (process.pid % 900));
   // game's own time domain decides when frame i is taken, so a slow
   // screenshot can delay the next shot but never shift what it shows.
   const shots = [];
-  const t0 = await page.evaluate(() => window.__BBB__.clock.now());
+  const t0 = SKIP + await page.evaluate(() => window.__BBB__.clock.now());
   const interval = SECONDS / SHOTS;
   for (let i = 0; i < SHOTS; i++) {
     const target = t0 + interval * (i + 1);
     await page.waitForFunction((t) => window.__BBB__.clock.now() >= t, target,
-      { polling: 'raf', timeout: (interval + 15) * 1000 });
+      { polling: 'raf', timeout: (interval + SKIP + 15) * 1000 });
     await page.evaluate(() => window.__BBB__.screenshotReady());
     const f = path.join(OUT, `shot-${String(i).padStart(3, '0')}.png`);
     await page.screenshot({ path: f });
     shots.push(f);
   }
+
+  await page.evaluate(() => window.__BBB__.stopAutoplay?.());
 
   // ---- audio: WAV + automatic check -------------------------------------
   let audio = null;
@@ -355,6 +363,8 @@ const PORT = Number(argv.port || 5321 + (process.pid % 900));
   const summary = {
     scene: SCENE,
     play: PLAY,
+    chart: CHART,
+    skip: SKIP,
     quality: QUALITY,
     actions: ACTIONS,
     division: DIVISION,

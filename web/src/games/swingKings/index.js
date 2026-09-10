@@ -47,6 +47,7 @@ import { FEEL, feelForCombo } from '../../core/feel.js';
 import { clamp01, damp, lerp, smoothstep } from '../../core/util.js';
 import { createWorld, LAYOUT } from './world.js';
 import { createTrace } from './trace.js';
+import { CLIPS } from '../../chars/index.js';
 import {
   buildSchedule, powerFor, tierFor, scoreFor, sectionAt,
   END_BEAT, FINALE_BEAT, LEAD_IN_BEATS, SCORED_BARS, TIERS,
@@ -55,6 +56,19 @@ import {
 const BPM = 124;
 const MUZZLE = [-6.38, 1.91, -0.25];
 const GRAV = 15.5;
+
+/**
+ * The batter's body is Mixamo's "Baseball Hit", retargeted onto the toy rig
+ * (chars/retarget.js). It is split at the bat-meets-ball frame: the COIL
+ * (stance -> stride -> loaded) plays while the ball is in the air, retimed so
+ * it finishes just before the ball arrives, and the press fires the STRIKE
+ * (contact -> follow-through). So the body telegraphs the beat the way the
+ * pips do, and the swing still happens on the frame the press lands.
+ */
+const SWING = CLIPS.swing;
+const LOAD = SWING.contact - 0.06;
+/** Most beats of coil — a finale ball 8 beats out should not coil in slow-mo. */
+const COIL_BEATS = 2;
 
 // scratch
 const _v = new THREE.Vector3();
@@ -66,7 +80,10 @@ const _dir = new THREE.Vector3();
  * boundary never feels like a cliff.
  */
 function powerFromTiming(time, pitch, clock) {
-  const err = Math.abs(time - pitch.time) * 1000;
+  // Pitches carry their beat; the audio time lives on the judged note. (This
+  // read `pitch.time`, which does not exist: power was NaN on every press.)
+  const target = pitch.note ? pitch.note.time : clock.timeAt(pitch.targetBeat);
+  const err = Math.abs(time - target) * 1000;
   const full = WINDOWS_MS.perfect;
   const zero = WINDOWS_MS.good;
   if (err <= full) return 1;
@@ -151,6 +168,7 @@ export default {
     this.finaleDone = false;
     this.lastBeat = -1e9;
     this.camPush = 0;
+    this.strikeUntil = -Infinity;
   },
 
   start(ctx) {
@@ -215,11 +233,35 @@ export default {
     }
   },
 
+  // ------------------------------------------------------------ batter body
+
+  /** Coil during the ball's flight, landing loaded just before `untilTime`. */
+  batterCoil(ctx, untilTime) {
+    const dur = Math.max(0.16, untilTime - ctx.clock.now() - 0.03);
+    this.w.batter.anim.play('swing', {
+      to: LOAD, dur, hold: true, face: 'focus', beat: 0.12, blend: 0.14,
+    });
+    this.pendingReact = null;   // the next pitch outranks the last verdict
+  },
+
+  /** Contact -> follow-through, from the loaded frame. */
+  batterStrike(ctx, power) {
+    power = Number.isFinite(power) ? clamp01(power) : 0.5;
+    const rate = 1.15 + power * 0.55;
+    const anim = this.w.batter.anim;
+    anim.play('swing', {
+      from: LOAD, rate, face: 'fierce', beat: 0.05, blend: 0.03, power, next: 'idle',
+    });
+    anim.impulse(0.45 * power, 0.02 * power);
+    // A coil for the next pitch must not cut the follow-through off at the
+    // knees; it waits for most of it.
+    this.strikeUntil = ctx.clock.now() + ((SWING.duration - LOAD) / rate) * 0.72;
+  },
+
   beginWindup(ctx, time) {
     this.holding = true;
     this.holdStart = time;
     this.holdBeats = 0;
-    this.w.batter.anim.windup({ hold: true });
     this.w.batTip.getWorldPosition(_v);
     this.trace.begin(_v.x, _v.y, _v.z);
     this.traceHoldOff = 0;
@@ -236,9 +278,13 @@ export default {
     // zero and every hit would be a bunt. Derive power from how close the
     // press is to the pitch's contact beat instead: dead-on is full power,
     // the edge of the claim window is none.
-    this.pendingPower = live
-      ? powerFromTiming(time, live, ctx.clock)
-      : powerFor(holdBeats, 2);
+    // A real hold (the conducting gesture) keeps the original design: power
+    // is the windup length. A tap has no windup to measure, so its power is
+    // earned by timing instead.
+    const held = holdBeats > 0.1;
+    this.pendingPower = held
+      ? powerFor(holdBeats, live ? live.ideal : 2)
+      : live ? powerFromTiming(time, live, ctx.clock) : 0;
     // Keep drawing for a quarter-second: the release stroke is part of the
     // gesture, and cutting the ribbon at the button-up loses the follow-through.
     this.traceHoldOff = 0.26;
@@ -250,7 +296,7 @@ export default {
       // Swung at nothing. Still swing — an input with no visible consequence
       // reads as a dropped input — but it costs nothing.
       if (!this.demoHit(ctx, time, holdBeats)) {
-        this.w.batter.anim.strike({ power: 0.3 + this.pendingPower * 0.4 });
+        this.batterStrike(ctx, 0.3 + this.pendingPower * 0.4);
         ctx.audio.sfx('swoosh', ctx.clock.rawNow());
       }
     }
@@ -263,7 +309,7 @@ export default {
     const beat = ctx.clock.beatAt(time);
     if (Math.abs(beat - d.targetBeat) > 0.45) return false;
     const power = Math.max(0.8, powerFor(holdBeats, d.ideal));
-    this.w.batter.anim.strike({ power: 1 });
+    this.batterStrike(ctx, 1);
     this.connect(ctx, d, 'perfect', power, TIERS.homer, false, true);
     d.done = true;
     return true;
@@ -274,7 +320,10 @@ export default {
   onJudged(ctx, note, verdict, errMs) {
     const p = note.data;
     const hit = verdict !== 'miss';
-    const power = hit ? powerFor(this.pendingHold, p.ideal) : 0;
+    // `pendingPower` is what releaseSwing derived for THIS press (from timing
+    // in tap mode). Recomputing from `pendingHold` here — always ~0 on a tap —
+    // made every hit a BUNT: the game never showed a home run.
+    const power = hit ? this.pendingPower : 0;
     const tier = tierFor(power, p.finale);
     const foul = hit && verdict === 'good';
 
@@ -294,8 +343,9 @@ export default {
       power: Math.round(power * 100) / 100, tier: tier.id, finale: !!p.finale,
     });
 
-    this.w.batter.anim.strike({ power: 0.4 + power * 0.8 });
-    this.pendingReact = { verdict, t: 0.2 };
+    this.batterStrike(ctx, 0.4 + power * 0.6);
+    // The verdict pose lands once the follow-through has read, not over it.
+    this.pendingReact = { verdict, t: 0.42 };
 
     if (hit) this.connect(ctx, p, verdict, power, tier, foul, false);
     else this.whiff(ctx, p);
@@ -444,6 +494,11 @@ export default {
     this.lastBeat = beat;
   },
 
+  /** Harness hook: the scored notes, so autoplay can press like a person. */
+  testChart() {
+    return this.judge.notes.map((n) => ({ time: n.time, action: 'a' }));
+  },
+
   /** The pitch currently in flight, if any. */
   livePitch() {
     for (const p of this.pitches) if (p.live && !p.done) return p;
@@ -470,6 +525,18 @@ export default {
       if (!p.armed && beat >= p.launchBeat - 1) {
         p.armed = true;
         w.armMachine(p.kind === 'slam' ? 1.6 : 1);
+        // Step into the box — unless a verdict pose is still playing out.
+        if (w.batter.anim.state === 'idle') {
+          w.batter.anim.play('ready', { loop: true, face: 'focus', beat: 0.3, blend: 0.25 });
+        }
+      }
+
+      // The coil: at most COIL_BEATS before contact, and never over the
+      // previous swing's follow-through.
+      if (p.live && !p.coiled && beat >= Math.max(p.launchBeat, p.targetBeat - COIL_BEATS)
+        && ctx.clock.now() >= this.strikeUntil) {
+        p.coiled = true;
+        this.batterCoil(ctx, ctx.clock.timeAt(p.targetBeat));
       }
 
       const u = (beat - p.launchBeat) / p.lead;

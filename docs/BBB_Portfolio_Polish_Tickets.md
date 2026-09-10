@@ -82,8 +82,13 @@ Status key: `[ ]` open · `[~]` in progress · `[x]` done · `[-]` cut (with rea
 **Blocked by:** 07
 - [x] Per-clip beat-layer amounts and face expressions tuned (per-call `beat` + CLIP_FACE presets; dance beat-locked to its own downbeats; further tuning rides on 09/13) so mocap states stay on the beat and in character; verified in `chars-demo` frames
 
-## [ ] 09 — Swing Kings batter + pitcher perform the mocap swing/pitch on the beat; bat visible
+## [x] 09 — Swing Kings batter performs the mocap swing on the beat; bat visible
 **Blocked by:** 07
+- [x] Batter: batting stance when a pitch is armed, mocap coil retimed across the ball's flight (lands loaded just before contact), strike from the contact frame on the press, procedural verdict pose after the follow-through — runs/t09-c
+- [x] Bat visible in every frame of the swing
+- [-] Mocap pitcher: cut by design — pitches come every 2 beats in dense sections, faster than any pitching windup; the machine (built for rapid fire) stays. The pitch clip is used in chars-demo
+- [x] Found + fixed on the way: tap-mode power was NaN (`pitch.time` does not exist) and judgement recomputed it from hold length, so every keyboard hit was a BUNT — perfect taps are now HOME RUNs
+- Note for 14: verify.mjs hold/release checks fail because tap-mode `input()` ignores key-up (pre-existing since the tap-mode change); restoring hold-and-release is ticket 14
 
 ## [ ] 10 — Swing Kings stage to "B": shadows, unified toon shading, env kit, lighting
 **Blocked by:** 04, 06
@@ -100,6 +105,7 @@ Status key: `[ ]` open · `[~]` in progress · `[x]` done · `[-]` cut (with rea
 ## [ ] 14 — Swing Kings gesture mode: mouse/pointer-drag source (+ ADR 0004)
 **Blocked by:** 01
 - [ ] Selectable input mode; drag-down + release fires the swing; release timing feeds accuracy → power
+- [ ] Keyboard hold-and-release works again in that mode; `verify.mjs` hold checks pass
 - [ ] Tap mode unchanged and still harness-verified
 
 ## [ ] 15 — Swing Kings gesture mode: webcam hand-tracking source

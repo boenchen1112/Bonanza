@@ -766,7 +766,7 @@ export class CharacterAnimator {
     if (!clip) return this;
     const from = o.from ?? 0;
     const to = o.to ?? clip.duration;
-    const rate = o.rate ?? 1;
+    const rate = Number.isFinite(o.rate) && o.rate > 0 ? o.rate : 1;
     const spec = {
       name, from, to, rate,
       loop: !!(o.loop || o.beatLock),
@@ -867,9 +867,21 @@ export class CharacterAnimator {
     // 34 e-folds/sec ≈ 30ms to close 63% of a gap: enough to kill seams,
     // not enough to blunt a snap. Frame-rate independent by construction.
     const cur = this._cur;
+    let bad = false;
     for (let i = 0; i < POSE_KEYS.length; i++) {
       const k = POSE_KEYS[i];
       cur[k] = damp(cur[k], target[k], 34, dt);
+      if (!Number.isFinite(cur[k])) bad = true;
+    }
+    // A NaN in any channel would otherwise persist forever through damp()
+    // and the character would vanish for the rest of the scene. Recover to
+    // the neutral pose, and say so once — this is always a caller bug.
+    if (bad) {
+      if (!this._warnedNaN) {
+        this._warnedNaN = true;
+        console.warn(`CharacterAnimator: non-finite pose in state '${this.state}' — reset to rest`);
+      }
+      resetPose(cur);
     }
 
     // --- 3. additive beat layer -----------------------------------------

@@ -75,9 +75,31 @@ let botPrevBeat = null;
 
 let botPressTotal = 0;
 
+function botPress(action, t) {
+  const ev = { action, time: t, down: true, source: 'bot', repeat: false };
+  if (current) {
+    try { current.input?.(currentCtx, [ev]); } catch (e) { console.error(e); }
+  }
+  bot.presses++;
+  botPressTotal++;
+}
+
 function pumpBot(beat) {
   if (!bot) return;
   if (clock.now() > bot.until) { bot = null; botPrevBeat = null; return; }
+
+  // Chart mode: press only the scene's actual notes (see `testChart`), the
+  // way a person plays — one press per note instead of one per grid step.
+  if (bot.chart) {
+    const now = clock.now();
+    while (bot.cursor < bot.chart.length && bot.chart[bot.cursor].time <= now) {
+      const n = bot.chart[bot.cursor++];
+      if (bot.rng() < bot.missRate) continue;
+      botPress(n.action || 'a', n.time + (bot.rng() * 2 - 1) * bot.jitter);
+    }
+    return;
+  }
+
   if (botPrevBeat === null) { botPrevBeat = beat; return; }
 
   // Every subdivision boundary crossed since the last frame gets a press.
@@ -96,14 +118,7 @@ function pumpBot(beat) {
     // construction — which reads as a broken game and is not. Extra presses
     // are harmless: the judge swallows a press that no note claims rather
     // than burning one, so covering all lanes measures the chart honestly.
-    for (const action of bot.actions) {
-      const ev = { action, time: t, down: true, source: 'bot', repeat: false };
-      if (current) {
-        try { current.input?.(currentCtx, [ev]); } catch (e) { console.error(e); }
-      }
-      bot.presses++;
-      botPressTotal++;
-    }
+    for (const action of bot.actions) botPress(action, t);
   }
   botPrevBeat = beat;
 }
@@ -430,7 +445,14 @@ if (TEST_API) window.__BBB__ = {
       until: clock.now() + (o.seconds ?? 15),
       rng: makeRng(o.seed ?? 0xb07),
       presses: 0,
+      // `chart: true` uses the scene's own note list when it offers one.
+      chart: null,
+      cursor: 0,
     };
+    if (o.chart && typeof current?.testChart === 'function') {
+      const now = clock.now();
+      bot.chart = current.testChart(currentCtx).filter((n) => n.time > now).sort((a, b) => a.time - b.time);
+    }
     botPrevBeat = null;
     botPressTotal = 0;
     return true;
