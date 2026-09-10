@@ -16,22 +16,22 @@ Status key: `[ ]` open · `[~]` in progress · `[x]` done · `[-]` cut (with rea
 
 ---
 
-## [ ] 01 — Harness renders on the real GPU
+## [x] 01 — Harness renders on the real GPU
 **Blocked by:** none
 **Delivers:** Swing Kings in the harness at real frame rate on the Iris Xe, post chain visible.
-- [ ] SwiftShader flags gated behind an explicit opt-in (`--swiftshader`)
-- [ ] Windows GPU-capable browser launch (system Chrome / bundled Chromium), headless where GPU survives
-- [ ] `QUALITY` defaults to `high` on the GPU path
-- [ ] Capture driven by `__BBB__.screenshotReady()`; the `SECONDS*4` padding and wall-clock sleeps gone
-- [ ] Summary reports GPU vs software honestly (renderer string), not a hardcoded `softwareRendered`
-- [ ] HANDOFF §3, critic-brief, CLAUDE.md harness notes rewritten
-- [ ] Draft PR into `Mario-Party` opened
+- [x] SwiftShader flags gated behind an explicit opt-in (`--swiftshader`)
+- [x] Windows GPU-capable browser launch (system Chrome / bundled Chromium), headless where GPU survives
+- [x] `QUALITY` defaults to `high` on the GPU path
+- [x] Capture driven by `__BBB__.screenshotReady()`; the `SECONDS*4` padding and wall-clock sleeps gone
+- [x] Summary reports GPU vs software honestly (renderer string), not a hardcoded `softwareRendered`
+- [x] HANDOFF §3, critic-brief, CLAUDE.md harness notes rewritten
+- [x] Draft PR into `Mario-Party` opened
 
-## [ ] 02 — Character + clips converted and in the repo
+## [x] 02 — Character + clips converted and in the repo
 **Blocked by:** none
-- [ ] FBX → GLB conversion is a repeatable script (not a one-off)
-- [ ] Y Bot mesh + skeleton and the 8 clips land as bundled `.glb` with provenance notes
-- [ ] Raw FBX never committed
+- [x] FBX → GLB conversion is a repeatable script (not a one-off)
+- [x] Y Bot mesh + skeleton and the 8 clips land as bundled `.glb` with provenance notes
+- [x] Raw FBX never committed
 
 ## [ ] 03 — Harness records video + the game's audio mix, with an automatic audio check
 **Blocked by:** 01
