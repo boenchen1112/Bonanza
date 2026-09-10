@@ -47,8 +47,6 @@ export default {
     if (humanChar) {
       const m = charMesh(charById(humanChar), {});
       m.position.set(0, -1.1, 0);
-      m.userData.baseY = -1.1;
-      m.userData.baseScale = 1.3;
       m.scale.setScalar(1.3);
       ctx.scene.add(m);
       S.cast = m;

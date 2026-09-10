@@ -162,7 +162,7 @@ export default {
       S.previewSpin += dt * 0.55;
       S.preview.rotation.y = S.previewSpin;
       charBeat(S.preview, beat, dt);
-      S.preview.rotation.y = S.previewSpin; // charBeat also writes rotation.y
+      S.preview.rotation.y = S.previewSpin;
     }
     S.ped.scale.y = 1 + pulse * 0.12;
     for (let i = 0; i < 4; i++) if (S.cast[i]) charBeat(S.cast[i], beat + i * 0.25, dt);
@@ -337,10 +337,8 @@ function setPreview(ctx, def) {
   S.previewId = def.id;
   if (S.preview) { S.stand.remove(S.preview); disposeChar(S.preview); }
   const m = charMesh(def, {});
-  m.userData.baseScale = 1.55;
   m.scale.setScalar(1.55);
   m.position.y = 0.42;
-  m.userData.baseY = 0.42;
   S.stand.add(m);
   S.preview = m;
   S.back.setAccent(def.color);
@@ -365,9 +363,6 @@ function lockIn(ctx, slot, def, isCpu) {
   // the pick walks onto the cast deck
   const m = charMesh(def, {});
   m.position.set((slot - 1.5) * 1.6, 0.5, 0);
-  m.userData.baseY = 0.5;
-  m.userData.phase = slot * 0.3;
-  m.userData.baseScale = 0.8;
   m.scale.setScalar(0.8);
   S.castGroup.add(m);
   if (S.cast[slot]) { S.castGroup.remove(S.cast[slot]); disposeChar(S.cast[slot]); }

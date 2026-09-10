@@ -72,9 +72,6 @@ export default {
       const def = CHARS.find((c) => c.id === id) || CHARS[i];
       const m = charMesh(def, {});
       m.position.set((i - (castIds.length - 1) / 2) * 1.95, 0.5, -0.4 + (i % 2) * 0.5);
-      m.userData.phase = i * 0.37;
-      m.userData.baseY = 0.5;
-      m.userData.baseScale = 0.92;
       m.scale.setScalar(0.92);
       stage.add(m);
       S.cast.push(m);
@@ -356,7 +353,6 @@ function applySelection(ctx, silent) {
   if (!silent) {
     const m = S.cast[S.sel];
     if (m) {
-      m.userData.baseY = 0.5;
       ctx.fx.ring([m.position.x, -0.9, m.position.z], { color: num(c), life: 0.45, from: 0.3, to: 2.2 });
       ctx.fx.burst([m.position.x, -0.6, m.position.z], { color: num(c), count: 9, speed: 3.4, life: 0.42, size: 0.1 });
     }

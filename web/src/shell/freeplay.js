@@ -48,9 +48,6 @@ export default {
     players.slice(0, 4).forEach((p, i) => {
       const m = charMesh(charById(p.char), {});
       m.position.set((i - (Math.min(players.length, 4) - 1) / 2) * 2.2, 0.5, 0);
-      m.userData.baseY = 0.5;
-      m.userData.phase = i * 0.4;
-      m.userData.baseScale = 0.72;
       m.scale.setScalar(0.72);
       S.castGroup.add(m);
       S.cast.push(m);
