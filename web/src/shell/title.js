@@ -63,7 +63,7 @@ export default {
       new THREE.CylinderGeometry(4.6, 5.0, 0.5, 24),
       new THREE.MeshStandardMaterial({ color: 0x2b2566, roughness: 0.5, metalness: 0.25, flatShading: true })
     );
-    deck.position.set(0, 0.25, -0.5);
+    deck.position.set(2.3, 0.25, -0.5);   // under the cast, right of the menu
     stage.add(deck);
     S.deck = deck;
 
@@ -71,7 +71,8 @@ export default {
     castIds.forEach((id, i) => {
       const def = CHARS.find((c) => c.id === id) || CHARS[i];
       const m = charMesh(def, {});
-      m.position.set((i - (castIds.length - 1) / 2) * 1.95, 0.5, -0.4 + (i % 2) * 0.5);
+      // Right of centre: the menu owns the left half of the frame.
+      m.position.set(2.3 + (i - (castIds.length - 1) / 2) * 1.55, 0.5, -0.4 + (i % 2) * 0.5);
       m.scale.setScalar(0.92);
       stage.add(m);
       S.cast.push(m);
@@ -176,6 +177,14 @@ export default {
       if (b % 4 === 0) sfx(ctx, 'tick', t);
     });
     try { ctx.audio?.music?.play?.('menu'); } catch { /* optional */ }
+
+    // The cast dances the retargeted mocap swing-dance, beat-locked to the
+    // menu tempo. Each starts a few beats further into the routine, so it is
+    // a line of dancers, not four clones — and every step still lands on a
+    // beat because the offsets are whole beats.
+    S.cast.forEach((m, i) => m.userData.charApi?.play('dance', {
+      beatLock: true, bpm: 124, beat0: -i * 3, face: 'groove', beat: 0.25, blend: 0.3,
+    }));
   },
 
   update(ctx, dt, beat) {

@@ -316,6 +316,9 @@ const PORT = Number(argv.port || 5321 + (process.pid % 900));
   // game's own time domain decides when frame i is taken, so a slow
   // screenshot can delay the next shot but never shift what it shows.
   const shots = [];
+  // --hide-ui: clean frames of the 3D scene only (card thumbnails, stills).
+  if (argv['hide-ui']) await page.addStyleTag({ content: '#ui{display:none!important}' });
+
   const t0 = SKIP + await page.evaluate(() => window.__BBB__.clock.now());
   const interval = SECONDS / SHOTS;
   for (let i = 0; i < SHOTS; i++) {

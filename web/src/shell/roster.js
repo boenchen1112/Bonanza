@@ -61,6 +61,9 @@ export default {
     const stand = new THREE.Group();
     stand.position.set(-3.7, -1.5, 0);
     ctx.scene.add(stand);
+    // House floor at the pedestal base: the preview stands on the pedestal,
+    // the locked-in picks on the floor beside it.
+    ctx.scene.userData.groundY = -1.5;
     S.stand = stand;
     const ped = new THREE.Mesh(
       new THREE.CylinderGeometry(1.5, 1.7, 0.42, 18),
@@ -157,12 +160,12 @@ export default {
     const pulse = beatPulse(beat, 6);
     const amp = S.reduce ? 0.4 : 1;
 
-    // 3D preview turntable
+    // 3D preview: a slow sway toward camera, not a full turntable — the face
+    // is the character, and a full spin spent half its time showing the back.
     if (S.preview) {
-      S.previewSpin += dt * 0.55;
-      S.preview.rotation.y = S.previewSpin;
+      S.previewSpin += dt;
+      S.preview.rotation.y = 0.35 + Math.sin(S.previewSpin * 0.6) * 0.45;
       charBeat(S.preview, beat, dt);
-      S.preview.rotation.y = S.previewSpin;
     }
     S.ped.scale.y = 1 + pulse * 0.12;
     for (let i = 0; i < 4; i++) if (S.cast[i]) charBeat(S.cast[i], beat + i * 0.25, dt);
@@ -341,6 +344,9 @@ function setPreview(ctx, def) {
   m.position.y = 0.42;
   S.stand.add(m);
   S.preview = m;
+  // Each character introduces itself with the mocap chest-thump taunt, then
+  // settles into its beat idle.
+  m.userData.charApi?.play('taunt', { face: 'smug', beat: 0.3, blend: 0.2 });
   S.back.setAccent(def.color);
   S.infoName.textContent = def.name;
   S.infoTrait.textContent = def.trait;
@@ -362,7 +368,7 @@ function lockIn(ctx, slot, def, isCpu) {
 
   // the pick walks onto the cast deck
   const m = charMesh(def, {});
-  m.position.set((slot - 1.5) * 1.6, 0.5, 0);
+  m.position.set((slot - 1.5) * 1.6, 0, 0);
   m.scale.setScalar(0.8);
   S.castGroup.add(m);
   if (S.cast[slot]) { S.castGroup.remove(S.cast[slot]); disposeChar(S.cast[slot]); }

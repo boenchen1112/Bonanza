@@ -7,8 +7,9 @@
  * longer probes for it or falls back to a stand-in shape when it's absent.
  */
 
+import * as THREE from 'three';
 import { PAL, num } from './theme.js';
-import { makeCast, paletteFor, BUILD_IDS } from '../chars/index.js';
+import { makeCast, BUILD_IDS } from '../chars/index.js';
 
 /** @typedef {{id:string,name:string,color:number,accent:number,trait:string,shape:string,crest:string}} CharDef */
 
@@ -49,11 +50,12 @@ export function charMesh(def, opts = {}) {
     count: 1,
     positions: [[0, 0, 0]],
     builds: [build],
-    players: [{ id: def.id, name: def.name, palette: paletteFor(idx) }],
+    players: [{ id: def.id, name: def.name, palette: paletteForChar(def) }],
     ...opts,
   });
   const member = cast.get(0);
   const obj = member.char;
+  addCrest(obj, def);
   obj.userData.charApi = member.anim;
   obj.userData.def = def;
   // Kept so disposeChar() can tear down this single-member cast; makeCast's
@@ -61,6 +63,128 @@ export function charMesh(def, opts = {}) {
   // shared caches other live characters still use.
   obj.userData.castHandle = cast;
   return obj;
+}
+
+// ------------------------------------------------- identity: palette + crest
+
+const palCache = new Map();
+const _c = new THREE.Color();
+
+/**
+ * The rig palette for a 2D character design, derived from its own colour and
+ * accent so the 3D figure and the menu portrait are the same character —
+ * bright body, darker trim for value contrast, a pale head, dark eyes.
+ */
+export function paletteForChar(def) {
+  let p = palCache.get(def.id);
+  if (p) return p;
+  const mix = (a, b, t) => _c.setHex(a).lerp(new THREE.Color(b), t).getHex();
+  p = {
+    id: `char:${def.id}`, name: def.name,
+    body: def.color,
+    limb: mix(def.color, 0xffffff, 0.18),
+    trim: mix(def.color, 0x100818, 0.62),
+    skin: mix(def.color, 0xffffff, 0.8),
+    accent: def.accent,
+    eye: mix(def.color, 0x06030c, 0.88),
+    rim: mix(def.color, 0xffffff, 0.35),
+  };
+  palCache.set(def.id, p);
+  return p;
+}
+
+const crestMats = new Map();
+function crestMat(hex, side = THREE.FrontSide) {
+  const key = `${hex}:${side}`;
+  let m = crestMats.get(key);
+  if (!m) { m = new THREE.MeshStandardMaterial({ color: hex, roughness: 0.4, side }); crestMats.set(key, m); }
+  return m;
+}
+const crestGeos = new Map();
+function cgeo(key, make) {
+  let g = crestGeos.get(key);
+  if (!g) { g = make(); crestGeos.set(key, g); }
+  return g;
+}
+
+/**
+ * Give the 3D figure its portrait's crest (antenna, bolt, plume, horns, cap,
+ * fin). Crests that should wobble hang off the rig's `bobble` joint, which
+ * the animator already drives with a lagging spring — so a plume or a fin
+ * keeps swinging a beat after the body stops, for free. The crest replaces
+ * the build's generic head gear so the silhouettes stay distinct.
+ */
+function addCrest(char, def) {
+  const j = char.joints;
+  const b = char.build;
+  const headTop = b.head.h * 0.5;
+  const hw = b.head.w;
+  const acc = crestMat(def.accent);
+  const dark = crestMat(_c.setHex(def.color).lerp(new THREE.Color(0x100818), 0.55).getHex());
+  if (j.gear && j.gear.parent === j.head) j.gear.visible = false;
+  const keepBall = def.crest === 'antenna';
+  if (j.bobbleMesh && !keepBall) j.bobbleMesh.visible = false;
+  const add = (parent, geo, mat, x, y, z, rx = 0, ry = 0, rz = 0) => {
+    const m = new THREE.Mesh(geo, mat);
+    m.position.set(x, y, z);
+    m.rotation.set(rx, ry, rz);
+    m.castShadow = true;
+    parent.add(m);
+    return m;
+  };
+  // The bobble joint sits `bobbleY` above the head centre; offsets below are
+  // in its frame, so y = headTop - bobbleY is the scalp.
+  const scalp = headTop - b.bobbleY;
+  switch (def.crest) {
+    case 'antenna': {
+      const L = Math.max(0.04, -scalp);
+      add(j.bobble, cgeo(`ant:${b.id}`, () => new THREE.CylinderGeometry(0.016, 0.02, L, 6)), dark, 0, -L / 2, 0);
+      break;
+    }
+    case 'bolt': {
+      const g = cgeo(`bolt:${b.id}`, () => {
+        const s = new THREE.Shape();
+        const h = hw * 0.75;
+        s.moveTo(0, 0); s.lineTo(h * 0.18, h * 0.5); s.lineTo(h * 0.02, h * 0.5);
+        s.lineTo(h * 0.22, h); s.lineTo(-h * 0.2, h * 0.38); s.lineTo(-h * 0.02, h * 0.38); s.lineTo(-h * 0.14, 0);
+        const e = new THREE.ExtrudeGeometry(s, { depth: 0.05, bevelEnabled: false });
+        e.translate(0, 0, -0.025);
+        return e;
+      });
+      add(j.bobble, g, acc, 0, scalp - 0.02, 0);
+      break;
+    }
+    case 'plume': {
+      const g = cgeo(`plume:${b.id}`, () => new THREE.SphereGeometry(hw * 0.13, 10, 8).scale(0.55, 2.4, 0.55));
+      for (const [ang, s] of [[-0.45, 0.85], [0, 1], [0.45, 0.85]]) {
+        const m = add(j.bobble, g, acc, Math.sin(ang) * hw * 0.12, scalp + hw * 0.24 * s, -hw * 0.05, -0.35, 0, ang);
+        m.scale.setScalar(s);
+      }
+      break;
+    }
+    case 'horns': {
+      const g = cgeo(`horn:${b.id}`, () => new THREE.ConeGeometry(hw * 0.1, hw * 0.34, 10));
+      for (const s of [-1, 1]) add(j.head, g, crestMat(0xfff1d6), s * hw * 0.34, headTop + hw * 0.08, 0, 0, 0, -s * 0.55);
+      break;
+    }
+    case 'cap': {
+      const dome = cgeo(`capd:${b.id}`, () => new THREE.SphereGeometry(hw * 0.52, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2));
+      const brim = cgeo(`capb:${b.id}`, () => new THREE.CylinderGeometry(hw * 0.42, hw * 0.42, 0.025, 18, 1, false, -Math.PI / 2, Math.PI));
+      add(j.head, dome, acc, 0, headTop - hw * 0.18, 0);
+      add(j.head, brim, acc, 0, headTop - hw * 0.16, hw * 0.28);
+      break;
+    }
+    case 'fin': {
+      const g = cgeo(`fin:${b.id}`, () => {
+        const c = new THREE.CircleGeometry(hw * 0.36, 16, 0, Math.PI);
+        c.rotateY(Math.PI / 2);
+        return c;
+      });
+      add(j.bobble, g, crestMat(def.accent, THREE.DoubleSide), 0, scalp - 0.01, 0);
+      break;
+    }
+    default: break;
+  }
 }
 
 /** Per-frame idle/dance, driven by the real beat-phase animator. */

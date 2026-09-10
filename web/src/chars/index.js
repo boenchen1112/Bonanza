@@ -70,9 +70,13 @@ export function makeCast({
 
   for (let i = 0; i < n; i++) {
     const p = players?.[i] || null;
-    const pal = p?.palette !== undefined && p.palette !== null
-      ? (typeof p.palette === 'string' ? paletteById(p.palette) : paletteFor(p.palette))
-      : paletteFor(i);
+    // A palette may be an id, an index, or a palette object. Objects used to
+    // fall into paletteFor(), which coerced them to index 0 — every shell
+    // character rendered in the same orange whatever colour it was given.
+    const pp = p?.palette;
+    const pal = pp === undefined || pp === null ? paletteFor(i)
+      : typeof pp === 'object' ? pp
+        : typeof pp === 'string' ? paletteById(pp) : paletteFor(pp);
     const build = builds?.[i] ?? BUILD_IDS[i % BUILD_IDS.length];
     const char = makeCharacter({
       palette: pal, build, seed: (seed + i * 7919) >>> 0, detail, scale,

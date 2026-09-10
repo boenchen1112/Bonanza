@@ -281,7 +281,10 @@ export function createStage({ canvas, clock }) {
     const preset = scene.userData.envPreset || (shell ? 'void' : 'arena');
     const env = createEnv(scene);
     env.stageSet(preset, {
-      groundY: look.ground.found ? look.ground.y : (shell ? -4.4 : 0),
+      // A scene can declare where its floor is (roster and freeplay stand
+      // their casts on a deck well below 0; the default arena floor at 0 used
+      // to slice through them).
+      groundY: look.ground.found ? look.ground.y : (scene.userData.groundY ?? (shell ? -4.4 : 0)),
       skipGround: look.ground.found,
     });
   }

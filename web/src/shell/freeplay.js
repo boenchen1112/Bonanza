@@ -40,14 +40,15 @@ export default {
     ctx.fx.attach(ctx.scene);
 
     // the roster cheers from the front of the stage
+    ctx.scene.userData.groundY = -1.55;   // the cast stands on the house floor
     S.castGroup = new THREE.Group();
-    S.castGroup.position.set(0, -1.55, 3.2);
+    S.castGroup.position.set(0, -1.55, 1.4);   // far enough back to show their feet
     ctx.scene.add(S.castGroup);
     S.cast = [];
     const players = session.players.length ? session.players : [];
     players.slice(0, 4).forEach((p, i) => {
       const m = charMesh(charById(p.char), {});
-      m.position.set((i - (Math.min(players.length, 4) - 1) / 2) * 2.2, 0.5, 0);
+      m.position.set((i - (Math.min(players.length, 4) - 1) / 2) * 2.2, 0, 0);
       m.scale.setScalar(0.72);
       S.castGroup.add(m);
       S.cast.push(m);
