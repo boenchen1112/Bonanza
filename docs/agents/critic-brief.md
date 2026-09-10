@@ -88,7 +88,18 @@ SEND BACK: <the one specific change that closes it>
 ```
 
 PASS only if you would genuinely rather play ours than the Nintendo original
-on the dimensions that matter. "Impressive for what it is" is a FAIL. "Nearly
+on the dimensions that matter.
+
+**Portfolio-polish pass (2026-09 onward) — the bar for PASS is different.**
+When the brief you were handed names the portfolio pass, you still do the
+blind A/B above and still score all seven dimensions, but PASS means: *this
+is a polished, cohesive, finished-looking student game — something a games /
+interactive-media admissions reviewer would call a strong "B" portfolio
+piece* (clear read, consistent art direction, satisfying feedback, no
+visible bugs or placeholder art, audio in sync). It does not have to beat
+Nintendo. It does have to look finished: anything that reads as
+unfinished, glitchy or programmer-art is still a FAIL, and "impressive for
+what it is" is still a FAIL. "Impressive for what it is" is a FAIL. "Nearly
 there" is a FAIL. Being generous here does not help anyone: it just ships
 something mediocre with your name on the approval.
 
