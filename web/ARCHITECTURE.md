@@ -22,9 +22,14 @@ borrow from it.
    converts at the boundary; `Input` already does this for you.
 2. **Never `lerp(a, b, 0.1)` in an update loop.** Use `damp(a, b, lambda, dt)`
    from `core/util.js`, or the feel changes with frame rate.
-3. **No external asset fetches.** Everything — geometry, textures, music,
-   SFX — is generated in code or embedded. The game must run from `file://`
-   after a build, offline, with zero network.
+3. **No fetches outside the build** (ADR 0003, `docs/adr/`). Authored assets
+   (`.glb`, textures, wasm, models) may be committed and imported through
+   Vite — they ship inside `dist/` and load same-origin via
+   `src/assets/index.js`. Nothing may be requested from any other origin
+   (CDN, API, font service); the harness aborts and flags it. The build must
+   run offline from any static server. (`file://` is not a target: module
+   scripts are CORS-blocked there and it never worked.) Free sources only —
+   CC0 or Mixamo — with a provenance README beside every asset.
 4. **Every minigame implements the same interface** (below). No exceptions,
    because the shell, the pause menu, the results screen and the automated
    critic harness all drive them generically.

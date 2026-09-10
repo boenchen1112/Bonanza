@@ -13,7 +13,9 @@
 
 import * as THREE from 'three';
 import { damp, clamp01 } from '../core/util.js';
+import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { makeCast, makeCrowd, BUILD_IDS } from './index.js';
+import { loadGLB } from '../assets/index.js';
 
 const VERDICTS = ['perfect', 'great', 'good', 'miss'];
 
@@ -40,6 +42,9 @@ let lastBeatInt = -1e9;
 let silhouette = false;
 let savedBg = null;
 let camDrift = 0;
+/** Bundled-asset tracer (ADR 0003): the raw Mixamo rig, dancing upstage. */
+let ybot = null;
+let ybotMixer = null;
 
 function light(scene) {
   const hemi = new THREE.HemisphereLight(0x9fc4ff, 0x2a1a3a, 1.15);
@@ -98,7 +103,7 @@ const demo = {
   durationBars: 999,
   controls: 'a',
 
-  load(ctx) {
+  async load(ctx) {
     ctxRef = ctx;
     root = new THREE.Group();
     ctx.scene.add(root);
@@ -122,6 +127,14 @@ const demo = {
     crowd.mesh.position.y = 0.2;
     ctx.scene.add(crowd.mesh);
     crowd.setEnergy(0.45);
+
+    const gltf = await loadGLB('ybot');
+    ybot = cloneSkinned(gltf.scene);
+    ybot.position.set(0, 0, -3.2);
+    ybot.scale.multiplyScalar(1.25);
+    root.add(ybot);
+    ybotMixer = new THREE.AnimationMixer(ybot);
+    ybotMixer.clipAction(gltf.animations.find((a) => a.name === 'dance')).play();
 
     ctx.camera.position.set(0, 2.35, 8.6);
     ctx.camera.lookAt(0, 1.15, 0);
@@ -152,6 +165,7 @@ const demo = {
 
     cast.update(dt, beat);
     crowd.update(dt, beat);
+    ybotMixer?.update(dt);
 
     // The camera is never still. Slow, low-amplitude, never fights the read.
     camDrift += dt;
@@ -180,7 +194,8 @@ const demo = {
     cast?.dispose();
     crowd?.dispose();
     root?.traverse((o) => { o.geometry?.dispose?.(); o.material?.dispose?.(); });
-    root = null; cast = null; crowd = null; ctxRef = null;
+    ybotMixer?.stopAllAction();
+    root = null; cast = null; crowd = null; ctxRef = null; ybot = null; ybotMixer = null;
     if (ctx?.scene) { ctx.scene.overrideMaterial = null; ctx.scene.fog = null; }
   },
 

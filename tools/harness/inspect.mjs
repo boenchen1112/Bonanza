@@ -233,9 +233,29 @@ const PORT = Number(argv.port || 5321 + (process.pid % 900));
   const page = await context.newPage();
 
   const logs = [];
-  page.on('console', (m) => logs.push(`[${m.type()}] ${m.text()}`));
+  // Scripts the HOST MACHINE injects into every page (antivirus web-scanning
+  // on the dev laptop rewrites localhost HTML to pull its own script). Not
+  // the game's requests: aborted silently, and the console error the abort
+  // produces is dropped. Anything else off-origin is still flagged below.
+  const ENV_INJECTED = /kaspersky-labs\.com/i;
+  page.on('console', (m) => {
+    if (ENV_INJECTED.test(m.location()?.url || '')) return;
+    logs.push(`[${m.type()}] ${m.text()}`);
+  });
   page.on('pageerror', (e) => logs.push(`[pageerror] ${e.message}\n${e.stack || ''}`));
-  page.on('requestfailed', (r) => logs.push(`[requestfailed] ${r.url()} ${r.failure()?.errorText}`));
+  page.on('requestfailed', (r) => {
+    if (!r.url().startsWith(`http://127.0.0.1:${PORT}/`)) return; // reported as [external-fetch]
+    logs.push(`[requestfailed] ${r.url()} ${r.failure()?.errorText}`);
+  });
+  // ADR 0003: the game fetches only its own bundled files. Anything bound for
+  // another origin is aborted (so the run behaves as it would offline) and
+  // logged, which makes the console dirty and fails the sweep.
+  await context.route('**/*', (route) => {
+    const url = route.request().url();
+    if (url.startsWith(`http://127.0.0.1:${PORT}/`)) return route.continue();
+    if (!ENV_INJECTED.test(url)) logs.push(`[external-fetch] ${url}`);
+    return route.abort('blockedbyclient');
+  });
 
   await page.goto(`http://127.0.0.1:${PORT}/index.html?scene=${encodeURIComponent(SCENE)}&quality=${encodeURIComponent(QUALITY)}`, {
     waitUntil: 'load', timeout: 30000,

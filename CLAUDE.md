@@ -62,8 +62,13 @@ state (what's built vs. stubbed vs. never verified).
   `performance.now()` or a raw rAF timestamp.
 - **Determinism.** `makeRng(seed)` from `core/util.js`, never `Math.random()`,
   anywhere that affects gameplay — the harness replays runs.
-- **No external asset fetches.** Geometry, textures, music, SFX are all
-  generated in code or embedded; the build must run from `file://` offline.
+- **No fetches outside the build** (ADR 0003). Authored assets (`.glb`,
+  textures, wasm) may be bundled via Vite and loaded same-origin through
+  `web/src/assets/index.js`; nothing is ever requested from another origin
+  (the harness aborts and flags it). Runs offline from any static server —
+  `file://` was never a working target. Free sources only (CC0 / Mixamo),
+  provenance README beside each asset; raw Mixamo FBX stay in gitignored
+  `Mixamo/`, converted by `tools/assets/convert-mixamo.mjs`.
 - **Every minigame implements the same interface** (`load/start/update/
   input/result/dispose`, documented in full in `web/ARCHITECTURE.md`) so the
   shell, pause menu, results screen, and harness can drive them generically.

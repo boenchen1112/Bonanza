@@ -50,11 +50,11 @@ Status key: `[ ]` open · `[~]` in progress · `[x]` done · `[-]` cut (with rea
 - [x] Production bundle contains no test API (verified by grepping a plain `vite build`)
 - [x] Harness build mode exposes it; harness runs still green
 
-## [ ] 06 — ADR 0003 + first bundled asset renders offline
+## [x] 06 — ADR 0003 + first bundled asset renders offline
 **Blocked by:** 01
-- [ ] ADR 0003: "no external asset fetches **at runtime**"; ARCHITECTURE.md + CLAUDE.md updated
-- [ ] ADR states MediaPipe wasm/model must be bundled (no CDN)
-- [ ] One bundled CC0/Mixamo `.glb` renders in Swing Kings from the built game, no network
+- [x] ADR 0003: "no fetches outside the build" (file:// dropped — verified it never worked); ARCHITECTURE.md + CLAUDE.md updated
+- [x] ADR states MediaPipe wasm/model must be bundled (no CDN); harness aborts + flags any off-origin request
+- [x] Bundled Mixamo `ybot.glb` renders + animates in the built game (chars-demo tracer; Swing Kings gets it in 09) with all off-origin requests blocked
 
 ## [ ] 07 — Skinned character behind the existing character contract (clip-only)
 **Blocked by:** 02, 06
