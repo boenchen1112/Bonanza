@@ -56,17 +56,33 @@ Status key: `[ ]` open · `[~]` in progress · `[x]` done · `[-]` cut (with rea
 - [x] ADR states MediaPipe wasm/model must be bundled (no CDN); harness aborts + flags any off-origin request
 - [x] Bundled Mixamo `ybot.glb` renders + animates in the built game (chars-demo tracer; Swing Kings gets it in 09) with all off-origin requests blocked
 
-## [ ] 07 — Skinned character behind the existing character contract (clip-only)
+> **Re-plan of 07–09 (2026-09-11, evidence-driven).** The spec assumed the
+> segmented toy rig is where the "prototype" read comes from ("limbs telescope
+> and clip"). That diagnosis was made from SwiftShader-era frames. A 60fps GPU
+> run of `chars-demo` through every state (`runs/t07-poses`: windup, strike,
+> all four verdicts, fail) shows the toy cast holding up in its extreme poses,
+> and its faces + four builds are the series' identity; the bundled Y Bot
+> mannequin next to them reads as generic. So the cast is **kept**, and the
+> Mixamo motion is **retargeted onto it** instead: an offline bake turns each
+> clip into the animator's own pose-channel tracks, so the existing crossfade,
+> damping, additive beat layer, springs, impulses and faces apply unchanged.
+> This is still the spec's §4 hybrid (clip base layer + procedural additive
+> layer) — minus the geometry swap. The four verdict reactions stay procedural
+> (their silhouettes are the design contract; the Victory/Sitting clips don't
+> meet it). Flag this in the hand-back.
+
+## [x] 07 — Mixamo clips retargeted onto the toy rig as pose-channel tracks
 **Blocked by:** 02, 06
-- [ ] `makeCharacter` keeps its contract (`.joints/.dims/.palette/.build/.attach/.dispose`); `attach('handR')` resolves to the hand bone
-- [ ] Toon material + inverted-hull outline wired for skinned meshes; palettes tint per player
-- [ ] Animator states crossfade Mixamo clips on the beat; visible in `chars-demo`
+- [x] Pure, unit-tested retarget solver: Mixamo bone directions/rotations → the rig's swing/lift/twist/bend + hips/torso/head channels (FK round-trip tests)
+- [x] Deterministic bake script (`ybot.glb` → committed clip-track module), no raw FBX needed
+- [x] Animator plays clip-backed states (`play(name, {from,to,dur})`) through the same crossfade/damping/beat layer; face channels still procedural
+- [x] Visible in `chars-demo` (mocap source figure beside the toy cast) — runs/t07-mocap
 
-## [ ] 08 — Additive beat-phase layer on skinned bones (or documented fallback)
+## [x] 08 — Beat layer + face tuned on clip-driven states
 **Blocked by:** 07
-- [ ] Anticipation / overshoot / squash / secondary motion reads on the skinned rig in `chars-demo`, OR a written, evidenced clip-only fallback decision
+- [x] Per-clip beat-layer amounts and face expressions tuned (per-call `beat` + CLIP_FACE presets; dance beat-locked to its own downbeats; further tuning rides on 09/13) so mocap states stay on the beat and in character; verified in `chars-demo` frames
 
-## [ ] 09 — Swing Kings cast is skinned; bat visible in the batter's hand
+## [ ] 09 — Swing Kings batter + pitcher perform the mocap swing/pitch on the beat; bat visible
 **Blocked by:** 07
 
 ## [ ] 10 — Swing Kings stage to "B": shadows, unified toon shading, env kit, lighting
@@ -96,7 +112,7 @@ Status key: `[ ]` open · `[~]` in progress · `[x]` done · `[-]` cut (with rea
 ## [ ] 17 — No placeholder game-select path (`select.js` real or removed)
 **Blocked by:** none
 
-## [ ] 18 — Shell to "B": skinned cast, consistent art, shell music verified
+## [ ] 18 — Shell to "B": mocap-animated cast, consistent art, shell music verified
 **Blocked by:** 03, 07, 10, 16, 17
 
 ## [ ] 19 — Critic loop: shell to PASS

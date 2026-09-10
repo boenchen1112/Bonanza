@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1 --port 5179",
     "test": "node --test \"tests/**/*.test.mjs\"",
-    "assets:mixamo": "node ../tools/assets/convert-mixamo.mjs"
+    "assets:mixamo": "node ../tools/assets/convert-mixamo.mjs",
+    "assets:clips": "node ../tools/assets/bake-clips.mjs"
   },
   "dependencies": {
     "three": "^0.185.1"

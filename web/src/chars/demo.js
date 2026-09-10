@@ -16,6 +16,7 @@ import { damp, clamp01 } from '../core/util.js';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { makeCast, makeCrowd, BUILD_IDS } from './index.js';
 import { loadGLB } from '../assets/index.js';
+import { CLIPS } from './clips.gen.js';
 
 const VERDICTS = ['perfect', 'great', 'good', 'miss'];
 
@@ -23,12 +24,22 @@ const VERDICTS = ['perfect', 'great', 'good', 'miss'];
 const SCRIPT = [
   { name: 'IDLE', kind: 'idle' },
   { name: 'READY', kind: 'ready' },
+  // Mocap steps: Mixamo motion retargeted onto the toy rig (retarget.js);
+  // the grey figure upstage is the source skeleton playing the same frame.
+  { name: 'MOCAP SWING', kind: 'mocapSwing' },
   { name: 'WINDUP / STRIKE', kind: 'swing' },
+  { name: 'MOCAP PITCH', kind: 'mocapPitch' },
+  { name: 'MOCAP PITCH', kind: 'hold' },
+  { name: 'MOCAP PITCH', kind: 'hold' },
   { name: 'VERDICTS', kind: 'verdicts', rot: 0 },
   { name: 'VERDICTS', kind: 'verdicts', rot: 1 },
   { name: 'VERDICTS', kind: 'verdicts', rot: 2 },
   { name: 'VERDICTS', kind: 'verdicts', rot: 3 },
+  { name: 'MOCAP DANCE', kind: 'mocapDance' },
+  { name: 'MOCAP DANCE', kind: 'hold' },
   { name: 'TAUNT', kind: 'taunt' },
+  { name: 'MOCAP TAUNT', kind: 'mocapTaunt' },
+  { name: 'MOCAP TAUNT', kind: 'hold' },
   { name: 'CELEBRATE', kind: 'celebrate' },
   { name: 'FAIL', kind: 'fail' },
 ];
@@ -42,9 +53,11 @@ let lastBeatInt = -1e9;
 let silhouette = false;
 let savedBg = null;
 let camDrift = 0;
-/** Bundled-asset tracer (ADR 0003): the raw Mixamo rig, dancing upstage. */
+/** The mocap SOURCE: the raw Mixamo rig upstage, mirroring member 0's clip. */
 let ybot = null;
 let ybotMixer = null;
+let ybotActions = null;
+let ybotShown = null;
 
 function light(scene) {
   const hemi = new THREE.HemisphereLight(0x9fc4ff, 0x2a1a3a, 1.15);
@@ -131,10 +144,13 @@ const demo = {
     const gltf = await loadGLB('ybot');
     ybot = cloneSkinned(gltf.scene);
     ybot.position.set(0, 0, -3.2);
-    ybot.scale.multiplyScalar(1.25);
+    ybot.scale.multiplyScalar(1.1);
+    // Neutral grey: it is reference, not cast.
+    ybot.traverse((o) => { if (o.isMesh) o.material = new THREE.MeshStandardMaterial({ color: 0x6d6f86, roughness: 0.7 }); });
     root.add(ybot);
     ybotMixer = new THREE.AnimationMixer(ybot);
-    ybotMixer.clipAction(gltf.animations.find((a) => a.name === 'dance')).play();
+    ybotActions = Object.fromEntries(gltf.animations.map((a) => [a.name, ybotMixer.clipAction(a)]));
+    ybotShown = null;
 
     ctx.camera.position.set(0, 2.35, 8.6);
     ctx.camera.lookAt(0, 1.15, 0);
@@ -165,7 +181,7 @@ const demo = {
 
     cast.update(dt, beat);
     crowd.update(dt, beat);
-    ybotMixer?.update(dt);
+    mirrorSource(dt);
 
     // The camera is never still. Slow, low-amplitude, never fights the read.
     camDrift += dt;
@@ -195,7 +211,8 @@ const demo = {
     crowd?.dispose();
     root?.traverse((o) => { o.geometry?.dispose?.(); o.material?.dispose?.(); });
     ybotMixer?.stopAllAction();
-    root = null; cast = null; crowd = null; ctxRef = null; ybot = null; ybotMixer = null;
+    root = null; cast = null; crowd = null; ctxRef = null;
+    ybot = null; ybotMixer = null; ybotActions = null; ybotShown = null;
     if (ctx?.scene) { ctx.scene.overrideMaterial = null; ctx.scene.fog = null; }
   },
 
@@ -233,6 +250,30 @@ const demo = {
   get crowd() { return crowd; },
 };
 
+// ------------------------------------------------------------ mocap source
+
+/**
+ * Show the source rig at the exact clip frame member 0 is retargeting, so the
+ * two can be compared side by side; idle loop otherwise.
+ */
+function mirrorSource(dt) {
+  if (!ybotMixer || !cast) return;
+  const anim = cast.members[0].anim;
+  const t = anim.clipTime;
+  const want = t !== null ? anim.variant.name : 'idle';
+  if (want !== ybotShown) {
+    ybotMixer.stopAllAction();
+    ybotActions[want]?.reset().play();
+    ybotShown = want;
+  }
+  if (t !== null) {
+    ybotActions[want].time = t;
+    ybotMixer.update(0);
+  } else {
+    ybotMixer.update(dt);
+  }
+}
+
 // ------------------------------------------------------------------ script
 
 function onBeat(ctx, beatInt, beat, jumped) {
@@ -250,9 +291,44 @@ function onBeat(ctx, beatInt, beat, jumped) {
 function applyStep(ctx, s, barBeat, entering) {
   if (!cast) return;
   const def = SCRIPT[s];
-  if (entering) ctx?.ui?.banner?.(def.name, { life: 1.1 });
+  const prevName = SCRIPT[(s - 1 + SCRIPT.length) % SCRIPT.length].name;
+  if (entering && def.name !== prevName) ctx?.ui?.banner?.(def.name, { life: 1.1 });
+  const spb = ctx?.clock?.spb ?? 0.5;
+  const bpm = ctx?.clock?.bpm ?? 118;
 
   switch (def.kind) {
+    case 'mocapSwing': {
+      // Two beats of coil ending exactly at the bat-meets-ball frame, the
+      // follow-through on beat 3 — the same timing a note would ask for.
+      const contact = CLIPS.swing.contact;
+      if (barBeat === 0) {
+        for (const m of cast.members) m.anim.play('swing', { to: contact, dur: spb * 2, hold: true, face: 'focus', beat: 0.15 });
+        crowd.setEnergy(0.6);
+      } else if (barBeat === 2) {
+        for (const m of cast.members) m.anim.play('swing', { from: contact, face: 'fierce', beat: 0.1 });
+        crowd.hype(0.5);
+      }
+      break;
+    }
+
+    case 'mocapPitch':
+      if (entering) for (const m of cast.members) m.anim.play('pitch', { face: 'focus', beat: 0.15 });
+      break;
+
+    case 'mocapDance':
+      if (entering) {
+        cast.members.forEach((m) => m.anim.play('dance', { beatLock: true, bpm, face: 'groove', beat: 0.2, beat0: Math.round(ctx.clock.beat) }));
+        crowd.setEnergy(0.8);
+      }
+      break;
+
+    case 'mocapTaunt':
+      if (entering) for (const m of cast.members) m.anim.play('taunt', { face: 'smug', beat: 0.3 });
+      break;
+
+    case 'hold':
+      break;
+
     case 'idle':
       if (entering) { cast.all('idle'); crowd.setEnergy(0.40); }
       break;

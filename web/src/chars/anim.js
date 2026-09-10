@@ -36,9 +36,10 @@ import {
   clamp, clamp01, lerp, smootherstep, damp,
   backOut, elasticOut, anticipate, easeOutCubic, easeOutQuint, makeRng,
 } from '../core/util.js';
+import { CLIPS, CLIP_FPS, CLIP_CHANNELS } from './clips.gen.js';
 
 export const STATES = [
-  'idle', 'ready', 'windup', 'action', 'recover', 'celebrate', 'fail', 'taunt',
+  'idle', 'ready', 'windup', 'action', 'recover', 'celebrate', 'fail', 'taunt', 'clip',
 ];
 
 /**
@@ -58,6 +59,8 @@ export const STATE_DEF = {
   celebrate: { dur: 2.40, blend: 0.10, beat: 1.35, next: 'idle' },
   fail: { dur: 1.70, blend: 0.07, beat: 0.22, next: 'idle' },
   taunt: { dur: 2.00, blend: 0.16, beat: 1.10, next: 'idle' },
+  // Mocap-driven body (see `play()`); dur/next/beat are set per call.
+  clip: { dur: 1, blend: 0.10, beat: 0.25, next: 'idle' },
 };
 
 /** Which state + variant a verdict maps to. Silhouettes, in order: Y, K, W, comma. */
@@ -518,7 +521,77 @@ function poseTaunt(p, s) {
   return p;
 }
 
+// ------------------------------------------------------------- mocap clips
+//
+// Mixamo motion, retargeted offline onto THIS rig's pose channels
+// (tools/assets/bake-clips.mjs + retarget.js). A clip only ever supplies the
+// body channels; the face stays ours (a preset per call), and everything
+// downstream — crossfade, damping, the additive beat layer, springs,
+// impulses, blinks — treats a clip exactly like a hand-written state.
+
+/** Face presets for clip states. Keys are pose channels; unset = REST. */
+export const CLIP_FACE = {
+  neutral: {},
+  focus: { eyeOpen: 0.78, browY: -0.45, browAngle: 0.5, pupilX: 0.45, mouthCurve: -0.12, mouthW: 0.8 },
+  fierce: { eyeOpen: 1.1, browY: -0.35, browAngle: 0.75, mouthCurve: -0.1, mouthOpen: 0.55, mouthW: 1.15 },
+  joy: { eyeOpen: 0.3, browY: 0.85, browAngle: -0.35, mouthCurve: 1.0, mouthOpen: 0.6, mouthW: 1.35 },
+  smug: { eyeOpen: 0.62, pupilX: -0.55, pupilY: 0.1, browY: 0.3, browAngle: 0.35, mouthCurve: 0.75, mouthW: 0.85 },
+  groove: { eyeOpen: 0.55, browY: 0.4, browAngle: -0.2, mouthCurve: 0.9, mouthOpen: 0.25, mouthW: 1.2 },
+};
+
+const mod = (a, n) => ((a % n) + n) % n;
+
+/** Clip-local time (seconds) a clip spec shows at state time `t` / beat. */
+export function clipTimeAt(spec, t, u, beat) {
+  const len = spec.to - spec.from;
+  if (spec.beatLock) return spec.from + mod(spec.phase + (beat - spec.beat0) * spec.secPerBeat - spec.from, len);
+  if (spec.loop) return spec.from + mod(t * spec.rate, len);
+  return spec.from + clamp01(u) * len;
+}
+
+/** Linear sample of every baked body channel at clip time `time`. */
+export function sampleClip(p, clip, time, legFrac = 0.3) {
+  const x = clamp(time, 0, clip.duration) * CLIP_FPS;
+  const i0 = Math.min(clip.n - 1, Math.floor(x));
+  const i1 = Math.min(clip.n - 1, i0 + 1);
+  const a = x - i0;
+  for (let c = 0; c < CLIP_CHANNELS.length; c++) {
+    const k = CLIP_CHANNELS[c];
+    const tr = clip.ch[k];
+    p[k] = (tr[i0] + (tr[i1] - tr[i0]) * a) * 0.001;
+  }
+  // Baked in leg-lengths; the pose wants fractions of this rig's height.
+  p.hipsY *= legFrac;
+  return p;
+}
+
+function poseClip(p, s) {
+  resetPose(p);
+  const spec = s.variant;
+  const clip = spec && CLIPS[spec.name];
+  if (!clip) return poseIdle(p, s);
+  sampleClip(p, clip, clipTimeAt(spec, s.t, s.u, s.beat), s.legFrac);
+  if (spec.face) Object.assign(p, spec.face);
+  return p;
+}
+
+/**
+ * Pick how many clip beats fit one game beat (½, 1, 2 or 4) so the playback
+ * rate — clipBeatsPerGameBeat · bpm / clipTempo — is as close to 1 as it can
+ * be. A 196bpm swing-dance loop under a 124bpm song plays at 1.27x with two
+ * of its steps per beat, rather than at 0.63x looking drugged.
+ */
+export function beatLockRatio(clipTempo, bpm) {
+  let best = 1, bestErr = Infinity;
+  for (const m of [0.5, 1, 2, 4]) {
+    const err = Math.abs(Math.log((m * bpm) / clipTempo));
+    if (err < bestErr) { bestErr = err; best = m; }
+  }
+  return best;
+}
+
 const POSE_FN = {
+  clip: poseClip,
   idle: poseIdle,
   ready: poseReady,
   windup: poseWindup,
@@ -578,7 +651,12 @@ export class CharacterAnimator {
     this._target = makePose();
     this._cur = makePose();
     this._layer = makePose();
-    this._s = { t: 0, u: 0, beat: 0, variation: this.variation, variant: null, power: 1 };
+    this._s = {
+      t: 0, u: 0, beat: 0, variation: this.variation, variant: null, power: 1,
+      legFrac: this.dims ? this.dims.legLen / this.dims.height : 0.3,
+    };
+    /** Where a finished clip hands off to (per `play()` call). */
+    this._clipNext = 'idle';
 
     // Secondary-motion springs.
     this._headLag = { x: 0, v: 0 };
@@ -634,6 +712,9 @@ export class CharacterAnimator {
     this.prevState = this.state;
     this.prevVariant = this.variant;
     this.prevT = this.t;
+    // The outgoing state's real duration: a retimed windup or a clip must
+    // keep sampling where it was, not at t / (its STATE_DEF default).
+    this.prevDur = this.dur;
     this.state = name;
     this.variant = opts.variant ?? null;
     this.t = 0;
@@ -663,6 +744,56 @@ export class CharacterAnimator {
   relax(opts = {}) { return this.setState('idle', opts); }
 
   taunt(opts = {}) { return this.setState('taunt', { force: true, ...opts }); }
+
+  /**
+   * Play a baked mocap clip through the normal state machine.
+   *
+   * ```js
+   * anim.play('swing', { to: CLIPS.swing.contact, dur: lead, hold: true, face: 'focus' });
+   * anim.play('swing', { from: CLIPS.swing.contact, face: 'fierce' }); // on the note
+   * anim.play('dance', { beatLock: true, bpm: clock.bpm, face: 'groove' });
+   * ```
+   * @param {string} name  clip id in clips.gen.js
+   * @param {object} [o]   {from, to, dur, rate, loop, beatLock, bpm, beat0,
+   *                        hold, next, blend, beat, face, power}
+   *   dur      seconds to spend on [from, to] (retimes the clip; default natural)
+   *   beatLock loop the clip with its own downbeats on the game's beats
+   *   beat     how much of the procedural beat layer rides on top (0..1.4)
+   *   face     a CLIP_FACE preset name or a {channel: value} object
+   */
+  play(name, o = {}) {
+    const clip = CLIPS[name];
+    if (!clip) return this;
+    const from = o.from ?? 0;
+    const to = o.to ?? clip.duration;
+    const rate = o.rate ?? 1;
+    const spec = {
+      name, from, to, rate,
+      loop: !!(o.loop || o.beatLock),
+      beatLock: !!(o.beatLock && clip.tempo),
+      face: typeof o.face === 'string' ? CLIP_FACE[o.face] : (o.face || null),
+    };
+    if (spec.beatLock) {
+      const m = beatLockRatio(clip.tempo, o.bpm ?? 120);
+      spec.secPerBeat = (m * 60) / clip.tempo;
+      spec.beat0 = o.beat0 ?? Math.floor(this._beat);
+      spec.phase = clip.downbeat ?? 0;
+    }
+    const dur = o.dur ?? (spec.loop ? Infinity : (to - from) / rate);
+    this.setState('clip', {
+      variant: spec, force: true, dur, hold: o.hold ?? false,
+      blend: o.blend ?? STATE_DEF.clip.blend, power: o.power,
+    });
+    this.beatAmtTarget = o.beat ?? STATE_DEF.clip.beat;
+    this._clipNext = o.next ?? 'idle';
+    return this;
+  }
+
+  /** Clip-local time currently shown (null outside a clip) — for mirroring a source rig. */
+  get clipTime() {
+    if (this.state !== 'clip' || !this.variant) return null;
+    return clipTimeAt(this.variant, this.t, clamp01(this.t / this.dur), this._beat);
+  }
 
   /**
    * Verdict reaction. Maps to a state+variant whose silhouettes are mutually
@@ -706,7 +837,8 @@ export class CharacterAnimator {
     // auto-advance
     const def = STATE_DEF[this.state] || STATE_DEF.idle;
     if (!this.hold && isFinite(this.dur) && this.t >= this.dur && def.next) {
-      this.setState(def.next, { variant: this.variant && def.next === 'recover' ? this.variant : null });
+      const next = this.state === 'clip' ? this._clipNext : def.next;
+      this.setState(next, { variant: this.variant && next === 'recover' && this.state !== 'clip' ? this.variant : null });
     }
 
     if (this.blend < 1) this.blend = Math.min(1, this.blend + dt / this.blendDur);
@@ -724,7 +856,7 @@ export class CharacterAnimator {
       target = (POSE_FN[this.state] || poseIdle)(this._pB, s);
     } else {
       const defPrev = STATE_DEF[this.prevState] || STATE_DEF.idle;
-      s.t = this.prevT; s.u = clamp01(this.prevT / defPrev.dur); s.variant = this.prevVariant; s.power = 1;
+      s.t = this.prevT; s.u = clamp01(this.prevT / (this.prevDur ?? defPrev.dur)); s.variant = this.prevVariant; s.power = 1;
       const a = (POSE_FN[this.prevState] || poseIdle)(this._pA, s);
       s.t = this.t; s.u = clamp01(this.t / this.dur); s.variant = this.variant; s.power = this.power;
       const b = (POSE_FN[this.state] || poseIdle)(this._pB, s);
