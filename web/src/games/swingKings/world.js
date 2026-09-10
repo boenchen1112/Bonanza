@@ -109,14 +109,32 @@ export function createWorld(ctx) {
   root.add(plate);
 
   // Backstop behind the batter: catches whiffs, closes the right edge.
+  // It used to be a raw wireframe cylinder whose arc (theta 1.26π..1.92π)
+  // put it on the PITCHER's side of the plate — a curtain of vertical lines
+  // drawn straight over the batter and the ball's last half-beat of flight.
+  // It now sits behind the plate (+X) as a chain-link net.
+  const netTex = makeNetTexture();
+  textures.push(netTex);
   const backstop = new THREE.Mesh(
-    new THREE.CylinderGeometry(3.2, 3.2, 3.6, 22, 1, true, Math.PI * 1.26, Math.PI * 0.66),
+    new THREE.CylinderGeometry(3.3, 3.3, 3.4, 28, 1, true, Math.PI * 0.18, Math.PI * 0.5),
     new THREE.MeshBasicMaterial({
-      color: 0x9fd8ff, wireframe: true, transparent: true, opacity: 0.18, toneMapped: false,
+      map: netTex, color: 0xcfeaff, transparent: true, opacity: 0.55,
+      side: THREE.DoubleSide, depthWrite: false, toneMapped: false,
     })
   );
-  backstop.position.set(LAYOUT.plate[0] + 0.7, 1.8, LAYOUT.plate[2]);
+  backstop.position.set(LAYOUT.plate[0] + 0.4, 1.7, LAYOUT.plate[2] - 0.6);
   root.add(backstop);
+  // Top rail: gives the net a readable edge instead of fading into the sky.
+  const rail = new THREE.Mesh(
+    new THREE.TorusGeometry(3.3, 0.05, 6, 28, Math.PI * 0.5),
+    new THREE.MeshStandardMaterial({ color: 0x2b2350, roughness: 0.6 })
+  );
+  // Torus angle a lands at (cos a, sin a) in XZ after the X quarter-turn;
+  // the cylinder's theta lands at (sin θ, cos θ), so a = π/2 - θ: the net's
+  // θ ∈ [0.18π, 0.68π] is a ∈ [-0.18π, 0.32π] — the arc rotated by -0.18π.
+  rail.rotation.set(Math.PI / 2, 0, -Math.PI * 0.18);
+  rail.position.set(backstop.position.x, 1.7 + 1.7, backstop.position.z);
+  root.add(rail);
 
   // ------------------------------------------------------- pitching machine
   const machine = new THREE.Group();
@@ -230,8 +248,10 @@ export function createWorld(ctx) {
     spriteMats.push(m);
     wordMat[w] = m;
   }
+  // Six slots: a dense section can put a word up every half-beat (~0.24s)
+  // with ~1s lives, and a 4th word used to steal slot 0 mid-animation.
   const callouts = [];
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < 6; i++) {
     const s = new THREE.Sprite(wordMat.BUNT);
     s.visible = false;
     s.renderOrder = 20;
@@ -265,7 +285,10 @@ export function createWorld(ctx) {
   const batTip = new THREE.Object3D();
   batTip.position.y = -1.24;
   batGroup.add(batTip);
-  batGroup.rotation.set(0.18, 0, 0.32);
+  // Fist grip: the bat leaves the hand across the forearm (hand-local +Z,
+  // tilted up), not along it. Along-the-forearm read fine for the old
+  // procedural coil but turned the mocap follow-through into a walking cane.
+  batGroup.rotation.set(-Math.PI / 2 - 0.3, 0, 0);
   batter.char.attach('handR', batGroup);
 
   // ----------------------------------------------------------------- state
@@ -319,7 +342,9 @@ export function createWorld(ctx) {
   function callout(word, pos, { scale = 1, life = 1.05, rise = 1.1 } = {}) {
     const mat = wordMat[word];
     if (!mat) return;
-    const slot = callouts.find((c) => c.life <= 0) || callouts[0];
+    // Free slot, else the one closest to done — never a word mid-pop.
+    let slot = callouts.find((c) => c.life <= 0);
+    if (!slot) slot = callouts.reduce((a, c) => (c.life / c.max < a.life / a.max ? c : a));
     slot.sprite.material = mat;
     slot.sprite.visible = true;
     slot.life = life; slot.max = life; slot.scale = scale; slot.rise = rise;
@@ -412,6 +437,27 @@ export function createWorld(ctx) {
     setOuts, callout, update, dispose,
     get outs() { return outs; },
   };
+}
+
+/** Chain-link net: a diamond lattice on transparent, tiled around the arc. */
+function makeNetTexture() {
+  const S = 64;
+  const c = document.createElement('canvas');
+  c.width = c.height = S;
+  const g = c.getContext('2d');
+  g.clearRect(0, 0, S, S);
+  g.strokeStyle = 'rgba(255,255,255,0.85)';
+  g.lineWidth = 2.2;
+  g.beginPath();
+  g.moveTo(0, 0); g.lineTo(S, S);
+  g.moveTo(S, 0); g.lineTo(0, S);
+  g.stroke();
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(18, 5);
+  tex.anisotropy = 4;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
 }
 
 /**

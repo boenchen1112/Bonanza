@@ -93,11 +93,16 @@ Status key: `[ ]` open · `[~]` in progress · `[x]` done · `[-]` cut (with rea
 ## [ ] 10 — Swing Kings stage to "B": shadows, unified toon shading, env kit, lighting
 **Blocked by:** 04, 06
 
-## [ ] 11 — Swing Kings callouts: pool never clobbers, legible, no pip curtain
+## [x] 11 — Swing Kings callouts: pool never clobbers, legible, no pip curtain
 **Blocked by:** 01
+- [x] Callout pool 3 -> 6, and a full pool recycles the word closest to done (never slot 0 mid-pop)
+- [x] Tier word stacks above the verdict word instead of overprinting; legible over the crowd at 60fps (runs/t11-a)
+- [x] The "pip curtain" was the wireframe backstop: its arc sat on the pitcher's side of the plate, drawing vertical lines over the batter. Now a chain-link net + rail behind the plate, closing the right edge
+- [x] Bat re-seated in a fist grip (across the forearm) so the mocap follow-through doesn't read as a cane (runs/t11-b)
 
-## [ ] 12 — Swing Kings music verified in-engine
+## [x] 12 — Swing Kings music verified in-engine
 **Blocked by:** 03
+- [x] Whole track (68.7s, chart-played, 45/45 perfect): audio pass, -15.8 dB RMS, peak 0.955 (no clipping), beat grid on 51% / off 0.8%, bias -4.2ms (runs/t12-full). Human listen: hand-back checklist
 
 ## [ ] 13 — Critic loop: Swing Kings to PASS
 **Blocked by:** 05, 08, 09, 10, 11, 12

@@ -414,7 +414,9 @@ export default {
     this.w.crowd.hype(big ? 1.0 : tier.id === 'liner' ? 0.5 : 0.25);
     if (big) this.w.crowd.wave(1, 2.1);
     const word = foul ? 'FOUL!' : tier.label;
-    this.w.callout(word, [c[0] - 0.9, c[1] + 1.05, c[2]], {
+    // Above the verdict word (fx.verdict pops at the contact point), so the two
+    // channels stack instead of overprinting.
+    this.w.callout(word, [c[0] - 0.9, c[1] + 1.6, c[2]], {
       scale: tier.id === 'slam' ? 1.35 : big ? 1.05 : 0.8,
       life: big ? 1.25 : 0.95,
       rise: big ? 1.5 : 0.9,
