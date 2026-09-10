@@ -122,11 +122,13 @@ Status key: `[ ]` open · `[~]` in progress · `[x]` done · `[-]` cut (with rea
 **Blocked by:** 14, 06
 - [ ] MediaPipe bundled (offline); no camera → falls back to mouse
 
-## [ ] 16 — Shell lineups use the real cast + animator (finishes #14's chars items)
+## [x] 16 — Shell lineups use the real cast + animator (finishes #14's chars items)
 **Blocked by:** none
+- [x] Already landed before this pass (0f3ba11: construction collapsed onto makeCast(), adapter deleted; charBeat only runs the real animator). Remaining cleanup done: dead baseY/baseScale/phase fields + a stale comment removed
 
-## [ ] 17 — No placeholder game-select path (`select.js` real or removed)
+## [x] 17 — No placeholder game-select path (`select.js` real or removed)
 **Blocked by:** none
+- [x] Removed: nothing in the flow ever routed into `select` (title -> party / freeplay / options; freeplay is the real game picker). Scene, registry entry, nav fallback and stage reference gone; nav test updated first (red -> green); HANDOFF updated
 
 ## [ ] 18 — Shell to "B": mocap-animated cast, consistent art, shell music verified
 **Blocked by:** 03, 07, 10, 16, 17

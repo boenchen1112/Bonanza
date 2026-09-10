@@ -75,9 +75,9 @@ not as "reviewed".
   `styles.js` landed, but `ui/index.js` was never rewritten to use them. The
   HUD is still the original debug overlay. This is now the biggest visible
   quality gap.
-- **`select.js` and `results.js`** are still integrator placeholders.
-- **`party` and `options` views** are referenced by `nav.js` but have no
-  scene files; they currently fall through to `select`.
+- **`select.js` was removed** (2026-09-11): a placeholder nothing in the
+  flow routed to. Title → PARTY / FREE PLAY / OPTIONS; the game picker is
+  `freeplay`. `results`, `party` and `options` are real scenes now.
 - **Audio has still never been heard by a person.** Since 2026-09-11 the
   harness captures the mix and machine-checks level + beat sync (§3 item 5);
   Swing Kings passes (on the 8th grid, -4ms bias). Taste is still unjudged.
@@ -132,7 +132,7 @@ trusting a number. Consequences:
    fixed 25fps, no audio track). Fine for review; portfolio footage should
    come from a real browser/OBS capture.
 
-Scenes reachable: `title roster freeplay play results select` and the five
+Scenes reachable: `title roster freeplay party options play results` (+ `chars-demo`) and the five
 game ids. Anything not in `web/src/shell/registry.js` is invisible to review.
 
 ## 4. Next actions, in order
@@ -148,7 +148,7 @@ game ids. Anything not in `web/src/shell/registry.js` is invisible to review.
 4. **Real-hardware perf pass.** Draw calls are trustworthy and fine: 73
    (swing-kings) to 109 (chomp-chorus) against a 120 budget. `cpuMs` is
    contaminated by SwiftShader and needs a real GPU.
-5. **`select.js` / `results.js`**, then `party`/`options`, coherence,
+5. Shell coherence (portfolio-polish ticket 18),
    calibration, accessibility.
 
 ### Verified, so stop worrying about it

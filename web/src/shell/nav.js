@@ -53,7 +53,6 @@ export function rosterExitRoute(mode) {
 export function exitRoute({ inParty, from, gameId }) {
   if (inParty) return { view: 'party', opts: {} };
   if (from === 'freeplay') return { view: 'freeplay', opts: { game: gameId } };
-  if (from === 'select') return { view: 'select', opts: {} };
   return { view: 'title', opts: {} };
 }
 

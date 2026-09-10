@@ -277,7 +277,7 @@ export function createStage({ canvas, clock }) {
     if (envs.size || !scene) return;
     if (scene.userData.env === false) return;
     const id = sceneId || '';
-    const shell = id === 'title' || id === 'select' || id === 'results';
+    const shell = id === 'title' || id === 'results';
     const preset = scene.userData.envPreset || (shell ? 'void' : 'arena');
     const env = createEnv(scene);
     env.stageSet(preset, {
