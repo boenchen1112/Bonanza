@@ -58,6 +58,10 @@ export function createStage({ canvas, clock }) {
   // default autoReset each post pass wiped the count, so telemetry reported
   // one draw call for every scene.
   renderer.info.autoReset = false;
+  // One soft shadow map, cast only inside a scene's declared focus box
+  // (look.setShadowFocus); scenes that never declare one pay nothing.
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFShadowMap;   // r185: PCFSoft is deprecated; shadow.radius softens
 
   const size = { w: 1, h: 1, dpr: 1 };
 

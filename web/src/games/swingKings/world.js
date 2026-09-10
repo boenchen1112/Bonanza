@@ -24,6 +24,7 @@
  */
 
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { makeCast, makeCrowd } from '../../chars/index.js';
 import { damp, clamp01, easeOutCubic, backOut } from '../../core/util.js';
 
@@ -57,16 +58,31 @@ export function createWorld(ctx) {
   env.stageSet('stage', {
     groundY: 0,
     per: {
+      // A ballpark, not a stage: no confetti, no concentric rings.
+      ground: { confetti: 0, rings: false },
       backdrop: { arches: 4, radius: 24, spacing: 7.5, z: -30, skyline: 30, skylineZ: -74 },
       spotlights: {},
     },
   });
   env.addBanners({ count: 30, radius: 13.5, y: 7.6, z: -3 });
 
+  // Mowed outfield: stripes in the texture, the palette's green in the colour.
+  const grassTex = makeGrassTexture();
+  textures.push(grassTex);
+  const groundTop = env.pieces.ground.top;
+  groundTop.material.map = grassTex;
+  groundTop.material.needsUpdate = true;
+  groundTop.receiveShadow = true;
+
+  // The one real shadow map: the plate, the batter and the machine.
+  ctx.stage.look.setShadowFocus([-2.3, 0, 0.1], 6.8);
+
   // --- stands: one sloped shell + a front wall, so the crowd has a stadium
   const ARC = Math.PI * 1.02;
+  const seatTex = makeSeatTexture();
+  textures.push(seatTex);
   const standMat = new THREE.MeshStandardMaterial({
-    color: 0x24406e, roughness: 0.95, metalness: 0, side: THREE.DoubleSide,
+    color: 0x2c4c82, map: seatTex, roughness: 0.95, metalness: 0, side: THREE.DoubleSide,
   });
   const slope = new THREE.Mesh(
     new THREE.CylinderGeometry(18.4, 11.0, 3.9, 56, 1, true, Math.PI - ARC / 2, ARC),
@@ -91,13 +107,49 @@ export function createWorld(ctx) {
   root.add(crowd.mesh);
 
   // ---------------------------------------------------------------- infield
-  const dirt = new THREE.Mesh(
-    new THREE.CircleGeometry(2.7, 40),
-    new THREE.MeshStandardMaterial({ color: 0x8a5a34, roughness: 1 })
-  );
+  // Enough of a diamond to read as baseball from a fixed side camera: the
+  // cut-out around the plate, the mound under the machine, both foul lines
+  // and the batter's boxes. (A full diamond would put 3rd base in the stands.)
+  const dirtTex = makeDirtTexture();
+  textures.push(dirtTex);
+  const dirtMat = new THREE.MeshStandardMaterial({ color: 0xc08a5a, map: dirtTex, roughness: 1 });
+  const dirt = new THREE.Mesh(new THREE.CircleGeometry(2.7, 48), dirtMat);
   dirt.rotation.x = -Math.PI / 2;
   dirt.position.set(LAYOUT.plate[0] - 0.2, 0.02, LAYOUT.plate[2]);
+  dirt.receiveShadow = true;
   root.add(dirt);
+
+  const mound = new THREE.Mesh(new THREE.CylinderGeometry(1.45, 1.95, 0.16, 40), dirtMat);
+  mound.position.set(LAYOUT.machine[0] + 0.3, 0.06, LAYOUT.machine[2]);
+  mound.receiveShadow = true;
+  root.add(mound);
+
+  // All chalk is one merged mesh (one draw call): each stroke is a flat strip
+  // placed in world space, then baked together.
+  const strokes = [];
+  const chalk = (len, w, x, z, rotY, y = 0.035) => {
+    const g = new THREE.PlaneGeometry(len, w);
+    g.rotateX(-Math.PI / 2);
+    g.translate(len / 2, 0, 0);
+    g.rotateY(rotY);
+    g.translate(x, y, z);
+    strokes.push(g);
+  };
+  // Foul lines leave the plate at ±45° either side of the line to the mound.
+  for (const s of [-1, 1]) chalk(13, 0.08, LAYOUT.plate[0] - 0.25, LAYOUT.plate[2], Math.PI + s * Math.PI * 0.25);
+  // Batter's boxes: open rectangles either side of the plate.
+  const W = 1.05, D = 1.7, T = 0.055;
+  for (const s of [-1, 1]) {
+    const bx = LAYOUT.plate[0], bz = LAYOUT.plate[2] + s * 0.95;
+    chalk(D, T, bx - W / 2, bz + D / 2, Math.PI / 2, 0.04);
+    chalk(D, T, bx + W / 2, bz + D / 2, Math.PI / 2, 0.04);
+    chalk(W, T, bx - W / 2, bz - D / 2, 0, 0.04);
+    chalk(W, T, bx - W / 2, bz + D / 2, 0, 0.04);
+  }
+  const chalkMesh = new THREE.Mesh(mergeGeometries(strokes),
+    new THREE.MeshBasicMaterial({ color: 0xf6f1e4, toneMapped: false }));
+  for (const g of strokes) g.dispose();
+  root.add(chalkMesh);
 
   const plate = new THREE.Mesh(
     new THREE.CircleGeometry(0.36, 5),
@@ -142,48 +194,106 @@ export function createWorld(ctx) {
   machine.position.set(LAYOUT.machine[0], 0, LAYOUT.machine[2]);
   root.add(machine);
 
+  // "PITCH-O": a toy pitching machine with a face, because everything in
+  // this series with a job to do also has an attitude about it. Squints when
+  // it arms, blinks when it fires, and watches the plate the rest of the time.
   const shellMat = new THREE.MeshStandardMaterial({ color: 0xe8563f, roughness: 0.45 });
   const darkMat = new THREE.MeshStandardMaterial({ color: 0x2b2350, roughness: 0.6 });
+  const trimMat = new THREE.MeshStandardMaterial({ color: 0xd8c7a6, roughness: 0.6 });   // below the bloom cut
 
-  const pedestal = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.76, 1.55, 14), darkMat);
-  pedestal.position.y = 0.775;
-  machine.add(pedestal);
+  // Chassis: a squat wheeled cart, so it reads as a machine that was rolled
+  // out onto the mound, not a lamp post.
+  const cart = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.34, 1.15), darkMat);
+  cart.position.y = 0.42;
+  machine.add(cart);
+  const tyreGeo = new THREE.CylinderGeometry(0.26, 0.26, 0.16, 18);
+  tyreGeo.rotateX(Math.PI / 2);
+  for (const x of [-0.6, 0.6]) {
+    for (const z of [-0.62, 0.62]) {
+      const t = new THREE.Mesh(tyreGeo, darkMat);
+      t.position.set(x, 0.26, z);
+      machine.add(t);
+    }
+  }
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.3, 0.75, 14), trimMat);
+  neck.position.y = 0.95;
+  machine.add(neck);
 
   const head = new THREE.Group();
   head.position.y = LAYOUT.machine[1];
   machine.add(head);
 
-  const body = new THREE.Mesh(new THREE.SphereGeometry(0.64, 18, 12), shellMat);
-  body.scale.set(1, 0.92, 1);
+  // Body: a rounded capsule lying along the throw, with a cream belly band.
+  const bodyGeo = new THREE.CapsuleGeometry(0.52, 0.55, 6, 18);
+  bodyGeo.rotateZ(Math.PI / 2);
+  const body = new THREE.Mesh(bodyGeo, shellMat);
   head.add(body);
+  const band = new THREE.Mesh(new THREE.CylinderGeometry(0.535, 0.535, 0.2, 24, 1, true), trimMat);
+  band.rotation.z = Math.PI / 2;
+  band.position.x = -0.18;
+  head.add(band);
 
-  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.44, 1.2, 16, 1, true), darkMat);
+  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.4, 0.85, 18, 1, true), darkMat);
   barrel.rotation.z = -Math.PI / 2 - 0.34;
-  barrel.position.set(0.58, 0.24, 0);
+  barrel.position.set(0.78, 0.2, 0);
   head.add(barrel);
 
-  const wheelGeo = new THREE.TorusGeometry(0.38, 0.11, 8, 20);
+  const wheelGeo = new THREE.TorusGeometry(0.34, 0.1, 8, 20);
   const wheelMat = new THREE.MeshStandardMaterial({ color: 0xffd93d, roughness: 0.35 });
   const wheels = [];
   for (const s of [-1, 1]) {
     const wm = new THREE.Mesh(wheelGeo, wheelMat);
     wm.userData.keepMaterial = true;   // shared between the two wheels
-    wm.position.set(0.2, s * 0.44, 0);
-    wm.rotation.y = Math.PI / 2;
+    // Above and below the barrel mouth, discs facing the camera: the spin-up
+    // reads from the side, and neither wheel covers the face.
+    wm.position.set(0.62, s * 0.5, 0.05);
     head.add(wm);
     wheels.push(wm);
   }
 
-  const hopper = new THREE.Mesh(new THREE.ConeGeometry(0.46, 0.66, 12, 1, true), shellMat);
-  hopper.position.y = 0.8;
+  // Hopper with a few balls waiting in it.
+  const hopper = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.2, 0.5, 16, 1, true), trimMat);
+  hopper.position.set(-0.2, 0.72, 0);
   head.add(hopper);
+  const spareGeo = new THREE.SphereGeometry(0.14, 10, 8);
+  const spareMat = new THREE.MeshStandardMaterial({ color: 0xfffaf0, roughness: 0.5 });
+  for (const [x, z] of [[-0.32, 0.08], [-0.1, -0.1], [-0.18, 0.18]]) {
+    const b = new THREE.Mesh(spareGeo, spareMat);
+    b.position.set(x, 0.9, z);
+    head.add(b);
+  }
+
+  // Face on the camera side (+Z): two big eyes and a visor brow.
+  const eyeWhite = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false });
+  const eyeDark = new THREE.MeshBasicMaterial({ color: 0x1a1030, toneMapped: false });
+  const eyes = [];
+  for (const x of [-0.34, 0.02]) {
+    const e = new THREE.Group();
+    e.position.set(x, 0.12, 0.46);
+    const white = new THREE.Mesh(new THREE.SphereGeometry(0.17, 14, 10), eyeWhite);
+    white.scale.set(1, 1, 0.55);
+    const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.085, 10, 8), eyeDark);
+    pupil.position.set(0.05, 0, 0.08);   // looking toward the plate
+    white.userData.keepMaterial = true;
+    pupil.userData.keepMaterial = true;
+    e.add(white, pupil);
+    head.add(e);
+    eyes.push(e);
+  }
+  const brow = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.07, 0.12), darkMat);
+  brow.position.set(-0.16, 0.34, 0.47);
+  head.add(brow);
+
+  // Only the big shapes cast: tyres, spare balls and the face add draw calls
+  // to the shadow pass without changing the shadow's silhouette.
+  for (const m of [cart, neck, body, barrel, hopper, ...wheels]) m.castShadow = true;
 
   const muzzleMat = new THREE.MeshBasicMaterial({
     color: 0xfff2c0, transparent: true, opacity: 0, side: THREE.DoubleSide, toneMapped: false,
   });
   const muzzle = new THREE.Mesh(new THREE.RingGeometry(0.34, 0.66, 20), muzzleMat);
   muzzle.userData.keepMaterial = true;
-  muzzle.position.set(1.06, 0.38, 0);
+  muzzle.position.set(1.16, 0.35, 0);
   muzzle.rotation.y = Math.PI / 2;
   muzzle.rotation.x = 0.32;
   head.add(muzzle);
@@ -355,12 +465,19 @@ export function createWorld(ctx) {
     // machine
     wheelSpinT = damp(wheelSpinT, 0, 1.6, dt);
     wheelSpin += dt * (2 + wheelSpinT);
-    wheels[0].rotation.x = wheelSpin;
-    wheels[1].rotation.x = -wheelSpin;
+    wheels[0].rotation.z = wheelSpin;
+    wheels[1].rotation.z = -wheelSpin;
     head.rotation.z = Math.sin(beat * Math.PI) * 0.022;
     muzzleFlash = damp(muzzleFlash, 0, 9, dt);
     muzzleMat.opacity = muzzleFlash * 0.9;
     muzzle.scale.setScalar(1 + muzzleFlash * 0.8);
+
+    // face: squint while the wheels spin up, blink shut on the shot
+    const focusAmt = clamp01(wheelSpinT / 26);
+    const open = (1 - focusAmt * 0.5) * (1 - muzzleFlash * 0.9);
+    for (const e of eyes) e.scale.set(1, Math.max(0.08, open), 1);
+    brow.position.y = 0.34 - focusAmt * 0.07;
+    brow.rotation.z = -focusAmt * 0.12;
 
     // pips
     if (pips.count > 0) {
@@ -437,6 +554,86 @@ export function createWorld(ctx) {
     setOuts, callout, update, dispose,
     get outs() { return outs; },
   };
+}
+
+/** Deterministic speckle (no Math.random in anything the harness replays). */
+function speckle(g, S, n, seed, colors, rMax) {
+  let s = seed >>> 0;
+  const r = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
+  for (let i = 0; i < n; i++) {
+    g.fillStyle = colors[(r() * colors.length) | 0];
+    const rad = 0.6 + r() * rMax;
+    g.beginPath();
+    g.arc(r() * S, r() * S, rad, 0, Math.PI * 2);
+    g.fill();
+  }
+}
+
+/**
+ * Mowed grass: alternating light/dark bands with blade speckle. Values only —
+ * the palette's green arrives through the material colour.
+ */
+function makeGrassTexture() {
+  const S = 256;
+  const c = document.createElement('canvas');
+  c.width = c.height = S;
+  const g = c.getContext('2d');
+  const BANDS = 8;
+  for (let i = 0; i < BANDS; i++) {
+    g.fillStyle = i % 2 ? '#ffffff' : '#c9d9c6';
+    g.fillRect((i * S) / BANDS, 0, S / BANDS, S);
+  }
+  speckle(g, S, 900, 0x9a55, ['rgba(255,255,255,0.18)', 'rgba(0,30,0,0.12)'], 1.1);
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(3, 3);
+  tex.anisotropy = 8;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+/** Infield dirt: warm tan, grain speckle, faint rake arcs. */
+function makeDirtTexture() {
+  const S = 256;
+  const c = document.createElement('canvas');
+  c.width = c.height = S;
+  const g = c.getContext('2d');
+  g.fillStyle = '#f2e2cf';
+  g.fillRect(0, 0, S, S);
+  speckle(g, S, 1400, 0xd127, ['rgba(120,70,30,0.22)', 'rgba(255,245,230,0.35)', 'rgba(90,50,20,0.14)'], 1.3);
+  g.strokeStyle = 'rgba(120,70,30,0.10)';
+  g.lineWidth = 2;
+  for (let i = 0; i < 9; i++) {
+    g.beginPath();
+    g.arc(S / 2, S * 1.6, S * (0.9 + i * 0.12), Math.PI * 1.25, Math.PI * 1.75);
+    g.stroke();
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.anisotropy = 8;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+/** Bleachers: stepped seat rows, so the stand reads as seating, not a slab. */
+function makeSeatTexture() {
+  const W = 64, H = 256;
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const g = c.getContext('2d');
+  const ROWS = 12;
+  for (let i = 0; i < ROWS; i++) {
+    const y = (i * H) / ROWS;
+    g.fillStyle = '#ffffff';
+    g.fillRect(0, y, W, H / ROWS);
+    g.fillStyle = 'rgba(0,0,20,0.28)';          // riser shadow under each row
+    g.fillRect(0, y + (H / ROWS) * 0.72, W, (H / ROWS) * 0.28);
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(24, 1);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
 }
 
 /** Chain-link net: a diamond lattice on transparent, tiled around the arc. */

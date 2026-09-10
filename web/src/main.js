@@ -411,6 +411,8 @@ if (TEST_API) window.__BBB__ = {
   clock, input, bus,
   /** The mix graph (`ctx`, `master`, buses) — the harness taps `master`. */
   audio,
+  /** Renderer, look, lights — for debugging render cost from the harness. */
+  stage,
   telemetry: () => telemetry.snapshot(),
   resetTelemetry: () => { telemetry.frames.length = 0; telemetry.judgements.length = 0; },
   goto: (id, opts) => activate(id, opts || {}),

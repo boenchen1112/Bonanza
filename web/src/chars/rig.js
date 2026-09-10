@@ -681,6 +681,14 @@ export function makeCharacter({
 
   group.scale.setScalar(scale);
 
+  // Every body part casts into the house shadow map — which only runs where a
+  // scene has declared a shadow focus (look.setShadowFocus), so this costs
+  // nothing anywhere else. The blob stays: it is the contact cue.
+  // Face parts sit on the head's surface and would only add draw calls to
+  // the shadow pass without changing its silhouette.
+  group.traverse((o) => { if (o.isMesh && o !== shadow) o.castShadow = true; });
+  face.traverse((o) => { if (o.isMesh) o.castShadow = false; });
+
   group.joints = joints;
   group.palette = pal;
   group.build = b;

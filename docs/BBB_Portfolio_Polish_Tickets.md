@@ -90,8 +90,13 @@ Status key: `[ ]` open · `[~]` in progress · `[x]` done · `[-]` cut (with rea
 - [x] Found + fixed on the way: tap-mode power was NaN (`pitch.time` does not exist) and judgement recomputed it from hold length, so every keyboard hit was a BUNT — perfect taps are now HOME RUNs
 - Note for 14: verify.mjs hold/release checks fail because tap-mode `input()` ignores key-up (pre-existing since the tap-mode change); restoring hold-and-release is ticket 14
 
-## [ ] 10 — Swing Kings stage to "B": shadows, unified toon shading, env kit, lighting
+## [x] 10 — Swing Kings stage to "B": shadows, unified toon shading, env kit, lighting
 **Blocked by:** 04, 06
+- [x] Real shadows: house-wide opt-in — one PCF shadow map from the key light, cast only inside a scene-declared focus box (`look.setShadowFocus`); low tier and scenes without a focus pay nothing (verified: no shadow pass in title). Rig bodies cast (faces don't); SK batter + machine cast onto grass/dirt/mound (runs/t10-c)
+- [x] Unified toon shading: everything lit goes through the house dress pass; no MeshStandard leaks in frame
+- [x] Ballpark set (procedural, consistent with the house kit rather than imported CC0): mowed-stripe grass, speckled dirt cut-out + mound, merged chalk foul lines + batter's boxes (1 draw), bleacher rows on the stands, no confetti/rings
+- [x] PITCH-O: the machine rebuilt as a toy character — cart, capsule body, stacked wheels, ball hopper, eyes that squint when it arms and blink when it fires
+- [x] Budget: SK 96-103 draw calls (< 120), ~54fps, cpu ~3ms; all 14 scenes console-clean (runs/t10-sweep)
 
 ## [x] 11 — Swing Kings callouts: pool never clobbers, legible, no pip curtain
 **Blocked by:** 01
