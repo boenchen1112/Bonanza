@@ -39,11 +39,11 @@ Status key: `[ ]` open · `[~]` in progress · `[x]` done · `[-]` cut (with rea
 - [x] Run dumps a WAV of the in-page audio mix (AudioWorklet on master, context-clock stamped)
 - [x] Pure, unit-tested checker: non-silent + onsets aligned to the beat grid (reported in summary)
 
-## [ ] 04 — Console-clean on every registered scene
+## [x] 04 — Console-clean on every registered scene
 **Blocked by:** 01
-- [ ] No `flatShading`-on-toon warnings anywhere
-- [ ] `CONTEXT_LOST_WEBGL` re-checked on the GPU path; fixed or filtered with a reason
-- [ ] `consoleClean: true` on every scene
+- [x] No `flatShading`-on-toon warnings anywhere (flag now set post-construction, so the intended faceting renders)
+- [x] `CONTEXT_LOST_WEBGL` re-checked: never occurs on the GPU path; only under `--swiftshader` (browser GPU-process reset, no `loseContext` in source) — documented, not filtered
+- [x] `consoleClean: true` on all 14 registered scenes (`node tools/harness/sweep.mjs`)
 
 ## [ ] 05 — `__BBB__` out of the production build; harness builds opt in
 **Blocked by:** 01

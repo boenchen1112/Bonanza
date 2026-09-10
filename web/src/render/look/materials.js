@@ -130,11 +130,17 @@ export function createMaterialSystem() {
     vertexColors = false, toneMapped = true, name = 'house',
   } = {}) {
     const m = new THREE.MeshToonMaterial({
-      color, map, transparent, opacity, side, fog, flatShading: flat, vertexColors,
+      color, map, transparent, opacity, side, fog, vertexColors,
       gradientMap: ramp(bands, softness),
       emissive: emissiveColor !== null ? emissiveColor : 0x000000,
       emissiveIntensity: emissiveColor !== null ? 1 : 0,
     });
+    // MeshToonMaterial doesn't declare `flatShading`, so passing it to the
+    // constructor only printed a warning (~30 per run) and was dropped — the
+    // faceting the floaters and buoys ask for never rendered. The renderer
+    // does honour the flag on any material (it defines FLAT_SHADED, which the
+    // toon fragment's shared normal chunk reads), so set it directly.
+    if (flat) m.flatShading = true;
     m.name = name;
     m.toneMapped = toneMapped;
     if (depthWrite !== undefined) m.depthWrite = depthWrite;
