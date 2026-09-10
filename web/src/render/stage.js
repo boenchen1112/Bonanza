@@ -53,6 +53,11 @@ export function createStage({ canvas, clock }) {
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.0;
   renderer.autoClear = true;
+  // Accumulate draw stats across every render() call in a frame (world, then
+  // each post pass) and reset once per frame in render() below. With the
+  // default autoReset each post pass wiped the count, so telemetry reported
+  // one draw call for every scene.
+  renderer.info.autoReset = false;
 
   const size = { w: 1, h: 1, dpr: 1 };
 
@@ -347,6 +352,7 @@ export function createStage({ canvas, clock }) {
   function render(dt, nowS) {
     if (!scene || !camera) return;
     timeS += dt;
+    renderer.info.reset();
 
     autoPalette();
     ensureDefaultEnv();
@@ -435,9 +441,7 @@ export function createStage({ canvas, clock }) {
       flashEl.style.opacity = flashA > 0.001 ? String(clamp01(flashA)) : '0';
     }
 
-    // Scene cost, captured before the post chain's fullscreen passes overwrite
-    // renderer.info. Without this the telemetry reports "1 draw call" for any
-    // scene, because the last thing drawn is always a quad.
+    // Scene cost for the whole frame (info accumulates — see autoReset above).
     stats.drawCalls = renderer.info.render.calls;
     stats.triangles = renderer.info.render.triangles;
     if (posted) {

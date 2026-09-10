@@ -42,10 +42,14 @@ node tools/harness/inspect.mjs --scene <id> --dist dist-<yours> \
 ```
 
 Use your own `--dist`/`--out` when working alongside other agents so builds
-don't collide. Read `docs/HANDOFF.md` §3 before trusting harness numbers —
-it renders through SwiftShader at ~2-3fps, so `fps`/`frameMs` are meaningless
-(judge perf on `cpuMs` and `render.drawCalls` instead), and timed effects
-visibly pile up at that frame rate in a way that doesn't happen at 60fps.
+don't collide. Read `docs/HANDOFF.md` §3 before trusting harness numbers.
+It renders headless on the real GPU (bundled Chromium, ANGLE/D3D11) at
+display rate with `--quality high` by default; `summary.json` → `gpu` /
+`softwareRendered` says what drew the frames. `--swiftshader` forces the old
+~2-3fps software path, where `fps`/`frameMs` are meaningless and timed
+effects pile up. Budget perf on `cpuMs` and `render.drawCalls` either way.
+The harness builds with `vite build --mode harness`; run `npm --prefix web
+install` first in a fresh worktree (Playwright resolves from `web/`).
 
 ### Architecture
 

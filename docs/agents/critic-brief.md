@@ -24,16 +24,19 @@ tells you *why* something is wrong; it must not be how you decide *whether*.
 
 ## Known harness artifacts — do NOT report these as game defects
 
-The harness renders through SwiftShader (software GPU) at roughly 2-3fps at
-720p. Three things follow, and all three have already been chased down once:
+The harness renders on the real GPU by default (headless, no window) and
+shots are paced in audio time. First check `summary.json`: `gpu` names the
+adapter and `softwareRendered` must be `false`. If it is `true` (someone
+passed `--swiftshader`, or the machine has no GPU), the run is a 2-3fps
+software render — re-run on a GPU before judging anything visual. Then:
 
-1. **`fps` and `frameMs` are meaningless.** Judge performance on `cpuMs`
-   (our JS per frame, budget < 4ms) and `render.drawCalls` (budget < 120).
-2. **Timed effects pile up on screen.** Callouts, particles and popups age in
-   real seconds, so at 2fps three of them are alive where at 60fps there
-   would be one. If you see stacked or overlapping callouts, re-run with
-   `--width 480 --height 270` (about 5x the frame rate) before reporting it.
-   If it resolves there, it is the harness, not the game.
+1. **Performance:** `fps`/`frameMs` are meaningful on the GPU path, but judge
+   against the budgets that transfer to other hardware: `cpuMs` (our JS per
+   frame, < 4ms) and `render.drawCalls` (< 120).
+2. **Stacked effects are real on the GPU path.** The old "callouts pile up
+   because the harness runs at 2fps" excuse only applies to a software render
+   (`softwareRendered: true`). At 60fps, overlapping callouts or a wall of
+   trails is what a player sees — report it.
 3. **Never report input timing from wall-clock delivery.** Autoplay presses
    are emitted inside the frame loop with the audio time they were aimed at,
    so `meanAbsErrMs` is a true measure of the judge. It should read ~0 under

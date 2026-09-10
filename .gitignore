@@ -22,6 +22,10 @@ UnitySwinger_*.log
 research/logs/
 research/hand_tracking_web/logs/
 
+# Raw Mixamo FBX downloads (Adobe terms: ship inside the game, don't
+# redistribute the raw files). Only converted game-ready .glb is committed.
+Mixamo/
+
 # web build + deps
 web/node_modules/
 web/dist/

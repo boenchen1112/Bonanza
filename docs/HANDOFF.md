@@ -92,16 +92,28 @@ Boots the **built** game in headless Chromium, plays it, dumps screenshots +
 `telemetry.json` + `console.log` + `summary.json`. Use your own `--dist` and
 `--out` so parallel agents never collide.
 
-**It renders through SwiftShader at ~2-3fps at 720p.** Three consequences,
-each of which already cost a debugging cycle once:
+**It renders on the machine's real GPU** (since 2026-09-11, portfolio-polish
+ticket 01). Playwright's full Chromium runs in new-headless mode — no window
+opens — with ANGLE/D3D11 on Windows, so frames arrive at display rate and
+`--quality` defaults to `high` (the full post chain). `summary.json` names the
+adapter in `gpu` and sets `softwareRendered` from it; check both before
+trusting a number. Consequences:
 
-1. **`fps`/`frameMs` are meaningless.** Judge perf on `cpuMs` (our JS per
-   frame, budget < 4ms) and `render.drawCalls` (budget < 120).
-2. **Timed effects pile up on screen.** At 2fps three callouts are alive
-   where at 60fps there would be one. Before reporting stacked or overlapping
-   effects, re-run at `--width 480 --height 270` (~5x the frame rate). If it
-   resolves, it is the harness.
-3. **Autoplay is frame-rate independent by construction.** Presses are
+1. **`fps`/`frameMs` mean something again** on the GPU path (~55-60fps for
+   Swing Kings on the dev laptop's Iris Xe). Still budget on `cpuMs` (our JS
+   per frame, < 4ms) and `render.drawCalls` (< 120) — those are the numbers
+   that transfer to other hardware. `drawCalls` now counts the whole frame
+   (shadow + world passes); `postPasses` counts the post chain separately.
+2. **Shots are paced in audio time.** Frame *i* is taken when
+   `Clock.now()` crosses its slot, then after `screenshotReady()` — never
+   after a wall-clock sleep — so what a shot shows cannot drift from the
+   music even if a screenshot is slow.
+3. **`--swiftshader` restores the old software path** for a machine with no
+   usable GPU. On that path (and only there) the old warnings apply: frames
+   run at ~2-3fps, `fps`/`frameMs` are meaningless, and timed effects pile up
+   on screen (three callouts alive where 60fps would show one). Old runs and
+   notes from before 2026-09-11 were all taken this way.
+4. **Autoplay is frame-rate independent by construction.** Presses are
    emitted inside the frame loop carrying the audio time they were *aimed*
    at. `--play perfect` must report `meanAbsErrMs: 0`. Anything else is a
    real defect. (The original setTimeout-driven bot delivered presses

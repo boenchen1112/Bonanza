@@ -35,9 +35,11 @@ node tools/harness/inspect.mjs \
 ```
 
 Then **Read the PNGs**. `summary.json` must show `consoleErrors: 0`.
-Ignore `fps`/`frameMs` — the harness renders through SwiftShader, so those
-numbers say nothing about real hardware. Judge performance on `cpuMs`
-(our JS per frame; budget < 4ms) and `render.drawCalls` (budget < 120).
+The harness renders on the real GPU (check `summary.json` → `gpu`,
+`softwareRendered: false`), so what the PNGs show is what a player sees.
+Judge performance on `cpuMs` (our JS per frame; budget < 4ms) and
+`render.drawCalls` (budget < 120) — those transfer to other hardware;
+`fps` only describes this machine.
 
 ## What "Nintendo first-party" means concretely
 
