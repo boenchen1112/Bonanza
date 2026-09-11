@@ -17,6 +17,9 @@ const ROWS = [
   { id: 'sfx', label: 'SFX VOLUME', type: 'pct' },
   { id: 'offsetMs', label: 'TIMING OFFSET', type: 'ms' },
   { id: 'reduceMotion', label: 'REDUCE MOTION', type: 'bool' },
+  // Swing Kings' conducting gesture: an optional second input, tap stays default.
+  { id: 'swingInput', label: 'SWING KINGS INPUT', type: 'choice', choices: ['tap', 'mouse', 'camera'],
+    names: { tap: 'TAP', mouse: 'MOUSE CONDUCT', camera: 'CAMERA CONDUCT' } },
   { id: 'reset', label: 'RESET PROGRESS', type: 'action' },
   { id: 'back', label: 'BACK', type: 'action' },
 ];
@@ -119,6 +122,7 @@ export default {
         if (row.id === 'reset') { S.confirmReset = true; S.confirmEl.style.opacity = '1'; sfx(ctx, 'uiBack'); }
         else if (row.id === 'back') back(ctx);
         else if (row.type === 'bool') { profile.setOption('reduceMotion', !profile.options.reduceMotion); refreshRow(row.id); sfx(ctx, 'ui'); }
+        else if (row.type === 'choice') adjust(ctx, 1);
       } else if (e.action === 'b' || e.action === 'pause') back(ctx);
     }
   },
@@ -142,6 +146,9 @@ function adjust(ctx, dir) {
     profile.setOption('offsetMs', v);
   } else if (row.type === 'bool') {
     profile.setOption('reduceMotion', !profile.options.reduceMotion);
+  } else if (row.type === 'choice') {
+    const i = Math.max(0, row.choices.indexOf(profile.options[row.id]));
+    profile.setOption(row.id, row.choices[(i + dir + row.choices.length) % row.choices.length]);
   } else {
     return;
   }
@@ -157,6 +164,7 @@ function refreshRow(id) {
   if (row.type === 'pct') cell.textContent = Math.round((profile.options[row.id] || 0) * 100) + '%';
   else if (row.type === 'ms') cell.textContent = (profile.options.offsetMs > 0 ? '+' : '') + profile.options.offsetMs + 'ms';
   else if (row.type === 'bool') cell.textContent = profile.options.reduceMotion ? 'ON' : 'OFF';
+  else if (row.type === 'choice') cell.textContent = row.names[profile.options[row.id]] || row.names[row.choices[0]];
   else cell.textContent = row.id === 'reset' ? '' : '›';
 }
 

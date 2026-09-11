@@ -26,6 +26,8 @@ export const DEFAULT_OPTIONS = {
   offsetMs: 0,
   partyLength: 4,
   reduceMotion: false,
+  /** Swing Kings: 'tap' (keyboard/tap, default) | 'mouse' (hold + conducting drag) | 'camera' (hand tracking). */
+  swingInput: 'tap',
 };
 
 /** @typedef {{score:number, rank:string, accuracy:number, plays:number, maxCombo:number}} Record_ */
