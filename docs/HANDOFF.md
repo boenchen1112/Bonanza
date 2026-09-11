@@ -31,8 +31,8 @@ verbatim.
 |---|---|
 | Builds | yes, clean (production build strips the `__BBB__` test API; the harness builds `--mode harness`) |
 | Runs | yes — every registered scene loads console-clean on the real GPU (`tools/harness/sweep.mjs`) |
-| Tests | 76/76 green (`npm --prefix web test`) + `swingKings/verify.mjs` and `swingKings/smoke-conduct.mjs` ALL PASS |
-| Critic rounds completed | Swing Kings: 2 FAIL rounds, fixes landed, round 3 in progress. Shell: round 1 in progress. See the tickets file (13, 19) |
+| Tests | 86/86 green (`npm --prefix web test`) + `swingKings/verify.mjs` (now on the real GPU, incl. bat-meets-ball contact checks) and `swingKings/smoke-conduct.mjs` ALL PASS |
+| Critic rounds completed | Swing Kings: 4 FAIL rounds, fixes landed for each, round 5 running. Shell: round 1 FAIL, fixes landed, round 2 running. See the tickets file (13, 19) |
 | Minigames | five, all playable; Swing Kings is the polished hero, the other four had a baseline pass |
 
 The earlier waves' builders were cut short by a spend limit and no critic
@@ -173,6 +173,17 @@ locked to the transport across every `setBpm`.
   count — ten of fifteen callouts were unrenderable and nothing errored.
 - **Parallel agents and git.** Builders must never run git commands in a
   shared tree. The integrator commits.
+- **Restarting the transport under a playing track.** Every shell scene
+  calls `clock.start(now, 0)`; the music player now notices
+  (`clock.generation`) and re-anchors. Anything else that caches a beat
+  cursor must do the same, or it goes silent until the new clock catches up.
+- **Lerping raw Euler angles.** Mocap hips spin many turns; blends and
+  damping must take the short way round (anim.js `IS_ANGLE`/`wrapPi`), and
+  the bake must decompose on the continuous branch (`retarget.eulerNear`,
+  hips in yaw-first `HIPS_ORDER`). Re-bake with `node tools/assets/bake-clips.mjs`.
+- **The default arena floor sits at y=0.** A scene that stands its cast on
+  the house floor (-1.6) must set `scene.userData.groundY`, or the arena
+  floor hides everything below 0.
 - **A scene throwing in `load()` used to kill the whole app** — `ready` never
   resolved and the harness reported a 20s timeout pointing nowhere near the
   cause. `activate()` now contains scene failures and records them on
