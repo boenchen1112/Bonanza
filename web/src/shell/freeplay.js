@@ -213,10 +213,12 @@ function layout(pulse, beat) {
     c.el.style.transform =
       `translate(-50%,-50%) translate3d(${x.toFixed(2)}%, ${y.toFixed(1)}px, ${z.toFixed(0)}px) `
       + `rotateY(${ry.toFixed(2)}deg) scale(${sc.toFixed(3)})`;
-    c.el.style.opacity = String(clamp01(1.25 - ad * 0.55));
+    // Side cards step back by DARKENING, not fading: a translucent card let
+    // the crowd show through its text. Only the ones sliding off fade.
+    c.el.style.opacity = String(clamp01((2.7 - ad) / 0.8));
     c.el.style.zIndex = String(100 - Math.round(ad * 10));
     c.el.classList.toggle('sh-panel--sel', ad < 0.5);
-    c.el.style.filter = ad < 0.5 ? '' : `brightness(${(0.62 + easeOutCubic(1 - clamp01(ad)) * 0.38).toFixed(2)})`;
+    c.el.style.filter = ad < 0.5 ? '' : `brightness(${(0.5 + easeOutCubic(1 - clamp01(ad / 1.6)) * 0.5).toFixed(2)})`;
   }
 }
 

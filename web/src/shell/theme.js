@@ -231,6 +231,9 @@ const CSS = `
 .sh-item--sel{color:#fff;background:linear-gradient(90deg,rgba(255,255,255,.20),rgba(255,255,255,.04));
   border-color:var(--accent,${PAL.cyan});box-shadow:0 6px 0 rgba(0,0,0,.5),0 0 30px -6px var(--accent,${PAL.cyan});}
 .sh-item--sel .sh-item__dot{opacity:1;}
+.sh-ping{position:absolute;inset:-3px;border-radius:16px;border:3px solid var(--accent,${PAL.cyan});
+  pointer-events:none;animation:sh-ping .44s cubic-bezier(.2,.7,.3,1) forwards;}
+@keyframes sh-ping{from{transform:scale(1);opacity:.95;}to{transform:scale(1.14,1.6);opacity:0;}}
 
 /* --------------------------------------------------------------- hints */
 .sh-hint{position:absolute;right:3.2%;bottom:3.4%;display:flex;gap:1.1em;align-items:center;

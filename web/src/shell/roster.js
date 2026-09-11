@@ -125,11 +125,15 @@ export default {
       const tag = el('div', 'sh-ros__slotTag', 'P' + (i + 1));
       const face = el('canvas', 'sh-ros__face');
       face.width = 1; face.height = 1;
+      // Name over type in one column, so the READY! stamp has the right-hand
+      // end of the slot to itself (it used to land on "CPU · hard").
+      const text = el('div', 'sh-ros__slotText');
       const name = el('div', 'sh-ros__slotName', '—');
       const type = el('div', 'sh-ros__slotType', '');
+      text.appendChild(name); text.appendChild(type);
       const stamp = el('div', 'sh-stamp sh-ros__ready', 'READY!');
       stamp.style.opacity = '0';
-      p.appendChild(tag); p.appendChild(face); p.appendChild(name); p.appendChild(type); p.appendChild(stamp);
+      p.appendChild(tag); p.appendChild(face); p.appendChild(text); p.appendChild(stamp);
       strip.appendChild(p);
       S.slots.push({ el: p, face, name, type, stamp, readyT: -1 });
     }
@@ -172,7 +176,8 @@ export default {
 
     // grid cards: hovered one lifts, taken ones sit back
     const gridOn = S.stage === 'chars';
-    S.grid.style.opacity = gridOn ? '1' : '0.42';
+    // Dimmed, not faded: at 42% opacity the 3D crowd showed through the portraits.
+    S.grid.style.filter = gridOn ? '' : 'saturate(.45) brightness(.5)';
     for (let i = 0; i < S.cards.length; i++) {
       const c = S.cards[i];
       const on = gridOn && i === S.cursor;
@@ -397,7 +402,7 @@ function refreshSlots(ctx) {
     const t = SLOT_TYPES[S.lineup[i]];
     const s = S.slots[i];
     s.type.textContent = t.id === 'off' ? 'EMPTY' : `${t.label} · ${t.sub}`;
-    s.el.style.opacity = t.id === 'off' ? '0.34' : '1';
+    s.el.style.filter = t.id === 'off' ? 'saturate(.3) brightness(.55)' : '';
   }
   refreshHint();
 }
@@ -406,15 +411,15 @@ function refreshHead() {
   if (!S) return;
   if (S.stage === 'lineup') {
     S.headMain.textContent = "WHO'S PLAYING?";
-    S.headSub.textContent = '↑↓ pick a slot · ←→ set human / CPU / off · A to continue';
+    S.headSub.textContent = '↑↓ pick a slot · ←→ set human / CPU / off · SPACE to continue';
   } else if (S.stage === 'chars') {
     S.headMain.textContent = `PLAYER ${S.active + 1} — CHOOSE`;
-    S.headSub.textContent = 'move with the arrows · A to lock in · B to go back';
+    S.headSub.textContent = 'move with the arrows · SPACE to lock in · X to go back';
   } else if (S.stage === 'cpu') {
     S.headMain.textContent = 'CPU IS CHOOSING…';
     S.headSub.textContent = 'they always take the good one';
   } else {
-    S.headMain.textContent = S.mode === 'party' ? 'LINEUP SET — PRESS A' : 'READY — PRESS A';
+    S.headMain.textContent = S.mode === 'party' ? 'LINEUP SET — PRESS SPACE' : 'READY — PRESS SPACE';
     S.headSub.textContent = S.mode === 'party' ? 'four games, one crown' : 'pick a minigame next';
   }
   refreshHint();
@@ -433,9 +438,14 @@ function flashHead(msg) {
 
 function refreshHint() {
   if (!S) return;
-  S.hint.innerHTML = S.stage === 'lineup'
-    ? '<span><b class="sh-key">←→</b>slot type</span><span><b class="sh-key">SPACE</b>continue</span><span><b class="sh-key">X</b>back</span>'
-    : '<span><b class="sh-key">↑↓←→</b>choose</span><span><b class="sh-key">SPACE</b>lock in</span><span><b class="sh-key">X</b>back</span>';
+  // One legend per stage — it must never say "lock in" once the lineup is set.
+  const HINTS = {
+    lineup: '<span><b class="sh-key">←→</b>slot type</span><span><b class="sh-key">SPACE</b>continue</span><span><b class="sh-key">X</b>back</span>',
+    chars: '<span><b class="sh-key">↑↓←→</b>choose</span><span><b class="sh-key">SPACE</b>lock in</span><span><b class="sh-key">X</b>back</span>',
+    cpu: '<span>CPU choosing…</span>',
+    go: `<span><b class="sh-key">SPACE</b>${S.mode === 'party' ? 'start the party' : 'pick a game'}</span><span><b class="sh-key">X</b>back</span>`,
+  };
+  S.hint.innerHTML = HINTS[S.stage] || HINTS.chars;
 }
 
 function back(ctx) {
@@ -492,7 +502,7 @@ function injectRosterCss() {
   .sh-ros__card{display:flex;align-items:center;justify-content:center;padding:clamp(4px,.5vw,8px);
     will-change:transform;}
   .sh-ros__card canvas{width:100%;height:auto;max-width:110px;}
-  .sh-ros__strip{position:absolute;left:4%;right:3.5%;bottom:4.5%;display:grid;
+  .sh-ros__strip{position:absolute;left:4%;right:3.5%;bottom:10%;display:grid;
     grid-template-columns:repeat(4,1fr);gap:clamp(6px,1vw,16px);height:clamp(74px,13vh,124px);}
   .sh-ros__slot{display:flex;align-items:center;gap:.6em;padding:0 .8em;overflow:hidden;
     will-change:transform;}
@@ -501,9 +511,10 @@ function injectRosterCss() {
   .sh-ros__face{width:62px;height:62px;border-radius:10px;flex:0 0 auto;background:rgba(0,0,0,.25);}
   .sh-ros__slotName{font-weight:900;font-size:clamp(11px,1.5vw,20px);color:#fff;
     text-shadow:0 2px 0 rgba(0,0,0,.6);}
-  .sh-ros__slotType{font-weight:800;font-size:clamp(8px,1.05vw,13px);color:${PAL.dim};margin-left:auto;
-    text-align:right;letter-spacing:.04em;}
-  .sh-ros__ready{right:6%;top:6%;font-size:clamp(10px,1.5vw,19px);background:${PAL.coral};
+  .sh-ros__slotText{display:flex;flex-direction:column;gap:.2em;min-width:0;}
+  .sh-ros__slotType{font-weight:800;font-size:clamp(8px,1.05vw,13px);color:${PAL.dim};
+    white-space:nowrap;letter-spacing:.04em;}
+  .sh-ros__ready{right:5%;top:50%;margin-top:-.8em;font-size:clamp(10px,1.4vw,18px);background:${PAL.coral};
     transform:rotate(-12deg);pointer-events:none;}
   `;
   document.head.appendChild(s);

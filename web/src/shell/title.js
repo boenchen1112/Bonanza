@@ -359,13 +359,26 @@ function applySelection(ctx, silent) {
   }
   const c = MENU[S.sel].color;
   S.back.setAccent(num(c));
-  if (!silent) {
-    const m = S.cast[S.sel];
-    if (m) {
-      ctx.fx.ring([m.position.x, -0.9, m.position.z], { color: num(c), life: 0.45, from: 0.3, to: 2.2 });
-      ctx.fx.burst([m.position.x, -0.6, m.position.z], { color: num(c), count: 9, speed: 3.4, life: 0.42, size: 0.1 });
-    }
-  }
+  // The move answers AT the item: a ring pings out of the button itself (it
+  // used to burst around a dancer on the far side of the screen).
+  if (!silent) ping(S.items[S.sel]);
+}
+
+function ping(item) {
+  const r = el('span', 'sh-ping');
+  item.appendChild(r);
+  setTimeout(() => r.remove(), 480);
+}
+
+/** World point `dist` in front of the camera, under a DOM element's centre. */
+function worldAt(ctx, node, dist = 6) {
+  const box = node.getBoundingClientRect();
+  const host = ctx.renderer?.domElement?.getBoundingClientRect?.() || { left: 0, top: 0, width: innerWidth, height: innerHeight };
+  const nx = ((box.left + box.width / 2 - host.left) / host.width) * 2 - 1;
+  const ny = -(((box.top + box.height / 2 - host.top) / host.height) * 2 - 1);
+  const cam = ctx.camera;
+  const v = new THREE.Vector3(nx, ny, 0.5).unproject(cam).sub(cam.position).normalize();
+  return v.multiplyScalar(dist).add(cam.position).toArray();
 }
 
 function confirm(ctx) {
@@ -374,7 +387,9 @@ function confirm(ctx) {
   sfx(ctx, 'fanfare');
   ctx.stage.flash?.(0.24, m.color);
   ctx.stage.shake?.(0.14, [0, 1, 0]);
-  ctx.fx.confetti([0, 1.4, 0], { count: 46 });
+  // Confetti bursts out of the chosen button, not the middle of the logo.
+  ctx.fx.confetti(worldAt(ctx, S.items[S.sel]), { count: 46 });
+  ping(S.items[S.sel]);
   S.items[S.sel].style.filter = 'brightness(1.6)';
 }
 

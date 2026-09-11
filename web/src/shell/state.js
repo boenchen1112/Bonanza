@@ -92,6 +92,18 @@ export const profile = {
     return false;
   },
 
+  /**
+   * Options' RESET PROGRESS: scores, ranks, unlocks and career stats. The
+   * player's settings (volumes, timing offset, reduce motion, input) and
+   * names are not progress and survive it.
+   */
+  resetProgress() {
+    this.records = {};
+    this.unlocks = { games: [], chars: [] };
+    this.stats = { rounds: 0, parties: 0, wins: 0, notes: 0 };
+    Save.del(RECORDS_KEY); Save.del(UNLOCK_KEY); Save.del(STATS_KEY);
+  },
+
   reset() {
     this.records = {};
     this.options = { ...DEFAULT_OPTIONS };

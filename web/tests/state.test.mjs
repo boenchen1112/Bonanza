@@ -101,6 +101,19 @@ test('session.recordPartyRound() folds a result into party.scores and advances t
   session.endParty();
 });
 
+test('resetProgress() clears records and stats but keeps the player\'s settings', () => {
+  profile.reset();
+  profile.setOption('offsetMs', 35);
+  profile.setOption('reduceMotion', true);
+  profile.submit('swing-kings', { score: 500, rank: 'B', accuracy: 0.8, stats: { maxCombo: 4 } });
+  profile.resetProgress();
+  assert.equal(profile.record('swing-kings').score, 0);
+  assert.equal(profile.stats.rounds, 0);
+  assert.equal(profile.options.offsetMs, 35, 'timing offset is a setting, not progress');
+  assert.equal(profile.options.reduceMotion, true);
+  profile.reset();
+});
+
 test('recordPartyRound() is a no-op outside a party', () => {
   session.endParty();
   assert.equal(session.party, null);

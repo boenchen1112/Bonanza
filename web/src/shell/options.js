@@ -10,6 +10,7 @@ import * as THREE from 'three';
 import { PAL, num, el, mountRoot, panel, sfx, createWipe, beatPulse, reducedMotion } from './theme.js';
 import { createBackdrop } from './backdrop.js';
 import { profile } from './state.js';
+import { charById, charMesh, charBeat, disposeChar } from './chars.js';
 import { goView } from './nav.js';
 
 const ROWS = [
@@ -31,12 +32,25 @@ export default {
   id: 'options', name: 'Options',
 
   load(ctx) {
-    S = { t: 0, sel: 0, rows: [], confirmReset: false, reduce: reducedMotion() };
+    S = { t: 0, sel: 0, rows: [], confirmReset: false, reduce: reducedMotion(), cast: [] };
 
     S.back = createBackdrop(ctx, { accent: num(PAL.green), density: 0.6 });
     ctx.fx.attach(ctx.scene);
     ctx.scene.background = new THREE.Color(0x0b0a1a);
-    ctx.camera.position.set(0, 0, 9);
+    // Two of the cast keep the beat either side of the list, on the house
+    // floor (the level camera at y=0 cut the horizon mid-screen over an
+    // empty floor).
+    ctx.scene.userData.groundY = -1.6;
+    ctx.camera.position.set(0, 1.5, 9);
+    ctx.camera.lookAt(0, 1.1, 0);
+    [['tuff', -4.7, 0.35], ['mimo', 4.7, -0.35]].forEach(([id, x, ry]) => {
+      const m = charMesh(charById(id), {});
+      m.position.set(x, -1.6, 0.4);
+      m.rotation.y = ry;
+      m.scale.setScalar(1.25);
+      ctx.scene.add(m);
+      S.cast.push(m);
+    });
 
     const root = mountRoot(ctx, 'sh-opt');
     S.root = root;
@@ -60,11 +74,6 @@ export default {
     root.appendChild(list);
     S.list = list;
 
-    const confirm = el('div', 'sh-opt__confirm', 'RESET ALL PROGRESS? SPACE to confirm · X to cancel');
-    confirm.style.opacity = '0';
-    root.appendChild(confirm);
-    S.confirmEl = confirm;
-
     const hint = el('div', 'sh-hint');
     S.hint = hint;
     root.appendChild(hint);
@@ -74,13 +83,20 @@ export default {
     applySelection();
   },
 
-  start(ctx) { ctx.clock.setBpm(124); ctx.clock.start(ctx.clock.now() + 0.1, 0); },
+  start(ctx) {
+    ctx.clock.setBpm(124);
+    ctx.clock.start(ctx.clock.now() + 0.1, 0);
+    S.cast.forEach((m, i) => m.userData.charApi?.play('dance', {
+      beatLock: true, bpm: 124, beat0: -i * 5, face: 'groove', beat: 0.25, blend: 0.3,
+    }));
+  },
 
   update(ctx, dt, beat) {
     if (!S) return;
     S.t += dt;
     S.back.update(dt, beat, S.t);
     S.wipe.update(dt);
+    for (const m of S.cast) charBeat(m, beat, dt);
     const pulse = beatPulse(beat, 6);
     for (let i = 0; i < S.rows.length; i++) {
       const on = i === S.sel;
@@ -99,17 +115,15 @@ export default {
       if (!e.down) continue;
 
       if (S.confirmReset) {
+        // Anything but SPACE cancels — including moving off the row.
         if (e.action === 'a') {
-          profile.reset();
-          S.confirmReset = false;
-          S.confirmEl.style.opacity = '0';
-          refreshAll();
+          profile.resetProgress();
           sfx(ctx, 'fanfare');
-        } else if (e.action === 'b' || e.action === 'pause') {
-          S.confirmReset = false;
-          S.confirmEl.style.opacity = '0';
+        } else {
           sfx(ctx, 'uiBack');
         }
+        setConfirm(false);
+        refreshAll();
         continue;
       }
 
@@ -119,7 +133,7 @@ export default {
         adjust(ctx, e.action === 'right' ? 1 : -1);
       } else if (e.action === 'a') {
         const row = ROWS[S.sel];
-        if (row.id === 'reset') { S.confirmReset = true; S.confirmEl.style.opacity = '1'; sfx(ctx, 'uiBack'); }
+        if (row.id === 'reset') { setConfirm(true); sfx(ctx, 'uiBack'); }
         else if (row.id === 'back') back(ctx);
         else if (row.type === 'bool') { profile.setOption('reduceMotion', !profile.options.reduceMotion); refreshRow(row.id); sfx(ctx, 'ui'); }
         else if (row.type === 'choice') adjust(ctx, 1);
@@ -129,6 +143,7 @@ export default {
 
   dispose() {
     if (!S) return;
+    for (const m of S.cast) { m.parent?.remove(m); disposeChar(m); }
     S.back.dispose();
     S.root.remove();
     S = null;
@@ -165,17 +180,34 @@ function refreshRow(id) {
   else if (row.type === 'ms') cell.textContent = (profile.options.offsetMs > 0 ? '+' : '') + profile.options.offsetMs + 'ms';
   else if (row.type === 'bool') cell.textContent = profile.options.reduceMotion ? 'ON' : 'OFF';
   else if (row.type === 'choice') cell.textContent = row.names[profile.options[row.id]] || row.names[row.choices[0]];
-  else cell.textContent = row.id === 'reset' ? '' : '›';
+  else if (row.id === 'reset') cell.textContent = S.confirmReset ? 'scores · ranks · stats' : '';
+  else cell.textContent = '›';
 }
 
 function refreshAll() { ROWS.forEach((r) => refreshRow(r.id)); }
 
+/**
+ * The reset question is asked IN the reset row (label + value swap), not in
+ * a floating line — that one landed on top of the BACK row.
+ */
+function setConfirm(on) {
+  S.confirmReset = on;
+  const i = ROWS.findIndex((r) => r.id === 'reset');
+  const r = S.rows[i];
+  r.el.classList.toggle('sh-opt__row--warn', on);
+  r.el.firstChild.textContent = on ? 'RESET ALL PROGRESS?' : ROWS[i].label;
+  refreshRow('reset');
+  applySelection();
+}
+
 function applySelection() {
   for (let i = 0; i < S.rows.length; i++) S.rows[i].el.classList.toggle('sh-panel--sel', i === S.sel);
   const row = ROWS[S.sel];
-  S.hint.innerHTML = row.type === 'action'
-    ? '<span><b class="sh-key">↑↓</b>choose</span><span><b class="sh-key">SPACE</b>select</span>'
-    : '<span><b class="sh-key">↑↓</b>choose</span><span><b class="sh-key">←→</b>adjust</span><span><b class="sh-key">X</b>back</span>';
+  S.hint.innerHTML = S.confirmReset
+    ? '<span><b class="sh-key">SPACE</b>reset</span><span><b class="sh-key">X</b>cancel</span>'
+    : row.type === 'action'
+      ? '<span><b class="sh-key">↑↓</b>choose</span><span><b class="sh-key">SPACE</b>select</span><span><b class="sh-key">X</b>back</span>'
+      : '<span><b class="sh-key">↑↓</b>choose</span><span><b class="sh-key">←→</b>adjust</span><span><b class="sh-key">X</b>back</span>';
 }
 
 function back(ctx) {
@@ -198,9 +230,9 @@ function injectCss() {
     padding:.7em 1em;will-change:transform;}
   .sh-opt__label{font-weight:900;font-size:clamp(12px,1.6vw,19px);}
   .sh-opt__value{font-weight:900;font-size:clamp(12px,1.6vw,19px);color:${PAL.dim};min-width:3em;text-align:right;}
-  .sh-opt__confirm{position:absolute;left:50%;bottom:14%;transform:translateX(-50%);
-    font-weight:900;font-size:clamp(11px,1.6vw,18px);color:${PAL.coral};text-align:center;
-    text-shadow:0 2px 0 rgba(0,0,0,.6);transition:opacity .15s;}
+  .sh-opt__row--warn{border-color:${PAL.coral}!important;box-shadow:0 9px 0 rgba(0,0,0,.55),0 0 26px -2px ${PAL.coral}!important;}
+  .sh-opt__row--warn .sh-opt__label{color:${PAL.coral};}
+  .sh-opt__row--warn .sh-opt__value{color:#ffd0d6;font-size:clamp(10px,1.2vw,14px);}
   `;
   document.head.appendChild(s);
 }

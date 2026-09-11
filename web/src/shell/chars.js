@@ -231,6 +231,68 @@ export function disposeChar(obj) {
 
 // ------------------------------------------------------------- portraits
 
+const BUST = 256;
+let bustCache = null;
+
+/**
+ * Head-and-shoulders renders of every character, made once on a throwaway
+ * WebGL context (so the main renderer's post chain and state are untouched)
+ * and kept as 2D canvases. Empty when WebGL is unavailable — drawPortrait
+ * then falls back to the 2D drawing.
+ */
+function busts() {
+  if (bustCache) return bustCache;
+  bustCache = new Map();
+  let r = null;
+  try {
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = BUST;
+    r = new THREE.WebGLRenderer({ canvas: cv, antialias: true, alpha: true, preserveDrawingBuffer: true });
+    r.setPixelRatio(1);
+    r.setSize(BUST, BUST, false);
+    r.setClearColor(0x000000, 0);
+    const scene = new THREE.Scene();
+    scene.add(new THREE.HemisphereLight(0xdfe6ff, 0x2a1d5e, 1.6));
+    const key = new THREE.DirectionalLight(0xffffff, 2.2);
+    key.position.set(2, 3, 4);
+    scene.add(key);
+    const rim = new THREE.DirectionalLight(0x9fd0ff, 1.2);
+    rim.position.set(-3, 2, -2);
+    scene.add(rim);
+    const cam = new THREE.PerspectiveCamera(28, 1, 0.05, 50);
+    const box = new THREE.Box3();
+    for (const def of CHARS) {
+      const m = charMesh(def, {});
+      scene.add(m);
+      m.rotation.y = -0.32;
+      const api = m.userData.charApi;
+      for (let i = 0; i < 20; i++) api?.update(1 / 30, 0.5 + i / 30);
+      m.updateMatrixWorld(true);
+      box.setFromObject(m);
+      const h = box.max.y - box.min.y;
+      const ty = box.min.y + h * 0.66;
+      const span = h * 0.78;
+      const dist = span / 2 / Math.tan(THREE.MathUtils.degToRad(14));
+      cam.position.set(0.18 * h, ty + h * 0.06, dist);
+      cam.lookAt(0, ty, 0);
+      r.render(scene, cam);
+      const out = document.createElement('canvas');
+      out.width = out.height = BUST;
+      out.getContext('2d').drawImage(cv, 0, 0);
+      bustCache.set(def.id, out);
+      scene.remove(m);
+      disposeChar(m);
+    }
+  } catch (e) {
+    console.warn('portrait busts unavailable', e);
+    bustCache.clear();
+  } finally {
+    // dispose() only: forceContextLoss() makes three log "Context Lost".
+    if (r) r.dispose();
+  }
+  return bustCache;
+}
+
 /**
  * Draw a character portrait into a canvas, procedurally. Deliberately drawn
  * ONCE and then animated with CSS transforms: eight canvases repainting every
@@ -264,6 +326,14 @@ export function drawPortrait(canvas, def, { size = 128, bg = true } = {}) {
     rg.addColorStop(1, hexA(col, 0));
     g.fillStyle = rg;
     g.fillRect(0, 0, S, S);
+  }
+
+  // The portrait IS the 3D character: a bust rendered once from the real rig
+  // (the hand-drawn smileys and hexagons didn't resemble the models at all).
+  const b = busts().get(def.id);
+  if (b) {
+    g.drawImage(b, 0, 0, S, S);
+    return canvas;
   }
 
   const cx = S * 0.5;
