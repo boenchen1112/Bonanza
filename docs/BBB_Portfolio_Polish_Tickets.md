@@ -116,7 +116,8 @@ Status key: `[ ]` open · `[~]` in progress · `[x]` done · `[-]` cut (with rea
 - [x] Round 4 FAIL (ours won Escalation; contact now reads "ring lands on the ball at the bat tip", Timing 8/10). Send-back: (1) grand-slam ball off-screen its whole ~4s flight (apex 7.4 vs camera lift cap 3.2) + batter still celebrating while the slam pitch flies; (2) third out never shown (lamps 2 -> 0, no callout); (3) home-run payoff leaves frame instantly, same badge every hit; (4) popped pips read as stray lights; (5) night palette milky; (6) contact freeze-frame looks like an overhead chop; (7) whiff plants bat in dirt / batter lunges with no press; (8) no finish word; (9) clutter (octahedra, big confetti on field); (10) countdown "3" + LIKE THIS! overlap
 - [x] Round 4 fixes landed (slam in frame, batter squares up, STRIKE!/SIDE RETIRED!, GAME!, homer distances, night palette, floaters)
 - [x] Round 5 FAIL, close (ours won Escalation; Timing 8, Readability 7). Send-back: grand-slam ring cut flat by the field. Fixed: overlay ring pool; badges off the pitch arc; homers land in the stands in frame; bat dropped for the curtain call; gold pips; bunt/foul split; misses stop at the net; NEW INNING; contact fires within half a frame
-- [ ] Round 6
+- [x] Round 6 FAIL, narrowly (Timing 8, Impact 7, Escalation 7; ours won 3 of 7). Send-back: the HOME RUN!/GRAND SLAM! badge rose under the OUTS pill. Also: NEW INNING beside a lit lamp, LIKE THIS! overlapping the "3", see-through badge plates, lumpy finale/combo rings. All fixed in 6009ff1 (badges clamp below the HUD band in screen space). Left as known gaps (design, not bugs): the pitch arcs through the crowd band, the strike heap hides the face, the set edge beyond the stands and the skyline are blockout, the night switch reads as a grade, hits look alike
+- [ ] Round 7 — confirmation of the R6 send-back only (final round)
 
 ## [x] 14 — Swing Kings gesture mode: mouse/pointer-drag source (+ ADR 0004)
 **Blocked by:** 01
