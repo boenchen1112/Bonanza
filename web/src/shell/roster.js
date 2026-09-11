@@ -125,15 +125,18 @@ export default {
       const tag = el('div', 'sh-ros__slotTag', 'P' + (i + 1));
       const face = el('canvas', 'sh-ros__face');
       face.width = 1; face.height = 1;
-      // Name over type in one column, so the READY! stamp has the right-hand
-      // end of the slot to itself (it used to land on "CPU · hard").
+      // Name over type in one column; the READY! stamp lands on the portrait,
+      // so the text keeps the whole width (beside it, "CPU · normal" was cut
+      // to "CPU · no…" — the very setting ←→ changes).
       const text = el('div', 'sh-ros__slotText');
       const name = el('div', 'sh-ros__slotName', '—');
       const type = el('div', 'sh-ros__slotType', '');
       text.appendChild(name); text.appendChild(type);
+      const faceWrap = el('div', 'sh-ros__faceWrap');
       const stamp = el('div', 'sh-stamp sh-ros__ready', 'READY!');
       stamp.style.opacity = '0';
-      p.appendChild(tag); p.appendChild(face); p.appendChild(text); p.appendChild(stamp);
+      faceWrap.appendChild(face); faceWrap.appendChild(stamp);
+      p.appendChild(tag); p.appendChild(faceWrap); p.appendChild(text);
       strip.appendChild(p);
       S.slots.push({ el: p, face, name, type, stamp, readyT: -1 });
     }
@@ -406,8 +409,10 @@ function refreshSlots(ctx) {
   for (let i = 0; i < 4; i++) {
     const t = SLOT_TYPES[S.lineup[i]];
     const s = S.slots[i];
-    s.type.textContent = t.id === 'off' ? 'EMPTY' : `${t.label} · ${t.sub}`;
+    s.type.textContent = t.id === 'off' ? 'EMPTY' : t.id === 'you' ? 'YOU' : `${t.label} · ${t.sub}`;
     s.el.style.filter = t.id === 'off' ? 'saturate(.3) brightness(.55)' : '';
+    // Free Play is solo: no rival seats to show.
+    s.el.style.visibility = S.mode === 'free' && i > 0 ? 'hidden' : '';
   }
   refreshHint();
 }
@@ -521,7 +526,8 @@ function injectRosterCss() {
   .sh-ros__slotText{display:flex;flex-direction:column;gap:.2em;min-width:0;flex:1 1 auto;}
   .sh-ros__slotType{font-weight:800;font-size:clamp(8px,1.05vw,13px);color:${PAL.dim};
     white-space:nowrap;letter-spacing:.04em;overflow:hidden;text-overflow:ellipsis;}
-  .sh-ros__slot .sh-ros__ready{position:relative;flex:0 0 auto;margin-left:auto;font-size:clamp(9px,1.15vw,16px);
+  .sh-ros__faceWrap{position:relative;flex:0 0 auto;}
+  .sh-ros__slot .sh-ros__ready{left:50%;bottom:-.2em;margin-left:-2.2em;font-size:clamp(9px,1.05vw,14px);
     background:${PAL.coral};transform:rotate(-12deg);pointer-events:none;}
   `;
   document.head.appendChild(s);

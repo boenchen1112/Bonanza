@@ -270,8 +270,9 @@ const CSS = `
 /* ------------------------------------------------------------------ wipe */
 .sh-wipe{position:absolute;left:-25%;top:-12%;width:150%;height:124%;
   will-change:transform;z-index:40;box-shadow:0 0 60px rgba(0,0,0,.6);}
-.sh-play__card{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) skewX(9deg);
-  white-space:nowrap;color:#fff;font-size:clamp(34px,6.5vw,92px);text-shadow:0 .07em 0 rgba(0,0,0,.35);}
+.sh-play__card{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(-3deg);
+  z-index:41;pointer-events:none;white-space:nowrap;color:#fff;font-size:clamp(34px,6.5vw,92px);
+  text-shadow:0 .07em 0 rgba(0,0,0,.35);}
 
 /* --------------------------------------------------------------- scanline */
 .sh-attract{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;

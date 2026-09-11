@@ -123,7 +123,11 @@ export default {
       pl.style.color = PLACE_COLOR[place] || PAL.dim;
       tag.appendChild(pl);
       tag.appendChild(el('span', 'sh-party__name', p.name));
-      const pts = el('span', 'sh-party__pts sh-mono', `${p.points} PTS`);
+      // Level on points with someone: show the round wins that split them,
+      // or three players on 4 PTS read T-1ST, T-1ST, 3RD for no visible reason.
+      const level = players.some((q) => q !== p && q.points === p.points);
+      const pts = el('span', 'sh-party__pts sh-mono',
+        level ? `${p.points} PTS · ${p.wins} WIN${p.wins === 1 ? '' : 'S'}` : `${p.points} PTS`);
       tag.appendChild(pts);
       if (!S.done && lastRow) {
         const d = el('span', 'sh-party__delta', `+${lastRow.points}`);

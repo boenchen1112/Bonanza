@@ -501,6 +501,7 @@ export function createWorld(ctx) {
 
   /** Lay half-beat markers along a flight path. `sample(u, out)`. */
   function setPips(pitch, sample) {
+    pipOwner = pitch || null;
     if (!pitch) { pips.count = 0; return; }
     const steps = Math.min(PIP_MAX, Math.max(2, Math.round(pitch.lead * 2)));
     for (let i = 0; i < steps; i++) {
@@ -518,8 +519,19 @@ export function createWorld(ctx) {
 
   // A popped pip has been passed: it flashes, then recedes to half size, so
   // the markers behind the ball don't hang over the stands as glowing discs.
-  function popPip(i) { if (i >= 0 && i < pips.count) { pipPop[i] = 1; pipBase[i] *= 0.5; } }
-  function clearPips() { pips.count = 0; }
+  // The markers belong to the pitch that laid them. Where the chart launches
+  // the next pitch on the previous one's target beat, resolving the old pitch
+  // (hit, or into the net) used to wipe the new pitch's markers.
+  let pipOwner = null;
+  function popPip(i, pitch) {
+    if (pitch !== pipOwner) return;
+    if (i >= 0 && i < pips.count) { pipPop[i] = 1; pipBase[i] *= 0.5; }
+  }
+  function clearPips(pitch) {
+    if (pitch !== undefined && pitch !== pipOwner) return;
+    pips.count = 0;
+    pipOwner = null;
+  }
 
   function setOuts(n) { outs = n; outsPulse = 1; }
 

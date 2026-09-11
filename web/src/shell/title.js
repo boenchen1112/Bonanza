@@ -22,6 +22,7 @@ import {
 import { createBackdrop } from './backdrop.js';
 import { CHARS, charMesh, charBeat, disposeChar } from './chars.js';
 import { CATALOG, drawPreview } from './games.js';
+import { preloadCards } from './cards.js';
 import { profile } from './state.js';
 import { goView, titleMenuRoute } from './nav.js';
 
@@ -44,6 +45,7 @@ export default {
   name: 'Title',
 
   load(ctx) {
+    preloadCards();
     S = {
       t: 0, idle: 0, sel: 0, mode: 'menu', selT: 0, confirm: null,
       attractIdx: 0, attractT: 0, attractA: 0, letters: [], items: [], cast: [],
@@ -131,10 +133,13 @@ export default {
 
     // top-right career line — tiny, but it says "this game remembers you"
     const stats = el('div', 'sh-title__stats');
+    // On a dark plate: lavender straight on the cream arch was unreadable.
     stats.style.cssText = 'position:absolute;right:3.2%;top:4.2%;text-align:right;font-weight:800;'
-      + 'font-size:clamp(10px,1.25vw,15px);color:' + PAL.dim + ';text-shadow:0 2px 0 rgba(0,0,0,.6);line-height:1.5;';
+      + 'font-size:clamp(10px,1.25vw,15px);color:#e6e0ff;text-shadow:0 2px 0 rgba(0,0,0,.6);line-height:1.5;'
+      + 'background:rgba(12,8,32,.72);border-radius:12px;padding:.45em .9em;';
     const best = bestOverall();
-    stats.innerHTML = `${profile.stats.rounds} ROUNDS PLAYED<br>`
+    const n = profile.stats.rounds;
+    stats.innerHTML = `${n} ROUND${n === 1 ? '' : 'S'} PLAYED<br>`
       + (best ? `BEST: ${best.name} · ${best.rank} · ${fmtScore(best.score)}` : 'NO RECORDS YET');
     root.appendChild(stats);
 

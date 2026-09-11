@@ -531,7 +531,7 @@ export default {
     const b = p.ball || this.w.acquireBall();
     p.ball = null;
     p.done = true;
-    this.w.clearPips();
+    this.w.clearPips(p);   // only if they're still this pitch's markers
 
     const dist = tier.dist * (foul ? 0.45 : 1);
     const T = tier.id === 'bunt' ? 0.9 : tier.id === 'liner' ? 1.5 : 2.6;
@@ -547,7 +547,9 @@ export default {
     let land = 0;
     if (tier.id === 'homer' && !foul && !isDemo) {
       const T2 = 1.55, g2 = GRAV * 0.6;
-      const Lx = -6.2 - (combo % 5) * 0.75, Lz = -12.6 - (combo % 3) * 0.8;
+      // Centre-right stands: aimed back over the machine, the homer crossed
+      // the next pitch's lob in the same strip of sky.
+      const Lx = 2.4 + (combo % 5) * 0.6, Lz = -14.0 - (combo % 3) * 0.8;
       const Ly = 1.9 + Math.max(0, Math.hypot(Lx, Lz + 3) - 11.6) * 0.53;
       vx = (Lx - c[0]) / T2; vz = (Lz - c[2]) / T2; vy = (Ly - c[1] + 0.5 * g2 * T2 * T2) / T2;
       land = T2;
@@ -848,7 +850,7 @@ export default {
       // pop each half-beat marker as the ball reaches it
       const steps = Math.max(2, Math.round(p.lead * 2));
       while (p.pipCursor < steps && u >= (p.pipCursor + 1) / steps - 0.02) {
-        w.popPip(p.pipCursor);
+        w.popPip(p.pipCursor, p);
         p.pipCursor++;
       }
 
@@ -859,7 +861,7 @@ export default {
         w.freeBall(ball);
         p.ball = null;
         p.done = true;
-        w.clearPips();
+        w.clearPips(p);
       }
     }
   },
@@ -968,7 +970,9 @@ export default {
     if (!this.over) return null;
     const s = this.judge.stats;
     const acc = this.judge.accuracy;
-    const score = this.maxPts > 0 ? Math.round(1000 * clamp01(this.gotPts / this.maxPts)) : 0;
+    // The number the HUD counted up (the results card used to show a 0-1000
+    // rescale of it, so 38000 on the scoreboard became 870).
+    const score = Math.round(this.gotPts);
     return {
       score,
       accuracy: acc,

@@ -24,3 +24,8 @@ export function cardImage(id) {
   }
   return img && img.complete && img.naturalWidth > 0 ? img : null;
 }
+
+/** Start decoding every bundled card now (the title calls this), so Free Play opens on real frames. */
+export function preloadCards() {
+  for (const k of Object.keys(URLS)) cardImage(k.slice(k.lastIndexOf('/') + 1, -'.webp'.length));
+}

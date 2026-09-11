@@ -74,7 +74,8 @@ await wait(1600); await shot('hub-round1');
 // Round 1 through the real results screen (party mode records the round).
 await page.evaluate(() => window.__BBB__.goto('results', { game: 'swing-kings', party: true,
   result: { score: 38000, accuracy: 0.97, rank: 'A', stats: { perfect: 30, great: 6, good: 2, miss: 1, maxCombo: 22 } } }));
-await wait(1200); await shot('results-r1');
+await wait(1200); await shot('results-r1-reveal');
+await wait(1600); await shot('results-r1');
 await page.evaluate(() => window.__BBB__.goto('party'));
 await wait(600); await shot('hub-round2-rising');
 await wait(1400); await shot('hub-round2');

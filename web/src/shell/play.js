@@ -24,6 +24,7 @@ import { session, ensurePlayers } from './state.js';
 import { gamePlayers } from './chars.js';
 import { CATALOG } from './games.js';
 import { goView, exitRoute } from './nav.js';
+import { clamp01 } from '../core/util.js';
 
 /** Beats of count-in after a pause. Three is the shortest that reads as one. */
 const RESUME_BEATS = 3;
@@ -66,7 +67,9 @@ export default {
     S.root = mountRoot(ctx, 'sh-play');
     const meta = CATALOG.find((g) => g.id === gameId);
     S.cover = createWipe(S.root, { color: hex(meta?.color ?? PAL.yellow), mode: 'in' });
-    S.cover.el.appendChild(el('div', 'sh-display sh-play__card', meta?.name || ''));
+    // Over the wipe, not inside it: in the skewed, oversized panel the name sat ~90px left of centre.
+    S.coverLabel = el('div', 'sh-display sh-play__card', meta?.name || '');
+    S.root.appendChild(S.coverLabel);
 
     const mod = await getScene(gameId);
     if (!mod) {
@@ -94,7 +97,10 @@ export default {
   update(ctx, dt, beat) {
     if (!S) return;
     S.t += dt;
-    if (S.t > COVER_HOLD_S) S.cover.update(dt);
+    if (S.t > COVER_HOLD_S) {
+      S.cover.update(dt);
+      S.coverLabel.style.opacity = String(clamp01(1 - (S.t - COVER_HOLD_S) / 0.12));
+    }
     S.pause.update(dt, beat);
 
     if (S.paused) {

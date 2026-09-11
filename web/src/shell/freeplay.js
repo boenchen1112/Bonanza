@@ -15,6 +15,7 @@ import { damp, clamp01, easeOutCubic } from '../core/util.js';
 import { PAL, el, mountRoot, panel, sfx, createWipe, beatPulse, fmtScore, RANK_COLOR, reducedMotion } from './theme.js';
 import { createBackdrop } from './backdrop.js';
 import { CATALOG, drawPreview } from './games.js';
+import { cardImage } from './cards.js';
 import { charById, charMesh, charBeat, disposeChar } from './chars.js';
 import { profile, session, ensurePlayers } from './state.js';
 import { goView, goPlay } from './nav.js';
@@ -101,7 +102,7 @@ export default {
       rail.appendChild(card);
       const c2d = cv.getContext('2d');
       if (c2d) drawPreview(g.id, c2d, cv.width, cv.height, i * 0.37, 0);
-      S.cards.push({ el: card, cv, c2d, g });
+      S.cards.push({ el: card, cv, c2d, g, real: !!cardImage(g.id) });
     });
 
     const hint = el('div', 'sh-hint');
@@ -140,6 +141,13 @@ export default {
     }
     const fc = S.cards[focus];
     if (fc?.c2d) drawPreview(fc.g.id, fc.c2d, fc.cv.width, fc.cv.height, beat, S.t);
+    // A side card drawn before its frame decoded showed the fallback sketch
+    // until focused: repaint it the moment the real frame is ready.
+    for (const c of S.cards) {
+      if (c.real || c === fc || !c.c2d || !cardImage(c.g.id)) continue;
+      c.real = true;
+      drawPreview(c.g.id, c.c2d, c.cv.width, c.cv.height, 0, 0);
+    }
 
     for (let i = 0; i < S.cast.length; i++) charBeat(S.cast[i], beat + i * 0.3, dt);
 
