@@ -31,7 +31,7 @@ verbatim.
 |---|---|
 | Builds | yes, clean (production build strips the `__BBB__` test API; the harness builds `--mode harness`) |
 | Runs | yes — every registered scene loads console-clean on the real GPU (`tools/harness/sweep.mjs`) |
-| Tests | 90/90 green (`npm --prefix web test`) + `swingKings/verify.mjs` (now on the real GPU, incl. bat-meets-ball contact checks) and `swingKings/smoke-conduct.mjs` ALL PASS |
+| Tests | 92/92 green (`npm --prefix web test`) + `swingKings/verify.mjs` (now on the real GPU, incl. bat-meets-ball contact checks) and `swingKings/smoke-conduct.mjs` ALL PASS |
 | Critic rounds completed | Swing Kings: 4 FAIL rounds, fixes landed for each, round 5 running. Shell: round 1 FAIL, fixes landed, round 2 running. See the tickets file (13, 19) |
 | Minigames | five, all playable; Swing Kings is the polished hero, the other four had a baseline pass |
 
@@ -194,6 +194,13 @@ locked to the transport across every `setBpm`.
   `current` before awaiting the next `load()`. It used not to, so the loop
   kept updating the disposed scene — harmless for most, but `play → play`
   (pause-menu restart) reached the new instance's half-built state.
+- **Only testing games booted directly.** The harness loads a minigame under
+  its own scene id; players reach it through the shell's `play` host. That
+  gap hid a silent soundtrack for every menu-launched game (`play` mapped to
+  "silent" in `trackForScene`; now `HOST_SCENES`). Check anything touching
+  scene activation through `tools/harness/lineup-probe.mjs` too.
+- **`music.stop()` for a pause.** It drops the track; nothing restarts it.
+  Use `music.pause()` / `music.resume()` (cursor kept, lookahead rewound).
 - **Identity through `ctx.players`, not shell imports.** Games read palette,
   build and `dress()` from `ctx.players` (ARCHITECTURE.md) and must keep a
   house default for `[]` — the harness boots games directly.
