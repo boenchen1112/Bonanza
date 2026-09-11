@@ -113,7 +113,8 @@ Status key: `[ ]` open · `[~]` in progress · `[x]` done · `[-]` cut (with rea
 **Blocked by:** 05, 08, 09, 10, 11, 12
 - [x] Round 1 FAIL (MP 7/7), round 2 FAIL (ours won Timing + Escalation), fixes landed for both
 - [x] Round 3 FAIL (6–1, ours won Escalation; gap: bat never meets the ball). Fixed: contact visuals wait for the live swing's contact frame and fire from the bat's sweet spot; the pitch aim adapts to it (verify.mjs: gap < 0.3 after the first hit, delay < 80ms); rounder/smaller beat pips; trace hidden in tap mode; earlier verdict pose; no title-card subtitle; opaque callout plaques popping from 60%; callouts age on real time
-- [ ] Round 4
+- [x] Round 4 FAIL (ours won Escalation; contact now reads "ring lands on the ball at the bat tip", Timing 8/10). Send-back: (1) grand-slam ball off-screen its whole ~4s flight (apex 7.4 vs camera lift cap 3.2) + batter still celebrating while the slam pitch flies; (2) third out never shown (lamps 2 -> 0, no callout); (3) home-run payoff leaves frame instantly, same badge every hit; (4) popped pips read as stray lights; (5) night palette milky; (6) contact freeze-frame looks like an overhead chop; (7) whiff plants bat in dirt / batter lunges with no press; (8) no finish word; (9) clutter (octahedra, big confetti on field); (10) countdown "3" + LIKE THIS! overlap
+- [ ] Round 5
 
 ## [x] 14 — Swing Kings gesture mode: mouse/pointer-drag source (+ ADR 0004)
 **Blocked by:** 01
@@ -145,6 +146,9 @@ Status key: `[ ]` open · `[~]` in progress · `[x]` done · `[-]` cut (with rea
 
 ## [ ] 19 — Critic loop: shell to PASS
 **Blocked by:** 05, 08, 18
+- [x] Round 1 FAIL (MP 7/7; gap: menu music died on every transition). Fixed: player re-anchors on transport restart (player.test.mjs); party has CPUs, points, standings hub, podium + winner, finale last; results/party card transforms; options reset in-row + keeps settings; roster stamp/legend/hints/see-through; freeplay side cards; menu ping + confetti at the item; portraits rendered from the 3D rig; dance no longer flips face-down (YXZ hips, re-baked, wrap-aware blends)
+- [ ] Open from round 1: title cpu p95 ~13ms (steady state; not DOM, env, chars or post — suspect per-beat work), attract reel is still stills, crowd faceless (art note)
+- [ ] Round 2
 
 ## [x] 20 — Baseline pass: Drumline Dash — *release valve*
 **Blocked by:** 04, 07, 10
