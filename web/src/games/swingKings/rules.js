@@ -127,7 +127,9 @@ export function buildSchedule() {
 
   // --- the grand slam: launched on bar 30, arrives two bars later ---------
   add(FINALE_BEAT, 8, {
-    section: 'finale', kind: 'slam', ideal: 6, apex: 7.4, finale: true,
+    // Apex 4.6, not 7.4: at 7.4 the ball spent its whole 4s flight above the
+    // top of the frame — the song's climax read as dots in the sky.
+    section: 'finale', kind: 'slam', ideal: 6, apex: 4.6, finale: true,
   });
 
   return out;

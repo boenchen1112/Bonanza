@@ -483,7 +483,9 @@ export function createWorld(ctx) {
     pips.count = steps;
   }
 
-  function popPip(i) { if (i >= 0 && i < pips.count) pipPop[i] = 1; }
+  // A popped pip has been passed: it flashes, then recedes to half size, so
+  // the markers behind the ball don't hang over the stands as glowing discs.
+  function popPip(i) { if (i >= 0 && i < pips.count) { pipPop[i] = 1; pipBase[i] *= 0.5; } }
   function clearPips() { pips.count = 0; }
 
   function setOuts(n) { outs = n; outsPulse = 1; }
@@ -543,7 +545,7 @@ export function createWorld(ctx) {
       for (let i = 0; i < pips.count; i++) {
         pipPop[i] = damp(pipPop[i], 0, 7, dt);
         _v3.set(pipPos[i * 3], pipPos[i * 3 + 1], pipPos[i * 3 + 2]);
-        _s3.setScalar(pipBase[i] * (1 + pipPop[i] * 0.9));
+        _s3.setScalar(pipBase[i] * (1 + pipPop[i] * 1.2));
         _m4.compose(_v3, _q, _s3);
         pips.setMatrixAt(i, _m4);
       }
@@ -847,6 +849,8 @@ const WORD_GRAD = {
   'OUT!': ['#ffffff', '#ffb0bd', '#ff5d73'],
   'LIKE THIS!': ['#ffffff', '#c8ffb0', '#6fe37a'],
   'WHIFF!': ['#ffffff', '#ffc0d8', '#ff5d8a'],
+  'STRIKE!': ['#ffffff', '#ffd9b0', '#ff8a3c'],
+  'SIDE RETIRED!': ['#ffffff', '#ffb0bd', '#ff4d6a'],
   OUTS: ['#ffffff', '#e3e8ff', '#a9b6e0'],
 };
 

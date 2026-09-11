@@ -208,6 +208,7 @@ export default {
     this.camLift = 0;
     this.curtain = false;
     this.curtainBeat = null;
+    this.finishShown = false;
   },
 
   start(ctx) {
@@ -404,8 +405,11 @@ export default {
     // gesture, and cutting the ribbon at the button-up loses the follow-through.
     this.traceHoldOff = 0.26;
 
-    // `press` calls onJudged synchronously when it claims a note.
+    // `press` calls onJudged synchronously when it claims a note; the flag
+    // tells a swing-and-miss from a pitch the player never swung at.
+    this._swinging = true;
     const r = this.judge.press('a', time);
+    this._swinging = false;
 
     if (!r) {
       // Swung at nothing. Still swing — an input with no visible consequence
@@ -492,12 +496,20 @@ export default {
       power: Math.round(power * 100) / 100, tier: tier.id, finale: !!p.finale,
     });
 
-    this.batterStrike(ctx, 0.4 + power * 0.6);
-    // The verdict pose lands once the follow-through has read, not over it.
-    this.pendingReact = { verdict, t: 0.3 };
+    const swung = hit || this._swinging;
+    if (swung) {
+      this.batterStrike(ctx, 0.4 + power * 0.6);
+      // The verdict pose lands once the follow-through has read, not over it.
+      this.pendingReact = { verdict, t: 0.3 };
+    } else {
+      // Never swung: the batter watches it go by and slumps — no lunge, so
+      // "didn't swing" and "swung and missed" no longer look the same.
+      this.w.batter.anim.react('miss');
+      this.pendingReact = null;
+    }
 
     if (hit) { p.contactPending = true; this.queueContact(ctx, [p, verdict, power, tier, foul, false]); }
-    else this.whiff(ctx, p);
+    else this.whiff(ctx, p, swung);
 
     ctx.bus.emit('judge', { verdict, errMs, beat: p.targetBeat });
     ctx.ui.hud.setScore(Math.round(this.gotPts));
@@ -581,7 +593,8 @@ export default {
     // channels stack instead of overprinting; its life never outlasts the gap
     // to the next pitch, so two tier words are never up at once.
     // The grand slam is the one word that gets to stay: bigger and longer.
-    const life = p.finale ? 2.4 : Math.min(big ? 1.25 : 0.95, Math.max(0.55, gap * 0.8));
+    // The demo's LIKE THIS! clears before the count-in's "3" appears.
+    const life = p.finale ? 2.4 : isDemo ? 0.85 : Math.min(big ? 1.25 : 0.95, Math.max(0.55, gap * 0.8));
     this.w.callout(word, [c[0] - 0.9, c[1] + 1.6, c[2]], {
       scale: tier.id === 'slam' ? 1.75 : big ? 1.05 : 0.8,
       life,
@@ -595,25 +608,32 @@ export default {
     }
   },
 
-  /** A whiff. Funny, never punishing: the ball thuds into the backstop. */
-  whiff(ctx, p) {
+  /**
+   * A miss. Funny, never punishing: the ball thuds into the backstop. WHIFF!
+   * for a swing and a miss, STRIKE! for a pitch the player never swung at.
+   */
+  whiff(ctx, p, swung = true) {
     const c = this.contactPoint;
-    // WHIFF! is a world badge whose life is capped by the gap to the next
-    // pitch (the fx verdict word lived ~1.26s and sat over the next HOME RUN!).
+    // The badge's life is capped by the gap to the next pitch (the fx
+    // verdict word lived ~1.26s and sat over the next HOME RUN!).
     ctx.fx.verdict('miss', c, { combo: 0, scale: 1, groundY: 0, text: false, stage: false });
     const life = Math.min(0.9, Math.max(0.5, this.gapAfter(p, ctx.clock.spb) * 0.7));
-    this.w.callout('WHIFF!', [c[0] - 0.6, c[1] + 1.2, c[2]], { scale: 0.8, life, rise: 0.4 });
+    this.outs += 1;
+    const third = this.outs >= 3;
+    if (!third) this.w.callout(swung ? 'WHIFF!' : 'STRIKE!', [c[0] - 0.6, c[1] + 1.2, c[2]], { scale: 0.8, life, rise: 0.4 });
     ctx.audio.sfx('miss', ctx.clock.rawNow());
     this.w.crowd.deflate(0.9);
-    // Outs are a scoring tier, not an ejection: the third one retires the side
-    // and the lamps reset. Nobody ever stops playing. The count lives in the
-    // HUD (hud.js), not in the crowd.
-    this.outs += 1;
+    // Outs are a scoring tier, not an ejection: the third one retires the
+    // side — all three lamps hold, the stadium says so — then the count
+    // resets and play goes on. The count lives in the HUD (hud.js).
     this.hud.setOuts(this.outs);
-    if (this.outs >= 3) {
+    if (third) {
       this.outs = 0;
-      this._outsClear = 0.6;
+      this._outsClear = Math.max(1.2, Math.min(1.8, this.gapAfter(p, ctx.clock.spb) * 0.9));
+      this.w.callout('SIDE RETIRED!|3 OUTS', [c[0] - 0.4, c[1] + 1.5, c[2]], { scale: 1.05, life: this._outsClear, rise: 0.3 });
+      this.w.crowd.deflate(1.4);
       this.w.crowd.wave(0.55, 1.4);
+      ctx.stage.shake?.(0.08, [0, -1, 0]);
     }
     this.camPush = 0.25;
   },
@@ -661,7 +681,14 @@ export default {
     if (this.pendingReact) {
       this.pendingReact.t -= dt;
       if (this.pendingReact.t <= 0) {
-        w.batter.anim.react(this.pendingReact.verdict);
+        // With a long pitch already in the air (the grand slam flies for
+        // eight beats), square up for it instead of celebrating facing away.
+        const lp = this.livePitch();
+        if (lp && clock.timeAt(lp.targetBeat) - now > 1.6) {
+          w.batter.anim.play('ready', { loop: true, face: 'focus', beat: 0.3, blend: 0.25, headTurn: HEAD_TURN });
+        } else {
+          w.batter.anim.react(this.pendingReact.verdict);
+        }
         this.pendingReact = null;
       }
     }
@@ -752,6 +779,16 @@ export default {
         p.ball.trail = ctx.fx.trail({ color: 0xbfeaff, width: 0.075 });
         p.pipCursor = 0;
         w.fireMachine();
+        // A pitch in the air outranks the last verdict: the batter squares up
+        // at the launch (the previous hit's celebration used to play on
+        // through the whole grand-slam flight, facing away from the ball).
+        const a = w.batter.anim;
+        const inSwing = a.state === 'clip' && a.variant?.name === 'swing';
+        const inReady = a.state === 'clip' && a.variant?.name === 'ready';
+        if (p.kind !== 'demo' && !inSwing && !inReady) {
+          this.pendingReact = null;
+          a.play('ready', { loop: true, face: 'focus', beat: 0.3, blend: 0.2, headTurn: HEAD_TURN });
+        }
         w.setPips(p, (uu, out) => this.sample(p, uu, out));
         ctx.audio.sfx('tick', ctx.clock.rawNow(), 0.16);
         if (p.kind === 'demo') this.beginWindup(ctx, ctx.clock.timeAt(p.launchBeat));
@@ -845,7 +882,7 @@ export default {
       // all the way ends up framing empty sky with no batter in shot.
       lift = Math.min(3.2, Math.max(0, flying - 2.6));
     }
-    this.camLift = damp(this.camLift || 0, lift, 2.2, dt);
+    this.camLift = damp(this.camLift || 0, lift, 3.4, dt);
     this.camPush = damp(this.camPush, 0, 3.2, dt);
     ctx.stage.rig.frame({
       target: [-1.9 + this.camPush * 0.9, 1.95 + this.camPush * 0.15 + this.camLift * 0.42, 0],
@@ -873,6 +910,14 @@ export default {
         }
       }
       w.crowd.setEnergy(1);
+    }
+
+    // The song ends on a word, on the last bar's downbeat, not on a crouch.
+    if (!this.finishShown && beat >= END_BEAT - 4) {
+      this.finishShown = true;
+      ctx.ui.banner('GAME!', { life: 2.2, color: '#ffe58a' });
+      ctx.audio.sfx('fanfare', ctx.clock.rawNow());
+      w.crowd.wave(1, 2);
     }
   },
 
