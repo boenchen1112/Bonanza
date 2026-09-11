@@ -13,16 +13,19 @@
  * what qualifies this as the series' tutorial.
  *
  * ─────────────────────────────────────────────────────────────────────────
- * WHY YOU DON'T TAP
+ * TWO WAYS TO SWING (ADR 0004)
  * ─────────────────────────────────────────────────────────────────────────
- * Hold to wind up, release on the ictus. Two axes that never talk to each
- * other:
+ * TAP (default, what the harness plays): press as the ball reaches the
+ * plate. Timing is everything — PERFECT sends it, GREAT is a line drive,
+ * GOOD a bunt (powerFromTiming).
+ *
+ * CONDUCT (opt-in, mouse or webcam): the original design. Hold to wind up,
+ * swing on the ictus — the downstroke's stop (gesture.js) or the release.
+ * Two axes that never talk to each other:
  *
  *   release timing  -> perfect / great / good / whiff   (core/judge.js)
  *   windup length   -> bunt / line drive / home run     (rules.js)
  *
- * A perfectly-timed bare tap is a BUNT: full marks for timing, a dribbler for
- * a result. Nobody has to be told the hold matters; they get told by the ball.
  * The windup draws as a conducting trace (trace.js) so the gesture has a
  * visible SHAPE, and the shape gets better as the player does.
  *
@@ -50,6 +53,7 @@ import { createTrace } from './trace.js';
 import { CLIPS } from '../../chars/index.js';
 import { Save } from '../../core/util.js';
 import { createIctusDetector } from './gesture.js';
+import { createHud } from './hud.js';
 import {
   buildSchedule, powerFor, tierFor, scoreFor, sectionAt,
   END_BEAT, FINALE_BEAT, LEAD_IN_BEATS, SCORED_BARS, TIERS,
@@ -71,6 +75,10 @@ const SWING = CLIPS.swing;
 const LOAD = SWING.contact - 0.06;
 /** Most beats of coil — a finale ball 8 beats out should not coil in slow-mo. */
 const COIL_BEATS = 2;
+
+/** Stance/coil head turn toward camera: the mocap batter watches the pitcher,
+ *  which put the helmet brim and gloves over his face in the most common pose. */
+const HEAD_TURN = 0.55;
 
 /** Webcam frames arrive ~this late (capture + inference); taken off each sample. */
 const CAMERA_LATENCY = 0.07;
@@ -230,6 +238,8 @@ export default {
     ctx.ui.banner('SWING KINGS', {
       sub: this.inputHint(), life: this.mode === 'tap' ? 1.5 : 2.2, color: '#ffe58a',
     });
+    this.hud = createHud(ctx, this.inputHintHtml());
+    this.hintHidden = false;
     this.startGestureSource(ctx);
     ctx.ui.hud.setScore(0);
     ctx.ui.hud.setAccuracy(1);
@@ -240,6 +250,13 @@ export default {
     if (this.mode === 'mouse') return 'HOLD as the ball flies · SWING DOWN (or let go) as it lands';
     if (this.mode === 'camera') return 'RAISE your hand as the ball flies · CONDUCT DOWN as it lands';
     return 'PRESS as the ball reaches the plate · nail the beat to send it';
+  },
+
+  /** The same instruction for the persistent HUD bar, with the key named. */
+  inputHintHtml() {
+    if (this.mode === 'mouse') return '<b>HOLD</b> the mouse as the ball flies · <b>SWING DOWN</b> as it lands';
+    if (this.mode === 'camera') return '<b>RAISE</b> your hand as the ball flies · <b>CONDUCT DOWN</b> as it lands';
+    return '<b>SPACE</b> / tap as the ball reaches the plate · on the beat = <b>HOME RUN</b>';
   },
 
   /**
@@ -336,7 +353,7 @@ export default {
   batterCoil(ctx, untilTime) {
     const dur = Math.max(0.16, untilTime - ctx.clock.now() - 0.03);
     this.w.batter.anim.play('swing', {
-      to: LOAD, dur, hold: true, face: 'focus', beat: 0.12, blend: 0.14,
+      to: LOAD, dur, hold: true, face: 'focus', beat: 0.12, blend: 0.14, headTurn: HEAD_TURN,
     });
     this.pendingReact = null;   // the next pitch outranks the last verdict
   },
@@ -346,10 +363,12 @@ export default {
     power = Number.isFinite(power) ? clamp01(power) : 0.5;
     const rate = 1.15 + power * 0.55;
     const anim = this.w.batter.anim;
+    // No squash impulse here: under the twisted mocap contact pose a root
+    // squash sheared the batter into an egg on every home run. The swing's
+    // own mechanics carry the impact; the world (hitstop, punch, ring) sells it.
     anim.play('swing', {
       from: LOAD, rate, face: 'fierce', beat: 0.05, blend: 0.03, power, next: 'idle',
     });
-    anim.impulse(0.45 * power, 0.02 * power);
     // A coil for the next pitch must not cut the follow-through off at the
     // knees; it waits for most of it.
     this.strikeUntil = ctx.clock.now() + ((SWING.duration - LOAD) / rate) * 0.72;
@@ -493,14 +512,18 @@ export default {
     const roomy = gap > 1.4;
     const dirArr = [dir.x * 0.65, 0.72 + tier.lift * 0.3, dir.z * 0.4];
     const scale = tier.id === 'slam' ? 2.0 : big ? 1.35 : tier.id === 'liner' ? 1.0 : 0.78;
-    // The demo is the batter showing you, not you scoring: no verdict word,
-    // no "HOME RUN!", just the swing, a burst and "LIKE THIS!".
-    ctx.fx.verdict(verdict, c, { dir: dirArr, combo, scale, groundY: 0, text: !isDemo });
+    // One word per hit: the result badge (below) carries the timing grade as
+    // its second line, so the fx verdict text is off — PERFECT!, HOME RUN!,
+    // the combo and OUTS used to pile into one patch of screen. The fx
+    // system's own full-frame flash is off too (it washed the frame milky);
+    // Swing Kings shakes the camera itself.
+    ctx.fx.verdict(verdict, c, { dir: dirArr, combo, scale, groundY: 0, text: false, stage: false, rings: !!p.finale });
     ctx.fx.impact(c, { dir: dirArr, color: tier.color, count: big ? 24 : 12, speed: 13, scale });
     if (big && !isDemo) {
       ctx.fx.speedLines(c, { color: tier.color, count: roomy ? 16 : 8, radius: 3.0 });
-      if (roomy || p.finale) ctx.fx.ring(c, { color: tier.color, from: 0.4, to: 4.2 * scale, life: 0.5, thick0: 0.2 });
+      if (p.finale) ctx.fx.ring(c, { color: tier.color, from: 0.4, to: 4.2 * scale, life: 0.5, thick0: 0.2 });
     }
+    if (!isDemo) ctx.stage.shake(big ? 0.12 : 0.05, [dir.x, 0.5, 0]);
 
     const f = feelForCombo(verdict, combo);
     if (!isDemo) {
@@ -519,7 +542,8 @@ export default {
     // --- crowd + callout ----------------------------------------------------
     this.w.crowd.hype(big ? 1.0 : tier.id === 'liner' ? 0.5 : 0.25);
     if (big) this.w.crowd.wave(1, 2.1);
-    const word = isDemo ? 'LIKE THIS!' : foul ? 'FOUL!' : tier.label;
+    const grade = { perfect: 'PERFECT', great: 'GREAT', good: 'GOOD' }[verdict] || '';
+    const word = isDemo ? 'LIKE THIS!' : `${foul ? 'FOUL!' : tier.label}|${grade}`;
     // Above the verdict word (fx.verdict pops at the contact point), so the two
     // channels stack instead of overprinting; its life never outlasts the gap
     // to the next pitch, so two tier words are never up at once.
@@ -541,16 +565,18 @@ export default {
   /** A whiff. Funny, never punishing: the ball thuds into the backstop. */
   whiff(ctx, p) {
     const c = LAYOUT.contact;
-    ctx.fx.verdict('miss', c, { combo: 0, scale: 1, groundY: 0 });
+    // WHIFF! is a world badge whose life is capped by the gap to the next
+    // pitch (the fx verdict word lived ~1.26s and sat over the next HOME RUN!).
+    ctx.fx.verdict('miss', c, { combo: 0, scale: 1, groundY: 0, text: false, stage: false });
+    const life = Math.min(0.9, Math.max(0.5, this.gapAfter(p, ctx.clock.spb) * 0.7));
+    this.w.callout('WHIFF!', [c[0] - 0.6, c[1] + 1.2, c[2]], { scale: 0.8, life, rise: 0.4 });
     ctx.audio.sfx('miss', ctx.clock.rawNow());
     this.w.crowd.deflate(0.9);
     // Outs are a scoring tier, not an ejection: the third one retires the side
-    // and the lamps reset. Nobody ever stops playing.
+    // and the lamps reset. Nobody ever stops playing. The count lives in the
+    // HUD (hud.js), not in the crowd.
     this.outs += 1;
-    this.w.setOuts(this.outs);
-    // OUT! pops at the outs lamps (which it labels), not at the plate: there it
-    // fell straight into the rising WHIFF and the two read as "OUWHIFF".
-    this.w.callout('OUT!', this.w.outsAnchor, { scale: 0.62, life: 0.8, rise: 0.35 });
+    this.hud.setOuts(this.outs);
     if (this.outs >= 3) {
       this.outs = 0;
       this._outsClear = 0.6;
@@ -606,7 +632,7 @@ export default {
 
     if (this._outsClear > 0) {
       this._outsClear -= dt;
-      if (this._outsClear <= 0) w.setOuts(0);
+      if (this._outsClear <= 0) this.hud.setOuts(0);
     }
 
     this.updatePitches(ctx, dt, beat);
@@ -661,7 +687,7 @@ export default {
         w.armMachine(p.kind === 'slam' ? 1.6 : 1);
         // Step into the box — unless a verdict pose is still playing out.
         if (w.batter.anim.state === 'idle') {
-          w.batter.anim.play('ready', { loop: true, face: 'focus', beat: 0.3, blend: 0.25 });
+          w.batter.anim.play('ready', { loop: true, face: 'focus', beat: 0.3, blend: 0.25, headTurn: HEAD_TURN });
         }
       }
 
@@ -741,6 +767,9 @@ export default {
   updateShow(ctx, dt, beat) {
     const w = this.w;
     const section = sectionAt(beat);
+
+    // The instruction bar stays up through the teach section, then fades.
+    if (!this.hintHidden && beat >= 16) { this.hintHidden = true; this.hud?.hideHint(); }
 
     // crowd energy climbs with the round and with the player's streak
     const base = { lead: 0.28, teach: 0.42, play: 0.58, escalate: 0.8, finale: 1 }[section] ?? 0.5;
@@ -831,6 +860,7 @@ export default {
     if (typeof window !== 'undefined' && window.__BBB__) delete window.__BBB__.swing;
     if (this._onPointerMove) { window.removeEventListener('pointermove', this._onPointerMove); this._onPointerMove = null; }
     if (this.camera) { this.camera.stop(); this.camera = null; }
+    this.hud?.dispose(); this.hud = null;
     for (const h of this.hitBalls) this.w?.freeBall(h.b);
     this.hitBalls = [];
     this.trace?.dispose();

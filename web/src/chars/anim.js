@@ -572,6 +572,9 @@ function poseClip(p, s) {
   if (!clip) return poseIdle(p, s);
   sampleClip(p, clip, clipTimeAt(spec, s.t, s.u, s.beat), s.legFrac);
   if (spec.face) Object.assign(p, spec.face);
+  // Optional head turn on top of the mocap (e.g. toward camera, so a batting
+  // stance doesn't hide the face behind the helmet brim).
+  if (spec.headTurn) p.headRotY += spec.headTurn;
   return p;
 }
 
@@ -643,6 +646,14 @@ export class CharacterAnimator {
     /** Amplitude of the additive beat layer, 0..1.4. Owned by the state. */
     this.beatAmt = 1;
     this.beatAmtTarget = 1;
+
+    /**
+     * How much squash/stretch reaches the root (0 = rigid). Squash is a
+     * non-uniform scale on the WHOLE character, so under a strongly twisted
+     * mocap pose it shears the body into an egg; games turn it down for
+     * those moments.
+     */
+    this.squashScale = opts.squash ?? 1;
 
     // Pose buffers — allocated once, mutated forever. Nothing here allocates
     // per frame, because a GC pause on a downbeat is a missed note.
@@ -772,6 +783,7 @@ export class CharacterAnimator {
       loop: !!(o.loop || o.beatLock),
       beatLock: !!(o.beatLock && clip.tempo),
       face: typeof o.face === 'string' ? CLIP_FACE[o.face] : (o.face || null),
+      headTurn: o.headTurn || 0,
     };
     if (spec.beatLock) {
       const m = beatLockRatio(clip.tempo, o.bpm ?? 120);
@@ -951,7 +963,7 @@ export class CharacterAnimator {
     const fb = this._faceBase;
 
     // root: translation then squash about the feet, volume-compensated.
-    const sy = 1 + p.squash * 0.32;
+    const sy = 1 + p.squash * 0.32 * this.squashScale;
     const sxz = 1 / Math.sqrt(Math.max(0.25, sy));
     j.root.position.y = p.rootY * H;
     j.root.scale.set(sxz, sy, sxz);

@@ -489,6 +489,10 @@ export function createFX({ stage, clock, bus = null }) {
       const layer = recipe[i][0];
       const delay = recipe[i][1];
       if (layer === L.TEXT && opts.text === false) continue;
+      // `rings: false` — the big outward wave and its echo. In a game whose
+      // subject stands AT the impact point they draw wobbly loops through the
+      // character; the core flash and shards still sell the hit.
+      if (opts.rings === false && (layer === L.RING_OUT || layer === L.ECHO)) continue;
       if (delay <= 0) {
         // Act 1 fires INLINE, on the same frame as the press. Queuing it would
         // cost a frame of latency, and that frame is the whole product.
@@ -501,7 +505,7 @@ export function createFX({ stage, clock, bus = null }) {
 
     // Combo escalation adds PHYSICAL layers, not just bigger numbers: extra
     // shockwaves trailing the first one, each wider, later, and fainter.
-    for (let k = 1; k <= f.extraRings; k++) {
+    for (let k = 1; opts.rings !== false && k <= f.extraRings; k++) {
       schedule(L.RING_OUT, 0.09 + k * 0.055, V, k);
     }
 

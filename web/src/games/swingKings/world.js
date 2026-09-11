@@ -288,10 +288,15 @@ export function createWorld(ctx) {
   // to the shadow pass without changing the shadow's silhouette.
   for (const m of [cart, neck, body, barrel, hopper, ...wheels]) m.castShadow = true;
 
+  // Muzzle flash: an additive radial glow, not a solid disc (the old flat
+  // beige ring read as a prop stuck to the barrel).
+  const glowTex = makeGlowTexture();
+  textures.push(glowTex);
   const muzzleMat = new THREE.MeshBasicMaterial({
-    color: 0xfff2c0, transparent: true, opacity: 0, side: THREE.DoubleSide, toneMapped: false,
+    map: glowTex, color: 0xfff2c0, transparent: true, opacity: 0, side: THREE.DoubleSide,
+    blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false,
   });
-  const muzzle = new THREE.Mesh(new THREE.RingGeometry(0.34, 0.66, 20), muzzleMat);
+  const muzzle = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 1.5), muzzleMat);
   muzzle.userData.keepMaterial = true;
   muzzle.position.set(1.16, 0.35, 0);
   muzzle.rotation.y = Math.PI / 2;
@@ -317,7 +322,8 @@ export function createWorld(ctx) {
   const PIP_MAX = 20;
   const pipGeo = new THREE.SphereGeometry(0.09, 8, 6);
   const pipMat = new THREE.MeshBasicMaterial({
-    color: 0xcdefff, transparent: true, opacity: 0.92, toneMapped: false,
+    // Warm and bright: the pale blue pips vanished against the crowd.
+    color: 0xfff0a0, transparent: true, opacity: 1, toneMapped: false,
   });
   const pips = new THREE.InstancedMesh(pipGeo, pipMat, PIP_MAX);
   pips.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -337,6 +343,7 @@ export function createWorld(ctx) {
   const outsGroup = new THREE.Group();
   outsGroup.position.set(LAYOUT.plate[0] - 0.15, 3.35, LAYOUT.plate[2] - 1.0);
   root.add(outsGroup);
+  outsGroup.visible = false;   // the outs count moved to the HUD (hud.js); kept for setOuts() callers
   const lampGeo = new THREE.SphereGeometry(0.14, 10, 8);
   const lamps = [];
   for (let i = 0; i < 3; i++) {
@@ -467,7 +474,7 @@ export function createWorld(ctx) {
       const whole = Math.abs(beatOff - Math.round(beatOff)) < 0.08;
       sample(u, _v3);
       pipPos[i * 3] = _v3.x; pipPos[i * 3 + 1] = _v3.y; pipPos[i * 3 + 2] = _v3.z;
-      pipBase[i] = whole ? 1.5 : 0.72;
+      pipBase[i] = whole ? 1.9 : 1.0;
       pipPop[i] = 0;
     }
     pips.count = steps;
@@ -479,8 +486,27 @@ export function createWorld(ctx) {
   function setOuts(n) { outs = n; outsPulse = 1; }
 
   /** In-world word callout — a different channel from the verdict callout. */
+  /**
+   * `word` may be "TIER|SUB" — a badge with the tier word big and a small
+   * second line (the timing grade), built on first use and cached.
+   */
+  function wordMaterial(key) {
+    if (wordMat[key]) return wordMat[key];
+    const [w, sub] = key.split('|');
+    if (!WORD_GRAD[w]) return null;
+    const tex = makeWordTexture(w, sub);
+    textures.push(tex);
+    const m = new THREE.SpriteMaterial({
+      map: tex, transparent: true, depthWrite: false, depthTest: false, toneMapped: false,
+    });
+    m.userData.aspect = tex.image.height / 128;
+    spriteMats.push(m);
+    wordMat[key] = m;
+    return m;
+  }
+
   function callout(word, pos, { scale = 1, life = 1.05, rise = 1.1 } = {}) {
-    const mat = wordMat[word];
+    const mat = wordMaterial(word);
     if (!mat) return;
     // Free slot, else the one closest to done — never a word mid-pop.
     let slot = callouts.find((c) => c.life <= 0);
@@ -540,7 +566,7 @@ export function createWorld(ctx) {
       const pop = backOut(clamp01(t / 0.24));
       c.sprite.position.set(c.x, c.y + easeOutCubic(t) * c.rise, c.z);
       const s = c.scale * pop * (1 + t * 0.12);
-      c.sprite.scale.set(s * 3.1, s * 0.8, 1);
+      c.sprite.scale.set(s * 3.1, s * 0.8 * (c.sprite.material.userData.aspect || 1), 1);
       c.sprite.material.opacity = t > 0.7 ? 1 - (t - 0.7) / 0.3 : 1;
       if (c.life <= 0) c.sprite.visible = false;
     }
@@ -553,6 +579,9 @@ export function createWorld(ctx) {
     const a = batter.anim;
     const coiled = a.state === 'clip' && a.variant
       && (a.variant.name === 'ready' || (a.variant.name === 'swing' && a.variant.to < CLIPS.swing.contact));
+    // Rigid through mocap clips (squash would shear the twisted swing pose),
+    // a lighter squash for the procedural idle and verdict poses.
+    a.squashScale = a.state === 'clip' ? 0 : 0.45;
     batGroup.quaternion.slerp(coiled ? grips.stance : grips.strike, 1 - Math.exp(-(coiled ? 10 : 26) * dt));
   }
 
@@ -739,6 +768,24 @@ function makeSeatTexture() {
   return tex;
 }
 
+/** Soft radial glow (white core to transparent), for additive flashes. */
+function makeGlowTexture() {
+  const S = 128;
+  const c = document.createElement('canvas');
+  c.width = c.height = S;
+  const g = c.getContext('2d');
+  const grad = g.createRadialGradient(S / 2, S / 2, 0, S / 2, S / 2, S / 2);
+  grad.addColorStop(0, 'rgba(255,255,255,1)');
+  grad.addColorStop(0.25, 'rgba(255,240,200,0.85)');
+  grad.addColorStop(0.6, 'rgba(255,200,120,0.25)');
+  grad.addColorStop(1, 'rgba(255,180,90,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, S, S);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
 /** Chain-link net: a diamond lattice on transparent, tiled around the arc. */
 function makeNetTexture() {
   const S = 64;
@@ -778,36 +825,58 @@ const WORD_GRAD = {
   'FOUL!': ['#ffffff', '#e2c4ff', '#a86bff'],
   'OUT!': ['#ffffff', '#ffb0bd', '#ff5d73'],
   'LIKE THIS!': ['#ffffff', '#c8ffb0', '#6fe37a'],
+  'WHIFF!': ['#ffffff', '#ffc0d8', '#ff5d8a'],
   OUTS: ['#ffffff', '#e3e8ff', '#a9b6e0'],
 };
 
-function makeWordTexture(word) {
-  const W = 512, H = 128;
+function makeWordTexture(word, sub = null) {
+  const W = 512, H = sub ? 176 : 128;
   const c = document.createElement('canvas');
   c.width = W; c.height = H;
   const g = c.getContext('2d');
   g.clearRect(0, 0, W, H);
+  const [c0, c1, c2] = WORD_GRAD[word] || WORD_GRAD['LINE DRIVE'];
+  // A dark rounded plate behind the word: over a multicoloured crowd, a
+  // stroke alone left "HOME RUN!" beige-on-busy and hard to read.
+  if (word !== 'OUTS') {
+    g.fillStyle = 'rgba(12,8,32,0.72)';
+    g.strokeStyle = c2;
+    g.lineWidth = 5;
+    g.beginPath();
+    g.roundRect(14, 10, W - 28, H - 20, 30);
+    g.fill();
+    g.stroke();
+  }
   // Shrink to fit: at 78px "GRAND SLAM!" plus its 18px stroke ran off the
   // 512px canvas and lost the "!".
-  let px = 78;
+  let px = sub ? 74 : 78;
   const setFont = () => { g.font = `900 ${px}px system-ui, -apple-system, "Segoe UI", sans-serif`; };
   setFont();
-  while (px > 40 && g.measureText(word).width + 26 > W) { px -= 2; setFont(); }
+  while (px > 40 && g.measureText(word).width + 70 > W) { px -= 2; setFont(); }
   g.textAlign = 'center';
   g.textBaseline = 'middle';
+  const cy = sub ? 70 : H / 2;
   // Chunky outline + drop shadow: legible over grass, sky or a particle burst.
   g.lineJoin = 'round';
   g.strokeStyle = 'rgba(10,7,24,0.95)';
-  g.lineWidth = 18;
-  g.strokeText(word, W / 2, H / 2 + 5);
-  g.strokeText(word, W / 2, H / 2);
-  const [c0, c1, c2] = WORD_GRAD[word] || WORD_GRAD['LINE DRIVE'];
-  const grad = g.createLinearGradient(0, 18, 0, H - 18);
+  g.lineWidth = 14;
+  g.strokeText(word, W / 2, cy + 4);
+  g.strokeText(word, W / 2, cy);
+  const grad = g.createLinearGradient(0, cy - px * 0.5, 0, cy + px * 0.5);
   grad.addColorStop(0, c0);
   grad.addColorStop(0.55, c1);
   grad.addColorStop(1, c2);
   g.fillStyle = grad;
-  g.fillText(word, W / 2, H / 2);
+  g.fillText(word, W / 2, cy);
+  if (sub) {
+    // The timing grade, small, under the result — one badge instead of two
+    // words competing for the same patch of screen.
+    g.font = '800 36px system-ui, -apple-system, "Segoe UI", sans-serif';
+    g.lineWidth = 8;
+    g.strokeText(sub, W / 2, 132);
+    g.fillStyle = '#fff6d8';
+    g.fillText(sub, W / 2, 132);
+  }
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.needsUpdate = true;
