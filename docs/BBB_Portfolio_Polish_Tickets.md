@@ -130,8 +130,15 @@ Status key: `[ ]` open · `[~]` in progress · `[x]` done · `[-]` cut (with rea
 **Blocked by:** none
 - [x] Removed: nothing in the flow ever routed into `select` (title -> party / freeplay / options; freeplay is the real game picker). Scene, registry entry, nav fallback and stage reference gone; nav test updated first (red -> green); HANDOFF updated
 
-## [ ] 18 — Shell to "B": mocap-animated cast, consistent art, shell music verified
+## [x] 18 — Shell to "B": mocap-animated cast, consistent art, shell music verified
 **Blocked by:** 03, 07, 10, 16, 17
+- [x] Cast identity: 3D palettes derived from each portrait + portrait crests; fixed makeCast coercing palette objects to one orange
+- [x] Mocap: title cast dances the beat-locked swing-dance; roster preview introduces itself with the taunt
+- [x] Framing: roster/freeplay floors no longer slice through the cast; title cast clear of the menu; results shows a character
+- [x] Freeplay cards + title attract reel use real captured game frames
+- [x] Title logo bright again (text-shadow over background-clipped text bug)
+- [x] Music: options mapped to the menu theme; title/roster/freeplay/options/party pass the beat-sync check; results fanfare reported no-grid (no transport)
+- Note for 19: title cpu ~4-5ms/frame (budget 4) — judge in the shell critic round
 
 ## [ ] 19 — Critic loop: shell to PASS
 **Blocked by:** 05, 08, 18
