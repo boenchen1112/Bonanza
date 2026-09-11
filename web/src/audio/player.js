@@ -49,6 +49,8 @@ export function createMusicPlayer({ ctx, clock, voices, buses, sends, tracks }) 
   let pos = 0;
   let loopIndex = 0;
   let barCursor = -1;
+  /** The clock.generation the cursor was laid against (see reanchor). */
+  let anchorGen = 0;
 
   // adaptive state
   let intensity = 1;
@@ -148,6 +150,7 @@ export function createMusicPlayer({ ctx, clock, voices, buses, sends, tracks }) 
     pos = 0;
     loopIndex = 0;
     barCursor = -1;
+    anchorGen = clock.generation ?? 0;
     manual = opts.intensity !== undefined;
     intensity = pendingIntensity = opts.intensity ?? 1;
     playing = true;
@@ -220,9 +223,36 @@ export function createMusicPlayer({ ctx, clock, voices, buses, sends, tracks }) 
     if (onEvent) onEvent({ ...ev, time: t, absBeat, bar, intensity });
   }
 
+  /**
+   * The transport was restarted under a playing track. Every shell scene
+   * starts it over at beat 0 while the menu track plays on; the cursor was
+   * still at the old screen's beat count, so nothing sounded until the new
+   * clock caught up — seconds of dead air per screen. Continue from the next
+   * bar of the loop on the new grid's next bar line. A restart that carries
+   * the beat count on (pause/resume) leaves the cursor where it is.
+   */
+  function reanchor() {
+    anchorGen = clock.generation;
+    const { events, loopBeats, bars, beatsPerBar: bpb } = compiled;
+    const now = clock.now();
+    if (useClock && pos < events.length) {
+      const t = clock.timeAt(startBeat + loopIndex * loopBeats + events[pos].beat);
+      if (t >= now - STALL && t <= now + HORIZON + bpb * spb()) return;
+    }
+    useClock = true;
+    const next = (((barCursor + 1) % bars) + bars) % bars;
+    const line = Math.ceil(clock.beatAt(now + 0.05) / bpb) * bpb;
+    startBeat = line - next * bpb;
+    loopIndex = 0;
+    pos = events.findIndex((e) => e.bar >= next);
+    if (pos < 0) pos = events.length;
+    barCursor = next - 1;
+  }
+
   /** Idempotent: safe to call from several sources in the same frame. */
   function pump() {
     if (!playing || !track) return;
+    if (clock.running && (clock.generation ?? 0) !== anchorGen) reanchor();
     const now = clock.now();
     const horizon = now + HORIZON;
     const { events, loopBeats } = compiled;

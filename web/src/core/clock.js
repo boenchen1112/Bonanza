@@ -70,7 +70,14 @@ export class Clock {
     this._beatAtOrigin = startBeat;
     this._running = true;
     this._lastDispatchedBeat = startBeat - 1e-9;
+    this._generation = (this._generation || 0) + 1;
   }
+
+  /**
+   * Bumped by every start(). Anything holding a cursor in beats (the music
+   * player) compares it to notice the transport was restarted under it.
+   */
+  get generation() { return this._generation || 0; }
 
   stop() {
     this._running = false;
