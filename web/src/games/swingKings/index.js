@@ -75,20 +75,22 @@ const _v = new THREE.Vector3();
 const _dir = new THREE.Vector3();
 
 /**
- * Timing -> power. Full power inside the PERFECT window, falling to zero at
- * the edge of what the judge will still claim, with a smooth knee so the tier
- * boundary never feels like a cliff.
+ * Timing -> power, stepped by verdict so the three hit tiers MEAN the three
+ * timing grades: PERFECT sends it (home run), GREAT is a line drive, GOOD a
+ * bunt. Within each band power still slides a little, so it never feels like
+ * a lookup table. (A smooth curve over the whole window put a ±60ms GREAT at
+ * 0.9 power — a home run too — and nobody ever saw a line drive or a bunt.)
  */
-function powerFromTiming(time, pitch, clock) {
+export function powerFromTiming(time, pitch, clock) {
   // Pitches carry their beat; the audio time lives on the judged note. (This
   // read `pitch.time`, which does not exist: power was NaN on every press.)
   const target = pitch.note ? pitch.note.time : clock.timeAt(pitch.targetBeat);
   const err = Math.abs(time - target) * 1000;
-  const full = WINDOWS_MS.perfect;
-  const zero = WINDOWS_MS.good;
-  if (err <= full) return 1;
-  if (err >= zero) return 0;
-  return smoothstep(1 - (err - full) / (zero - full));
+  const { perfect, great, good } = WINDOWS_MS;
+  if (err <= perfect) return 1;
+  if (err <= great) return 0.62 - 0.2 * ((err - perfect) / (great - perfect));   // liner
+  if (err <= good) return 0.24 - 0.14 * ((err - great) / (good - great));        // bunt
+  return 0;
 }
 
 export default {
@@ -169,6 +171,10 @@ export default {
     this.lastBeat = -1e9;
     this.camPush = 0;
     this.strikeUntil = -Infinity;
+    this.nightOn = false;
+    this.camLift = 0;
+    this.curtain = false;
+    this.curtainBeat = null;
   },
 
   start(ctx) {
@@ -188,21 +194,30 @@ export default {
     this.judge.onJudged = (note, verdict, errMs) => this.onJudged(ctx, note, verdict, errMs);
 
     // --- lead-in click + crowd -------------------------------------------
+    // Lead-in, 8 beats: title card + the demo swing (lands at -5), then a
+    // 4-3-2 count and "PLAY BALL!" on the last beat — short, and up top, so
+    // it is gone before the first scored pitch reaches the plate at beat 0.
+    // (It used to be a centre banner AT beat 0, printed over the first hit.)
     this._offBeat = clock.onBeat((b, t) => {
       if (b < 0) {
         ctx.audio.sfx('count', t, ((b % 4) + 4) % 4);
         const n = -b;
-        if (n <= 4) ctx.ui.popup(String(n), { y: 0.30, scale: 1.5, color: '#ffe58a' });
+        if (n <= 4 && n >= 2) ctx.ui.popup(String(n - 1), { y: 0.26, scale: 1.4, color: '#ffe58a', life: 0.42 });
+        if (n === 1) ctx.ui.popup('PLAY BALL!', { y: 0.26, scale: 1.2, color: '#ffe58a', life: 0.44 });
       }
-      if (b === 0) ctx.ui.banner('PLAY BALL!', { life: 1.0, color: '#ffe58a' });
     });
 
     ctx.audio.music.play('swing-kings');
     ctx.ui.banner('SWING KINGS', {
-      sub: 'HOLD to wind up · RELEASE as the ball lands', life: 2.4, color: '#ffe58a',
+      sub: this.inputHint(), life: 1.5, color: '#ffe58a',
     });
     ctx.ui.hud.setScore(0);
     ctx.ui.hud.setAccuracy(1);
+  },
+
+  /** The one instruction the player reads — it must describe the real input. */
+  inputHint() {
+    return 'PRESS as the ball reaches the plate · nail the beat to send it';
   },
 
   // ------------------------------------------------------------------ input
@@ -389,18 +404,27 @@ export default {
     });
 
     // --- feedback -----------------------------------------------------------
+    // How long until the next pitch lands: in the dense sections (a pitch
+    // every 0.97s) full-size rings and 1.25s words stacked up and caged the
+    // batter, hiding the next ball. Feedback scales to the space it has.
+    const gap = this.gapAfter(p, ctx.clock.spb);
+    const roomy = gap > 1.4;
     const dirArr = [dir.x * 0.65, 0.72 + tier.lift * 0.3, dir.z * 0.4];
     const scale = tier.id === 'slam' ? 2.0 : big ? 1.35 : tier.id === 'liner' ? 1.0 : 0.78;
-    ctx.fx.verdict(verdict, c, { dir: dirArr, combo, scale, groundY: 0 });
+    // The demo is the batter showing you, not you scoring: no verdict word,
+    // no "HOME RUN!", just the swing, a burst and "LIKE THIS!".
+    ctx.fx.verdict(verdict, c, { dir: dirArr, combo, scale, groundY: 0, text: !isDemo });
     ctx.fx.impact(c, { dir: dirArr, color: tier.color, count: big ? 24 : 12, speed: 13, scale });
-    if (big) {
-      ctx.fx.speedLines(c, { color: tier.color, count: 16, radius: 3.0 });
-      ctx.fx.ring(c, { color: tier.color, from: 0.4, to: 4.2 * scale, life: 0.5, thick0: 0.2 });
+    if (big && !isDemo) {
+      ctx.fx.speedLines(c, { color: tier.color, count: roomy ? 16 : 8, radius: 3.0 });
+      if (roomy || p.finale) ctx.fx.ring(c, { color: tier.color, from: 0.4, to: 4.2 * scale, life: 0.5, thick0: 0.2 });
     }
 
     const f = feelForCombo(verdict, combo);
-    ctx.hitstop(Math.min(FEEL.hitstopMax * 1.6, f.hitstop * (big ? 1.5 : 1) * (p.finale ? 2.6 : 1)));
-    ctx.stage.punchZoom(1 + (big ? 0.07 : 0.03) * (p.finale ? 2.4 : 1));
+    if (!isDemo) {
+      ctx.hitstop(Math.min(FEEL.hitstopMax * 1.6, f.hitstop * (big ? 1.5 : 1) * (p.finale ? 2.6 : 1)));
+      ctx.stage.punchZoom(1 + (big ? 0.07 : 0.03) * (p.finale ? 2.4 : 1));
+    }
     this.camPush = big ? 1 : 0.45;
 
     // --- sound --------------------------------------------------------------
@@ -413,13 +437,16 @@ export default {
     // --- crowd + callout ----------------------------------------------------
     this.w.crowd.hype(big ? 1.0 : tier.id === 'liner' ? 0.5 : 0.25);
     if (big) this.w.crowd.wave(1, 2.1);
-    const word = foul ? 'FOUL!' : tier.label;
+    const word = isDemo ? 'LIKE THIS!' : foul ? 'FOUL!' : tier.label;
     // Above the verdict word (fx.verdict pops at the contact point), so the two
-    // channels stack instead of overprinting.
+    // channels stack instead of overprinting; its life never outlasts the gap
+    // to the next pitch, so two tier words are never up at once.
+    // The grand slam is the one word that gets to stay: bigger and longer.
+    const life = p.finale ? 2.4 : Math.min(big ? 1.25 : 0.95, Math.max(0.55, gap * 0.8));
     this.w.callout(word, [c[0] - 0.9, c[1] + 1.6, c[2]], {
-      scale: tier.id === 'slam' ? 1.35 : big ? 1.05 : 0.8,
-      life: big ? 1.25 : 0.95,
-      rise: big ? 1.5 : 0.9,
+      scale: tier.id === 'slam' ? 1.75 : big ? 1.05 : 0.8,
+      life,
+      rise: (big ? 1.5 : 0.9) * (life / (big ? 1.25 : 0.95)),
     });
 
     if (p.finale) {
@@ -439,7 +466,9 @@ export default {
     // and the lamps reset. Nobody ever stops playing.
     this.outs += 1;
     this.w.setOuts(this.outs);
-    this.w.callout('OUT!', [c[0] - 0.6, c[1] + 0.9, c[2]], { scale: 0.72, life: 0.85, rise: -0.5 });
+    // OUT! pops at the outs lamps (which it labels), not at the plate: there it
+    // fell straight into the rising WHIFF and the two read as "OUWHIFF".
+    this.w.callout('OUT!', this.w.outsAnchor, { scale: 0.62, life: 0.8, rise: 0.35 });
     if (this.outs >= 3) {
       this.outs = 0;
       this._outsClear = 0.6;
@@ -494,6 +523,15 @@ export default {
 
     if (!this.over && beat > END_BEAT && this.judge.finished) this.over = true;
     this.lastBeat = beat;
+  },
+
+  /** Seconds until the next pitch after `p` lands (Infinity for the last). */
+  gapAfter(p, spb) {
+    let next = Infinity;
+    for (const q of this.pitches) {
+      if (q.targetBeat > p.targetBeat && q.targetBeat < next) next = q.targetBeat;
+    }
+    return (next - p.targetBeat) * spb;
   },
 
   /** Harness hook: the scored notes, so autoplay can press like a person. */
@@ -615,17 +653,56 @@ export default {
     const streak = clamp01(this.judge.stats.combo / 14) * 0.25;
     w.crowd.setEnergy(clamp01(base + streak));
 
-    // The grand-slam windup: the camera leans in and the stadium holds still.
+    // The stage escalates with the chart: dusk turns to stadium-lit night
+    // when the fast off-beat section starts, and stays there for the finale.
+    const night = section === 'escalate' || section === 'finale';
+    if (night !== this.nightOn) {
+      this.nightOn = night;
+      ctx.stage.setPalette(night ? 'swing-kings-night' : 'swing-kings', night ? 2.4 : 0.8);
+    }
+
+    // The grand-slam windup: the ball goes up for eight beats, and the camera
+    // goes with it — it used to stay put and the ball left the frame for the
+    // whole windup. After contact it follows the hit out, then settles.
+    const slam = this.pitches[this.pitches.length - 1];
     const slamHold = beat >= FINALE_BEAT - 8 && beat < FINALE_BEAT;
+    let lift = 0;
+    const flying = slam?.ball?.mesh?.visible ? slam.ball.mesh.position.y
+      : this.hitBalls.find((h) => h.tier.id === 'slam')?.y;
+    if ((slamHold || beat < FINALE_BEAT + 4) && flying !== undefined && beat >= FINALE_BEAT - 8) {
+      // Capped: a grand slam leaves the park, and a camera that chases it
+      // all the way ends up framing empty sky with no batter in shot.
+      lift = Math.min(3.2, Math.max(0, flying - 2.6));
+    }
+    this.camLift = damp(this.camLift || 0, lift, 2.2, dt);
     this.camPush = damp(this.camPush, 0, 3.2, dt);
     ctx.stage.rig.frame({
-      target: [-1.9 + this.camPush * 0.9, 1.95 + this.camPush * 0.15, 0],
-      distance: (slamHold ? 11.4 : 12.6) - this.camPush * 0.5,
+      target: [-1.9 + this.camPush * 0.9, 1.95 + this.camPush * 0.15 + this.camLift * 0.42, 0],
+      distance: (slamHold ? 12.2 : night ? 12.0 : 12.6) - this.camPush * 0.5 + this.camLift * 0.7,
       height: 2.15,
       yaw: 0.055 + Math.sin(beat * 0.11) * 0.012,
       lambda: 2.4,
     });
     if (slamHold) w.crowd.setEnergy(0.95);
+
+    // Curtain call: after the grand slam the batter dances the mocap routine
+    // on the beat, the crowd waves every bar and confetti fires every two
+    // beats — the run ends on a party, not on four seconds of idle.
+    if (this.finaleDone && beat >= FINALE_BEAT + 2) {
+      if (!this.curtain) {
+        this.curtain = true;
+        w.batter.anim.play('dance', { beatLock: true, bpm: ctx.clock.bpm, face: 'joy', beat: 0.3, blend: 0.3 });
+      }
+      const b = Math.floor(beat);
+      if (b !== this.curtainBeat) {
+        this.curtainBeat = b;
+        if (b % 4 === 0) w.crowd.wave(0.8, 1.6);
+        if (b % 2 === 0) {
+          ctx.fx.confetti([LAYOUT.contact[0] - 3 + (b % 3), 5.5, -1], { count: 60, speed: 6, up: 0.6 });
+        }
+      }
+      w.crowd.setEnergy(1);
+    }
   },
 
   // ----------------------------------------------------------------- result

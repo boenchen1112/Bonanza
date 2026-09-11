@@ -25,7 +25,7 @@
 
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { makeCast, makeCrowd } from '../../chars/index.js';
+import { makeCast, makeCrowd, CLIPS, makePose, sampleClip } from '../../chars/index.js';
 import { damp, clamp01, easeOutCubic, backOut } from '../../core/util.js';
 
 export const LAYOUT = {
@@ -36,7 +36,7 @@ export const LAYOUT = {
   batterFacing: -1.02,
 };
 
-const TIER_WORDS = ['BUNT', 'LINE DRIVE', 'HOME RUN!', 'GRAND SLAM!', 'FOUL!', 'OUT!'];
+const TIER_WORDS = ['BUNT', 'LINE DRIVE', 'HOME RUN!', 'GRAND SLAM!', 'FOUL!', 'OUT!', 'LIKE THIS!', 'OUTS'];
 
 /** Protect a subtree's materials from the house dress pass. */
 function protect(obj) {
@@ -358,6 +358,15 @@ export function createWorld(ctx) {
     spriteMats.push(m);
     wordMat[w] = m;
   }
+  // The lamps are labelled: three unlabelled dots over the crowd read as
+  // random decoration, and a lit one as a stray red light.
+  const outsLabel = new THREE.Sprite(wordMat.OUTS);
+  outsLabel.scale.set(1.05, 0.27, 1);
+  outsLabel.position.set(-0.98, 0, 0);
+  outsLabel.renderOrder = 19;
+  outsGroup.add(outsLabel);
+  const outsAnchor = [outsGroup.position.x, outsGroup.position.y + 0.45, outsGroup.position.z];
+
   // Six slots: a dense section can put a word up every half-beat (~0.24s)
   // with ~1s lives, and a 4th word used to steal slot 0 mid-animation.
   const callouts = [];
@@ -400,6 +409,26 @@ export function createWorld(ctx) {
   // procedural coil but turned the mocap follow-through into a walking cane.
   batGroup.rotation.set(-Math.PI / 2 - 0.3, 0, 0);
   batter.char.attach('handR', batGroup);
+
+  // Batting helmet instead of the build's headband: the headband sat over
+  // the eyes in the stance and slid to the neck in the whiff pratfall.
+  {
+    const j = batter.char.joints;
+    const hb = batter.char.build.head;
+    if (j.gear && j.gear.parent === j.head) j.gear.visible = false;
+    if (j.bobbleMesh) j.bobbleMesh.visible = false;
+    const helmetMat = new THREE.MeshStandardMaterial({ color: 0x1f2f6b, roughness: 0.35 });
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(hb.w * 0.56, 18, 10, 0, Math.PI * 2, 0, Math.PI * 0.5), helmetMat);
+    dome.position.y = hb.h * 0.5 - hb.w * 0.22;
+    const brim = new THREE.Mesh(new THREE.CylinderGeometry(hb.w * 0.4, hb.w * 0.4, 0.03, 18, 1, false, -Math.PI / 2, Math.PI), helmetMat);
+    brim.position.set(0, hb.h * 0.5 - hb.w * 0.2, hb.w * 0.3);
+    const flap = new THREE.Mesh(new THREE.SphereGeometry(hb.w * 0.2, 10, 8), helmetMat);
+    flap.scale.set(0.5, 1, 1);
+    flap.position.set(-hb.w * 0.5, hb.h * 0.12, 0);   // ear flap on the pitcher side
+    for (const m of [dome, brim, flap]) { m.castShadow = true; j.head.add(m); }
+  }
+
+  const grips = calibrateBatter(batter, batGroup);
 
   // ----------------------------------------------------------------- state
   let wheelSpin = 0;
@@ -517,6 +546,13 @@ export function createWorld(ctx) {
 
     crowd.update(dt, beat);
     cast.update(dt, beat);
+
+    // Grip: bat up behind the head in the stance and the coil, across the
+    // forearm for the strike and everything after it.
+    const a = batter.anim;
+    const coiled = a.state === 'clip' && a.variant
+      && (a.variant.name === 'ready' || (a.variant.name === 'swing' && a.variant.to < CLIPS.swing.contact));
+    batGroup.quaternion.slerp(coiled ? grips.stance : grips.strike, 1 - Math.exp(-(coiled ? 10 : 26) * dt));
   }
 
   function dispose() {
@@ -551,9 +587,75 @@ export function createWorld(ctx) {
     balls, acquireBall, freeBall,
     armMachine, fireMachine,
     setPips, popPip, clearPips,
-    setOuts, callout, update, dispose,
+    setOuts, callout, update, dispose, outsAnchor,
     get outs() { return outs; },
   };
+}
+
+/**
+ * Fit the batter to the mocap swing, once, at load. Posing the rig directly at
+ * sampled clip frames (no damping, no beat layer), it:
+ *  1. picks the stance GRIP that stands the bat up behind the head (the
+ *     strike grip, across the forearm, held it level like a barbell there);
+ *  2. picks the FACING at which the contact pose shows its chest to camera
+ *     and pitcher (the authored facing left it edge-on, back to camera);
+ *  3. moves the batter so the bat's sweet spot is exactly where the ball
+ *     arrives, and lifts the arrival point to the bat's height — so the hit
+ *     flash, which spawns at LAYOUT.contact, lands ON the bat.
+ * Returns the two grip quaternions for the per-frame blend in update().
+ */
+function calibrateBatter(batter, batGroup) {
+  const { char, anim } = batter;
+  const pose = makePose();
+  const legFrac = char.dims.legLen / char.dims.height;
+  const clip = CLIPS.swing;
+  const poseAt = (name, t) => {
+    sampleClip(pose, CLIPS[name], t, legFrac);
+    anim._applyPose(pose);
+    char.updateMatrixWorld(true);
+  };
+  const v = new THREE.Vector3();
+  const q = new THREE.Quaternion();
+  const e = new THREE.Euler();
+
+  // 1. strike grip = the authored one; stance grip = best "up and back".
+  const strikeGrip = batGroup.quaternion.clone();
+  poseAt('ready', 0.4);
+  const want = new THREE.Vector3(0.25, 1, -0.35).normalize();
+  let bestA = 0, bestS = -Infinity;
+  for (let i = 0; i < 48; i++) {
+    const ax = -Math.PI + (i / 48) * Math.PI * 2;
+    batGroup.quaternion.setFromEuler(e.set(ax, 0, 0.2));
+    char.updateMatrixWorld(true);
+    batGroup.getWorldQuaternion(q);
+    const s = v.set(0, -1, 0).applyQuaternion(q).dot(want);
+    if (s > bestS) { bestS = s; bestA = ax; }
+  }
+  const stanceGrip = new THREE.Quaternion().setFromEuler(e.set(bestA, 0, 0.2));
+  batGroup.quaternion.copy(strikeGrip);
+
+  // 2. facing: chest (torso +Z) toward a point between camera and pitcher.
+  const target = new THREE.Vector3(-1, 0.1, 1.15).normalize();
+  let bestF = char.rotation.y, bestD = -Infinity;
+  for (let i = 0; i < 72; i++) {
+    const f = -Math.PI + (i / 72) * Math.PI * 2;
+    char.rotation.y = f;
+    poseAt('swing', clip.contact);
+    char.joints.torso.getWorldQuaternion(q);
+    const d = v.set(0, 0, 1).applyQuaternion(q).dot(target);
+    if (d > bestD) { bestD = d; bestF = f; }
+  }
+  char.rotation.y = bestF;
+
+  // 3. sweet spot onto the ball's arrival point.
+  poseAt('swing', clip.contact);
+  batGroup.localToWorld(v.set(0, -0.9, 0));
+  char.position.x += LAYOUT.contact[0] - v.x;
+  char.position.z += LAYOUT.contact[2] - v.z;
+  LAYOUT.contact[1] = Math.min(1.7, Math.max(0.7, v.y));
+
+  anim.setState('idle', { force: true, blend: 0.001 });
+  return { stance: stanceGrip, strike: strikeGrip };
 }
 
 /** Deterministic speckle (no Math.random in anything the harness replays). */
@@ -662,13 +764,34 @@ function makeNetTexture() {
  * boot and silently drops anything not in it, so the hit tiers get their own
  * atlas rather than a callout that quietly never appears.
  */
+/**
+ * Each tier word has its own colour, so it reads as a different channel from
+ * the gold verdict word (PERFECT!) that pops beside it — two gold words
+ * stacked read as one repeated word.
+ */
+const WORD_GRAD = {
+  BUNT: ['#ffffff', '#9ff0ff', '#3cc4ff'],
+  'LINE DRIVE': ['#ffffff', '#fff39a', '#ffc21a'],
+  'HOME RUN!': ['#ffffff', '#ffb27a', '#ff5a3c'],
+  'GRAND SLAM!': ['#ffffff', '#fff3cf', '#ffd35a'],
+  'FOUL!': ['#ffffff', '#e2c4ff', '#a86bff'],
+  'OUT!': ['#ffffff', '#ffb0bd', '#ff5d73'],
+  'LIKE THIS!': ['#ffffff', '#c8ffb0', '#6fe37a'],
+  OUTS: ['#ffffff', '#e3e8ff', '#a9b6e0'],
+};
+
 function makeWordTexture(word) {
   const W = 512, H = 128;
   const c = document.createElement('canvas');
   c.width = W; c.height = H;
   const g = c.getContext('2d');
   g.clearRect(0, 0, W, H);
-  g.font = '900 78px system-ui, -apple-system, "Segoe UI", sans-serif';
+  // Shrink to fit: at 78px "GRAND SLAM!" plus its 18px stroke ran off the
+  // 512px canvas and lost the "!".
+  let px = 78;
+  const setFont = () => { g.font = `900 ${px}px system-ui, -apple-system, "Segoe UI", sans-serif`; };
+  setFont();
+  while (px > 40 && g.measureText(word).width + 26 > W) { px -= 2; setFont(); }
   g.textAlign = 'center';
   g.textBaseline = 'middle';
   // Chunky outline + drop shadow: legible over grass, sky or a particle burst.
@@ -677,10 +800,11 @@ function makeWordTexture(word) {
   g.lineWidth = 18;
   g.strokeText(word, W / 2, H / 2 + 5);
   g.strokeText(word, W / 2, H / 2);
+  const [c0, c1, c2] = WORD_GRAD[word] || WORD_GRAD['LINE DRIVE'];
   const grad = g.createLinearGradient(0, 18, 0, H - 18);
-  grad.addColorStop(0, '#ffffff');
-  grad.addColorStop(0.55, '#ffe58a');
-  grad.addColorStop(1, '#ff9a3a');
+  grad.addColorStop(0, c0);
+  grad.addColorStop(0.55, c1);
+  grad.addColorStop(1, c2);
   g.fillStyle = grad;
   g.fillText(word, W / 2, H / 2);
   const tex = new THREE.CanvasTexture(c);

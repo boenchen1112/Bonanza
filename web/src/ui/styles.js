@@ -43,9 +43,11 @@ const CSS = `
   flex:0 0 auto;}
 
 /* Small system-ui labels. Body text is allowed to be a system face. */
+/* Brighter than --dim, with a soft dark halo: over a bright sky the old grey
+   labels (SCORE, COMBO, ACCURACY) all but disappeared. */
 .bbb-lab{font-size:calc(var(--u)*0.86);font-weight:800;letter-spacing:.14em;
-  text-transform:uppercase;color:var(--dim);line-height:1.1;
-  text-shadow:0 calc(var(--u)*.09) 0 rgba(0,0,0,.55);white-space:nowrap;}
+  text-transform:uppercase;color:#e2e8ff;line-height:1.1;
+  text-shadow:0 0 calc(var(--u)*.35) rgba(4,4,24,.9),0 calc(var(--u)*.09) 0 rgba(0,0,0,.7);white-space:nowrap;}
 
 /* ------------------------------------------------------------------ HUD -- */
 .bbb-hud{position:absolute;inset:0;

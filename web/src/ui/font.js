@@ -200,11 +200,13 @@ export const GLYPHS = {
     ['Q', k.R, 0.42, k.R, 0.64], ['Q', k.R, k.B, k.C - 0.04, k.B],
     ['Q', k.L, k.B, k.L, k.B - 0.16],
   ]),
+  // 6 and 9: a long, nearly straight stem into the bowl. The old short curled
+  // flick left a "6" that read as "c" or "ó" in the HUD score.
   6: G(0.80, (k) => {
     const r = k.rx, cyb = k.B - r;
     return [
-      ['M', k.R - 0.02, k.T + 0.12],
-      ['C', k.R - 0.30, k.T - 0.06, k.L, k.T + 0.28, k.L, cyb],
+      ['M', k.R - 0.06, k.T],
+      ['Q', k.L + 0.02, k.T + 0.16, k.L, cyb],
       ['E', k.cx, cyb, r, r, Math.PI, Math.PI + TAU, false],
     ];
   }),
@@ -219,8 +221,8 @@ export const GLYPHS = {
   9: G(0.80, (k) => {
     const r = k.rx, cyt = k.T + r;
     return [
-      ['M', k.L + 0.02, k.B - 0.12],
-      ['C', k.L + 0.30, k.B + 0.06, k.R, k.B - 0.28, k.R, cyt],
+      ['M', k.L + 0.06, k.B],
+      ['Q', k.R - 0.02, k.B - 0.16, k.R, cyt],
       ['E', k.cx, cyt, r, r, 0, TAU, false],
     ];
   }),

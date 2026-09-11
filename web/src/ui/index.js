@@ -90,7 +90,15 @@ export function createUI({ root, bus, clock }) {
     layer.innerHTML = '';
   }
 
-  function update(dt) {
+  // Lifetimes age on REAL elapsed time, not the frame dt main.js hands us:
+  // that dt is clamped (and zeroed in hitstop), so a 900ms load hitch used to
+  // leave a title banner up for seconds over live play while the audio-timed
+  // count-in and pitches marched on underneath it.
+  let lastMs = null;
+  function update() {
+    const nowMs = performance.now();
+    const dt = lastMs === null ? 0 : Math.min(2, (nowMs - lastMs) / 1000);
+    lastMs = nowMs;
     for (let i = live.length - 1; i >= 0; i--) {
       const p = live[i];
       p.life += dt;

@@ -27,7 +27,7 @@ import {
   makeCharacter, paletteFor, paletteById, buildFor, drawCallsFor,
   PALETTES, BUILDS, BUILD_IDS, disposeSharedResources,
 } from './rig.js';
-import { CharacterAnimator, makeAnimator, STATES, STATE_DEF, VERDICT_POSE, idle, windup, strike, makePose } from './anim.js';
+import { CharacterAnimator, makeAnimator, STATES, STATE_DEF, VERDICT_POSE, idle, windup, strike, makePose, sampleClip } from './anim.js';
 import { makeCrowd } from './crowd.js';
 import { CLIP_FACE } from './anim.js';
 import { CLIPS } from './clips.gen.js';
@@ -38,7 +38,7 @@ export {
   makeCharacter, paletteFor, paletteById, buildFor, drawCallsFor,
   PALETTES, BUILDS, BUILD_IDS, disposeSharedResources,
   CharacterAnimator, makeAnimator, STATES, STATE_DEF, VERDICT_POSE,
-  idle, windup, strike, makePose,
+  idle, windup, strike, makePose, sampleClip,
   makeCrowd,
 };
 

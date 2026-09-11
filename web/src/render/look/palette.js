@@ -163,6 +163,25 @@ PALETTES['swing-kings'] = P({
   bloom: 0.8, exposure: 1.08,
 });
 
+/**
+ * Swing Kings, late innings: the sun is gone and the stadium lights carry the
+ * frame. The chart's fast off-beat section cross-fades into this, so the
+ * stage escalates with the music instead of looking the same for 70 seconds.
+ */
+PALETTES['swing-kings-night'] = P({
+  skyTop: 0x040a24, skyMid: 0x0f2258, skyBot: 0x5b3a8c,
+  sun: 0xb8d4ff, sunDir: [0.35, 0.1, -1], sunStrength: 0.45, sunSize: 0.18,
+  ground: 0x17603e, groundAlt: 0x1d7049, groundRim: 0xd8f0ff,
+  band: 0x0e2458, bandAlt: 0x2346a0,
+  accent: 0xffe066, accent2: 0x7fe7ff, accent3: 0xff5d7a,
+  crowd: [0xffe066, 0x7fe7ff, 0xff5d7a, 0xffffff, 0xb28cff],
+  key: 0xeaf2ff, keyDir: [-0.35, 0.9, 0.3], keyIntensity: 2.9,
+  fillSky: 0x6f8fe0, fillGround: 0x0c2b22, fillIntensity: 1.0,
+  rim: 0xbfe6ff, rimDir: [0.6, 0.35, -0.75], rimStrength: 1.2,
+  fog: 0x0d1c46, fogNear: 20, fogFar: 74,
+  bloom: 1.05, exposure: 1.05,
+});
+
 /** Drumline Dash: hot night parade. Magenta and ember. */
 PALETTES['drumline-dash'] = P({
   skyTop: 0x1e0630, skyMid: 0x6a1055, skyBot: 0xff5a3c,
