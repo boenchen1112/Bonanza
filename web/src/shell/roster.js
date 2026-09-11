@@ -20,7 +20,7 @@ import {
 import { createBackdrop } from './backdrop.js';
 import { CHARS, charById, charMesh, charBeat, disposeChar, drawPortrait } from './chars.js';
 import { CATALOG } from './games.js';
-import { profile, session } from './state.js';
+import { profile, session, partyPlaylist } from './state.js';
 import { goView, rosterExitRoute } from './nav.js';
 
 const COLS = 4;
@@ -462,7 +462,7 @@ function startRun(ctx) {
   session.mode = S.mode;
   if (S.mode === 'party') {
     const len = Math.min(CATALOG.length, Math.max(1, profile.options.partyLength || 4));
-    session.startParty(shuffled(CATALOG.map((g) => g.id), ctx.rng).slice(0, len), len);
+    session.startParty(partyPlaylist(CATALOG.map((g) => g.id), len, ctx.rng), len, (ctx.rng() * 2 ** 32) >>> 0);
   }
   sfx(ctx, 'fanfare');
   ctx.stage.flash?.(0.3, PAL.yellow);
@@ -472,16 +472,6 @@ function startRun(ctx) {
     t: 0, fired: false, color: S.mode === 'party' ? PAL.yellow : PAL.cyan,
     go: () => goView(ctx, r.view, r.opts),
   };
-}
-
-/** Fisher-Yates using the scene's own seeded rng — never Math.random(). */
-function shuffled(arr, rng) {
-  const out = arr.slice();
-  for (let i = out.length - 1; i > 0; i--) {
-    const j = Math.floor(rng() * (i + 1));
-    [out[i], out[j]] = [out[j], out[i]];
-  }
-  return out;
 }
 
 // -------------------------------------------------------------------- css

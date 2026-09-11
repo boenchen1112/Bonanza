@@ -48,7 +48,7 @@ export default {
     const humanChar = session.players.find((p) => !p.isCpu)?.char || 'bopp';
     if (humanChar) {
       const m = charMesh(charById(humanChar), {});
-      m.position.set(-3.1, -1.1, 0);   // left of the scorecard panel
+      m.position.set(-4.5, -1.1, 0);   // left of the scorecard panel, clear of it
       m.scale.setScalar(1.3);
       ctx.scene.add(m);
       S.cast = m;
@@ -113,7 +113,10 @@ export default {
     S.back.update(dt, beat, S.t);
     S.wipe.update(dt);
     if (S.cast) charBeat(S.cast, beat, dt);
-    S.card.style.transform = `scale(${(1 + Math.sin(S.t * 3) * 0.006).toFixed(3)})`;
+    // The centring translate must be restated: an inline `scale()` alone
+    // replaced the stylesheet's translate(-50%,-50%) and threw the card
+    // (and its NEW RANK! stamp) off to the lower right.
+    S.card.style.transform = `translate(-50%,-50%) scale(${(1 + Math.sin(S.t * 3) * 0.006).toFixed(3)})`;
 
     if (S.exit) {
       S.exit.t += dt;
@@ -154,8 +157,8 @@ function injectCss() {
   const s = document.createElement('style');
   s.id = 'sh-res-css';
   s.textContent = `
-  .sh-res__card{position:absolute;left:50%;top:44%;transform:translate(-50%,-50%);
-    width:min(56vw,620px);padding:clamp(18px,2.4vw,32px);text-align:center;}
+  .sh-res__card{position:absolute;left:57%;top:44%;transform:translate(-50%,-50%);
+    width:min(52vw,600px);padding:clamp(18px,2.4vw,32px);text-align:center;}
   .sh-res__rank{width:2.2em;height:2.2em;margin:0 auto .3em;border-radius:16px;border:3px solid;
     display:flex;align-items:center;justify-content:center;font-weight:900;
     font-size:clamp(28px,4.4vw,54px);text-shadow:0 3px 0 rgba(0,0,0,.5);}

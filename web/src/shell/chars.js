@@ -187,6 +187,37 @@ function addCrest(char, def) {
   }
 }
 
+/**
+ * A gold crown on the character's head (party leader / winner). Returns the
+ * mesh group; `crown.visible` toggles it. Geometry is shared.
+ */
+export function addCrown(char) {
+  const j = char.joints;
+  const b = char.build;
+  const hw = b.head.w;
+  const gold = crestMat(0xffd23d);
+  const band = cgeo('crownBand', () => new THREE.CylinderGeometry(0.5, 0.46, 0.22, 20, 1, true));
+  const spike = cgeo('crownSpike', () => new THREE.ConeGeometry(0.09, 0.26, 8));
+  const gem = cgeo('crownGem', () => new THREE.SphereGeometry(0.06, 10, 8));
+  const g = new THREE.Group();
+  const bandMesh = new THREE.Mesh(band, crestMat(0xffd23d, THREE.DoubleSide));
+  g.add(bandMesh);
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2;
+    const s = new THREE.Mesh(spike, gold);
+    s.position.set(Math.sin(a) * 0.47, 0.22, Math.cos(a) * 0.47);
+    g.add(s);
+    const d = new THREE.Mesh(gem, crestMat(i % 2 ? 0xff4d8a : 0x39d4ff));
+    d.position.set(Math.sin(a) * 0.5, 0.02, Math.cos(a) * 0.5);
+    g.add(d);
+  }
+  g.scale.setScalar(hw * 0.62);
+  g.position.set(0, b.head.h * 0.5 + hw * 0.05, 0);
+  g.rotation.x = -0.12;
+  j.head.add(g);
+  return g;
+}
+
 /** Per-frame idle/dance, driven by the real beat-phase animator. */
 export function charBeat(obj, beat, dt) {
   obj?.userData?.charApi?.update(dt, beat);

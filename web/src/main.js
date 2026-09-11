@@ -416,6 +416,8 @@ if (TEST_API) window.__BBB__ = {
   telemetry: () => telemetry.snapshot(),
   resetTelemetry: () => { telemetry.frames.length = 0; telemetry.judgements.length = 0; },
   goto: (id, opts) => activate(id, opts || {}),
+  /** Shell bookkeeping (session/profile) — lets a script stage a party mid-way. */
+  shellState: () => import('./shell/state.js'),
   setSeed: (n) => { ctxBase.rng = makeRng(n); },
   /**
    * Render quality. The harness forces 'low' by default: it renders through
