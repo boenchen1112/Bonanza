@@ -734,7 +734,12 @@ export default {
     if (this.pendingContact) {
       const a = w.batter.anim;
       const atContact = a.state === 'clip' && a.variant?.name === 'swing'
-        && a.variant.from >= LOAD - 1e-6 && a.clipTime >= SWING.contact;
+        && a.variant.from >= LOAD - 1e-6
+        // Within half a frame of the contact frame (either side), so the bat
+        // is at most half a frame's travel off the ball instead of up to one.
+        // (Predicted with at most a 60fps frame: a long, stalled frame must not
+        // fire the hit early.)
+        && a.clipTime + 0.5 * (a.variant.rate || 1) * Math.min(dt, 1 / 60) >= SWING.contact;
       if (atContact || now - this.pendingContact.t0 > 0.12) this.flushContact(ctx);
     }
 
