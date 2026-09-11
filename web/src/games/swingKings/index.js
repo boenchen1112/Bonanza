@@ -207,6 +207,7 @@ export default {
     this.nightOn = false;
     this.camLift = 0;
     this.curtain = false;
+    this.w?.holdBat?.();
     this.curtainBeat = null;
     this.finishShown = false;
   },
@@ -478,7 +479,9 @@ export default {
     // made every hit a BUNT: the game never showed a home run.
     const power = hit ? this.pendingPower : 0;
     const tier = tierFor(power, p.finale);
-    const foul = hit && verdict === 'good';
+    // GOOD is a bunt when early, a foul when late (swung behind it) — a
+    // GOOD used to be a FOUL every time, and BUNT never appeared.
+    const foul = hit && verdict === 'good' && errMs > 0;
 
     const s = scoreFor(verdict, power, p.finale);
     this.gotPts += s.got;
@@ -535,9 +538,20 @@ export default {
     // Fouls slice toward the camera; fair balls go out over the machine.
     const zAim = foul ? 1.5 : -0.42;
     const dir = _dir.set(-1, 0, zAim).normalize();
-    const vx = dir.x * dist / T;
-    const vz = dir.z * dist / T;
-    const vy = (tier.lift * dist) / T + 0.5 * GRAV * T * 0.42;
+    let vx = dir.x * dist / T;
+    let vz = dir.z * dist / T;
+    let vy = (tier.lift * dist) / T + 0.5 * GRAV * T * 0.42;
+    // A home run lands IN the stands, in frame, and the crowd there erupts:
+    // it used to leave the top of the frame at once, and the payoff was a
+    // streak at the edge. (The grand slam still leaves the park.)
+    let land = 0;
+    if (tier.id === 'homer' && !foul && !isDemo) {
+      const T2 = 1.55, g2 = GRAV * 0.6;
+      const Lx = -6.2 - (combo % 5) * 0.75, Lz = -12.6 - (combo % 3) * 0.8;
+      const Ly = 1.9 + Math.max(0, Math.hypot(Lx, Lz + 3) - 11.6) * 0.53;
+      vx = (Lx - c[0]) / T2; vz = (Lz - c[2]) / T2; vy = (Ly - c[1] + 0.5 * g2 * T2 * T2) / T2;
+      land = T2;
+    }
 
     b.mesh.position.set(c[0], c[1], c[2]);
     b.mesh.visible = true;
@@ -545,8 +559,8 @@ export default {
     if (!b.trail) b.trail = ctx.fx.trail({ color: tier.color, width: big ? 0.15 : 0.09 });
     else { b.trail.setColor(tier.color); b.trail.setWidth(big ? 0.15 : 0.09); }
     this.hitBalls.push({
-      b, x: c[0], y: c[1], z: c[2], vx, vy, vz, t: 0,
-      life: big ? 3.4 : T + 0.35, tier, spin: (0.5 + power) * 9,
+      b, x: c[0], y: c[1], z: c[2], vx, vy, vz, t: 0, land,
+      life: land || (big ? 3.4 : T + 0.35), tier, spin: (0.5 + power) * 9,
     });
 
     // --- feedback -----------------------------------------------------------
@@ -562,11 +576,16 @@ export default {
     // the combo and OUTS used to pile into one patch of screen. The fx
     // system's own full-frame flash is off too (it washed the frame milky);
     // Swing Kings shakes the camera itself.
-    ctx.fx.verdict(verdict, c, { dir: dirArr, combo, scale, groundY: 0, text: false, stage: false, rings: !!p.finale });
+    ctx.fx.verdict(verdict, c, { dir: dirArr, combo, scale, groundY: 0, text: false, stage: false, rings: false });
     ctx.fx.impact(c, { dir: dirArr, color: tier.color, count: big ? 24 : 12, speed: 13, scale });
     if (big && !isDemo) {
       ctx.fx.speedLines(c, { color: tier.color, count: roomy ? 16 : 8, radius: 3.0 });
-      if (p.finale) ctx.fx.ring(c, { color: tier.color, from: 0.4, to: 4.2 * scale, life: 0.5, thick0: 0.2 });
+      // The grand slam's shockwave and its echo reach well below the bat;
+      // overlay rings, so the field can't slice them off flat.
+      if (p.finale) {
+        ctx.fx.ring(c, { color: tier.color, from: 0.4, to: 4.2 * scale, life: 0.5, thick0: 0.2, overlay: true });
+        ctx.fx.ring(c, { color: 0xffd35a, from: 0.2, to: 2.6 * scale, life: 0.7, thick0: 0.14, overlay: true });
+      }
     }
     if (!isDemo) ctx.stage.shake(big ? 0.12 : 0.05, [dir.x, 0.5, 0]);
 
@@ -599,7 +618,9 @@ export default {
     // The grand slam is the one word that gets to stay: bigger and longer.
     // The demo's LIKE THIS! clears before the count-in's "3" appears.
     const life = p.finale ? 2.4 : isDemo ? 0.85 : Math.min(big ? 1.25 : 0.95, Math.max(0.55, gap * 0.8));
-    this.w.callout(word, [c[0] - 0.9, c[1] + 1.6, c[2]], {
+    // Right of the batter, off the incoming pitch's arc (it comes down from
+    // the machine on the left, and the next ball used to fly through the badge).
+    this.w.callout(word, [c[0] + 1.15, c[1] + 1.75, c[2]], {
       scale: tier.id === 'slam' ? 1.75 : big ? 1.05 : 0.8,
       life,
       rise: (big ? 1.5 : 0.9) * (life / (big ? 1.25 : 0.95)),
@@ -624,7 +645,7 @@ export default {
     const life = Math.min(0.9, Math.max(0.5, this.gapAfter(p, ctx.clock.spb) * 0.7));
     this.outs += 1;
     const third = this.outs >= 3;
-    if (!third) this.w.callout(swung ? 'WHIFF!' : 'STRIKE!', [c[0] - 0.6, c[1] + 1.2, c[2]], { scale: 0.8, life, rise: 0.4 });
+    if (!third) this.w.callout(swung ? 'WHIFF!' : 'STRIKE!', [c[0] + 1.0, c[1] + 1.3, c[2]], { scale: 0.8, life, rise: 0.4 });
     ctx.audio.sfx('miss', ctx.clock.rawNow());
     this.w.crowd.deflate(0.9);
     // Outs are a scoring tier, not an ejection: the third one retires the
@@ -634,7 +655,7 @@ export default {
     if (third) {
       this.outs = 0;
       this._outsClear = Math.max(1.2, Math.min(1.8, this.gapAfter(p, ctx.clock.spb) * 0.9));
-      this.w.callout('SIDE RETIRED!|3 OUTS', [c[0] - 0.4, c[1] + 1.5, c[2]], { scale: 1.05, life: this._outsClear, rise: 0.3 });
+      this.w.callout('SIDE RETIRED!|3 OUTS', [c[0] + 1.1, c[1] + 1.6, c[2]], { scale: 1.05, life: this._outsClear, rise: 0.3 });
       this.w.crowd.deflate(1.4);
       this.w.crowd.wave(0.55, 1.4);
       ctx.stage.shake?.(0.08, [0, -1, 0]);
@@ -823,8 +844,9 @@ export default {
         p.pipCursor++;
       }
 
-      if (u >= 1.55) {
-        // sailed past — into the backstop, with a puff. Never silent.
+      if (u >= 1.28) {
+        // sailed past — into the backstop net (not on to the edge of the
+        // frame, where its trail drew a line across the grass), with a puff.
         ctx.fx.burst([_v.x, _v.y, _v.z], { count: 8, color: 0x9fd8ff, speed: 3, life: 0.4 });
         w.freeBall(ball);
         p.ball = null;
@@ -846,6 +868,12 @@ export default {
       h.b.mesh.rotation.x += dt * h.spin * 0.7;
       if (h.b.trail) h.b.trail.set(h.x, h.y, h.z);
       if (h.t >= h.life) {
+        if (h.land) {
+          // Caught in the stands: a pop of confetti and the section stands up.
+          ctx.fx.confetti([h.x, h.y + 0.3, h.z], { count: 36, speed: 5, up: 1 });
+          ctx.fx.burst([h.x, h.y, h.z], { count: 10, color: h.tier.color, speed: 4, life: 0.45 });
+          this.w.crowd.hype(0.7);
+        }
         this.w.freeBall(h.b);
         this.hitBalls.splice(i, 1);
       }
@@ -903,6 +931,7 @@ export default {
     if (this.finaleDone && beat >= FINALE_BEAT + 2) {
       if (!this.curtain) {
         this.curtain = true;
+        w.dropBat();
         w.batter.anim.play('dance', { beatLock: true, bpm: ctx.clock.bpm, face: 'joy', beat: 0.3, blend: 0.3 });
       }
       const b = Math.floor(beat);

@@ -328,7 +328,7 @@ export function createWorld(ctx) {
   const pipGeo = new THREE.SphereGeometry(0.09, 16, 12);
   const pipMat = new THREE.MeshBasicMaterial({
     // Warm and bright: the pale blue pips vanished against the crowd.
-    color: 0xfff0a0, transparent: true, opacity: 1, toneMapped: false,
+    color: 0xffc83d, transparent: true, opacity: 1, toneMapped: false,
   });
   const pips = new THREE.InstancedMesh(pipGeo, pipMat, PIP_MAX);
   pips.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -442,6 +442,29 @@ export function createWorld(ctx) {
   }
 
   const grips = calibrateBatter(batter, batGroup);
+  const batHand = batGroup.parent;
+  const batHandPos = batGroup.position.clone();
+  let batDropped = false;
+
+  /**
+   * Curtain call: the bat goes down on the grass and the batter dances with
+   * empty hands (the dance's low hand drove a held bat into the dirt).
+   */
+  function dropBat() {
+    if (batDropped) return;
+    batDropped = true;
+    root.add(batGroup);
+    batGroup.position.set(LAYOUT.plate[0] + 0.55, 0.07, LAYOUT.plate[2] + 0.95);
+    batGroup.rotation.set(0, 0.5, Math.PI / 2);   // bat axis is local Y: lay it flat
+  }
+
+  function holdBat() {
+    if (!batDropped) return;
+    batDropped = false;
+    batHand.add(batGroup);
+    batGroup.position.copy(batHandPos);
+    batGroup.quaternion.copy(grips.stance);
+  }
 
   // ----------------------------------------------------------------- state
   let wheelSpin = 0;
@@ -480,7 +503,8 @@ export function createWorld(ctx) {
       const whole = Math.abs(beatOff - Math.round(beatOff)) < 0.08;
       sample(u, _v3);
       pipPos[i * 3] = _v3.x; pipPos[i * 3 + 1] = _v3.y; pipPos[i * 3 + 2] = _v3.z;
-      pipBase[i] = whole ? 1.5 : 1.0;
+      // Big enough to read as the beat from across the room; whole beats bigger.
+      pipBase[i] = whole ? 2.0 : 1.35;
       pipPop[i] = 0;
     }
     pips.count = steps;
@@ -599,11 +623,11 @@ export function createWorld(ctx) {
     const inCoil = a.state === 'clip' && v?.name === 'swing' && v.to < CLIPS.swing.contact;
     const coilU = inCoil ? (a.clipTime ?? 0) / Math.max(1e-3, v.to) : 1;
     const up = (a.state === 'clip' && v?.name === 'ready') || (inCoil && coilU < 0.72)
-      || a.state === 'celebrate' || (a.state === 'clip' && v?.name === 'dance');
+      || a.state === 'celebrate';
     // Rigid through mocap clips (squash would shear the twisted swing pose),
     // a lighter squash for the procedural idle and verdict poses.
     a.squashScale = a.state === 'clip' ? 0 : 0.45;
-    batGroup.quaternion.slerp(up ? grips.stance : grips.strike, 1 - Math.exp(-(up ? 10 : 30) * dt));
+    if (!batDropped) batGroup.quaternion.slerp(up ? grips.stance : grips.strike, 1 - Math.exp(-(up ? 10 : 30) * dt));
   }
 
   function dispose() {
@@ -638,7 +662,7 @@ export function createWorld(ctx) {
     balls, acquireBall, freeBall,
     armMachine, fireMachine,
     setPips, popPip, clearPips,
-    setOuts, callout, update, dispose, outsAnchor,
+    setOuts, callout, update, dispose, outsAnchor, dropBat, holdBat,
     /** World position of the bat's sweet spot, as posed right now. */
     batSweetSpot(out) {
       batGroup.updateWorldMatrix(true, false);   // poses were set this frame, matrices not yet

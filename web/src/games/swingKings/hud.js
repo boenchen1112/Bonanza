@@ -20,6 +20,7 @@ const CSS = `
   box-shadow:inset 0 0 0 2px rgba(255,255,255,.25);transition:transform .12s;}
 .sk-outs__lamp--on{background:#ff5d73;box-shadow:0 0 .7em #ff5d73,inset 0 0 0 2px rgba(255,255,255,.55);}
 .sk-outs__lamp--pop{transform:scale(1.45);}
+.sk-outs--fresh{color:#ffe58a;border-color:rgba(255,229,138,.8);box-shadow:0 0 1em rgba(255,229,138,.45);}
 .sk-hint{position:absolute;left:50%;bottom:6.5%;transform:translateX(-50%);white-space:nowrap;
   font:800 clamp(12px,1.55vw,20px)/1 system-ui,-apple-system,"Segoe UI",sans-serif;letter-spacing:.06em;
   color:#fff6d8;text-shadow:0 .1em 0 rgba(0,0,0,.7);background:rgba(12,8,32,.66);
@@ -39,6 +40,8 @@ export function createHud(ctx, hintHtml) {
   const outs = document.createElement('div');
   outs.className = 'sk-outs';
   outs.innerHTML = '<span>OUTS</span>';
+  const label = outs.firstChild;
+  let labelTimer = null;
   const lamps = [];
   for (let i = 0; i < 3; i++) {
     const l = document.createElement('span');
@@ -61,10 +64,17 @@ export function createHud(ctx, hintHtml) {
         l.classList.toggle('sk-outs__lamp--pop', i === n - 1 && n > shown);
       });
       if (n > shown) setTimeout(() => lamps[n - 1]?.classList.remove('sk-outs__lamp--pop'), 160);
+      // Three down, count back to zero: say so, or the reset reads as a bug.
+      if (n === 0 && shown >= 3) {
+        label.textContent = 'NEW INNING';
+        outs.classList.add('sk-outs--fresh');
+        clearTimeout(labelTimer);
+        labelTimer = setTimeout(() => { label.textContent = 'OUTS'; outs.classList.remove('sk-outs--fresh'); }, 1800);
+      }
       shown = n;
     },
     /** Fade the instruction once the player has had the teach section. */
     hideHint() { hint.style.opacity = '0'; },
-    dispose() { outs.remove(); hint.remove(); },
+    dispose() { clearTimeout(labelTimer); outs.remove(); hint.remove(); },
   };
 }

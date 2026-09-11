@@ -114,6 +114,9 @@ export function createFX({ stage, clock, bus = null }) {
   });
 
   const rings = new RingPool({ max: CAP.rings, rng });
+  // A few rings that ignore depth: a climax ring big enough to reach the
+  // ground was sliced flat by the field (`ring(pos, { overlay: true })`).
+  const overlayRings = new RingPool({ max: 8, rng, depthTest: false });
   const trails = new TrailSystem({
     max: FEEL.fx.trail.maxTrails,
     segs: FEEL.fx.trail.segments,
@@ -122,7 +125,7 @@ export function createFX({ stage, clock, bus = null }) {
   const popText = new PopTextPool({ max: CAP.text, words: VOCAB });
 
   const families = [
-    ambient, decals, trails, smoke, confetti, sparks, shards, streaks, flare, rings, popText,
+    ambient, decals, trails, smoke, confetti, sparks, shards, streaks, flare, rings, overlayRings, popText,
   ];
 
   // ------------------------------------------------------------- state
@@ -590,10 +593,10 @@ export function createFX({ stage, clock, bus = null }) {
   /** Expanding shock ring — the single most legible "you hit it" cue. */
   function ring(pos, {
     color = 0xffffff, life = 0.42, from = 0.35, to = 3.2, billboard = true,
-    thick0 = 0.24, thick1 = 0.035, wobble = 0.03, alpha = 1, normal = null, spin = 0,
+    thick0 = 0.24, thick1 = 0.035, wobble = 0.03, alpha = 1, normal = null, spin = 0, overlay = false,
   } = {}) {
     readVec(pos, tmpDir, focus);
-    rings.spawn(tmpDir, {
+    (overlay ? overlayRings : rings).spawn(tmpDir, {
       color, life, from, to, thick0, thick1, wobble, alpha, spin,
       normal: billboard ? null : (normal || [0, 1, 0]),
     });
