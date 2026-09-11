@@ -591,6 +591,8 @@ export default {
       distance: CAM_DISTANCE, height: CAM_HEIGHT, yaw: CAM_YAW,
       lambda: CAM_LAMBDA, immediate: true,
     });
+    // Real shadows ride along with the camera as it follows the platforms.
+    ctx.stage.look.setShadowFocus('rig', 8);
 
     ctx.ui.hud.mount();
 

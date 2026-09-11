@@ -85,7 +85,10 @@ export function createLightRig() {
       key.castShadow = false;
       return;
     }
-    focus = { center: new THREE.Vector3(...center), radius };
+    // 'rig': follow the stage camera's target every frame (games whose camera
+    // travels, like Bounce Brigade's platform run) — see follow().
+    const follow = center === 'rig';
+    focus = { center: follow ? new THREE.Vector3() : new THREE.Vector3(...center), radius, follow };
     const cam = key.shadow.camera;
     cam.left = -radius; cam.right = radius;
     cam.top = radius; cam.bottom = -radius;
@@ -94,9 +97,24 @@ export function createLightRig() {
     key.castShadow = true;
   }
 
+  /**
+   * For a 'rig' focus: centre the shadow box on `target` (the camera rig's
+   * look target), snapped to whole shadow-map texels so a smoothly moving
+   * box doesn't make every shadow edge crawl.
+   */
+  function follow(target) {
+    if (!focus?.follow || !target) return;
+    const texel = (focus.radius * 2) / key.shadow.mapSize.x;
+    focus.center.set(
+      Math.round(target.x / texel) * texel,
+      0,
+      Math.round(target.z / texel) * texel,
+    );
+  }
+
   function dispose() {
     key.dispose?.(); fill.dispose?.(); kick.dispose?.();
   }
 
-  return { group, key, fill, kick, update, setShadowFocus, dispose };
+  return { group, key, fill, kick, update, setShadowFocus, follow, dispose };
 }

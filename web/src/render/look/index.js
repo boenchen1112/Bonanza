@@ -158,6 +158,7 @@ export function createLook({ renderer }) {
           rim: 0.25, pulse: 0.05, name: 'houseGround',
         });
         o.userData.houseGround = true;
+        o.receiveShadow = true;   // free unless the scene sets a shadow focus
         o.getWorldPosition(_wp);
         ground.found = true;
         ground.y = _wp.y;

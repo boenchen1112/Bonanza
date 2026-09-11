@@ -247,6 +247,7 @@ export default {
     ctx.stage.rig.frame({
       target: [0, 1.55, -0.4], distance: 10.3, height: 2.65, yaw: 0.02, fov: 52, lambda: 2.6,
     });
+    ctx.stage.look.setShadowFocus('rig', 8);   // boss, player and the stage between them
     ctx.stage.rig.snap();
     ctx.stage.rig.setPushGain(1.15);
 

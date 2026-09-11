@@ -268,6 +268,7 @@ export default {
     S.musicDuck = 0.72;
 
     ctx.stage.rig.frame({ ...CAM_RESP, lambda: 3.4, immediate: true });
+    ctx.stage.look.setShadowFocus('rig', 9);   // real shadows follow the camera between call and response
     ctx.stage.rig.setPushGain(0.7);
 
     // --- schedule every call, once, at absolute audio times ----------------

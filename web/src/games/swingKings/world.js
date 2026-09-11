@@ -386,6 +386,7 @@ export function createWorld(ctx) {
   const batter = cast.get(0);
   batter.char.rotation.y = LAYOUT.batterFacing;
   protect(batter.char);
+  batter.char.setShadowDetail('full');   // the hero: whole silhouette in the shadow map
 
   // Bat: parented to the right hand, so the rig's own coil and strike draw the
   // conducting arc and the trace is sampled from a real moving object.

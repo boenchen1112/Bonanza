@@ -140,6 +140,7 @@ export default {
     ctx.stage.rig.frame({
       target: [0, 1.05, 0], distance: 6.9, height: 1.15, fov: 48, lambda: 2.6,
     });
+    ctx.stage.look.setShadowFocus([0, 0, 0], 5);   // the four singers and their pads
     ctx.stage.rig.snap();
     ctx.stage.rig.setPushGain(0.75);
 

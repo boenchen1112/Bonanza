@@ -28,7 +28,7 @@ export function makeGround({ look, rng }, {
     mats.toon({ color: 0xffffff, map: arenaTexture(), bands: 3, rim: 0.25, pulse: 0.05, name: 'envGroundTop' })
   );
   top.rotation.x = -Math.PI / 2;
-  top.receiveShadow = false;
+  top.receiveShadow = true;   // free unless a scene declares a shadow focus
   group.add(top);
 
   const side = new THREE.Mesh(

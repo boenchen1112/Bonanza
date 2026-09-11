@@ -12,6 +12,7 @@
     "assets:clips": "node ../tools/assets/bake-clips.mjs"
   },
   "dependencies": {
+    "@mediapipe/tasks-vision": "^0.10.14",
     "three": "^0.185.1"
   },
   "devDependencies": {

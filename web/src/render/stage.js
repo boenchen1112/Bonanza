@@ -376,6 +376,7 @@ export function createStage({ canvas, clock }) {
     trackBeat(dt);
 
     // --- world --------------------------------------------------------------
+    if (rigState.active) look.lights.follow(rigState.target);
     look.update(dt, { camera, beatPulse, time: timeS });
     for (const e of envs) e.update(dt, clock?.beat || 0, timeS, look.palette);
 

@@ -136,17 +136,22 @@ Status key: `[ ]` open · `[~]` in progress · `[x]` done · `[-]` cut (with rea
 ## [ ] 19 — Critic loop: shell to PASS
 **Blocked by:** 05, 08, 18
 
-## [ ] 20 — Baseline pass: Drumline Dash — *release valve*
+## [x] 20 — Baseline pass: Drumline Dash — *release valve*
 **Blocked by:** 04, 07, 10
+- [x] Unified shading (dress pass + flatShading fix), real shadows following the camera between call/response, cast variety (4 palettes x builds + drum major), callouts legible, console clean — runs/t20c (sweep: all clean, draws 90-118 < 120, ~55fps, audio pass on 12s runs)
 
-## [ ] 21 — Baseline pass: Bounce Brigade — *release valve*
+## [x] 21 — Baseline pass: Bounce Brigade — *release valve*
 **Blocked by:** 04, 07, 10
+- [x] Same bar; shadow focus rides the platform-following camera; single bouncer is the design — runs/t20c (sweep: all clean, draws 90-118 < 120, ~55fps, audio pass on 12s runs)
 
-## [ ] 22 — Baseline pass: Chomp Chorus (+ stuck beam) — *release valve*
+## [x] 22 — Baseline pass: Chomp Chorus (+ stuck beam) — *release valve*
 **Blocked by:** 04, 07, 10
+- [x] Same bar — runs/t20c (sweep: all clean, draws 90-118 < 120, ~55fps, audio pass on 12s runs)
+- [x] "Stuck beam": not stuck at 60fps — it is the air-pipe telegraph / voice beam of whichever lane is cued, moving between lanes (runs/t22-a); the report came from SwiftShader-era frames
 
-## [ ] 23 — Baseline pass: Finale Fever — *release valve*
+## [x] 23 — Baseline pass: Finale Fever — *release valve*
 **Blocked by:** 04, 07, 10
+- [x] Same bar; boss + player cast shadows — runs/t20c (sweep: all clean, draws 90-118 < 120, ~55fps, audio pass on 12s runs)
 
 ## [ ] 24 — Hand-back status report in the draft PR
 **Blocked by:** 13, 15, 19 (deliberately **not** 20–23)

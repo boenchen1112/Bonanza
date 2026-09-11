@@ -681,13 +681,19 @@ export function makeCharacter({
 
   group.scale.setScalar(scale);
 
-  // Every body part casts into the house shadow map — which only runs where a
-  // scene has declared a shadow focus (look.setShadowFocus), so this costs
-  // nothing anywhere else. The blob stays: it is the contact cue.
-  // Face parts sit on the head's surface and would only add draw calls to
-  // the shadow pass without changing its silhouette.
-  group.traverse((o) => { if (o.isMesh && o !== shadow) o.castShadow = true; });
-  face.traverse((o) => { if (o.isMesh) o.castShadow = false; });
+  // Shadow casting (the house shadow map only runs where a scene declares a
+  // focus, so none of this costs anything elsewhere). By default only the
+  // torso and head cast — 2 draws per character, which keeps a five-strong
+  // parade inside the 120-draw budget; with the blob underneath as the
+  // contact cue that reads as a grounded body. A scene's hero can ask for
+  // the whole silhouette with `setShadowDetail('full')`.
+  const setShadowDetail = (level = 'core') => {
+    group.traverse((o) => { if (o.isMesh) o.castShadow = level === 'full' && o !== shadow; });
+    face.traverse((o) => { if (o.isMesh) o.castShadow = false; });
+    torsoMesh.castShadow = headMesh.castShadow = level !== 'none';
+  };
+  setShadowDetail('core');
+  group.setShadowDetail = setShadowDetail;
 
   group.joints = joints;
   group.palette = pal;
