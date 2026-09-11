@@ -246,14 +246,17 @@ export default {
         if (e.action === 'up') { S.slotSel = (S.slotSel + 3) % 4; sfx(ctx, 'ui'); }
         else if (e.action === 'down') { S.slotSel = (S.slotSel + 1) % 4; sfx(ctx, 'ui'); }
         else if (e.action === 'left' || e.action === 'right') {
+          // One controller, one human: every minigame is played by P1, so the
+          // other seats are CPU rivals or empty — never a second "YOU" that
+          // the games would silently ignore.
+          if (S.slotSel === 0) { sfx(ctx, 'miss'); flashHead('P1 IS YOU — SET THE RIVALS'); continue; }
           const d = e.action === 'right' ? 1 : -1;
-          S.lineup[S.slotSel] = (S.lineup[S.slotSel] + d + SLOT_TYPES.length) % SLOT_TYPES.length;
-          // slot 1 can never be empty — somebody has to hold the controller
-          if (S.slotSel === 0 && SLOT_TYPES[S.lineup[0]].id === 'off') S.lineup[0] = typeIdx('you');
+          const seat = SEAT_TYPES.indexOf(S.lineup[S.slotSel]);
+          S.lineup[S.slotSel] = SEAT_TYPES[(seat + d + SEAT_TYPES.length) % SEAT_TYPES.length];
           sfx(ctx, 'ui');
           refreshSlots(ctx);
         } else if (e.action === 'a') {
-          if (activeSlots().length < 2) { sfx(ctx, 'miss'); flashHead('NEED AT LEAST 2 PLAYERS'); continue; }
+          if (activeSlots().length < 2) { sfx(ctx, 'miss'); flashHead('SEAT AT LEAST ONE RIVAL'); continue; }
           sfx(ctx, 'ui');
           S.stage = 'chars';
           S.active = nextHuman(-1);
@@ -310,6 +313,8 @@ export default {
 // ---------------------------------------------------------------- helpers
 
 const typeIdx = (id) => SLOT_TYPES.findIndex((t) => t.id === id);
+/** What seats P2–P4 cycle through. */
+const SEAT_TYPES = ['cpu-easy', 'cpu-norm', 'cpu-hard', 'off'].map(typeIdx);
 const activeSlots = () => S.lineup.map((ti, i) => ({ ti, i })).filter((x) => SLOT_TYPES[x.ti].id !== 'off');
 
 function nextHuman(after) {
@@ -410,10 +415,10 @@ function refreshSlots(ctx) {
 function refreshHead() {
   if (!S) return;
   if (S.stage === 'lineup') {
-    S.headMain.textContent = "WHO'S PLAYING?";
-    S.headSub.textContent = '↑↓ pick a slot · ←→ set human / CPU / off · SPACE to continue';
+    S.headMain.textContent = 'PICK YOUR RIVALS';
+    S.headSub.textContent = 'you are P1 · ↑↓ pick a seat · ←→ CPU easy / normal / hard / off';
   } else if (S.stage === 'chars') {
-    S.headMain.textContent = `PLAYER ${S.active + 1} — CHOOSE`;
+    S.headMain.textContent = 'CHOOSE YOUR CHARACTER';
     S.headSub.textContent = 'move with the arrows · SPACE to lock in · X to go back';
   } else if (S.stage === 'cpu') {
     S.headMain.textContent = 'CPU IS CHOOSING…';
@@ -460,7 +465,9 @@ function startRun(ctx) {
     if (t.id === 'off') continue;
     const def = charById(S.picks[i] || CHARS[i % CHARS.length].id);
     players.push({
-      name: t.id === 'you' ? (profile.names[i] || 'P' + (i + 1)) : def.name,
+      // The human goes by their character (BOPP beside ZIZZ, not "P1" beside
+      // ZIZZ) unless they've set a name of their own; the hub marks them YOU.
+      name: t.id === 'you' && profile.names[i] && !/^P\d$/.test(profile.names[i]) ? profile.names[i] : def.name,
       char: def.id,
       isCpu: t.id !== 'you',
       cpuSkill: t.skill,
@@ -511,11 +518,11 @@ function injectRosterCss() {
   .sh-ros__face{width:62px;height:62px;border-radius:10px;flex:0 0 auto;background:rgba(0,0,0,.25);}
   .sh-ros__slotName{font-weight:900;font-size:clamp(11px,1.5vw,20px);color:#fff;
     text-shadow:0 2px 0 rgba(0,0,0,.6);}
-  .sh-ros__slotText{display:flex;flex-direction:column;gap:.2em;min-width:0;}
+  .sh-ros__slotText{display:flex;flex-direction:column;gap:.2em;min-width:0;flex:1 1 auto;}
   .sh-ros__slotType{font-weight:800;font-size:clamp(8px,1.05vw,13px);color:${PAL.dim};
-    white-space:nowrap;letter-spacing:.04em;}
-  .sh-ros__ready{right:5%;top:50%;margin-top:-.8em;font-size:clamp(10px,1.4vw,18px);background:${PAL.coral};
-    transform:rotate(-12deg);pointer-events:none;}
+    white-space:nowrap;letter-spacing:.04em;overflow:hidden;text-overflow:ellipsis;}
+  .sh-ros__slot .sh-ros__ready{position:relative;flex:0 0 auto;margin-left:auto;font-size:clamp(9px,1.15vw,16px);
+    background:${PAL.coral};transform:rotate(-12deg);pointer-events:none;}
   `;
   document.head.appendChild(s);
 }

@@ -150,7 +150,10 @@ Status key: `[ ]` open · `[~]` in progress · `[x]` done · `[-]` cut (with rea
 **Blocked by:** 05, 08, 18
 - [x] Round 1 FAIL (MP 7/7; gap: menu music died on every transition). Fixed: player re-anchors on transport restart (player.test.mjs); party has CPUs, points, standings hub, podium + winner, finale last; results/party card transforms; options reset in-row + keeps settings; roster stamp/legend/hints/see-through; freeplay side cards; menu ping + confetti at the item; portraits rendered from the 3D rig; dance no longer flips face-down (YXZ hips, re-baked, wrap-aware blends)
 - [ ] Open from round 1: title cpu p95 ~13ms (steady state; not DOM, env, chars or post — suspect per-beat work), attract reel is still stills, crowd faceless (art note)
-- [ ] Round 2
+- [x] Round 2 FAIL (ours won Timing). Send-back: the lineup never exists in play (picked character, rival CPUs), CPU standings are rolls, ties shown as ranks. Also: results accuracy contradicts stats (Drumline), READY! clips slot text, 2nd human cursor on a taken character, no results input lockout, no party->game wipe, load hitches, fonts
+- [ ] Round 3 (after the identity pass-through + correctness fixes)
+
+**Loop decision (2026-09-11):** the blind critic always finds a next gap against a first-party bar, so "loop until PASS" has no fixed point. Plan: Swing Kings round 6 and shell round 3 are the last rounds; whatever they still find goes into ticket 24 as known gaps. Scope for the shell: the minigames are single-player by design, so the party is presented honestly as one player vs CPU rivals (no 2nd-human slots, CPU columns marked) rather than building 4-player minigames. Cut, with reason: Free Play thumbnails before focus, shell/game font unification, title cpu p95 and scene-load hitches (no bounded fix found; see verify cold-run note), bloom on the roster preview, MIMO's build.
 
 ## [x] 20 — Baseline pass: Drumline Dash — *release valve*
 **Blocked by:** 04, 07, 10

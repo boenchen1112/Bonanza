@@ -18,6 +18,9 @@ import { goView, exitRoute } from './nav.js';
 
 /** Rank -> the animator verdict whose reaction pose reads closest to it. */
 const RANK_VERDICT = { S: 'perfect', A: 'great', B: 'good', C: 'good', D: 'miss' };
+const ORDINAL = ['1ST', '2ND', '3RD', '4TH'];
+/** Seconds before the card takes input: a held or late tap from the game must not skip it. */
+const LOCK_S = 0.7;
 
 let S = null;
 
@@ -90,6 +93,19 @@ export default {
       });
     card.appendChild(stats);
 
+    // In a party the round is also a placing — say where it put you.
+    if (inParty) {
+      const round = session.party?.scores?.[session.party.scores.length - 1];
+      const me = round?.players?.find((r) => r.id === session.players.find((p) => !p.isCpu)?.id);
+      if (me) {
+        const tied = round.players.filter((r) => r.place === me.place).length > 1;
+        const line = el('div', 'sh-res__party',
+          `${tied ? 'TIED ' : ''}${ORDINAL[me.place - 1] || me.place + 'TH'} THIS ROUND · +${me.points} PTS`);
+        line.style.color = me.place === 1 ? PAL.yellow : '';
+        card.appendChild(line);
+      }
+    }
+
     if (S.fold?.newScore || S.fold?.newRank) {
       const badge = el('div', 'sh-stamp sh-res__badge', S.fold.newRank ? 'NEW RANK!' : 'NEW BEST!');
       card.appendChild(badge);
@@ -98,9 +114,11 @@ export default {
     root.appendChild(card);
     S.card = card;
 
-    const hint = el('div', 'sh-hint');
+    // The prompt appears when the card starts listening, not before.
+    const hint = el('div', 'sh-hint sh-res__hint');
     hint.innerHTML = '<span><b class="sh-key">SPACE</b>continue</span>';
     root.appendChild(hint);
+    S.hint = hint;
 
     S.wipe = createWipe(root, { color: rankColor === PAL.dim ? PAL.violet : rankColor, mode: 'in' });
   },
@@ -112,6 +130,7 @@ export default {
     S.t += dt;
     S.back.update(dt, beat, S.t);
     S.wipe.update(dt);
+    if (S.t >= LOCK_S) S.hint.classList.add('sh-res__hint--on');
     if (S.cast) charBeat(S.cast, beat, dt);
     // The centring translate must be restated: an inline `scale()` alone
     // replaced the stylesheet's translate(-50%,-50%) and threw the card
@@ -125,7 +144,7 @@ export default {
   },
 
   input(ctx, events) {
-    if (!S || S.exit) return;
+    if (!S || S.exit || S.t < LOCK_S) return;
     for (const e of events) {
       if (!e.down) continue;
       if (e.action === 'a' || e.action === 'b' || e.action === 'pause') {
@@ -171,6 +190,9 @@ function injectCss() {
   .sh-res__stat{display:flex;flex-direction:column;}
   .sh-res__statN{font-weight:900;font-size:clamp(14px,2vw,24px);}
   .sh-res__statL{font-weight:800;font-size:clamp(7px,.9vw,11px);color:${PAL.dim};letter-spacing:.08em;}
+  .sh-res__party{margin-top:.8em;font-weight:900;font-size:clamp(11px,1.4vw,17px);letter-spacing:.08em;}
+  .sh-res__hint{opacity:0;transition:opacity .25s;}
+  .sh-res__hint--on{opacity:1;}
   .sh-res__badge{position:absolute;right:-6%;top:-8%;font-size:clamp(11px,1.6vw,20px);
     background:${PAL.coral};transform:rotate(-10deg);}
   `;

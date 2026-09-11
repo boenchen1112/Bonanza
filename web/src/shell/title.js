@@ -31,7 +31,7 @@ const IDLE_TO_ATTRACT = 8.5;
 const ATTRACT_HOLD = 3.2;
 
 const MENU = [
-  { id: 'party', label: 'PARTY', sub: 'up to 4 players · 4 games · one crown', color: PAL.yellow },
+  { id: 'party', label: 'PARTY', sub: 'you vs CPU rivals · 4 games · one crown', color: PAL.yellow },
   { id: 'free', label: 'FREE PLAY', sub: 'any minigame · chase your best rank', color: PAL.cyan },
   { id: 'options', label: 'OPTIONS', sub: 'mix · timing · reset', color: PAL.green },
 ];

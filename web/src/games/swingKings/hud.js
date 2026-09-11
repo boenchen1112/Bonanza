@@ -65,11 +65,17 @@ export function createHud(ctx, hintHtml) {
       });
       if (n > shown) setTimeout(() => lamps[n - 1]?.classList.remove('sk-outs__lamp--pop'), 160);
       // Three down, count back to zero: say so, or the reset reads as a bug.
+      const plain = () => { label.textContent = 'OUTS'; outs.classList.remove('sk-outs--fresh'); };
       if (n === 0 && shown >= 3) {
         label.textContent = 'NEW INNING';
         outs.classList.add('sk-outs--fresh');
         clearTimeout(labelTimer);
-        labelTimer = setTimeout(() => { label.textContent = 'OUTS'; outs.classList.remove('sk-outs--fresh'); }, 1800);
+        labelTimer = setTimeout(plain, 1800);
+      } else if (n > 0) {
+        // The first out of the new inning ends the announcement — "NEW
+        // INNING" beside a lit lamp read as a contradiction.
+        clearTimeout(labelTimer);
+        plain();
       }
       shown = n;
     },

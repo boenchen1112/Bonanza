@@ -583,8 +583,9 @@ export default {
       // The grand slam's shockwave and its echo reach well below the bat;
       // overlay rings, so the field can't slice them off flat.
       if (p.finale) {
-        ctx.fx.ring(c, { color: tier.color, from: 0.4, to: 4.2 * scale, life: 0.5, thick0: 0.2, overlay: true });
-        ctx.fx.ring(c, { color: 0xffd35a, from: 0.2, to: 2.6 * scale, life: 0.7, thick0: 0.14, overlay: true });
+        // Near-true circles: the default wobble at this radius read as lumpy geometry.
+        ctx.fx.ring(c, { color: tier.color, from: 0.4, to: 4.2 * scale, life: 0.5, thick0: 0.2, wobble: 0.004, overlay: true });
+        ctx.fx.ring(c, { color: 0xffd35a, from: 0.2, to: 2.6 * scale, life: 0.7, thick0: 0.14, wobble: 0.004, overlay: true });
       }
     }
     if (!isDemo) ctx.stage.shake(big ? 0.12 : 0.05, [dir.x, 0.5, 0]);
@@ -617,7 +618,9 @@ export default {
     // to the next pitch, so two tier words are never up at once.
     // The grand slam is the one word that gets to stay: bigger and longer.
     // The demo's LIKE THIS! clears before the count-in's "3" appears.
-    const life = p.finale ? 2.4 : isDemo ? 0.85 : Math.min(big ? 1.25 : 0.95, Math.max(0.55, gap * 0.8));
+    // (the "3" pops at beat -4: the demo's word gets whatever is left until then)
+    const demoLife = Math.max(0.35, Math.min(0.85, ctx.clock.timeAt(-4) - ctx.clock.now() - 0.04));
+    const life = p.finale ? 2.4 : isDemo ? demoLife : Math.min(big ? 1.25 : 0.95, Math.max(0.55, gap * 0.8));
     // Right of the batter, off the incoming pitch's arc (it comes down from
     // the machine on the left, and the next ball used to fly through the badge).
     this.w.callout(word, [c[0] + 1.15, c[1] + 1.75, c[2]], {

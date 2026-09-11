@@ -430,7 +430,8 @@ export function createFX({ stage, clock, bus = null }) {
           color: heatUp(FEEL.color.combo, 0), life: 0.5 + k * 0.08,
           from: 0.3 + k * 0.5, to: 2.4 + k * 1.5,
           thick0: 0.16 - k * 0.03, thick1: 0.02,
-          wobble: 0.02 + k * 0.015, alpha: 0.85 - k * 0.2,
+          // The wave grows with k; so must its roundness, or a ×10 ring is a lumpy loop.
+          wobble: 0.012 + k * 0.003, alpha: 0.85 - k * 0.2,
         });
         const e = flare.begin();
         e.x = r.x; e.y = r.y; e.z = r.z;

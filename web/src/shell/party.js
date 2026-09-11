@@ -68,8 +68,11 @@ export default {
     const party = session.party;
     const last = party.scores[party.scores.length - 1] || null;
     const standings = session.standings();
-    const placeOf = new Map(standings.map((p, i) => [p.id, i]));
-    const leaderPts = standings[0]?.points || 0;
+    // Shared places are shared: level on points and wins is a tie, not an
+    // order the id happened to pick. 0-based here for the lookup tables.
+    const places = session.standingPlaces();
+    const placeOf = new Map(standings.map((p) => [p.id, places.get(p.id) - 1]));
+    const tiedAt = (pl) => standings.filter((q) => placeOf.get(q.id) === pl).length > 1;
 
     // ------------------------------------------------------------ the cast
     const players = session.players;
@@ -102,7 +105,7 @@ export default {
       m.scale.setScalar(CHAR_S);
       ctx.scene.add(m);
       const crown = addCrown(m);
-      crown.visible = p.points > 0 && p.points === leaderPts && (S.done ? place === 0 : true);
+      crown.visible = p.points > 0 && place === 0;
 
       const api = m.userData.charApi;
       const lastRow = last?.players?.find((r) => r.id === p.id);
@@ -116,7 +119,7 @@ export default {
       // Nameplate: place · name · points (+ what the last round paid).
       const tag = el('div', 'sh-party__tag');
       tag.style.setProperty('--c', hex(def.color));
-      const pl = el('span', 'sh-party__place', PLACE[place] || '');
+      const pl = el('span', 'sh-party__place', (tiedAt(place) ? 'T-' : '') + (PLACE[place] || ''));
       pl.style.color = PLACE_COLOR[place] || PAL.dim;
       tag.appendChild(pl);
       tag.appendChild(el('span', 'sh-party__name', p.name));
@@ -139,10 +142,19 @@ export default {
     S.card = card;
 
     if (S.done) {
-      const win = players.find((p) => p.id === party.winner) || standings[0];
+      const ids = party.winners?.length ? party.winners : [party.winner ?? standings[0]?.id];
+      const wins = ids.map((id) => players.find((p) => p.id === id)).filter(Boolean);
+      const win = wins[0] || standings[0];
       card.appendChild(el('div', 'sh-sub sh-party__round', 'PARTY COMPLETE'));
-      const title = el('div', 'sh-display sh-party__title', `${win?.name || '???'} WINS!`);
+      const title = el('div', 'sh-display sh-party__title', wins.length > 1
+        ? `${wins.map((w) => w.name).join(' & ')} SHARE THE CROWN!`
+        : `${win?.name || '???'} WINS!`);
       title.style.color = hex(charById(win?.char).color);
+      // Level on points but split on wins: name the tiebreak that decided it.
+      const second = standings[1];
+      if (wins.length === 1 && second && second.points === win.points) {
+        card.appendChild(el('div', 'sh-party__blurb', `Level on ${win.points} points — ${win.wins} round wins to ${second.wins} breaks the tie`));
+      }
       card.appendChild(title);
       card.appendChild(recapTable(party, players));
     } else {
@@ -156,9 +168,13 @@ export default {
       if (g?.blurb) card.appendChild(el('div', 'sh-party__blurb', g.blurb));
       if (last) {
         const lg = CATALOG.find((c) => c.id === last.game);
-        const top = last.players?.find((r) => r.place === 1);
-        const who = players.find((p) => p.id === top?.id);
-        if (who) card.appendChild(el('div', 'sh-party__last', `${lg?.name || last.game}: ${who.name} took it`));
+        const top = (last.players || []).filter((r) => r.place === 1)
+          .map((r) => players.find((p) => p.id === r.id)).filter(Boolean);
+        if (top.length) {
+          card.appendChild(el('div', 'sh-party__last', top.length > 1
+            ? `${lg?.name || last.game}: ${top.map((w) => w.name).join(' & ')} tied it`
+            : `${lg?.name || last.game}: ${top[0].name} took it`));
+        }
       }
     }
 
@@ -221,7 +237,10 @@ export default {
         sfx(ctx, 'fanfare');
         const r = partyConfirmRoute({ done: S.done, gameId: session.currentGame });
         if (S.done) session.endParty();
-        S.exit = { t: 0, fired: false, color: S.done ? PAL.violet : PAL.yellow, go: () => goView(ctx, r.view, r.opts) };
+        // Wipe out in the next game's colour: its title card is the same colour.
+        const next = CATALOG.find((c) => c.id === session.currentGame);
+        const color = S.done ? PAL.violet : hex(next?.color ?? PAL.yellow);
+        S.exit = { t: 0, fired: false, color, go: () => goView(ctx, r.view, r.opts) };
       } else if (e.action === 'b' || e.action === 'pause') {
         sfx(ctx, 'uiBack');
         session.endParty();
@@ -260,7 +279,7 @@ function recapTable(party, players) {
   for (const round of party.scores) {
     const tr = el('tr');
     const g = CATALOG.find((c) => c.id === round.game);
-    tr.appendChild(el('td', 'sh-party__game', g?.name || round.game));
+    tr.appendChild(el('td', 'sh-party__game', (g?.name || round.game) + (round.sim ? ' *' : '')));
     for (const p of players) {
       const r = round.players?.find((q) => q.id === p.id);
       const td = el('td', 'sh-mono', r ? `+${r.points}` : '–');
@@ -273,7 +292,12 @@ function recapTable(party, players) {
   tot.appendChild(el('td', 'sh-party__game', 'TOTAL'));
   for (const p of players) tot.appendChild(el('td', 'sh-mono', String(p.points)));
   t.appendChild(tot);
-  return t;
+  if (!party.scores.some((r) => r.sim)) return t;
+  // Solo games have no rivals on screen; say how the CPUs' rounds were decided.
+  const wrap = el('div');
+  wrap.appendChild(t);
+  wrap.appendChild(el('div', 'sh-party__note', '* solo game — CPU rivals played off-screen at their skill level'));
+  return wrap;
 }
 
 let cssDone = false;
@@ -290,6 +314,7 @@ function injectCss() {
   .sh-party__blurb{margin-top:.35em;font-weight:700;font-size:clamp(10px,1.25vw,15px);color:${PAL.dim};}
   .sh-party__last{margin-top:.6em;padding-top:.5em;border-top:1px solid rgba(255,255,255,.09);
     font-weight:800;font-size:clamp(10px,1.2vw,14px);color:#e9ecff;}
+  .sh-party__note{margin-top:.5em;font-weight:700;font-size:clamp(8px,.95vw,12px);color:${PAL.dim};}
   .sh-party__table{margin:.7em auto 0;border-collapse:collapse;font-weight:800;
     font-size:clamp(10px,1.2vw,15px);}
   .sh-party__table th{padding:.15em .7em;font-weight:900;letter-spacing:.04em;}
@@ -303,6 +328,9 @@ function injectCss() {
     background:rgba(14,10,36,.88);border:2px solid var(--c);box-shadow:0 4px 0 rgba(0,0,0,.45);
     font-size:clamp(10px,1.2vw,15px);font-weight:900;transition:opacity .25s;opacity:0;}
   .sh-party__tag--you{box-shadow:0 4px 0 rgba(0,0,0,.45),0 0 18px -2px var(--c);}
+  .sh-party__tag--you::before{content:'YOU';position:absolute;left:50%;top:0;transform:translate(-50%,-60%);
+    font-weight:900;font-size:.62em;letter-spacing:.12em;color:#1a1030;background:var(--c);
+    border-radius:999px;padding:.15em .6em;}
   .sh-party__place{font-size:.8em;letter-spacing:.12em;}
   .sh-party__name{font-size:1.15em;color:var(--c);letter-spacing:.02em;}
   .sh-party__pts{color:#fff;}

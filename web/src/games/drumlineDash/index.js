@@ -187,11 +187,28 @@ export default {
       return r;
     };
 
-    S.you = mkRacer(0, 'YOU', 'sunburst', 'round', 'full');
+    // The field is the shell's lineup: P1 marches in lane one, the named CPU
+    // rivals take the next lanes at a pace set by their difficulty, and house
+    // drummers fill any empty lane. Booted cold, it's the house field.
+    const hero = ctx.players?.[0];
+    const rivals = (ctx.players || []).filter((p) => p.isCpu).slice(0, CPUS.length);
+    S.you = mkRacer(0, 'YOU', hero?.palette ?? 'sunburst', hero?.build || 'round', 'full');
+    S.you.playerId = hero ? hero.id : null;
+    hero?.dress?.(S.you.char);
     CPUS.forEach((c, k) => {
-      const r = mkRacer(k + 1, c.name, c.palette, c.build, 'lite');
-      r.skill = c.skill;
-      r.stumbleChance = c.stumble;
+      const p = rivals[k];
+      const r = mkRacer(k + 1, p ? p.name : c.name, p ? p.palette : c.palette, p ? p.build : c.build, 'lite');
+      if (p) {
+        // Easy .40 → 0.73 pace, hard .86 → 0.90: the ace is still CRASH-fast.
+        r.skill = 0.58 + 0.37 * p.cpuSkill;
+        r.stumbleChance = 0.28 - 0.23 * p.cpuSkill;
+        r.playerId = p.id;
+        p.dress?.(r.char);
+      } else {
+        r.skill = c.skill;
+        r.stumbleChance = c.stumble;
+        r.playerId = null;
+      }
     });
 
     // the player carries a snare, so "you are the drummer" needs no caption
@@ -687,10 +704,17 @@ function finishRound(ctx, S) {
   S.you.anim.setState(place === 1 ? 'celebrate' : 'taunt', { variant: 'perfect', force: true });
 
   const notes = S.tot.perfect + S.tot.great + S.tot.good + S.tot.miss;
+  // Accuracy is hit quality, the same number every game reports; the race
+  // points (which also carry chart multipliers and mash penalties) are the score.
+  const hit01 = notes
+    ? (S.tot.perfect * SCORE.perfect + S.tot.great * SCORE.great + S.tot.good * SCORE.good) / (notes * SCORE.perfect)
+    : 0;
   S.result = {
     score: Math.round(score01 * 1000),
-    accuracy: score01,
-    rank: rankFor(score01, S.tot.miss),
+    accuracy: hit01,
+    rank: rankFor(hit01, S.tot.miss),
+    // The race was run against the lineup: the party takes these places as-is.
+    field: S.racers.map((r) => ({ id: r.playerId ?? null, place: r.place })),
     stats: {
       ...S.tot,
       notes,

@@ -391,11 +391,16 @@ export function createWorld(ctx) {
   }
 
   // ------------------------------------------------------------------ cast
+  // The batter is whoever the shell's lineup put in P1 (booted cold, the
+  // house default).
+  const hero = ctx.players?.[0] || null;
   const cast = makeCast({
-    scene: root, count: 1, builds: ['round'],
+    scene: root, count: 1, builds: [hero?.build || 'round'],
+    players: hero ? [{ id: hero.id, name: hero.name, palette: hero.palette }] : null,
     positions: [LAYOUT.batter], scale: 1.55, seed: 0x51e, faceCamera: false,
   });
   const batter = cast.get(0);
+  hero?.dress?.(batter.char);
   batter.char.rotation.y = LAYOUT.batterFacing;
   protect(batter.char);
   batter.char.setShadowDetail('full');   // the hero: whole silhouette in the shadow map
@@ -430,7 +435,8 @@ export function createWorld(ctx) {
     const hb = batter.char.build.head;
     if (j.gear && j.gear.parent === j.head) j.gear.visible = false;
     if (j.bobbleMesh) j.bobbleMesh.visible = false;
-    const helmetMat = new THREE.MeshStandardMaterial({ color: 0x1f2f6b, roughness: 0.35 });
+    // Team colour: the character's own trim, so the helmet belongs to them.
+    const helmetMat = new THREE.MeshStandardMaterial({ color: hero?.palette?.trim ?? 0x1f2f6b, roughness: 0.35 });
     const dome = new THREE.Mesh(new THREE.SphereGeometry(hb.w * 0.56, 18, 10, 0, Math.PI * 2, 0, Math.PI * 0.5), helmetMat);
     dome.position.y = hb.h * 0.5 - hb.w * 0.22;
     const brim = new THREE.Mesh(new THREE.CylinderGeometry(hb.w * 0.4, hb.w * 0.4, 0.03, 18, 1, false, -Math.PI / 2, Math.PI), helmetMat);
@@ -537,6 +543,24 @@ export function createWorld(ctx) {
     return m;
   }
 
+  /**
+   * The HUD owns the top of the frame (score, accuracy, the OUTS pill down to
+   * ~17%): a rising badge stops at HUD_TOP instead of sliding under the pill.
+   */
+  const HUD_TOP_NDC = 1 - 2 * 0.2;
+  const _top = new THREE.Vector3();
+  const _mid = new THREE.Vector3();
+  function keepBelowHud(sprite) {
+    const cam = ctx.camera;
+    if (!cam) return;
+    const half = sprite.scale.y * 0.5;
+    _mid.copy(sprite.position).project(cam);
+    _top.copy(sprite.position).setY(sprite.position.y + half).project(cam);
+    const over = _top.y - HUD_TOP_NDC;
+    const perUnit = (_top.y - _mid.y) / Math.max(1e-4, half);
+    if (over > 0 && perUnit > 1e-4) sprite.position.y -= over / perUnit;
+  }
+
   function callout(word, pos, { scale = 1, life = 1.05, rise = 1.1 } = {}) {
     const mat = wordMaterial(word);
     if (!mat) return;
@@ -605,6 +629,7 @@ export function createWorld(ctx) {
       c.sprite.position.set(c.x, c.y + easeOutCubic(t) * c.rise, c.z);
       const s = c.scale * pop * (1 + t * 0.12);
       c.sprite.scale.set(s * 3.1, s * 0.8 * (c.sprite.material.userData.aspect || 1), 1);
+      keepBelowHud(c.sprite);
       c.sprite.material.opacity = t > 0.7 ? 1 - (t - 0.7) / 0.3 : 1;
       if (c.life <= 0) c.sprite.visible = false;
     }
@@ -891,7 +916,9 @@ function makeWordTexture(word, sub = null) {
   // A dark rounded plate behind the word: over a multicoloured crowd, a
   // stroke alone left "HOME RUN!" beige-on-busy and hard to read.
   if (word !== 'OUTS') {
-    g.fillStyle = 'rgba(12,8,32,0.9)';
+    // Opaque: at 0.9 the pennants behind a GRAND SLAM! showed through as
+    // dark triangles across the word.
+    g.fillStyle = 'rgb(16,11,40)';
     g.strokeStyle = c2;
     g.lineWidth = 5;
     g.beginPath();

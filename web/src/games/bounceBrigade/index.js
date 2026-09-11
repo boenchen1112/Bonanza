@@ -561,13 +561,14 @@ export default {
     env.root.position.y = 0;
 
     // --- the bouncer ---------------------------------------------------------
-    const pal = ctx.players?.[0]?.palette ?? 'lagoon';
+    const hero = ctx.players?.[0];
     bouncerRoot = new THREE.Group();
     bouncerRoot.name = 'bb:bouncer';
     bouncer = makeCharacter({
-      palette: pal, build: 'round', seed: 0xb0c3, detail: 'full',
+      palette: hero?.palette ?? 'lagoon', build: hero?.build || 'round', seed: 0xb0c3, detail: 'full',
       scale: BOUNCER_SCALE, name: 'bb:hero',
     });
+    hero?.dress?.(bouncer);
     bouncer.rotation.y = BOUNCER_FACING;
     bouncerRoot.add(bouncer);
     root.add(bouncerRoot);

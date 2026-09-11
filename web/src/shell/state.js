@@ -215,26 +215,37 @@ export const session = {
     const party = this.party;
     if (!party) return;
     const humanId = this.players.find((p) => !p.isCpu)?.id ?? -1;
+    // A game that actually fielded the lineup (Drumline's race) reports who
+    // finished where; that order is the round. Otherwise the CPUs' rounds are
+    // simulated from their skill on the human's score scale — and the round
+    // says so (`sim`), so the recap can too.
+    const field = Array.isArray(result.field) ? result.field : null;
+    const inField = field && this.players.every((p) => field.some((f) => f.id === p.id));
     const posted = this.players.map((p) => {
-      if (p.id === humanId) {
-        return { id: p.id, score: Math.round(result.score || 0), rank: result.rank || 'D', accuracy: result.accuracy || 0 };
-      }
+      const mine = p.id === humanId
+        ? { score: Math.round(result.score || 0), rank: result.rank || 'D', accuracy: result.accuracy || 0 }
+        : null;
+      if (inField) return { id: p.id, ...(mine || { score: null }), finish: field.find((f) => f.id === p.id).place };
+      if (mine) return { id: p.id, ...mine };
       const rng = makeRng((party.seed ^ ((party.index + 1) * 0x9e3779b1) ^ ((p.id + 1) * 0x85ebca6b)) >>> 0);
       return { id: p.id, ...cpuRound(p.isCpu ? p.cpuSkill : 0.63, rng, result) };
     });
-    posted.slice().sort((a, b) => (b.score - a.score) || (a.id - b.id)).forEach((r, i) => {
-      r.place = i + 1;
-      r.points = PLACE_POINTS[i] ?? 0;
+    const places = inField ? rankPlaces(posted, (r) => -r.finish) : rankPlaces(posted, (r) => r.score);
+    for (const r of posted) {
+      r.place = places.get(r.id);
+      r.points = PLACE_POINTS[r.place - 1] ?? 0;
+      delete r.finish;
       const p = this.players.find((q) => q.id === r.id);
       p.points += r.points;
-      if (i === 0) p.wins++;
-    });
-    party.scores.push({ game: gameId, score: result.score, rank: result.rank, players: posted });
+      if (r.place === 1) p.wins++;
+    }
+    party.scores.push({ game: gameId, score: result.score, rank: result.rank, players: posted, sim: !inField });
     party.index++;
     if (party.index >= party.length && this.players.length) {
-      const top = this.standings()[0];
-      party.winner = top.id;
-      if (!top.isCpu) { profile.stats.wins++; Save.set(STATS_KEY, profile.stats); }
+      const places = this.standingPlaces();
+      party.winners = this.standings().filter((p) => places.get(p.id) === 1).map((p) => p.id);
+      party.winner = party.winners[0];
+      if (party.winners.includes(humanId)) { profile.stats.wins++; Save.set(STATS_KEY, profile.stats); }
     }
   },
 
@@ -242,17 +253,36 @@ export const session = {
     return !!this.party && this.party.index >= this.party.length;
   },
 
-  /** Standings, best first, with ties broken by wins then id. */
+  /** Standings, best first, with ties broken by wins (then id, for a stable order only). */
   standings() {
     return this.players.slice().sort((a, b) => (b.points - a.points) || (b.wins - a.wins) || (a.id - b.id));
   },
+
+  /** id → place. Points then wins decide; level on both is a shared place. */
+  standingPlaces() {
+    return rankPlaces(this.players, (p) => p.points * 1000 + p.wins);
+  },
 };
+
+/**
+ * Competition ranking: id → 1-based place, higher `value` first, equal values
+ * share a place and the next one is skipped (1, 1, 3).
+ */
+export function rankPlaces(rows, value) {
+  const sorted = rows.slice().sort((a, b) => value(b) - value(a));
+  const out = new Map();
+  sorted.forEach((r, i) => {
+    const prev = sorted[i - 1];
+    out.set(r.id, prev && value(prev) === value(r) ? out.get(prev.id) : i + 1);
+  });
+  return out;
+}
 
 /** Convenience for scenes that can be entered cold (harness `goto`). */
 export function ensurePlayers(rng) {
   if (session.players.length) return session.players;
   session.setPlayers([
-    { name: profile.names[0] || 'P1', char: 'bopp', isCpu: false, cpuSkill: 0 },
+    { name: 'BOPP', char: 'bopp', isCpu: false, cpuSkill: 0 },
     { name: 'ZIZZ', char: 'zizz', isCpu: true, cpuSkill: 0.62 },
     { name: 'KWARK', char: 'kwark', isCpu: true, cpuSkill: 0.5 },
   ]);

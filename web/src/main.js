@@ -155,6 +155,10 @@ const ctxBase = {
 async function activate(id, opts = {}) {
   if (current) {
     try { current.dispose?.(currentCtx); } catch (e) { console.error('dispose', e); }
+    // No scene until the next one has loaded: the loop kept calling the
+    // disposed one's update/input through the await, and when the next scene
+    // is the same module (play → play on restart) that reached its half-built state.
+    current = null;
     stage.detach();
     ui.clear();
     fx.reset();
@@ -183,10 +187,11 @@ async function activate(id, opts = {}) {
   // should be a broken scene, not a broken product.
   try {
     await mod.load?.(currentCtx);
+    stage.sceneId = id;
+    await stage.warm();
     current = mod;
     mod.start?.(currentCtx);
     bus.emit('scene:active', id);
-    stage.sceneId = id;
   } catch (e) {
     console.error('scene failed to start:', id, e);
     current = null;
@@ -453,9 +458,12 @@ if (TEST_API) window.__BBB__ = {
       chart: null,
       cursor: 0,
     };
-    if (o.chart && typeof current?.testChart === 'function') {
+    // (a host scene like the shell's `play` forwards testChart and returns
+    // null when the game it hosts has none: fall back to division presses)
+    const list = o.chart && typeof current?.testChart === 'function' ? current.testChart(currentCtx) : null;
+    if (Array.isArray(list)) {
       const now = clock.now();
-      bot.chart = current.testChart(currentCtx).filter((n) => n.time > now).sort((a, b) => a.time - b.time);
+      bot.chart = list.filter((n) => n.time > now).sort((a, b) => a.time - b.time);
     }
     botPrevBeat = null;
     botPressTotal = 0;

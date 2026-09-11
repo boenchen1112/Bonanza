@@ -19,8 +19,9 @@
 
 import { getScene } from './registry.js';
 import { createPause } from './pause.js';
-import { mountRoot, sfx, PAL } from './theme.js';
-import { session } from './state.js';
+import { mountRoot, sfx, PAL, createWipe, el, hex } from './theme.js';
+import { session, ensurePlayers } from './state.js';
+import { gamePlayers } from './chars.js';
 import { CATALOG } from './games.js';
 import { goView, exitRoute } from './nav.js';
 
@@ -28,6 +29,8 @@ import { goView, exitRoute } from './nav.js';
 const RESUME_BEATS = 3;
 /** Hold after a game reports its result, so its own last flourish can land. */
 const OUTRO_S = 0.55;
+/** Frames the game draws under its title card before the card pulls away. */
+const COVER_HOLD_S = 0.12;
 
 let S = null;
 
@@ -53,6 +56,18 @@ export default {
       baseGo(id, opts);
     };
 
+    // The lineup the roster built is who plays: the human's character is the
+    // hero, the named CPUs are the rivals in games that field any.
+    ctx.players = gamePlayers(ensurePlayers());
+
+    // Title card over the swap: the menu's wipe covers the exit, this one
+    // holds while the game builds and its shaders compile (a blocking ~1s on
+    // some GPUs), then pulls away once the game has drawn a few frames.
+    S.root = mountRoot(ctx, 'sh-play');
+    const meta = CATALOG.find((g) => g.id === gameId);
+    S.cover = createWipe(S.root, { color: hex(meta?.color ?? PAL.yellow), mode: 'in' });
+    S.cover.el.appendChild(el('div', 'sh-display sh-play__card', meta?.name || ''));
+
     const mod = await getScene(gameId);
     if (!mod) {
       console.error('play: unknown game', gameId);
@@ -61,7 +76,6 @@ export default {
     }
     S.mod = mod;
 
-    S.root = mountRoot(ctx, 'sh-play');
     S.pause = createPause(S.root, {
       onSelect: (id) => {
         if (id === 'resume') resume(ctx);
@@ -80,6 +94,7 @@ export default {
   update(ctx, dt, beat) {
     if (!S) return;
     S.t += dt;
+    if (S.t > COVER_HOLD_S) S.cover.update(dt);
     S.pause.update(dt, beat);
 
     if (S.paused) {
@@ -127,6 +142,11 @@ export default {
     if (forward.length) {
       try { S.mod?.input?.(ctx, forward); } catch (e) { console.error(e); }
     }
+  },
+
+  /** Harness hook, forwarded so the bot can play a game hosted here too. */
+  testChart(ctx) {
+    return S?.mod?.testChart?.(ctx) ?? null;
   },
 
   dispose(ctx) {
@@ -245,6 +265,8 @@ function normalise(r) {
       maxCombo: s.maxCombo || 0, errors: Array.isArray(s.errors) ? s.errors : [],
     },
     highlights: r?.highlights || null,
+    // Only games that fielded the lineup report one; see session.recordPartyRound.
+    field: Array.isArray(r?.field) ? r.field : null,
   };
 }
 

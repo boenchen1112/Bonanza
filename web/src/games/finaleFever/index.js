@@ -208,11 +208,12 @@ export default {
     boss.rotation.y = PLACE.bossYaw;
     root.add(boss);
 
-    const pal = ctx.players?.[0]?.palette;
+    const hero = ctx.players?.[0];
     const player = makeCharacter({
-      palette: pal === undefined || pal === null ? 'ember' : pal,
-      build: 'round', seed: 0x51e, detail: 'full', scale: 1.05, name: 'player',
+      palette: hero?.palette ?? 'ember',
+      build: hero?.build || 'round', seed: 0x51e, detail: 'full', scale: 1.05, name: 'player',
     });
+    hero?.dress?.(player);
     player.position.set(PLACE.player[0], PLACE.player[1], PLACE.player[2]);
     player.rotation.y = PLACE.playerYaw;
     root.add(player);

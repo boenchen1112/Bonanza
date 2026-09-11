@@ -272,6 +272,19 @@ export function createStage({ canvas, clock }) {
     return env;
   }
 
+  /**
+   * Get a freshly built scene to the GPU before its clock starts: build the
+   * default set, run the dress pass, and compile every program in parallel
+   * (KHR_parallel_shader_compile). Left to the first frame, Swing Kings'
+   * compiles blocked ~1.2s with the count-in already running.
+   */
+  async function warm() {
+    if (!scene || !camera) return;
+    ensureDefaultEnv();
+    look.dress();
+    try { await renderer.compileAsync(scene, camera); } catch (e) { console.warn('warm: compile', e); }
+  }
+
   /** Build the default set for a scene that didn't ask for one. */
   function ensureDefaultEnv() {
     if (envs.size || !scene) return;
@@ -488,7 +501,7 @@ export function createStage({ canvas, clock }) {
 
   return {
     // --- original surface (do not break) ---
-    renderer, size, resize, attach, detach, render,
+    renderer, size, resize, attach, detach, render, warm,
     stats,
     shake, flash, punchZoom, setClear,
     get scene() { return scene; },

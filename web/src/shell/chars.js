@@ -65,6 +65,25 @@ export function charMesh(def, opts = {}) {
   return obj;
 }
 
+/**
+ * The session lineup as a minigame sees it (`ctx.players`, ARCHITECTURE.md):
+ * each slot's rig palette and build, plus `dress(char)` to put the crest on a
+ * character the game built itself. Games never import the shell, so identity
+ * travels as data and one callback.
+ */
+export function gamePlayers(players) {
+  return players.map((p) => {
+    const def = charById(p.char);
+    const idx = Math.max(0, CHARS.findIndex((c) => c.id === def.id));
+    return {
+      id: p.id, name: p.name, char: def.id, isCpu: !!p.isCpu, cpuSkill: p.cpuSkill || 0,
+      palette: paletteForChar(def),
+      build: BUILD_BY_SHAPE[def.shape] || BUILD_IDS[idx % BUILD_IDS.length],
+      dress: (obj) => addCrest(obj, def),
+    };
+  });
+}
+
 // ------------------------------------------------- identity: palette + crest
 
 const palCache = new Map();
