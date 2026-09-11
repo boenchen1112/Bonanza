@@ -92,6 +92,22 @@ for (const game of GAMES) {
   console.log(JSON.stringify(row));
 }
 
+// --pause: pause the last game through the real menu (Escape, then confirm
+// on RESUME) and report whether its music track is playing again after.
+if (argv.pause) {
+  const musicOn = () => page.evaluate(() => {
+    const m = window.__BBB__.audio?.music;
+    return m ? `${m.playing ? 'playing' : 'stopped'}:${m.track?.id ?? '-'}` : 'no music facade';
+  });
+  const before = await musicOn();
+  await page.keyboard.press('Escape'); await wait(900);
+  const during = await musicOn();
+  await page.keyboard.press('Space'); await wait(2600);
+  const after = await musicOn();
+  console.log('pause', JSON.stringify({ before, during, after }));
+  report.push({ pause: { before, during, after } });
+}
+
 // --race: run Drumline Dash to the end as round 1 of a party and report how
 // the party scored it (the race's real places, not a simulation).
 let race = null;

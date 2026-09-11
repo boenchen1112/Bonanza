@@ -41,6 +41,14 @@ const SCENE_TRACK = {
 };
 
 /**
+ * Host scenes: the shell's `play` wraps a minigame, and the minigame picked
+ * its own track in load(). Their activation must leave the music alone —
+ * mapped to "silent", it stopped every game launched from the menus (the
+ * harness boots games directly, so only the shell path was ever silent).
+ */
+export const HOST_SCENES = new Set(['play']);
+
+/**
  * @param {string} sceneId
  * @returns {string|null} track id, or null if the scene should be silent.
  */

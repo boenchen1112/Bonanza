@@ -33,7 +33,7 @@ import { makeRng } from '../core/util.js';
 import { makeImpulse, makeDriveCurve } from './dsp.js';
 import { createVoices } from './voices.js';
 import { createMusicPlayer } from './player.js';
-import { TRACKS, trackForScene } from './music/index.js';
+import { TRACKS, trackForScene, HOST_SCENES } from './music/index.js';
 import { SCALES, arpUp, snapToChord, degree, note } from './theory.js';
 
 /** Fallback key when nothing is playing, so SFX are never atonal. */
@@ -334,6 +334,7 @@ export function createAudio({ ctx, clock, bus, offline = false }) {
       bus.on('judge', onJudge);
       bus.on('scene:active', (id) => {
         streak = 0; missRun = 0;
+        if (HOST_SCENES.has(id)) return;
         const wanted = trackForScene(id);
         // A minigame that picked its own track during start() keeps it.
         if (!wanted) { player.stop(); return; }
