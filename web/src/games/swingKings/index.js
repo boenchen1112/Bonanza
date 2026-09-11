@@ -48,6 +48,8 @@ import { clamp01, damp, lerp, smoothstep } from '../../core/util.js';
 import { createWorld, LAYOUT } from './world.js';
 import { createTrace } from './trace.js';
 import { CLIPS } from '../../chars/index.js';
+import { Save } from '../../core/util.js';
+import { createIctusDetector } from './gesture.js';
 import {
   buildSchedule, powerFor, tierFor, scoreFor, sectionAt,
   END_BEAT, FINALE_BEAT, LEAD_IN_BEATS, SCORED_BARS, TIERS,
@@ -69,6 +71,19 @@ const SWING = CLIPS.swing;
 const LOAD = SWING.contact - 0.06;
 /** Most beats of coil — a finale ball 8 beats out should not coil in slow-mo. */
 const COIL_BEATS = 2;
+
+/** Webcam frames arrive ~this late (capture + inference); taken off each sample. */
+const CAMERA_LATENCY = 0.07;
+
+/**
+ * Tap, mouse or camera (ADR 0004). A launch option (`?swingInput=` / the
+ * play wrapper's opts) wins; otherwise the player's saved Options choice.
+ * Read through core Save so the game never imports shell modules.
+ */
+function resolveInputMode(ctx) {
+  const m = ctx.opts?.swingInput ?? Save.get('options', null)?.swingInput ?? 'tap';
+  return m === 'mouse' || m === 'camera' ? m : 'tap';
+}
 
 // scratch
 const _v = new THREE.Vector3();
@@ -128,18 +143,22 @@ export default {
     this.hitBalls = [];
     this.reset();
 
+    // Input mode (ADR 0004): 'tap' is the default and the harness path;
+    // 'mouse' and 'camera' are opt-in conducting modes from Options.
+    this.mode = resolveInputMode(ctx);
+    this.detector = createIctusDetector();
+    this.camera = null;
+
     // Debug/verification hook. The shared harness bot can only emit key-DOWN
     // events, so it can never perform a hold-and-release; this lets a script
-    // drive the real gesture at exact audio times. See verify.mjs.
+    // drive the real gesture at exact audio times, in any mode. See verify.mjs.
     if (typeof window !== 'undefined' && window.__BBB__) {
       const self = this;
       window.__BBB__.swing = {
-        hold: (atBeat) => self.input(ctx, [{
-          action: 'a', time: ctx.clock.timeAt(atBeat), down: true, source: 'test',
-        }]),
-        release: (atBeat) => self.input(ctx, [{
-          action: 'a', time: ctx.clock.timeAt(atBeat), down: false, source: 'test',
-        }]),
+        hold: (atBeat) => self.beginWindup(ctx, ctx.clock.timeAt(atBeat)),
+        release: (atBeat) => self.releaseSwing(ctx, ctx.clock.timeAt(atBeat)),
+        /** Conduct-mode state, for smoke-conduct.mjs. */
+        conduct: () => ({ mode: self.mode, holding: self.holding, detector: self.detector.state, pointer: self._pointer || null }),
         stats: () => ({
           swings: self.swings.slice(-40),
           outs: self.outs,
@@ -209,15 +228,69 @@ export default {
 
     ctx.audio.music.play('swing-kings');
     ctx.ui.banner('SWING KINGS', {
-      sub: this.inputHint(), life: 1.5, color: '#ffe58a',
+      sub: this.inputHint(), life: this.mode === 'tap' ? 1.5 : 2.2, color: '#ffe58a',
     });
+    this.startGestureSource(ctx);
     ctx.ui.hud.setScore(0);
     ctx.ui.hud.setAccuracy(1);
   },
 
   /** The one instruction the player reads — it must describe the real input. */
   inputHint() {
+    if (this.mode === 'mouse') return 'HOLD as the ball flies · SWING DOWN (or let go) as it lands';
+    if (this.mode === 'camera') return 'RAISE your hand as the ball flies · CONDUCT DOWN as it lands';
     return 'PRESS as the ball reaches the plate · nail the beat to send it';
+  },
+
+  /**
+   * Gesture sources (ADR 0004). Both feed the same ictus detector: the mouse
+   * while a button is held (press = raise, the downstroke's stop = swing),
+   * the camera from the tracked palm (raise = windup, ictus = swing). Neither
+   * runs in tap mode, and the harness never drives them.
+   */
+  startGestureSource(ctx) {
+    if (this.mode === 'mouse') this.startPointerConduct(ctx);
+    if (this.mode === 'camera') {
+      import('./camera.js')
+        .then(({ startCamera }) => startCamera({
+          clock: ctx.clock,
+          onSample: (t, y) => this.onConductSample(ctx, t - CAMERA_LATENCY, y, true),
+          onLost: () => this.detector.reset(),
+        }))
+        .then((cam) => {
+          if (!this.w) { cam.stop(); return; }   // left the scene while loading
+          this.camera = cam;
+        })
+        .catch((e) => {
+          // No camera, refused, or no GPU for the model: conduct with the mouse
+          // instead. The mode is opt-in and low-stakes by design (spec §5).
+          console.info('camera conduct unavailable, using mouse:', e?.message || e);
+          if (!this.w) return;
+          this.mode = 'mouse';
+          ctx.ui.banner('NO CAMERA', { sub: 'conduct with the mouse instead', life: 1.8, color: '#ffe58a' });
+          this.startPointerConduct(ctx);
+        });
+    }
+  },
+
+  startPointerConduct(ctx) {
+    if (this._onPointerMove) return;
+    this._onPointerMove = (e) => {
+      if (!this.holding || !(e.buttons & 1)) return;
+      const t = ctx.clock.toAudioTime(e.timeStamp);
+      const y = e.clientY / Math.max(1, innerHeight);
+      this._pointer = { t, y };
+      this.onConductSample(ctx, t, y, false);
+    };
+    window.addEventListener('pointermove', this._onPointerMove, { passive: true });
+  },
+
+  /** One gesture position; `raises` = this source starts windups itself. */
+  onConductSample(ctx, time, y, raises) {
+    const ev = this.detector.feed(time, y);
+    if (!ev) return;
+    if (ev.type === 'raise' && raises && !this.holding) this.beginWindup(ctx, ev.time);
+    else if (ev.type === 'ictus' && this.holding) this.releaseSwing(ctx, ev.time);
   },
 
   // ------------------------------------------------------------------ input
@@ -239,7 +312,16 @@ export default {
    */
   input(ctx, events) {
     for (const e of events) {
-      if (e.action !== 'a' || !e.down) continue;
+      if (e.action !== 'a') continue;
+      if (this.mode !== 'tap') {
+        // CONDUCT MODES: hold to wind up (the trace draws the gesture),
+        // release — or finish a downstroke, see onConductSample — to swing.
+        // Power is the windup length again, the original design.
+        if (e.down && !e.repeat) { this.detector.reset(); this.beginWindup(ctx, e.time); }
+        else if (!e.down) this.releaseSwing(ctx, e.time);
+        continue;
+      }
+      if (!e.down) continue;
       // Begin and release on the same timestamp: the windup still runs as an
       // animation (the batter must not teleport into the follow-through), but
       // it costs the player no input.
@@ -483,6 +565,18 @@ export default {
     const clock = ctx.clock;
     const now = clock.now();
     const w = this.w;
+
+    // A mouse that stops moving stops sending events, so the detector would
+    // never see the deceleration that IS the ictus. Once the pointer has been
+    // still for 40ms (longer than any gap between moves mid-stroke), feed it
+    // the resting position so the stop registers — stamped one frame after
+    // the last real move, which is when the hand actually stopped, not 40ms
+    // later when we noticed.
+    if (this.mode === 'mouse' && this.holding && this._pointer && now - this._pointer.t > 0.04) {
+      const tStill = this._pointer.t + 1 / 60;
+      this._pointer.t = tStill;
+      this.onConductSample(ctx, tStill, this._pointer.y, false);
+    }
 
     this.judge.update(now);
 
@@ -735,6 +829,8 @@ export default {
   dispose(ctx) {
     if (this._offBeat) { this._offBeat(); this._offBeat = null; }
     if (typeof window !== 'undefined' && window.__BBB__) delete window.__BBB__.swing;
+    if (this._onPointerMove) { window.removeEventListener('pointermove', this._onPointerMove); this._onPointerMove = null; }
+    if (this.camera) { this.camera.stop(); this.camera = null; }
     for (const h of this.hitBalls) this.w?.freeBall(h.b);
     this.hitBalls = [];
     this.trace?.dispose();

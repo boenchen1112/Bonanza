@@ -112,15 +112,15 @@ Status key: `[ ]` open · `[~]` in progress · `[x]` done · `[-]` cut (with rea
 ## [ ] 13 — Critic loop: Swing Kings to PASS
 **Blocked by:** 05, 08, 09, 10, 11, 12
 
-## [ ] 14 — Swing Kings gesture mode: mouse/pointer-drag source (+ ADR 0004)
+## [x] 14 — Swing Kings gesture mode: mouse/pointer-drag source (+ ADR 0004)
 **Blocked by:** 01
-- [ ] Selectable input mode; drag-down + release fires the swing; release timing feeds accuracy → power
-- [ ] Keyboard hold-and-release works again in that mode; `verify.mjs` hold checks pass
-- [ ] Tap mode unchanged and still harness-verified
+- [x] Selectable input mode (Options: TAP / MOUSE CONDUCT / CAMERA CONDUCT); hold to wind up, a downstroke ictus (or release) swings; hold length = power
+- [x] Keyboard/pointer hold-and-release works again; `verify.mjs` ALL PASS (first time since tap mode); `smoke-conduct.mjs` drives real mouse strokes -> PERFECT/GREAT released by the ictus
+- [x] Tap mode unchanged and still harness-verified (default); ADR 0004 + CLAUDE.md updated
 
-## [ ] 15 — Swing Kings gesture mode: webcam hand-tracking source
+## [x] 15 — Swing Kings gesture mode: webcam hand-tracking source
 **Blocked by:** 14, 06
-- [ ] MediaPipe bundled (offline); no camera → falls back to mouse
+- [x] MediaPipe bundled (npm wasm + committed Apache-2.0 model, lazy chunk); raise = windup, ictus = swing; no camera -> falls back to mouse with a notice; smoke: pipeline boots offline on Chromium's fake camera, console clean. Real-webcam check = hand-back checklist
 
 ## [x] 16 — Shell lineups use the real cast + animator (finishes #14's chars items)
 **Blocked by:** none

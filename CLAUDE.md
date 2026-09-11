@@ -94,9 +94,12 @@ state (what's built vs. stubbed vs. never verified).
 - `src/core/feel.js` (referenced from `web/src/`) holds cross-game feel
   constants (countdown length, hitstop, shake magnitudes, popup lifetimes) —
   change them there, not per-game.
-- **Input is taps-only for now.** The hold-and-release conducting gesture is
-  deliberately deferred (see `docs/HANDOFF.md` §6); don't reintroduce it
-  without reading why it was pulled.
+- **Input is taps-first.** Every game plays on taps and the harness drives
+  taps. Two scoped exceptions: Baton Brawl (ADR 0002) and Swing Kings'
+  opt-in conducting modes — mouse hold/drag and webcam hand tracking,
+  chosen in Options (ADR 0004). Those modes are harness-exempt and covered
+  by `swingKings/verify.mjs` + `swingKings/smoke-conduct.mjs` instead.
+  Don't add gesture input elsewhere without reading `docs/HANDOFF.md` §6.
 - Build process notes: `docs/agents/build-brief.md` and
   `docs/agents/critic-brief.md` define the builder/critic agent workflow
   this codebase is developed under (one builder per module, then a separate
