@@ -33,7 +33,8 @@ const req = createRequire(path.join(WEB, 'package.json'));
 const imp = (id) => import(pathToFileURL(req.resolve(id)).href);
 const THREE = await imp('three');
 const { GLTFLoader } = await imp('three/examples/jsm/loaders/GLTFLoader.js');
-const { solveArm, solveLeg, eulerXYZ, unwrapInPlace } = await import(pathToFileURL(path.join(WEB, 'src/chars/retarget.js')).href);
+const { solveArm, solveLeg, eulerNear, unwrapInPlace } = await import(pathToFileURL(path.join(WEB, 'src/chars/retarget.js')).href);
+const { HIPS_ORDER } = await import(pathToFileURL(path.join(WEB, 'src/chars/anim.js')).href);
 
 const FPS = 30;
 const OUT = path.join(WEB, 'src', 'chars', 'clips.gen.js');
@@ -126,9 +127,13 @@ for (const spec of BAKE) {
     const iQh = Qh.clone().invert();
     const iQs = Qs.clone().invert();
 
-    const [hx, hy, hz] = eulerXYZ(Qh);
-    const [tx, ty, tz] = eulerXYZ(iQh.clone().multiply(Qs));
-    const [ex, ey, ez] = eulerXYZ(iQs.clone().multiply(Qhd));
+    // Continuous with the previous frame (not the canonical ±π/2 branch):
+    // a spin past a quarter turn must not flip x and z by π between frames.
+    // Hips in the animator's HIPS_ORDER (yaw outermost), torso/head in XYZ.
+    const near = (q, k, order = 'XYZ') => eulerNear(q, i ? [ch[k + 'X'][i - 1], ch[k + 'Y'][i - 1], ch[k + 'Z'][i - 1]] : [0, 0, 0], order);
+    const [hx, hy, hz] = near(Qh, 'hipsRot', HIPS_ORDER);
+    const [tx, ty, tz] = near(iQh.clone().multiply(Qs), 'torsoRot');
+    const [ex, ey, ez] = near(iQs.clone().multiply(Qhd), 'headRot');
     ch.hipsRotX[i] = hx; ch.hipsRotY[i] = hy; ch.hipsRotZ[i] = hz;
     ch.torsoRotX[i] = tx; ch.torsoRotY[i] = ty; ch.torsoRotZ[i] = tz;
     ch.headRotX[i] = ex; ch.headRotY[i] = ey; ch.headRotZ[i] = ez;

@@ -115,10 +115,31 @@ function resetPose(p) {
   return p;
 }
 
+/**
+ * Euler order of the hips. Yaw outermost: a turning body (the dance spins, a
+ * swing opens the hips ~90°) is one channel and stays far from gimbal lock,
+ * where XYZ put the yaw in the middle and locked at exactly a quarter turn.
+ * The clip bake (tools/assets/bake-clips.mjs) decomposes in this order.
+ */
+export const HIPS_ORDER = 'YXZ';
+
+/**
+ * Which pose keys are Euler angles. Adding a whole turn to one Euler angle
+ * leaves the rotation unchanged, so blends and damping take the short way
+ * round: a spinning mocap dance carries hips angles many turns from zero,
+ * and a straight lerp back to idle (or across the loop's wrap) cartwheeled
+ * the body upside-down on the way.
+ */
+const IS_ANGLE = POSE_KEYS.map((k) => /Rot[XYZ]$|Swing$|Lift$|Twist$|Spread$/.test(k));
+const TAU = Math.PI * 2;
+/** `d` wrapped into [-π, π). */
+const wrapPi = (d) => d - TAU * Math.floor((d + Math.PI) / TAU);
+
 function blendPose(out, a, b, t) {
   for (let i = 0; i < POSE_KEYS.length; i++) {
     const k = POSE_KEYS[i];
-    out[k] = a[k] + (b[k] - a[k]) * t;
+    const d = b[k] - a[k];
+    out[k] = a[k] + (IS_ANGLE[i] ? wrapPi(d) : d) * t;
   }
   return out;
 }
@@ -882,7 +903,9 @@ export class CharacterAnimator {
     let bad = false;
     for (let i = 0; i < POSE_KEYS.length; i++) {
       const k = POSE_KEYS[i];
-      cur[k] = damp(cur[k], target[k], 34, dt);
+      cur[k] = IS_ANGLE[i]
+        ? target[k] - wrapPi(target[k] - cur[k]) * Math.exp(-34 * dt)
+        : damp(cur[k], target[k], 34, dt);
       if (!Number.isFinite(cur[k])) bad = true;
     }
     // A NaN in any channel would otherwise persist forever through damp()
@@ -970,7 +993,7 @@ export class CharacterAnimator {
     j.root.rotation.set(0, p.rootRotY, p.rootRotZ);
 
     j.hips.position.y = this.dims.hipY + p.hipsY * H;
-    j.hips.rotation.set(p.hipsRotX, p.hipsRotY, p.hipsRotZ);
+    j.hips.rotation.set(p.hipsRotX, p.hipsRotY, p.hipsRotZ, HIPS_ORDER);
     j.torso.rotation.set(p.torsoRotX, p.torsoRotY, p.torsoRotZ);
 
     // Breathing lives on the torso MESH, so it never moves the head or arms.

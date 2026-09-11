@@ -9,7 +9,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { solveArm, solveLeg, armFK, legFK, eulerXYZ, unwrapInPlace } from '../src/chars/retarget.js';
+import { solveArm, solveLeg, armFK, legFK, eulerXYZ, eulerNear, unwrapInPlace } from '../src/chars/retarget.js';
 
 function rng(seed) {
   let s = seed >>> 0;
@@ -80,6 +80,31 @@ test('eulerXYZ matches three.js Euler(XYZ) decomposition', () => {
     const q2 = new THREE.Quaternion().setFromEuler(new THREE.Euler(x, y, z, 'XYZ'));
     assert.ok(Math.abs(Math.abs(q.dot(q2)) - 1) < 1e-9, `#${i}`);
   }
+});
+
+test('eulerNear follows two full spins (yaw-first hips order) with no flips', () => {
+  // A dancer turning round on the spot with a little lean. The canonical
+  // decomposition keeps the middle angle in ±π/2, so past a quarter turn it
+  // flipped the other two by π in one frame — a linear sample across that
+  // frame drew the body face-down. The hips use YXZ (yaw outermost, so a spin
+  // is one channel and never nears gimbal lock) and must stay continuous.
+  let prev = [0, 0, 0];
+  for (let i = 1; i <= 240; i++) {
+    const yaw = (i / 240) * Math.PI * 4;
+    const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(0.25 * Math.sin(i * 0.1), yaw, 0.15, 'YXZ'));
+    const e = eulerNear(q, prev, 'YXZ');
+    for (let c = 0; c < 3; c++) assert.ok(Math.abs(e[c] - prev[c]) < 0.3, `frame ${i} channel ${c}: ${prev[c].toFixed(2)} -> ${e[c].toFixed(2)}`);
+    const q2 = new THREE.Quaternion().setFromEuler(new THREE.Euler(e[0], e[1], e[2], 'YXZ'));
+    assert.ok(Math.abs(Math.abs(q.dot(q2)) - 1) < 1e-9, `frame ${i} reconstructs`);
+    prev = e;
+  }
+  assert.ok(Math.abs(prev[1] - Math.PI * 4) < 1e-6, 'the spin accumulates on yaw');
+});
+
+test('eulerNear picks the alternate XYZ solution when it is the continuous one', () => {
+  const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(0.1, 2.0, 0.2, 'XYZ'));
+  const e = eulerNear(q, [0.1, 1.9, 0.2], 'XYZ');   // canonical would be y = π-2 with x, z flipped
+  assert.ok(Math.abs(e[0] - 0.1) < 1e-9 && Math.abs(e[1] - 2.0) < 1e-9 && Math.abs(e[2] - 0.2) < 1e-9, e.join(','));
 });
 
 test('unwrapInPlace removes 2π jumps so channels interpolate smoothly', () => {

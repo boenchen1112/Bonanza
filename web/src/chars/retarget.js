@@ -35,6 +35,30 @@ export function eulerXYZ(q) {
   return [_e.x, _e.y, _e.z];
 }
 
+const TAU = Math.PI * 2;
+const nearAngle = (a, ref) => a + TAU * Math.round((ref - a) / TAU);
+
+/**
+ * Euler angles [x, y, z] of a quaternion in `order`, choosing — of the two
+ * solutions (first+π, π-middle, last+π) and the canonical one, each shifted
+ * by whole turns — the one nearest `prev`. The canonical decomposition keeps
+ * the middle angle within ±π/2, so a body turning past a quarter turn flipped
+ * the other two by π in a single frame; a sample between those frames drew
+ * the dancer face-down.
+ */
+export function eulerNear(q, prev, order = 'XYZ') {
+  _e.setFromQuaternion(q, order);
+  const e = [_e.x, _e.y, _e.z];
+  const idx = { X: 0, Y: 1, Z: 2 };
+  const [f, m, l] = [idx[order[0]], idx[order[1]], idx[order[2]]];
+  const alt = e.slice();
+  alt[f] += Math.PI; alt[m] = Math.PI - alt[m]; alt[l] += Math.PI;
+  const a = e.map((v, c) => nearAngle(v, prev[c]));
+  const b = alt.map((v, c) => nearAngle(v, prev[c]));
+  const dist = (s) => Math.abs(s[0] - prev[0]) + Math.abs(s[1] - prev[1]) + Math.abs(s[2] - prev[2]);
+  return dist(b) < dist(a) ? b : a;
+}
+
 /** Forward kinematics of one toy arm: unit directions of upper arm + forearm. */
 export function armFK({ swing, lift, twist, bend }, sx) {
   const R = new THREE.Quaternion().setFromEuler(new THREE.Euler(-swing, twist * sx, sx * lift, 'XYZ'));
