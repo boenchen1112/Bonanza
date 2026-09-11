@@ -44,7 +44,7 @@ scenes.forEach((scene, i) => {
   const log = readFileSync(path.join(ROOT, out, 'console.log'), 'utf8');
   const lines = log === '(clean)' ? [] : [...new Set(log.split('\n').filter((l) => l.startsWith('[')))];
   if (!s.consoleClean) dirty++;
-  const au = s.audio ? `audio ${s.audio.pass ? 'pass' : 'FAIL'} ${s.audio.rmsDb}dB` : 'audio -';
+  const au = s.audio ? `audio ${s.audio.pass === null ? 'no-grid' : s.audio.pass ? 'pass' : 'FAIL'} ${s.audio.rmsDb}dB` : 'audio -';
   console.log(`${scene.padEnd(15)} ${s.consoleClean ? 'clean' : 'DIRTY'}  ${String(s.fps).padStart(5)}fps  `
     + `cpu ${s.cpuMs.mean.toFixed(1)}ms  draws ${s.render.drawCalls}  ${au}`
     + (lines.length ? '\n    ' + lines.slice(0, 6).join('\n    ') : ''));

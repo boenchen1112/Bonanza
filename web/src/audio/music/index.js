@@ -32,7 +32,7 @@ export const TRACKS = Object.fromEntries(
 const SCENE_TRACK = {
   title: 'title',
   menu: 'title',
-  select: 'title',
+  options: 'title',
   freeplay: 'title',
   roster: 'title',
   party: 'title',

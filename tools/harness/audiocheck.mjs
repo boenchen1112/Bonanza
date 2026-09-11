@@ -142,6 +142,15 @@ export function checkAudio({ samples, sampleRate, startTime = 0, beatTimes, minO
   const rmsDb = 10 * Math.log10(sq / Math.max(1, samples.length) + 1e-12);
   const silent = rmsDb < -60;
   const onsets = silent ? [] : detectOnsets(samples, sampleRate).map((t) => t + startTime);
+  // No transport running (a results fanfare, a static screen): there is no
+  // beat grid to be on or off. Report level only; `pass: null` = not judged.
+  if (!beatTimes || beatTimes.length < 2) {
+    return {
+      pass: silent ? false : null, grid: 'none', silent,
+      rmsDb: Math.round(rmsDb * 10) / 10, peak: Math.round(peak * 1000) / 1000,
+      clipped: peak >= 0.999, onsets: onsets.length, bestGrid: null, biasMs: null, grids: [],
+    };
+  }
   const grids = [1, 2, 4].map((s) => gridAlignment(onsets, beatTimes, s));
   const ok = (g) => g.n >= minOnsets && g.onGrid >= 0.5 && g.contrast >= 0.25;
   const best = grids.filter(ok).sort((a, b) => b.contrast - a.contrast)[0]

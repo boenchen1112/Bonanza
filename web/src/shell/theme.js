@@ -195,11 +195,13 @@ const CSS = `
   will-change:transform;transform-origin:50% 85%;
   background:linear-gradient(178deg,#fff 6%,${PAL.yellow} 42%,#ff9f45 68%,${PAL.coral} 100%);
   -webkit-background-clip:text;background-clip:text;color:transparent;
-  text-shadow:0 .055em 0 rgba(0,0,0,.85);
-  filter:drop-shadow(0 .04em 0 #2a1d5e) drop-shadow(0 0 .34em rgba(255,190,90,.45));}
+  /* No text-shadow here: with a transparent, background-clipped fill Chrome
+     paints the shadow OVER the gradient, which turned every letter face dark
+     brown. The extrusion lives in the filter chain instead. */
+  filter:drop-shadow(0 .055em 0 rgba(20,10,48,.9)) drop-shadow(0 .02em 0 #2a1d5e) drop-shadow(0 0 .34em rgba(255,190,90,.45));}
 .sh-logo__l--alt{background:linear-gradient(178deg,#fff 6%,${PAL.cyan} 40%,#7aa6ff 70%,${PAL.violet} 100%);
   -webkit-background-clip:text;background-clip:text;
-  filter:drop-shadow(0 .04em 0 #16264f) drop-shadow(0 0 .34em rgba(90,200,255,.45));}
+  filter:drop-shadow(0 .055em 0 rgba(8,14,44,.9)) drop-shadow(0 .02em 0 #16264f) drop-shadow(0 0 .34em rgba(90,200,255,.45));}
 .sh-logo__l--sp{width:.34em;}
 .sh-logo__tag{margin-top:.34em;font-weight:900;letter-spacing:.42em;
   color:${PAL.dim};text-shadow:0 2px 0 rgba(0,0,0,.7);}

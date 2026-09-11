@@ -43,10 +43,12 @@ export default {
     ctx.fx.attach(ctx.scene);
     ctx.scene.background = new THREE.Color(0x0b0a1a);
 
-    const humanChar = session.players.find((p) => !p.isCpu)?.char;
+    // Direct loads (deep link, harness) have no session: show the default star
+    // rather than an empty stage beside the scorecard.
+    const humanChar = session.players.find((p) => !p.isCpu)?.char || 'bopp';
     if (humanChar) {
       const m = charMesh(charById(humanChar), {});
-      m.position.set(0, -1.1, 0);
+      m.position.set(-3.1, -1.1, 0);   // left of the scorecard panel
       m.scale.setScalar(1.3);
       ctx.scene.add(m);
       S.cast = m;

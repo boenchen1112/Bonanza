@@ -91,6 +91,14 @@ test('a grid-perfect track that sounds 60ms late fails and reports the lag', () 
   assert.ok(Math.abs(s2.biasMs - 60) < 4, `bias ${s2.biasMs}`);
 });
 
+test('audio with no beat grid (clock stopped) is audible but not judged', () => {
+  const x = hits([0.3, 0.9, 1.4, 2.2], 3);
+  const r = checkAudio({ samples: x, sampleRate: SR, startTime: 0, beatTimes: [] });
+  assert.equal(r.silent, false);
+  assert.equal(r.pass, null);
+  assert.equal(r.grid, 'none');
+});
+
 test('encodeWav writes a valid 16-bit PCM RIFF header', () => {
   const L = new Float32Array([0, 0.5, -0.5, 1]);
   const R = new Float32Array([0, -1, 1, 0]);

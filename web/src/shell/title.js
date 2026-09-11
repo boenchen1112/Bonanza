@@ -63,7 +63,7 @@ export default {
       new THREE.CylinderGeometry(4.6, 5.0, 0.5, 24),
       new THREE.MeshStandardMaterial({ color: 0x2b2566, roughness: 0.5, metalness: 0.25, flatShading: true })
     );
-    deck.position.set(2.3, 0.25, -0.5);   // under the cast, right of the menu
+    deck.position.set(2.9, 0.25, -0.5);   // under the cast, right of the menu
     stage.add(deck);
     S.deck = deck;
 
@@ -72,7 +72,7 @@ export default {
       const def = CHARS.find((c) => c.id === id) || CHARS[i];
       const m = charMesh(def, {});
       // Right of centre: the menu owns the left half of the frame.
-      m.position.set(2.3 + (i - (castIds.length - 1) / 2) * 1.55, 0.5, -0.4 + (i % 2) * 0.5);
+      m.position.set(2.9 + (i - (castIds.length - 1) / 2) * 1.45, 0.5, -0.4 + (i % 2) * 0.5);
       m.scale.setScalar(0.92);
       stage.add(m);
       S.cast.push(m);
