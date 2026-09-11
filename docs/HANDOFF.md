@@ -1,8 +1,11 @@
 # Beat Bash Bonanza — handoff
 
-**Written 2026-08-08.** Branch `claude/rhythm-party-game-713xsk`, all pushed.
-**Pull request: [#12](https://github.com/boenchen1112/Swinger/pull/12)** — this
-branch is the PR, so every further push updates it. Do not open a second one.
+**Updated 2026-09-11 (portfolio-polish pass).** Branch `bbb-portfolio-polish`,
+draft PR [#22](https://github.com/boenchen1112/Bonanza/pull/22) into
+`Mario-Party` (never `master`). The pass is specified in
+`docs/BBB_Portfolio_Polish_Spec.md` and tracked ticket by ticket in
+`docs/BBB_Portfolio_Polish_Tickets.md` — read that file for what changed and
+why; this document is the standing state of play.
 
 Read this first, then `web/ARCHITECTURE.md`. This document is the state of
 play and the plan; ARCHITECTURE.md is the contract.
@@ -26,17 +29,15 @@ verbatim.
 
 | | |
 |---|---|
-| Builds | yes, clean |
-| Runs | yes — all 8 registered scenes load with a clean console |
-| Tests | 27/27 green (`npm --prefix web test`) |
-| Critic rounds completed | **zero** |
-| Minigames built | **five, all playable and passing autoplay at 100%** — none reviewed by a critic |
+| Builds | yes, clean (production build strips the `__BBB__` test API; the harness builds `--mode harness`) |
+| Runs | yes — every registered scene loads console-clean on the real GPU (`tools/harness/sweep.mjs`) |
+| Tests | 76/76 green (`npm --prefix web test`) + `swingKings/verify.mjs` and `swingKings/smoke-conduct.mjs` ALL PASS |
+| Critic rounds completed | Swing Kings: 2 FAIL rounds, fixes landed, round 3 in progress. Shell: round 1 in progress. See the tickets file (13, 19) |
+| Minigames | five, all playable; Swing Kings is the polished hero, the other four had a baseline pass |
 
-Wave 1 (six engine builders) and Wave 2 (five minigame builders) were BOTH
-terminated part-way by a monthly API spend limit. Their partial work was recovered and integrated, so the
-engine is real but **nothing has passed the quality bar you set, because no
-critic has run.** Treat every "shipped" claim below as "exists and runs",
-not as "reviewed".
+The earlier waves' builders were cut short by a spend limit and no critic
+ever ran; the portfolio-polish pass is the first time the builder/critic
+loop has actually been exercised.
 
 ### What genuinely exists
 
@@ -46,11 +47,16 @@ not as "reviewed".
 - **Audio** (`web/src/audio/`) — synthesis voices, reverb/delay sends, a
   music player with lookahead scheduling, music theory helpers, and seven
   original tracks as data. Verdict SFX are pitched into the current chord.
-  **Never heard by anyone** — the harness mutes audio. This is the single
-  least-verified area in the project.
+  The harness now captures the mix and checks level + beat sync on every
+  run; no person has listened to it yet.
 - **Look** (`web/src/render/look/`, `env/`) — house toon style, lighting rig,
-  palettes, gradient sky, blob shadows, bloom/vignette/chroma post, and a
-  beat-reactive environment kit.
+  palettes, gradient sky, blob shadows plus one opt-in real shadow map
+  (`look.setShadowFocus`), bloom/vignette/chroma post, and a beat-reactive
+  environment kit.
+- **Mocap on the toy rig** (`web/src/chars/retarget.js`, `clips.gen.js`) —
+  Mixamo clips baked offline into the procedural rig's pose channels and
+  played through the same animator (`anim.play()`); the why is in the
+  tickets file (re-plan note above ticket 07).
 - **VFX** (`web/src/render/fx/`) — pooled sparks, shards, streaks, rings,
   trails, confetti, decals, in-world callouts, plus a `fx.verdict()` that
   composes a layered response and a combo-escalation system.
@@ -63,18 +69,11 @@ not as "reviewed".
 
 ### What is missing
 
-- **Critic review.** Still zero rounds. Every game is mechanically verified
-  but none has been judged for feel, readability or personality.
-- **The conducting gesture is deferred by decision, not oversight.** Swing
-  Kings and Bounce Brigade were built around hold-and-release; both are now
-  plain taps (see §6). Swing Kings derives power from timing accuracy instead
-  of hold length; Bounce Brigade's two-beat charge is a double-tap, on the
-  ramp and off it. Restoring the gesture later is a localised change to each
-  game's `input()` plus its power source.
-- **UI (P5) is half-wired.** `web/src/ui/font.js` (procedural typeface) and
-  `styles.js` landed, but `ui/index.js` was never rewritten to use them. The
-  HUD is still the original debug overlay. This is now the biggest visible
-  quality gap.
+- **Critic PASS.** In progress for Swing Kings and the shell (tickets 13,
+  19); the other four games had a baseline pass only, no critic round.
+- **Conducting gesture: Swing Kings only, opt-in** (ADR 0004) — mouse drag
+  and webcam hand tracking, chosen in Options; taps stay the default.
+  Bounce Brigade's charge is still a double-tap.
 - **`select.js` was removed** (2026-09-11): a placeholder nothing in the
   flow routed to. Title → PARTY / FREE PLAY / OPTIONS; the game picker is
   `freeplay`. `results`, `party` and `options` are real scenes now.
@@ -137,19 +136,13 @@ game ids. Anything not in `web/src/shell/registry.js` is invisible to review.
 
 ## 4. Next actions, in order
 
-1. **Wave 2 critics.** Every game now plays under the standard harness, so a
-   critic can finally judge one. One fresh critic per game,
-   `critic-brief.md` verbatim, blind A/B against the Mario Party rhythm
-   minigames. Loop until PASS. Known cosmetic defect for triage: Swing Kings'
-   hit-tier callout is dark-on-dark against the crowd.
-2. **Finish P5 (UI)** — the biggest visible gap now that the games exist.
-3. **Audio verification** via `OfflineAudioContext`: assert peak <= 1.0 and
-   non-silence per layer. Nobody has heard this game.
-4. **Real-hardware perf pass.** Draw calls are trustworthy and fine: 73
-   (swing-kings) to 109 (chomp-chorus) against a 120 budget. `cpuMs` is
-   contaminated by SwiftShader and needs a real GPU.
-5. Shell coherence (portfolio-polish ticket 18),
-   calibration, accessibility.
+See `docs/BBB_Portfolio_Polish_Tickets.md` for the live list. Beyond it:
+
+1. **Critic rounds for the other four games** (they only had a baseline
+   pass). Same brief, same loop.
+2. **A person listens** to every track (`runs/*/audio.wav` from any harness
+   run) and plays the webcam mode once.
+3. Calibration, accessibility.
 
 ### Verified, so stop worrying about it
 
@@ -166,8 +159,13 @@ locked to the transport across every `setBpm`.
   already been guarded against in `clock.test.mjs` for `Beats.barFrac`.
 - **Zeroing `dt` for hitstop.** Subtract only the frozen portion, or a 78ms
   hitstop eats a whole frame on a slow device.
-- **Sampling `renderer.info` after post.** The fullscreen quads overwrite it;
-  every scene reports 1 draw call. `stage.stats` captures it before post.
+- **`renderer.info` resetting per render() call.** The post chain calls
+  render() several times per frame; with the default `autoReset` every
+  scene reported 1 draw call. The stage turns autoReset off and resets once
+  per frame.
+- **Trusting SwiftShader frames.** Many old "bugs" (callout pile-ups, a
+  stuck Chomp beam, CONTEXT_LOST spam) were 2fps software-render artifacts.
+  Re-check on the GPU path before fixing anything seen in an old run.
 - **Two verdict callouts.** `fx` auto-bridges the `judge` bus event into a
   full layered response including an in-world callout. Do not also fire a
   DOM popup for the same verdict.
@@ -180,23 +178,25 @@ locked to the transport across every `setBpm`.
   cause. `activate()` now contains scene failures and records them on
   `window.__BBB__.lastError`. If a scene seems to hang, read that field.
 
-## 6. Input: taps only, for now
+## 6. Input: taps first
 
-The hold-and-release conducting gesture is deliberately deferred. Every
-scored input in every game is a discrete button press. Two consequences:
+Every scored input in every game can be a discrete button press, so the
+standard harness bot exercises all five games. Pass
+`--actions a,left,down,up,right` for lane games; `--division 2` (eighths) is
+the right grid — finer grids make accuracy look worse, see the critic brief.
+`--chart` makes the bot press a scene's own notes (Swing Kings implements
+`testChart()`), one press per note like a person.
 
-- The standard harness bot exercises all five games. Pass
-  `--actions a,left,down,up,right` for lane games; `--division 2` (eighths)
-  is the right grid — finer grids make accuracy look worse, see the critic
-  brief.
-- No per-game verification scripts are needed. `swingKings/verify.mjs` and
-  `chompChorus/verify.mjs` are leftovers from the gesture design and are not
-  part of the verification path.
+Exceptions (harness-exempt, own scripts): Baton Brawl (ADR 0002) and Swing
+Kings' opt-in conduct modes (ADR 0004) — `swingKings/verify.mjs` drives
+hold/release, `swingKings/smoke-conduct.mjs` drives real mouse strokes and
+boots the webcam pipeline on a fake camera.
 
 ## 7. Conventions
 
 - All time is audio time (`Clock.now()`), never `performance.now()`.
 - `damp(a, b, lambda, dt)`, never `lerp(a, b, 0.1)` in an update loop.
 - `makeRng(seed)`, never `Math.random()`, in anything affecting gameplay.
-- No external fetches: every asset is generated in code.
+- No fetches outside the build (ADR 0003): bundled assets only, loaded
+  same-origin through `web/src/assets/index.js`.
 - Minigames implement the interface in ARCHITECTURE.md and are registered.
