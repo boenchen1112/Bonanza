@@ -109,7 +109,7 @@ Status key: `[ ]` open · `[~]` in progress · `[x]` done · `[-]` cut (with rea
 **Blocked by:** 03
 - [x] Whole track (68.7s, chart-played, 45/45 perfect): audio pass, -15.8 dB RMS, peak 0.955 (no clipping), beat grid on 51% / off 0.8%, bias -4.2ms (runs/t12-full). Human listen: hand-back checklist
 
-## [ ] 13 — Critic loop: Swing Kings to PASS
+## [x] 13 — Critic loop: Swing Kings to PASS — *closed at round 7 without a PASS (see loop decision under 19)*
 **Blocked by:** 05, 08, 09, 10, 11, 12
 - [x] Round 1 FAIL (MP 7/7), round 2 FAIL (ours won Timing + Escalation), fixes landed for both
 - [x] Round 3 FAIL (6–1, ours won Escalation; gap: bat never meets the ball). Fixed: contact visuals wait for the live swing's contact frame and fire from the bat's sweet spot; the pitch aim adapts to it (verify.mjs: gap < 0.3 after the first hit, delay < 80ms); rounder/smaller beat pips; trace hidden in tap mode; earlier verdict pose; no title-card subtitle; opaque callout plaques popping from 60%; callouts age on real time
@@ -117,7 +117,8 @@ Status key: `[ ]` open · `[~]` in progress · `[x]` done · `[-]` cut (with rea
 - [x] Round 4 fixes landed (slam in frame, batter squares up, STRIKE!/SIDE RETIRED!, GAME!, homer distances, night palette, floaters)
 - [x] Round 5 FAIL, close (ours won Escalation; Timing 8, Readability 7). Send-back: grand-slam ring cut flat by the field. Fixed: overlay ring pool; badges off the pitch arc; homers land in the stands in frame; bat dropped for the curtain call; gold pips; bunt/foul split; misses stop at the net; NEW INNING; contact fires within half a frame
 - [x] Round 6 FAIL, narrowly (Timing 8, Impact 7, Escalation 7; ours won 3 of 7). Send-back: the HOME RUN!/GRAND SLAM! badge rose under the OUTS pill. Also: NEW INNING beside a lit lamp, LIKE THIS! overlapping the "3", see-through badge plates, lumpy finale/combo rings. All fixed in 6009ff1 (badges clamp below the HUD band in screen space). Left as known gaps (design, not bugs): the pitch arcs through the crowd band, the strike heap hides the face, the set edge beyond the stands and the skyline are blockout, the night switch reads as a grade, hits look alike
-- [ ] Round 7 — confirmation of the R6 send-back only (final round)
+- [x] Round 7 FAIL (Impact 8, Escalation 8, Timing 8 even; the R6 badge fix held). Send-back: in the two-a-bar section the incoming pitch lost its beat dots — resolving pitch N cleared the dots pitch N+1 had just laid. Fixed in f304bf9 (dots owned by their pitch), with homers moved centre-right so they no longer cross the incoming lob, and the results score now equal to the HUD score. Verified on runs/r9-sk-late, verify.mjs ALL PASS
+- **Known gaps at hand-back** (not re-reviewed): flat wedge at the left edge of the set and blockout skyline; the title card's beige text over the crowd; home-run badges repeat (only the distance varies); the pitch arcs through the busy crowd band; the strike heap hides the face; the night switch reads as a colour grade; the pitching machine's face never changes; faceless crowd
 
 ## [x] 14 — Swing Kings gesture mode: mouse/pointer-drag source (+ ADR 0004)
 **Blocked by:** 01
@@ -147,12 +148,14 @@ Status key: `[ ]` open · `[~]` in progress · `[x]` done · `[-]` cut (with rea
 - [x] Music: options mapped to the menu theme; title/roster/freeplay/options/party pass the beat-sync check; results fanfare reported no-grid (no transport)
 - Note for 19: title cpu ~4-5ms/frame (budget 4) — judge in the shell critic round
 
-## [ ] 19 — Critic loop: shell to PASS
+## [x] 19 — Critic loop: shell to PASS — *closed at round 3 without a PASS (see loop decision below)*
 **Blocked by:** 05, 08, 18
 - [x] Round 1 FAIL (MP 7/7; gap: menu music died on every transition). Fixed: player re-anchors on transport restart (player.test.mjs); party has CPUs, points, standings hub, podium + winner, finale last; results/party card transforms; options reset in-row + keeps settings; roster stamp/legend/hints/see-through; freeplay side cards; menu ping + confetti at the item; portraits rendered from the 3D rig; dance no longer flips face-down (YXZ hips, re-baked, wrap-aware blends)
 - [ ] Open from round 1: title cpu p95 ~13ms (steady state; not DOM, env, chars or post — suspect per-beat work), attract reel is still stills, crowd faceless (art note)
 - [x] Round 2 FAIL (ours won Timing). Send-back: the lineup never exists in play (picked character, rival CPUs), CPU standings are rolls, ties shown as ranks. Also: results accuracy contradicts stats (Drumline), READY! clips slot text, 2nd human cursor on a taken character, no results input lockout, no party->game wipe, load hitches, fonts
-- [ ] Round 3 (after the identity pass-through + correctness fixes)
+- [x] Round 2 fixes (6009ff1): ctx.players carries the lineup into every game (hero palette/build/crest; Drumline's rival lanes are the roster CPUs and the party scores that race's real places); competition ranking with shared places and co-champions; one human seat; results accuracy = hit quality; scene warm-up before the clock starts + title card over the swap
+- [x] Round 3 FAIL (ours won Timing; the lineup pass-through was seen working). Send-back: results → standings don't pay off (static card, same sting for D as B, rivals never shown), plus carousel placeholder thumbnails, truncated seat plates, unexplained tie places. Fixed in f304bf9: results reveal in order (count-up, staggered stats, rank stamp with a per-rank sting, every player's round placing), carousel repaints on decode, READY! on the portrait, wins shown on points ties, Drumline races only the lineup, centred game title card, title stats plate/plural
+- **Known gaps at hand-back** (not re-reviewed): 3 of 4 party rounds are solo games whose CPU results are simulated (disclosed on the recap); roster menu music fails the beat-grid check (suspect: each shell scene restarts the transport at beat 0 — not investigated); countdown lands on the Drumline intro title and on the fading PAUSED panel; bloom bleaches white heads/limbs; TUFF lies flat and small cast figures float on roster lock-in; results frame is empty below the card; Drumline taglines differ across attract/carousel/intro; attract stills washed out; title p95 cpu spikes (~12ms)
 
 **Loop decision (2026-09-11):** the blind critic always finds a next gap against a first-party bar, so "loop until PASS" has no fixed point. Plan: Swing Kings round 6 and shell round 3 are the last rounds; whatever they still find goes into ticket 24 as known gaps. Scope for the shell: the minigames are single-player by design, so the party is presented honestly as one player vs CPU rivals (no 2nd-human slots, CPU columns marked) rather than building 4-player minigames. Cut, with reason: Free Play thumbnails before focus, shell/game font unification, title cpu p95 and scene-load hitches (no bounded fix found; see verify cold-run note), bloom on the roster preview, MIMO's build.
 
@@ -173,5 +176,6 @@ Status key: `[ ]` open · `[~]` in progress · `[x]` done · `[-]` cut (with rea
 **Blocked by:** 04, 07, 10
 - [x] Same bar; boss + player cast shadows — runs/t20c (sweep: all clean, draws 90-118 < 120, ~55fps, audio pass on 12s runs)
 
-## [ ] 24 — Hand-back status report in the draft PR
+## [x] 24 — Hand-back status report in the draft PR
 **Blocked by:** 13, 15, 19 (deliberately **not** 20–23)
+- [x] PR #22 body rewritten as the hand-back: every ticket done/partial/cut, both critic loops' final scores and known gaps, and the human checklist (listen to the captured WAVs, real-webcam test, confirm the toy-rig + retargeted-mocap direction)
