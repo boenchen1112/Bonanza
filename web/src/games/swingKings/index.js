@@ -588,7 +588,11 @@ export default {
     this.w.crowd.hype(big ? 1.0 : tier.id === 'liner' ? 0.5 : 0.25);
     if (big) this.w.crowd.wave(1, 2.1);
     const grade = { perfect: 'PERFECT', great: 'GREAT', good: 'GOOD' }[verdict] || '';
-    const word = isDemo ? 'LIKE THIS!' : `${foul ? 'FOUL!' : tier.label}|${grade}`;
+    // Home runs carry their distance, so forty homers aren't forty identical
+    // badges (quantised to 5ft: the badge textures are cached per string).
+    const feet = tier.id === 'homer' && !foul
+      ? ` · ${Math.round((365 + power * 70 + (verdict === 'perfect' ? 15 : 0) + (combo % 7) * 3) / 5) * 5} FT` : '';
+    const word = isDemo ? 'LIKE THIS!' : `${foul ? 'FOUL!' : tier.label}|${grade}${feet}`;
     // Above the verdict word (fx.verdict pops at the contact point), so the two
     // channels stack instead of overprinting; its life never outlasts the gap
     // to the next pitch, so two tier words are never up at once.

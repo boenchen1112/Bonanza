@@ -171,15 +171,17 @@ PALETTES['swing-kings'] = P({
 PALETTES['swing-kings-night'] = P({
   skyTop: 0x040a24, skyMid: 0x0f2258, skyBot: 0x5b3a8c,
   sun: 0xb8d4ff, sunDir: [0.35, 0.1, -1], sunStrength: 0.45, sunSize: 0.18,
-  ground: 0x17603e, groundAlt: 0x1d7049, groundRim: 0xd8f0ff,
+  // Rich, not milky: a warm floodlight key over a dim blue fill keeps the
+  // turf green and the dirt warm (a bright blue fill washed both to teal/grey).
+  ground: 0x176a3a, groundAlt: 0x1d7a44, groundRim: 0xd8f0ff,
   band: 0x0e2458, bandAlt: 0x2346a0,
   accent: 0xffe066, accent2: 0x7fe7ff, accent3: 0xff5d7a,
   crowd: [0xffe066, 0x7fe7ff, 0xff5d7a, 0xffffff, 0xb28cff],
-  key: 0xeaf2ff, keyDir: [-0.35, 0.9, 0.3], keyIntensity: 2.9,
-  fillSky: 0x6f8fe0, fillGround: 0x0c2b22, fillIntensity: 1.0,
-  rim: 0xbfe6ff, rimDir: [0.6, 0.35, -0.75], rimStrength: 1.2,
-  fog: 0x0d1c46, fogNear: 20, fogFar: 74,
-  bloom: 1.05, exposure: 1.05,
+  key: 0xfff0d6, keyDir: [-0.35, 0.9, 0.3], keyIntensity: 3.0,
+  fillSky: 0x3f5aa6, fillGround: 0x0b2a1c, fillIntensity: 0.72,
+  rim: 0xbfe6ff, rimDir: [0.6, 0.35, -0.75], rimStrength: 1.1,
+  fog: 0x0a1638, fogNear: 22, fogFar: 80,
+  bloom: 0.9, exposure: 1.0,
 });
 
 /** Drumline Dash: hot night parade. Magenta and ember. */

@@ -62,6 +62,9 @@ export function createWorld(ctx) {
       ground: { confetti: 0, rings: false },
       backdrop: { arches: 4, radius: 24, spacing: 7.5, z: -30, skyline: 30, skylineZ: -74 },
       spotlights: {},
+      // Fewer, smaller and up in the sky: full-size floaters hung in front
+      // of the stands as big crystals between the camera and the crowd.
+      floaters: { count: 10, innerR: 26, outerR: 36, minY: 7, maxY: 16, size: 0.6 },
     },
   });
   env.addBanners({ count: 30, radius: 13.5, y: 7.6, z: -3 });
