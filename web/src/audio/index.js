@@ -358,6 +358,9 @@ export function createAudio({ ctx, clock, bus, offline = false }) {
       return ok;
     },
     stop(opts) { player.stop(opts || {}); },
+    /** Pause menu: silent, cursor kept; resume() continues in step with the transport. */
+    pause(opts) { player.pause(opts || {}); },
+    resume(opts) { player.resume(opts || {}); },
     setIntensity(n, opts) { player.setIntensity(n, opts); },
     get intensity() { return player.intensity; },
     get playing() { return player.playing; },

@@ -199,7 +199,8 @@ export default {
       const p = rivals[k];
       // A party races only its own lineup: a house drummer in the spare lane
       // ranked you 4th on the board while the party called it 3rd.
-      if (!p && ctx.players?.length) { S.laneColors.push(0x3a2a55); return; }
+      // (Free Play's lineup is you alone: no rivals seated, so the house races.)
+      if (!p && rivals.length) { S.laneColors.push(0x3a2a55); return; }
       const r = mkRacer(k + 1, p ? p.name : c.name, p ? p.palette : c.palette, p ? p.build : c.build, 'lite');
       if (p) {
         // Easy .40 → 0.73 pace, hard .86 → 0.90: the ace is still CRASH-fast.

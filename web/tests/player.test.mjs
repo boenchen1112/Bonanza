@@ -58,6 +58,46 @@ test('a transport restart keeps the music going on the new grid', () => {
   for (const t of after) assert.ok(onGrid(clock, t), `kick at beat ${clock.beatAt(t)} is off the new grid`);
 });
 
+test('a restart at beat 0 after a short screen still plays at once', () => {
+  // Title → roster inside ~1.5s: the old cursor sat only a few beats ahead,
+  // close enough in time to look like a continuation — a bar of dead air.
+  const { ctx, clock, player, kicks, run } = rig();
+  clock.setBpm(120);
+  clock.start(0.1, 0);
+  player.play('menu');
+  run(1.5);
+  clock.stop();
+  const restartAt = ctx.currentTime;
+  clock.start(restartAt + 0.12, 0);
+  kicks.length = 0;
+  run(2);
+  const after = kicks.filter((t) => t > restartAt + 0.05);
+  assert.ok(after.length >= 3, `got ${after.length} kicks in 2s`);
+  assert.ok(after[0] - restartAt < 0.7, `first kick after the restart ${(after[0] - restartAt).toFixed(2)}s late`);
+});
+
+test('pause() / resume() across a pause-menu restart picks the track up where it stopped', () => {
+  const { ctx, clock, player, kicks, run } = rig();
+  clock.setBpm(120);
+  clock.start(0.1, 0);
+  player.play('menu');
+  run(6);
+  // pause: the transport stops at a beat; resume counts in 3 beats and restarts at that beat
+  const pauseBeat = clock.beat;
+  player.pause();
+  clock.stop();
+  run(2);
+  const resumeAt = ctx.currentTime + 3 * 0.5;
+  clock.start(resumeAt, pauseBeat);
+  player.resume();
+  kicks.length = 0;
+  run(4);
+  const beats = kicks.filter((t) => t >= resumeAt - 1e-6).map((t) => clock.beatAt(t));
+  assert.ok(beats.length >= 5, `music is back after resume (got ${beats.length} kicks)`);
+  assert.ok(beats[0] - pauseBeat < 1.01, `first kick at beat ${beats[0].toFixed(2)}, paused at ${pauseBeat.toFixed(2)}: it skipped ahead`);
+  for (const b of beats) assert.ok(Math.abs(b - Math.round(b)) < 1e-6, `kick at beat ${b} is off the grid`);
+});
+
 test('a restart that continues the beat count (pause/resume) keeps the cursor', () => {
   const { ctx, clock, player, kicks, run } = rig();
   clock.setBpm(120);

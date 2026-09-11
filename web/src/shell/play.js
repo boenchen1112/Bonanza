@@ -177,7 +177,9 @@ function openPause(ctx) {
   // BEAT, which survives an origin shift — so snapshot and put them back.
   S.sched = Array.isArray(ctx.clock._scheduled) ? ctx.clock._scheduled.slice() : null;
   ctx.clock.stop();
-  ctx.audio?.music?.stop?.();
+  // pause, not stop: stop() dropped the track, and nothing ever restarted it
+  const music = ctx.audio?.music;
+  if (music?.pause) music.pause(); else music?.stop?.();
   S.pause.show();
   S.pause.clearCount();
   sfx(ctx, 'uiBack');
@@ -191,6 +193,7 @@ function resume(ctx) {
   const lead = RESUME_BEATS * ctx.clock.spb;
   const at = ctx.clock.now() + lead;
   ctx.clock.start(at, S.pauseBeat);
+  ctx.audio?.music?.resume?.();
   if (S.sched) {
     for (const e of S.sched) if (!e.done) ctx.clock.at(e.beat, e.fn);
     S.sched = null;

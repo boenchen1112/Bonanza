@@ -411,11 +411,21 @@ function enterAttract(ctx) {
   sfx(ctx, 'ui');
 }
 
+/**
+ * The player's best game: by rank, then accuracy. Not by score — each game
+ * keeps its own scale (Swing Kings counts in thousands, the rest 0-1000),
+ * so a raw-score comparison always named Swing Kings, even a D.
+ */
 function bestOverall() {
+  const order = ['S', 'A', 'B', 'C', 'D'];
+  const rankIdx = (r) => (order.includes(r) ? order.indexOf(r) : order.length);
   let best = null;
   for (const g of CATALOG) {
     const r = profile.record(g.id);
-    if (r.plays && (!best || r.score > best.score)) best = { name: g.name, score: r.score, rank: r.rank || '-' };
+    if (!r.plays) continue;
+    const cand = { name: g.name, score: r.score, rank: r.rank || '-', acc: r.accuracy || 0 };
+    if (!best || rankIdx(cand.rank) < rankIdx(best.rank)
+      || (rankIdx(cand.rank) === rankIdx(best.rank) && cand.acc > best.acc)) best = cand;
   }
   return best;
 }

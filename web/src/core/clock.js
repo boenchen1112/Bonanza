@@ -68,6 +68,7 @@ export class Clock {
   start(audioTime = this.now() + 0.1, startBeat = 0) {
     this._origin = audioTime;
     this._beatAtOrigin = startBeat;
+    this._startBeat = startBeat;
     this._running = true;
     this._lastDispatchedBeat = startBeat - 1e-9;
     this._generation = (this._generation || 0) + 1;
@@ -78,6 +79,9 @@ export class Clock {
    * player) compares it to notice the transport was restarted under it.
    */
   get generation() { return this._generation || 0; }
+
+  /** The beat the last start() began counting from (0 for a fresh transport). */
+  get startBeat() { return this._startBeat || 0; }
 
   stop() {
     this._running = false;

@@ -269,6 +269,12 @@ export default {
   startGestureSource(ctx) {
     if (this.mode === 'mouse') this.startPointerConduct(ctx);
     if (this.mode === 'camera') {
+      // This module object is reused by the next load (pause → restart), so
+      // "still the scene that asked?" is a token, not `this.w` — a restart
+      // mid-prompt used to keep the old stream and start a second one.
+      const token = {};
+      this._camToken = token;
+      const stale = () => !this.w || this._camToken !== token;
       import('./camera.js')
         .then(({ startCamera }) => startCamera({
           clock: ctx.clock,
@@ -276,14 +282,14 @@ export default {
           onLost: () => this.detector.reset(),
         }))
         .then((cam) => {
-          if (!this.w) { cam.stop(); return; }   // left the scene while loading
+          if (stale()) { cam.stop(); return; }   // left (or restarted) the scene while loading
           this.camera = cam;
         })
         .catch((e) => {
           // No camera, refused, or no GPU for the model: conduct with the mouse
           // instead. The mode is opt-in and low-stakes by design (spec §5).
           console.info('camera conduct unavailable, using mouse:', e?.message || e);
-          if (!this.w) return;
+          if (stale()) return;
           this.mode = 'mouse';
           ctx.ui.banner('NO CAMERA', { sub: 'conduct with the mouse instead', life: 1.8, color: '#ffe58a' });
           this.startPointerConduct(ctx);
@@ -648,6 +654,9 @@ export default {
     // verdict word lived ~1.26s and sat over the next HOME RUN!).
     ctx.fx.verdict('miss', c, { combo: 0, scale: 1, groundY: 0, text: false, stage: false });
     const life = Math.min(0.9, Math.max(0.5, this.gapAfter(p, ctx.clock.spb) * 0.7));
+    // A new out while SIDE RETIRED! still holds the three lamps: the new
+    // inning starts now, or the pending reset would erase this out's lamp.
+    if (this._outsClear > 0) { this._outsClear = 0; this.hud.setOuts(0); }
     this.outs += 1;
     const third = this.outs >= 3;
     if (!third) this.w.callout(swung ? 'WHIFF!' : 'STRIKE!', [c[0] + 1.0, c[1] + 1.3, c[2]], { scale: 0.8, life, rise: 0.4 });
@@ -854,7 +863,9 @@ export default {
         p.pipCursor++;
       }
 
-      if (u >= 1.28) {
+      // (not a struck ball waiting on the plate for the bat's contact frame:
+      // a late GOOD in a 1.5-beat lead could reach the cutoff first)
+      if (u >= 1.28 && !p.contactPending) {
         // sailed past — into the backstop net (not on to the edge of the
         // frame, where its trail drew a line across the grass), with a puff.
         ctx.fx.burst([_v.x, _v.y, _v.z], { count: 8, color: 0x9fd8ff, speed: 3, life: 0.4 });
@@ -998,6 +1009,7 @@ export default {
     if (typeof window !== 'undefined' && window.__BBB__) delete window.__BBB__.swing;
     if (this._onPointerMove) { window.removeEventListener('pointermove', this._onPointerMove); this._onPointerMove = null; }
     if (this.camera) { this.camera.stop(); this.camera = null; }
+    this._camToken = null;
     this.hud?.dispose(); this.hud = null;
     for (const h of this.hitBalls) this.w?.freeBall(h.b);
     this.hitBalls = [];
