@@ -88,8 +88,19 @@ export default {
   /** Drained input events, already in audio time, in order. */
   input(ctx, events) {},
 
-  /** Return a result once the game is over, else null. */
-  result(ctx) { return null; },  // {score, accuracy, rank, stats, highlights}
+  /**
+   * Return a result once the game is over, else null:
+   *   {score, accuracy, rank, stats, highlights, field?}
+   * `accuracy` is HIT QUALITY in every game — verdict-weighted, 0..1, the
+   * number the results card prints beside PERFECT/GREAT/GOOD/MISS. A game
+   * whose score is something else (Drumline's race points) keeps that in
+   * `score`, never in `accuracy`.
+   * `field` only from a game that actually raced the lineup: one
+   * `{id, place}` per competitor (`id` = ctx.players id, null for a house
+   * extra). A party scores that order as-is; without it, CPU rounds are
+   * simulated and the recap says so.
+   */
+  result(ctx) { return null; },
 
   /** Free GPU resources. Called always, even on abort. */
   dispose(ctx) {},
@@ -111,10 +122,17 @@ export default {
   fx,         // render/fx/index.js: burst(), ring(), confetti(), trail()
   bus,        // Bus for cross-module events
   rng,        // seeded rng
-  players,    // [{id, name, palette, isCpu, cpuSkill}]
+  players,    // [{id, name, char, palette, build, isCpu, cpuSkill, dress(char)}]
   size,       // {w, h, dpr} — updated on resize
 }
 ```
+
+`players` is the session lineup, filled by the shell's `play` host
+(`shell/chars.js` `gamePlayers`); `[0]` is the one human. `palette` is a rig
+palette object and `build` a rig build id, both ready for `makeCharacter` /
+`makeCast`; `dress(char)` adds the character's crest to a rig the game built.
+A scene booted directly (the harness) gets `[]` — always keep a house
+default.
 
 ## Shared feel constants
 

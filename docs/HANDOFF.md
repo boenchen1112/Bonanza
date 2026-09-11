@@ -31,7 +31,7 @@ verbatim.
 |---|---|
 | Builds | yes, clean (production build strips the `__BBB__` test API; the harness builds `--mode harness`) |
 | Runs | yes — every registered scene loads console-clean on the real GPU (`tools/harness/sweep.mjs`) |
-| Tests | 86/86 green (`npm --prefix web test`) + `swingKings/verify.mjs` (now on the real GPU, incl. bat-meets-ball contact checks) and `swingKings/smoke-conduct.mjs` ALL PASS |
+| Tests | 90/90 green (`npm --prefix web test`) + `swingKings/verify.mjs` (now on the real GPU, incl. bat-meets-ball contact checks) and `swingKings/smoke-conduct.mjs` ALL PASS |
 | Critic rounds completed | Swing Kings: 4 FAIL rounds, fixes landed for each, round 5 running. Shell: round 1 FAIL, fixes landed, round 2 running. See the tickets file (13, 19) |
 | Minigames | five, all playable; Swing Kings is the polished hero, the other four had a baseline pass |
 
@@ -184,6 +184,19 @@ locked to the transport across every `setBpm`.
 - **The default arena floor sits at y=0.** A scene that stands its cast on
   the house floor (-1.6) must set `scene.userData.groundY`, or the arena
   floor hides everything below 0.
+- **Compiling on the first frame.** On ANGLE/D3D11 a fresh scene's shader
+  compiles blocked the first frame ~1.2s (Swing Kings) with the count-in
+  already running. `activate()` now awaits `stage.warm()` (default set,
+  dress pass, `compileAsync`) before `start()`; the stall is still there,
+  but it sits under the `play` host's title card instead of inside the
+  game's clock. `tools/harness/lineup-probe.mjs` measures both halves.
+- **Calling a disposed scene during the next load.** `activate()` clears
+  `current` before awaiting the next `load()`. It used not to, so the loop
+  kept updating the disposed scene — harmless for most, but `play → play`
+  (pause-menu restart) reached the new instance's half-built state.
+- **Identity through `ctx.players`, not shell imports.** Games read palette,
+  build and `dress()` from `ctx.players` (ARCHITECTURE.md) and must keep a
+  house default for `[]` — the harness boots games directly.
 - **A scene throwing in `load()` used to kill the whole app** — `ready` never
   resolved and the harness reported a 20s timeout pointing nowhere near the
   cause. `activate()` now contains scene failures and records them on
