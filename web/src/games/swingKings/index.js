@@ -131,6 +131,9 @@ export default {
     ctx.stage.setPalette('swing-kings');
 
     this.w = createWorld(ctx);
+    // Where pitches cross the plate; starts at the calibrated sweet spot and
+    // adapts to the live bat after each hit (flushContact).
+    this.contactPoint = LAYOUT.contact.slice();
     this.trace = createTrace();
     this.w.root.add(this.trace.mesh);
 
@@ -169,6 +172,7 @@ export default {
         conduct: () => ({ mode: self.mode, holding: self.holding, detector: self.detector.state, pointer: self._pointer || null }),
         stats: () => ({
           swings: self.swings.slice(-40),
+          contacts: self.contacts.slice(),
           outs: self.outs,
           score: self.gotPts,
           combo: self.judge.stats.combo,
@@ -193,11 +197,13 @@ export default {
     this.powerSum = 0;
     this.powerN = 0;
     this.swings = [];
+    this.contacts = [];
     this.over = false;
     this.finaleDone = false;
     this.lastBeat = -1e9;
     this.camPush = 0;
     this.strikeUntil = -Infinity;
+    this.pendingContact = null;
     this.nightOn = false;
     this.camLift = 0;
     this.curtain = false;
@@ -235,9 +241,9 @@ export default {
     });
 
     ctx.audio.music.play('swing-kings');
-    ctx.ui.banner('SWING KINGS', {
-      sub: this.inputHint(), life: this.mode === 'tap' ? 1.5 : 2.2, color: '#ffe58a',
-    });
+    // No subtitle: the instruction lives in the HUD bar for the whole teach
+    // section, and a 1.5s line of small text over the grass was unreadable.
+    ctx.ui.banner('SWING KINGS', { life: this.mode === 'tap' ? 1.5 : 2.2, color: '#ffe58a' });
     this.hud = createHud(ctx, this.inputHintHtml());
     this.hintHidden = false;
     this.startGestureSource(ctx);
@@ -245,14 +251,7 @@ export default {
     ctx.ui.hud.setAccuracy(1);
   },
 
-  /** The one instruction the player reads — it must describe the real input. */
-  inputHint() {
-    if (this.mode === 'mouse') return 'HOLD as the ball flies · SWING DOWN (or let go) as it lands';
-    if (this.mode === 'camera') return 'RAISE your hand as the ball flies · CONDUCT DOWN as it lands';
-    return 'PRESS as the ball reaches the plate · nail the beat to send it';
-  },
-
-  /** The same instruction for the persistent HUD bar, with the key named. */
+  /** The one instruction the player reads (HUD bar) — it must describe the real input. */
   inputHintHtml() {
     if (this.mode === 'mouse') return '<b>HOLD</b> the mouse as the ball flies · <b>SWING DOWN</b> as it lands';
     if (this.mode === 'camera') return '<b>RAISE</b> your hand as the ball flies · <b>CONDUCT DOWN</b> as it lands';
@@ -426,9 +425,43 @@ export default {
     if (Math.abs(beat - d.targetBeat) > 0.45) return false;
     const power = Math.max(0.8, powerFor(holdBeats, d.ideal));
     this.batterStrike(ctx, 1);
-    this.connect(ctx, d, 'perfect', power, TIERS.homer, false, true);
+    this.queueContact(ctx, [d, 'perfect', power, TIERS.homer, false, true]);
     d.done = true;
     return true;
+  },
+
+  /**
+   * The bat meets the ball when the BAT gets there. Judgement happens on the
+   * press (audio time, exact), but the strike starts a few clip-frames before
+   * the contact frame, so the visuals — ball launch, flash, hitstop, words —
+   * wait until the live swing reaches its contact frame (~2 frames) and fire
+   * from the bat's actual sweet spot. Firing them at a fixed point on the
+   * press put the flash in empty air while the bat swung through elsewhere.
+   */
+  queueContact(ctx, args) {
+    if (this.pendingContact) this.flushContact(ctx);
+    this.pendingContact = { args, t0: ctx.clock.now() };
+  },
+
+  flushContact(ctx) {
+    const pc = this.pendingContact;
+    if (!pc) return;
+    this.pendingContact = null;
+    this.w.batSweetSpot(_v);
+    // Pitches aim at `contactPoint`; pull it toward where the bat really was
+    // (load-time calibration can't see the animator's smoothing), so the
+    // next ball arrives on the bat, not beside it.
+    const cp = this.contactPoint;
+    cp[0] += (_v.x - cp[0]) * 0.7; cp[1] += (_v.y - cp[1]) * 0.7; cp[2] += (_v.z - cp[2]) * 0.7;
+    // How far the waiting ball was from the bat when the bat got there, and
+    // how long the visuals waited for it — verify.mjs holds both to a bound.
+    const ball = pc.args[0].ball?.mesh.position;
+    this.contacts.push({
+      gap: ball ? Math.round(ball.distanceTo(_v) * 1000) / 1000 : null,
+      delayMs: Math.round((ctx.clock.now() - pc.t0) * 1000),
+    });
+    if (this.contacts.length > 40) this.contacts.shift();
+    this.connect(ctx, ...pc.args, [_v.x, _v.y, _v.z]);
   },
 
   // -------------------------------------------------------------- judgement
@@ -461,9 +494,9 @@ export default {
 
     this.batterStrike(ctx, 0.4 + power * 0.6);
     // The verdict pose lands once the follow-through has read, not over it.
-    this.pendingReact = { verdict, t: 0.42 };
+    this.pendingReact = { verdict, t: 0.3 };
 
-    if (hit) this.connect(ctx, p, verdict, power, tier, foul, false);
+    if (hit) { p.contactPending = true; this.queueContact(ctx, [p, verdict, power, tier, foul, false]); }
     else this.whiff(ctx, p);
 
     ctx.bus.emit('judge', { verdict, errMs, beat: p.targetBeat });
@@ -474,8 +507,8 @@ export default {
   },
 
   /** Contact. Ball leaves the bat; the whole stadium says the same thing. */
-  connect(ctx, p, verdict, power, tier, foul, isDemo) {
-    const c = LAYOUT.contact;
+  connect(ctx, p, verdict, power, tier, foul, isDemo, at = null) {
+    const c = at || this.contactPoint;
     const combo = this.judge.stats.combo;
     const big = tier.id === 'homer' || tier.id === 'slam';
 
@@ -564,7 +597,7 @@ export default {
 
   /** A whiff. Funny, never punishing: the ball thuds into the backstop. */
   whiff(ctx, p) {
-    const c = LAYOUT.contact;
+    const c = this.contactPoint;
     // WHIFF! is a world badge whose life is capped by the gap to the next
     // pitch (the fx verdict word lived ~1.26s and sat over the next HOME RUN!).
     ctx.fx.verdict('miss', c, { combo: 0, scale: 1, groundY: 0, text: false, stage: false });
@@ -620,6 +653,9 @@ export default {
       if (this.traceHoldOff <= 0) this.trace.release();
     }
     this.trace.update(dt, ctx.camera);
+    // The ribbon draws the player's conducting gesture. A tap has no gesture,
+    // so in tap mode it was just a smear behind the bat that meant nothing.
+    this.trace.mesh.visible = this.mode !== 'tap';
 
     // --- delayed verdict pose --------------------------------------------
     if (this.pendingReact) {
@@ -640,6 +676,15 @@ export default {
     this.updateShow(ctx, dt, beat);
 
     w.update(dt, beat);
+
+    // Contact fires once the posed bat has actually reached the contact frame
+    // (poses were just applied above), or after 120ms whatever happens.
+    if (this.pendingContact) {
+      const a = w.batter.anim;
+      const atContact = a.state === 'clip' && a.variant?.name === 'swing'
+        && a.variant.from >= LOAD - 1e-6 && a.clipTime >= SWING.contact;
+      if (atContact || now - this.pendingContact.t0 > 0.12) this.flushContact(ctx);
+    }
 
     if (!this.over && beat > END_BEAT && this.judge.finished) this.over = true;
     this.lastBeat = beat;
@@ -667,7 +712,7 @@ export default {
 
   /** Sample a pitch's flight path at `u` (0 = muzzle, 1 = the plate). */
   sample(p, u, out) {
-    const c = LAYOUT.contact;
+    const c = this.contactPoint;
     out.x = lerp(MUZZLE[0], c[0], u);
     out.y = lerp(MUZZLE[1], c[1], u) + 4 * p.apex * u * (1 - u);
     out.z = lerp(MUZZLE[2], c[2], u) + Math.sin(Math.PI * clamp01(u)) * 0.45;
@@ -720,8 +765,11 @@ export default {
 
       const ball = p.ball;
       if (!ball) continue;
-      this.sample(p, Math.min(u, 1.6), _v);
-      if (u > 1) _v.y = Math.max(0.16, _v.y - (u - 1) * 1.4);
+      // A struck ball waits on the plate for the ~2 frames until the bat's
+      // contact frame fires (flushContact) instead of flying through the bat.
+      const uu = p.contactPending ? Math.min(u, 1) : u;
+      this.sample(p, Math.min(uu, 1.6), _v);
+      if (uu > 1) _v.y = Math.max(0.16, _v.y - (uu - 1) * 1.4);
       ball.mesh.position.copy(_v);
       ball.mesh.rotation.x += dt * 11;
       ball.mesh.rotation.z += dt * 7;

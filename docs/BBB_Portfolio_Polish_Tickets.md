@@ -111,6 +111,9 @@ Status key: `[ ]` open · `[~]` in progress · `[x]` done · `[-]` cut (with rea
 
 ## [ ] 13 — Critic loop: Swing Kings to PASS
 **Blocked by:** 05, 08, 09, 10, 11, 12
+- [x] Round 1 FAIL (MP 7/7), round 2 FAIL (ours won Timing + Escalation), fixes landed for both
+- [x] Round 3 FAIL (6–1, ours won Escalation; gap: bat never meets the ball). Fixed: contact visuals wait for the live swing's contact frame and fire from the bat's sweet spot; the pitch aim adapts to it (verify.mjs: gap < 0.3 after the first hit, delay < 80ms); rounder/smaller beat pips; trace hidden in tap mode; earlier verdict pose; no title-card subtitle; opaque callout plaques popping from 60%; callouts age on real time
+- [ ] Round 4
 
 ## [x] 14 — Swing Kings gesture mode: mouse/pointer-drag source (+ ADR 0004)
 **Blocked by:** 01

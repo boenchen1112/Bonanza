@@ -72,11 +72,13 @@ function check(name, ok, detail) {
   if (!argv['no-build']) await build();
   const server = await serve(path.join(WEB, DIST), PORT);
 
-  const browser = await chromium.launch({
-    executablePath: existsSync(CHROME) ? CHROME : undefined,
-    args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--mute-audio',
-      '--autoplay-policy=no-user-gesture-required', '--disable-gpu-sandbox'],
-  });
+  // Real GPU (full Chromium, new-headless), like the harness: the contact
+  // checks are frame-bound, and at SwiftShader's 2-3fps one frame is 400ms.
+  const common = ['--mute-audio', '--autoplay-policy=no-user-gesture-required'];
+  const browser = await chromium.launch(existsSync(CHROME)
+    ? { executablePath: CHROME, args: [...common, '--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--disable-gpu-sandbox'] }
+    : { channel: 'chromium', headless: true,
+      args: [...common, ...(process.platform === 'win32' ? ['--use-angle=d3d11'] : [])] });
   const ctx = await browser.newContext({ viewport: { width: 960, height: 540 }, deviceScaleFactor: 1 });
   const page = await ctx.newPage();
   const logs = [];
@@ -151,6 +153,20 @@ function check(name, ok, detail) {
   check('an on-time tap earns full power from timing',
     powers[1] === 1 && powers[4] === 1,
     `tap=${powers[1]} tap2=${powers[4]}`);
+
+  // The bat meets the ball: visuals fire on the bat's contact frame, from the
+  // bat's sweet spot, and the pitch aim adapts to it — so after the first
+  // contact the waiting ball is on the bat, not beside it (ball radius 0.2).
+  const contacts = plan.stats.contacts || [];
+  check('every hit made contact', contacts.length >= expect.length,
+    `${contacts.length} contacts for ${expect.length} hits`);
+  const later = contacts.slice(1).map((c) => c.gap);
+  const worstGap = later.length ? Math.max(...later) : 99;
+  check('ball on the bat at contact (gap < 0.3 after the first)', worstGap < 0.3,
+    `gaps ${contacts.map((c) => c.gap).join(', ')}`);
+  const worstDelay = contacts.length ? Math.max(...contacts.map((c) => c.delayMs)) : 999;
+  check('contact visuals wait at most ~2 frames for the bat (< 80ms)', worstDelay < 80,
+    `delays ${contacts.map((c) => c.delayMs).join(', ')}ms`);
 
   const errs = logs.filter((l) => l.startsWith('[pageerror]') || l.startsWith('[error]'));
   check('console clean', errs.length === 0, errs.join('\n') || 'no errors');

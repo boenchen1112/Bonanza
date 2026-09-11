@@ -320,7 +320,9 @@ export function createWorld(ctx) {
 
   // ------------------------------------------------------------- beat pips
   const PIP_MAX = 20;
-  const pipGeo = new THREE.SphereGeometry(0.09, 8, 6);
+  // Enough segments to stay round when a whole-beat pip pops: the old 8x6
+  // sphere scaled up read as a faceted disc.
+  const pipGeo = new THREE.SphereGeometry(0.09, 16, 12);
   const pipMat = new THREE.MeshBasicMaterial({
     // Warm and bright: the pale blue pips vanished against the crowd.
     color: 0xfff0a0, transparent: true, opacity: 1, toneMapped: false,
@@ -444,6 +446,7 @@ export function createWorld(ctx) {
   let muzzleFlash = 0;
   let outs = 0;
   let outsPulse = 0;
+  let calloutMs = null;
 
   // ------------------------------------------------------------------- api
 
@@ -474,7 +477,7 @@ export function createWorld(ctx) {
       const whole = Math.abs(beatOff - Math.round(beatOff)) < 0.08;
       sample(u, _v3);
       pipPos[i * 3] = _v3.x; pipPos[i * 3 + 1] = _v3.y; pipPos[i * 3 + 2] = _v3.z;
-      pipBase[i] = whole ? 1.9 : 1.0;
+      pipBase[i] = whole ? 1.5 : 1.0;
       pipPop[i] = 0;
     }
     pips.count = steps;
@@ -540,7 +543,7 @@ export function createWorld(ctx) {
       for (let i = 0; i < pips.count; i++) {
         pipPop[i] = damp(pipPop[i], 0, 7, dt);
         _v3.set(pipPos[i * 3], pipPos[i * 3 + 1], pipPos[i * 3 + 2]);
-        _s3.setScalar(pipBase[i] * (1 + pipPop[i] * 2.4));
+        _s3.setScalar(pipBase[i] * (1 + pipPop[i] * 0.9));
         _m4.compose(_v3, _q, _s3);
         pips.setMatrixAt(i, _m4);
       }
@@ -558,12 +561,18 @@ export function createWorld(ctx) {
       );
     }
 
-    // callouts
+    // callouts — aged on REAL elapsed time like the DOM popups (ui/index.js):
+    // the frame dt is clamped and eaten by hitstop, which is exactly when a
+    // callout spawns, so the word sat frozen mid-pop at scale ~0.
+    const nowMs = performance.now();
+    const realDt = calloutMs === null ? dt : Math.min(0.25, (nowMs - calloutMs) / 1000);
+    calloutMs = nowMs;
     for (const c of callouts) {
       if (c.life <= 0) continue;
-      c.life -= dt;
+      c.life -= realDt;
       const t = 1 - clamp01(c.life / c.max);
-      const pop = backOut(clamp01(t / 0.24));
+      // Starts at 60% size: from zero, the first frames drew a speck.
+      const pop = 0.6 + 0.4 * backOut(clamp01(t / 0.24));
       c.sprite.position.set(c.x, c.y + easeOutCubic(t) * c.rise, c.z);
       const s = c.scale * pop * (1 + t * 0.12);
       c.sprite.scale.set(s * 3.1, s * 0.8 * (c.sprite.material.userData.aspect || 1), 1);
@@ -577,12 +586,19 @@ export function createWorld(ctx) {
     // Grip: bat up behind the head in the stance and the coil, across the
     // forearm for the strike and everything after it.
     const a = batter.anim;
-    const coiled = a.state === 'clip' && a.variant
-      && (a.variant.name === 'ready' || (a.variant.name === 'swing' && a.variant.to < CLIPS.swing.contact));
+    // Bat UP (stance grip) in the batting stance, the first part of the coil
+    // and celebrations (arms up, bat raised — it used to point at the floor
+    // like a cane); strike grip from late in the coil, so the bat is already
+    // in its hitting orientation when the swing reaches the ball.
+    const v = a.variant;
+    const inCoil = a.state === 'clip' && v?.name === 'swing' && v.to < CLIPS.swing.contact;
+    const coilU = inCoil ? (a.clipTime ?? 0) / Math.max(1e-3, v.to) : 1;
+    const up = (a.state === 'clip' && v?.name === 'ready') || (inCoil && coilU < 0.72)
+      || a.state === 'celebrate' || (a.state === 'clip' && v?.name === 'dance');
     // Rigid through mocap clips (squash would shear the twisted swing pose),
     // a lighter squash for the procedural idle and verdict poses.
     a.squashScale = a.state === 'clip' ? 0 : 0.45;
-    batGroup.quaternion.slerp(coiled ? grips.stance : grips.strike, 1 - Math.exp(-(coiled ? 10 : 26) * dt));
+    batGroup.quaternion.slerp(up ? grips.stance : grips.strike, 1 - Math.exp(-(up ? 10 : 30) * dt));
   }
 
   function dispose() {
@@ -618,6 +634,11 @@ export function createWorld(ctx) {
     armMachine, fireMachine,
     setPips, popPip, clearPips,
     setOuts, callout, update, dispose, outsAnchor,
+    /** World position of the bat's sweet spot, as posed right now. */
+    batSweetSpot(out) {
+      batGroup.updateWorldMatrix(true, false);   // poses were set this frame, matrices not yet
+      return batGroup.localToWorld(out.set(0, -0.9, 0));
+    },
     get outs() { return outs; },
   };
 }
@@ -839,7 +860,7 @@ function makeWordTexture(word, sub = null) {
   // A dark rounded plate behind the word: over a multicoloured crowd, a
   // stroke alone left "HOME RUN!" beige-on-busy and hard to read.
   if (word !== 'OUTS') {
-    g.fillStyle = 'rgba(12,8,32,0.72)';
+    g.fillStyle = 'rgba(12,8,32,0.9)';
     g.strokeStyle = c2;
     g.lineWidth = 5;
     g.beginPath();
