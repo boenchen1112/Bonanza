@@ -57,7 +57,7 @@ export function kick(ctx, t, gain = 0.45) {
 }
 
 /** The UI agent owns `ui.layer`; fall back to the raw overlay if it moves. */
-export function uiLayer(ctx) {
+function uiLayer(ctx) {
   return ctx.ui?.layer || document.getElementById('ui') || document.body;
 }
 
@@ -98,14 +98,6 @@ export function beatPulse(beat, sharpness = 6) {
   const f = beatPhase(beat);
   return Math.exp(-f * sharpness);
 }
-
-/** Softer, symmetric breathing — for idle poses that must never look frozen. */
-export function breathe(t, hz = 0.5) {
-  return 0.5 + 0.5 * Math.sin(t * hz * Math.PI * 2);
-}
-
-/** Cheap deterministic per-index jitter so rows never move in lockstep. */
-export const stagger = (i, amount = 0.12) => ((i * 0.6180339887) % 1) * amount;
 
 export function reducedMotion() {
   let osWants = false;
@@ -164,7 +156,7 @@ function shift(c) {
 }
 
 let injected = false;
-export function injectShellStyles() {
+function injectShellStyles() {
   if (injected || document.getElementById('sh-style')) { injected = true; return; }
   injected = true;
   const s = document.createElement('style');

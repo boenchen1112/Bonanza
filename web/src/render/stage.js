@@ -533,7 +533,5 @@ export function createStage({ canvas, clock }) {
      *  this instead of FEEL.color directly so the grade stays coherent. */
     verdictColor(v) { return look.palette.verdictHex(v); },
     verdictHex(v) { return look.palette.verdict[v]?.getHex() ?? 0xffffff; },
-    /** Named palettes, for menus and debug overlays. */
-    palettes() { return Object.keys(look.paletteNamed('__none__') ? {} : {}); },
   };
 }
