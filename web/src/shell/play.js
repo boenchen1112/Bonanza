@@ -19,15 +19,20 @@
 
 import { getScene } from './registry.js';
 import { createPause } from './pause.js';
-import { mountRoot, sfx, PAL } from './theme.js';
-import { session } from './state.js';
+import { mountRoot, sfx, PAL, createWipe, el, hex } from './theme.js';
+import { session, ensurePlayers } from './state.js';
+import { gamePlayers } from './chars.js';
 import { CATALOG } from './games.js';
 import { goView, exitRoute } from './nav.js';
+import { clamp01 } from '../core/util.js';
+import { normaliseResult } from '../core/result.js';
 
 /** Beats of count-in after a pause. Three is the shortest that reads as one. */
 const RESUME_BEATS = 3;
 /** Hold after a game reports its result, so its own last flourish can land. */
 const OUTRO_S = 0.55;
+/** Frames the game draws under its title card before the card pulls away. */
+const COVER_HOLD_S = 0.12;
 
 let S = null;
 
@@ -53,6 +58,20 @@ export default {
       baseGo(id, opts);
     };
 
+    // The lineup the roster built is who plays: the human's character is the
+    // hero, the named CPUs are the rivals in games that field any.
+    ctx.players = gamePlayers(ensurePlayers());
+
+    // Title card over the swap: the menu's wipe covers the exit, this one
+    // holds while the game builds and its shaders compile (a blocking ~1s on
+    // some GPUs), then pulls away once the game has drawn a few frames.
+    S.root = mountRoot(ctx, 'sh-play');
+    const meta = CATALOG.find((g) => g.id === gameId);
+    S.cover = createWipe(S.root, { color: hex(meta?.color ?? PAL.yellow), mode: 'in' });
+    // Over the wipe, not inside it: in the skewed, oversized panel the name sat ~90px left of centre.
+    S.coverLabel = el('div', 'sh-display sh-play__card', meta?.name || '');
+    S.root.appendChild(S.coverLabel);
+
     const mod = await getScene(gameId);
     if (!mod) {
       console.error('play: unknown game', gameId);
@@ -61,7 +80,6 @@ export default {
     }
     S.mod = mod;
 
-    S.root = mountRoot(ctx, 'sh-play');
     S.pause = createPause(S.root, {
       onSelect: (id) => {
         if (id === 'resume') resume(ctx);
@@ -80,6 +98,10 @@ export default {
   update(ctx, dt, beat) {
     if (!S) return;
     S.t += dt;
+    if (S.t > COVER_HOLD_S) {
+      S.cover.update(dt);
+      S.coverLabel.style.opacity = String(clamp01(1 - (S.t - COVER_HOLD_S) / 0.12));
+    }
     S.pause.update(dt, beat);
 
     if (S.paused) {
@@ -129,6 +151,11 @@ export default {
     }
   },
 
+  /** Harness hook, forwarded so the bot can play a game hosted here too. */
+  testChart(ctx) {
+    return S?.mod?.testChart?.(ctx) ?? null;
+  },
+
   dispose(ctx) {
     if (!S) return;
     unblur(ctx);
@@ -145,13 +172,13 @@ function openPause(ctx) {
   if (S.paused || S.finished) return;
   S.paused = true;
   S.resumeAt = 0;
-  S.pauseBeat = ctx.clock.beat;
   S.pauseTime = ctx.clock.now();
-  // clock.stop() clears the one-shot schedule, and those entries are keyed by
-  // BEAT, which survives an origin shift — so snapshot and put them back.
-  S.sched = Array.isArray(ctx.clock._scheduled) ? ctx.clock._scheduled.slice() : null;
-  ctx.clock.stop();
-  ctx.audio?.music?.stop?.();
+  // suspend(), not stop(): stop() drops the one-shot schedule, and those
+  // entries are keyed by beat, so they survive the resume untouched.
+  S.pauseBeat = ctx.clock.suspend();
+  // pause, not stop: stop() dropped the track, and nothing ever restarted it
+  const music = ctx.audio?.music;
+  if (music?.pause) music.pause(); else music?.stop?.();
   S.pause.show();
   S.pause.clearCount();
   sfx(ctx, 'uiBack');
@@ -165,10 +192,7 @@ function resume(ctx) {
   const lead = RESUME_BEATS * ctx.clock.spb;
   const at = ctx.clock.now() + lead;
   ctx.clock.start(at, S.pauseBeat);
-  if (S.sched) {
-    for (const e of S.sched) if (!e.done) ctx.clock.at(e.beat, e.fn);
-    S.sched = null;
-  }
+  ctx.audio?.music?.resume?.();
   S.resumeAt = at;
   // Absolute note times the game computed before the pause are now `shift`
   // seconds early. Games that implement `shiftTime` stay in sync; the bus
@@ -177,7 +201,9 @@ function resume(ctx) {
   try { S.mod?.shiftTime?.(ctx, shift); } catch { /* optional hook */ }
   ctx.bus?.emit?.('transport:shift', shift);
   ctx.bus?.emit?.('resume', { beat: S.pauseBeat, shift });
-  ctx.input?.setEnabled?.(true);
+  // No setEnabled(true) here: nothing ever disables Input, and it must stay
+  // enabled while paused — the pause overlay is driven by the same drained
+  // events (see input() above, which routes to S.pause.input while open).
 }
 
 function restart(ctx) {
@@ -221,7 +247,7 @@ function unblur(ctx) {
 
 function finish(ctx, result, source) {
   if (S.finished) return;
-  const res = normalise(result);
+  const res = normaliseResult(result);
   S.finished = { res, source, route: null };
   S.outro = 0;
   session.lastResult = res;
@@ -231,21 +257,6 @@ function finish(ctx, result, source) {
   S.finished.route = () => goView(nav, 'results', {
     result: res, game: S.gameId, from: S.from, party: session.mode === 'party' && !!session.party,
   });
-}
-
-/** Tolerate a partial result object — a half-built minigame must not 500. */
-function normalise(r) {
-  const s = r?.stats || {};
-  return {
-    score: Number(r?.score) || 0,
-    accuracy: Number.isFinite(r?.accuracy) ? r.accuracy : 0,
-    rank: r?.rank || null,
-    stats: {
-      perfect: s.perfect || 0, great: s.great || 0, good: s.good || 0, miss: s.miss || 0,
-      maxCombo: s.maxCombo || 0, errors: Array.isArray(s.errors) ? s.errors : [],
-    },
-    highlights: r?.highlights || null,
-  };
 }
 
 export const PLAY_ACCENT = PAL.yellow;

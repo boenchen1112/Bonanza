@@ -19,9 +19,10 @@
 
 import { clamp, clamp01, smoothstep } from '../../core/util.js';
 import { SCORE } from '../../core/judge.js';
+import { FEEL } from '../../core/feel.js';
 
 export const BEATS_PER_BAR = 4;
-export const LEAD_IN_BEATS = 8;      // FEEL.leadInBars * 4
+export const LEAD_IN_BEATS = FEEL.leadInBars * 4;
 export const SCORED_BARS = 32;       // teach 8 + play 16 + escalate 8
 export const FINALE_BEAT = 128;      // the grand slam lands here
 export const END_BEAT = FINALE_BEAT + 12; // three bars of curtain call
@@ -127,7 +128,9 @@ export function buildSchedule() {
 
   // --- the grand slam: launched on bar 30, arrives two bars later ---------
   add(FINALE_BEAT, 8, {
-    section: 'finale', kind: 'slam', ideal: 6, apex: 7.4, finale: true,
+    // Apex 4.6, not 7.4: at 7.4 the ball spent its whole 4s flight above the
+    // top of the frame — the song's climax read as dots in the sky.
+    section: 'finale', kind: 'slam', ideal: 6, apex: 4.6, finale: true,
   });
 
   return out;

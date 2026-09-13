@@ -32,6 +32,8 @@
  */
 
 /** Beats per slot. 16 slots to a 4/4 bar. */
+import { FEEL } from '../../core/feel.js';
+
 export const SLOT_BEATS = 0.25;
 export const BEATS_PER_BAR = 4;
 
@@ -78,7 +80,7 @@ export const FINALE = [
 ];
 
 /** How many beats of lead-in the transport runs before beat 0. */
-export const LEAD_BEATS = 8;
+export const LEAD_BEATS = FEEL.leadInBars * 4;
 
 /** Beats of victory-lap after the last response bar closes. */
 export const OUTRO_BEATS = 8;

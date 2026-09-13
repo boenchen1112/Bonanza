@@ -68,13 +68,39 @@ export class Clock {
   start(audioTime = this.now() + 0.1, startBeat = 0) {
     this._origin = audioTime;
     this._beatAtOrigin = startBeat;
+    this._startBeat = startBeat;
     this._running = true;
     this._lastDispatchedBeat = startBeat - 1e-9;
+    this._generation = (this._generation || 0) + 1;
   }
+
+  /**
+   * Bumped by every start(). Anything holding a cursor in beats (the music
+   * player) compares it to notice the transport was restarted under it.
+   */
+  get generation() { return this._generation || 0; }
+
+  /** The beat the last start() began counting from (0 for a fresh transport). */
+  get startBeat() { return this._startBeat || 0; }
 
   stop() {
     this._running = false;
     this._scheduled.length = 0;
+  }
+
+  /**
+   * Halt the transport but KEEP the one-shot schedule, and report the beat it
+   * halted on. `start(at, thatBeat)` resumes exactly where it left off.
+   *
+   * Scheduled entries are keyed by beat, which survives an origin shift, so
+   * they need no repair — but `stop()` drops them, which is why the pause
+   * menu used to snapshot the private `_scheduled` array and put it back by
+   * hand. Pausing is the clock's job, not the caller's.
+   */
+  suspend() {
+    const at = this.beat;
+    this._running = false;
+    return at;
   }
 
   get running() { return this._running; }

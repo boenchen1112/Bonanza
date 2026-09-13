@@ -38,8 +38,10 @@
 
 import * as THREE from 'three';
 import { NoteJudge, rankFor, SCORE } from '../../core/judge.js';
+import { roundResult } from '../../core/result.js';
+import { countIn } from '../../core/round.js';
 import { FEEL, feelForCombo } from '../../core/feel.js';
-import { clamp, clamp01, damp } from '../../core/util.js';
+import { clamp, clamp01, damp, beatPhase } from '../../core/util.js';
 import { makeCast, paletteById } from '../../chars/index.js';
 import { SCALES, chord as chordTones, mtof } from '../../audio/theory.js';
 import { LANES, LANE_ACTIONS, ACTION_TO_LANE, buildChart, FINALE_BEAT, FINALE_END, END_BEAT } from './chart.js';
@@ -140,6 +142,7 @@ export default {
     ctx.stage.rig.frame({
       target: [0, 1.05, 0], distance: 6.9, height: 1.15, fov: 48, lambda: 2.6,
     });
+    ctx.stage.look.setShadowFocus([0, 0, 0], 5);   // the four singers and their pads
     ctx.stage.rig.snap();
     ctx.stage.rig.setPushGain(0.75);
 
@@ -249,10 +252,9 @@ export default {
     // ------------------------------------------------------------ transport
     // Beat listeners live on the clock, which OUTLIVES the scene — unsubscribe
     // in dispose() or this fires forever inside the next minigame.
-    s.unsubBeat = clock.onBeat((b, t) => {
-      if (b >= 0) return;
-      ctx.audio.sfx('count', t, ((b % 4) + 4) % 4);
-      if (b >= -4) ctx.ui.banner(String(-b), { life: 0.52, color: '#ffe9a8' });
+    s.unsubBeat = countIn(ctx, {
+      beats: LEAD_BEATS,
+      show: (text) => ctx.ui.banner(text, { life: 0.52, color: '#ffe9a8' }),
     });
 
     ctx.audio.music.play('chomp-chorus');
@@ -492,7 +494,7 @@ export default {
     v.chordN = s.chordN;
     // Beat phase is `x - floor(x)`, NEVER `x % 1`: the transport runs negative
     // beats through the lead-in and `%` keeps the dividend's sign.
-    v.beatPhase = beat - Math.floor(beat);
+    v.beatPhase = beatPhase(beat);
     s.props.update(v);
 
     if (!s.over && beat >= END_BEAT) {
@@ -660,7 +662,7 @@ export default {
     let weakest = null;
     for (const l of lanes) if (l.notes && (!weakest || l.accuracy < weakest.accuracy)) weakest = l;
 
-    s.resultCache = {
+    s.resultCache = roundResult({
       score,
       accuracy,
       rank: rankFor(accuracy, st.miss),
@@ -677,8 +679,21 @@ export default {
         weakest && weakest.miss > 0 ? `Weakest voice: ${weakest.glyph} (${Math.round(weakest.accuracy * 100)}%)` : 'All four voices held',
         s.finale.hit === N ? 'Full four-part finale' : `${s.finale.hit}/4 in the finale`,
       ],
-    };
+    });
     return s.resultCache;
+  },
+
+  // ──────────────────────────────────────────────────── harness: testChart
+
+  /**
+   * The chart, in beats and lane actions. The generic bot only ever presses
+   * 'a' on eighths, so by construction it misses every lane in this game —
+   * which is why this game had to fork the whole harness to verify itself.
+   */
+  testChart() {
+    const s = this._;
+    if (!s?.chart) return null;
+    return s.chart.map((n) => ({ beat: n.beat, action: LANE_ACTIONS[n.lane] }));
   },
 
   // ---------------------------------------------------------------- dispose

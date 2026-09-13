@@ -61,7 +61,8 @@ void main() {
 }`;
 
 export class RingPool {
-  constructor({ max = 48, rng }) {
+  /** `depthTest: false` = an overlay pool: rings the ground can't cut. */
+  constructor({ max = 48, rng, depthTest = true }) {
     this.max = max;
     this.rng = rng;
 
@@ -71,6 +72,7 @@ export class RingPool {
       fragmentShader: FRAG,
       transparent: true,
       depthWrite: false,
+      depthTest,
       blending: THREE.AdditiveBlending,
       side: THREE.DoubleSide,
     });

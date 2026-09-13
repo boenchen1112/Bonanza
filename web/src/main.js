@@ -41,12 +41,24 @@ const bus = new Bus();
 const stage = createStage({ canvas, clock });
 const audio = createAudio({ ctx: audioCtx, clock, bus });
 const ui = createUI({ root: uiRoot, bus, clock });
-const fx = createFX({ stage, clock });
+const fx = createFX({ stage, clock, bus });
+
+/**
+ * `window.__BBB__` (the harness/test API: autoplay, telemetry, goto, the
+ * audio tap) exists in dev and in `vite build --mode harness` builds only.
+ * Vite inlines these as literals, so a production bundle drops the whole
+ * block rather than shipping a remote control for the game.
+ */
+const TEST_API = Boolean(import.meta.env.DEV || import.meta.env.MODE === 'harness');
 
 /** @type {import('./shell/registry.js').SceneModule|null} */
 let current = null;
 let currentCtx = null;
+/** Last scene that threw in load()/start(), for the test API. */
+let lastError = null;
 let pendingScene = null;
+/** Set by `__BBB__.setSeed`; applies to every activation after it. */
+let seedOverride = null;
 let hitstopUntil = 0;
 /** When the current hitstop began, so we only ever subtract time once. */
 let frozenFrom = 0;
@@ -65,9 +77,37 @@ let botPrevBeat = null;
 
 let botPressTotal = 0;
 
+function botPress(action, t) {
+  const ev = { action, time: t, down: true, source: 'bot', repeat: false };
+  if (current) {
+    try { current.input?.(currentCtx, [ev]); } catch (e) { console.error(e); }
+  }
+  bot.presses++;
+  botPressTotal++;
+}
+
 function pumpBot(beat) {
   if (!bot) return;
   if (clock.now() > bot.until) { bot = null; botPrevBeat = null; return; }
+
+  // Chart mode: press only the scene's actual notes (see `testChart`), the
+  // way a person plays — one press per note instead of one per grid step.
+  if (bot.chart) {
+    const now = clock.now();
+    while (bot.cursor < bot.chart.length) {
+      const n = bot.chart[bot.cursor];
+      // A note may be keyed by beat instead of by time. Finale Fever ramps
+      // tempo under the chart, so an audio time computed at autoplay start
+      // drifts by the last bar; re-deriving it here is exactly zero off.
+      const t = n.time !== undefined ? n.time : clock.timeAt(n.beat);
+      if (t > now) break;
+      bot.cursor++;
+      if (bot.rng() < bot.missRate) continue;
+      botPress(n.action || 'a', t + (bot.rng() * 2 - 1) * bot.jitter);
+    }
+    return;
+  }
+
   if (botPrevBeat === null) { botPrevBeat = beat; return; }
 
   // Every subdivision boundary crossed since the last frame gets a press.
@@ -86,14 +126,7 @@ function pumpBot(beat) {
     // construction — which reads as a broken game and is not. Extra presses
     // are harmless: the judge swallows a press that no note claims rather
     // than burning one, so covering all lanes measures the chart honestly.
-    for (const action of bot.actions) {
-      const ev = { action, time: t, down: true, source: 'bot', repeat: false };
-      if (current) {
-        try { current.input?.(currentCtx, [ev]); } catch (e) { console.error(e); }
-      }
-      bot.presses++;
-      botPressTotal++;
-    }
+    for (const action of bot.actions) botPress(action, t);
   }
   botPrevBeat = beat;
 }
@@ -127,15 +160,46 @@ const ctxBase = {
 
 // --------------------------------------------------------------- scene swap
 
-async function activate(id, opts = {}) {
+/** Drop every beat listener the outgoing scene registered through `ctx.onBeat`. */
+function releaseSceneSubs() {
+  const subs = currentCtx?.subs;
+  if (!subs) return;
+  for (const off of subs) {
+    try { off?.(); } catch (e) { console.error('release subscription', e); }
+  }
+  subs.length = 0;
+}
+
+/**
+ * Scene swaps are serialised. A swap has two awaits in it, so two calls
+ * landing inside one await window used to run two swaps concurrently against
+ * the same stage, `current` and `currentCtx`. Reachable from the harness,
+ * which can call goto() faster than a scene loads.
+ */
+let activation = Promise.resolve();
+
+function activate(id, opts = {}) {
+  activation = activation.catch(() => {}).then(() => activateNow(id, opts));
+  return activation;
+}
+
+async function activateNow(id, opts = {}) {
   if (current) {
     try { current.dispose?.(currentCtx); } catch (e) { console.error('dispose', e); }
+    // No scene until the next one has loaded: the loop kept calling the
+    // disposed one's update/input through the await, and when the next scene
+    // is the same module (play → play on restart) that reached its half-built state.
+    current = null;
     stage.detach();
     ui.clear();
     fx.reset();
     clock.stop();
     clock.clearSchedule();
   }
+
+  // Always, even when the scene never started: load() can subscribe and then
+  // throw, and `current` is still null on that path.
+  releaseSceneSubs();
 
   const mod = await getScene(id);
   if (!mod) { console.error('unknown scene', id); return; }
@@ -144,12 +208,25 @@ async function activate(id, opts = {}) {
   const camera = new THREE.PerspectiveCamera(50, stage.size.w / stage.size.h, 0.1, 200);
   camera.position.set(0, 2.2, 8);
 
+  // Subscriptions taken out through `ctx.onBeat` are recorded here and
+  // released on the next scene swap. The clock outlives every scene, so a
+  // discarded unsubscribe keeps firing inside whatever loads next — it cost
+  // us a stacking kick voice on the title screen and count SFX bleeding into
+  // the following minigame before this ledger existed.
+  const sceneSubs = [];
+
   currentCtx = Object.assign(Object.create(ctxBase), {
     scene, camera, opts,
-    rng: makeRng(opts.seed ?? 0x5eed),
+    rng: makeRng(opts.seed ?? seedOverride ?? 0x5eed),
+    subs: sceneSubs,
+    onBeat(fn) {
+      const off = clock.onBeat(fn);
+      sceneSubs.push(off);
+      return off;
+    },
   });
 
-  stage.attach(scene, camera);
+  stage.attach(scene, camera, id);
 
   // A scene that throws in load() must not take the application down with it.
   // Before this, one game reading a null field during load left `ready`
@@ -158,15 +235,17 @@ async function activate(id, opts = {}) {
   // should be a broken scene, not a broken product.
   try {
     await mod.load?.(currentCtx);
+    // `attach` already carries the id; load() has now declared the scene's
+    // env preset and ground, which warm() reads while it builds and compiles.
+    await stage.warm();
     current = mod;
     mod.start?.(currentCtx);
     bus.emit('scene:active', id);
-    window.__BBB__.scene = id;
   } catch (e) {
     console.error('scene failed to start:', id, e);
     current = null;
-    window.__BBB__.scene = null;
-    window.__BBB__.lastError = { scene: id, message: String(e && e.message || e) };
+    stage.sceneId = null;
+    lastError = { scene: id, message: String(e && e.message || e) };
     bus.emit('scene:error', id, e);
     // Fall back to the title screen so the player is never stranded — unless
     // the title is what failed, in which case stop rather than loop forever.
@@ -272,7 +351,7 @@ const telemetry = {
         textures: info.memory.textures,
       },
       judgements: this.judgements.slice(-400),
-      scene: window.__BBB__?.scene,
+      scene: stage.sceneId,
       outputLatencyMs: clock.outputLatency * 1000,
     };
   },
@@ -376,17 +455,35 @@ for (const ev of ['pointerdown', 'keydown', 'touchstart']) {
 
 // ------------------------------------------------------------------ test API
 
-let resolveReady;
-window.__BBB__ = {
+let resolveReady = () => {};
+if (TEST_API) window.__BBB__ = {
   ready: new Promise((r) => { resolveReady = r; }),
-  scene: null,
+  get scene() { return stage.sceneId; },
+  get lastError() { return lastError; },
   scenes: SCENES.map((s) => s.id),
   version: '0.1.0',
   clock, input, bus,
+  /** The mix graph (`ctx`, `master`, buses) — the harness taps `master`. */
+  audio,
+  /** Renderer, look, lights — for debugging render cost from the harness. */
+  stage,
   telemetry: () => telemetry.snapshot(),
   resetTelemetry: () => { telemetry.frames.length = 0; telemetry.judgements.length = 0; },
   goto: (id, opts) => activate(id, opts || {}),
-  setSeed: (n) => { ctxBase.rng = makeRng(n); },
+  /** Shell bookkeeping (session/profile) — lets a script stage a party mid-way. */
+  shellState: () => import('./shell/state.js'),
+  /**
+   * Reseed the run. This used to assign `ctxBase.rng` only — and every
+   * activation gives the scene context an OWN `rng` property that shadows the
+   * prototype, so it reached nothing at all. It now reseeds the running scene
+   * and every activation after it, which is what "the harness replays runs"
+   * needs in order to be true.
+   */
+  setSeed: (n) => {
+    seedOverride = n;
+    ctxBase.rng = makeRng(n);
+    if (currentCtx) currentCtx.rng = makeRng(n);
+  },
   /**
    * Render quality. The harness forces 'low' by default: it renders through
    * SwiftShader, where the post chain costs hundreds of ms per frame and the
@@ -417,7 +514,18 @@ window.__BBB__ = {
       until: clock.now() + (o.seconds ?? 15),
       rng: makeRng(o.seed ?? 0xb07),
       presses: 0,
+      // `chart: true` uses the scene's own note list when it offers one.
+      chart: null,
+      cursor: 0,
     };
+    // (a host scene like the shell's `play` forwards testChart and returns
+    // null when the game it hosts has none: fall back to division presses)
+    const list = o.chart && typeof current?.testChart === 'function' ? current.testChart(currentCtx) : null;
+    if (Array.isArray(list)) {
+      const now = clock.now();
+      const at = (n) => (n.time !== undefined ? n.time : clock.timeAt(n.beat));
+      bot.chart = list.filter((n) => at(n) > now).sort((a, b) => at(a) - at(b));
+    }
     botPrevBeat = null;
     botPressTotal = 0;
     return true;

@@ -27,14 +27,18 @@ import {
   makeCharacter, paletteFor, paletteById, buildFor, drawCallsFor,
   PALETTES, BUILDS, BUILD_IDS, disposeSharedResources,
 } from './rig.js';
-import { CharacterAnimator, makeAnimator, STATES, STATE_DEF, VERDICT_POSE, idle, windup, strike, makePose } from './anim.js';
+import { CharacterAnimator, makeAnimator, STATES, STATE_DEF, VERDICT_POSE, idle, windup, strike, makePose, sampleClip } from './anim.js';
 import { makeCrowd } from './crowd.js';
+import { CLIP_FACE } from './anim.js';
+import { CLIPS } from './clips.gen.js';
 
 export {
+  /** Baked mocap clips (durations, `contact` frames) for `anim.play()`. */
+  CLIPS, CLIP_FACE,
   makeCharacter, paletteFor, paletteById, buildFor, drawCallsFor,
   PALETTES, BUILDS, BUILD_IDS, disposeSharedResources,
   CharacterAnimator, makeAnimator, STATES, STATE_DEF, VERDICT_POSE,
-  idle, windup, strike, makePose,
+  idle, windup, strike, makePose, sampleClip,
   makeCrowd,
 };
 
@@ -66,9 +70,13 @@ export function makeCast({
 
   for (let i = 0; i < n; i++) {
     const p = players?.[i] || null;
-    const pal = p?.palette !== undefined && p.palette !== null
-      ? (typeof p.palette === 'string' ? paletteById(p.palette) : paletteFor(p.palette))
-      : paletteFor(i);
+    // A palette may be an id, an index, or a palette object. Objects used to
+    // fall into paletteFor(), which coerced them to index 0 — every shell
+    // character rendered in the same orange whatever colour it was given.
+    const pp = p?.palette;
+    const pal = pp === undefined || pp === null ? paletteFor(i)
+      : typeof pp === 'object' ? pp
+        : typeof pp === 'string' ? paletteById(pp) : paletteFor(pp);
     const build = builds?.[i] ?? BUILD_IDS[i % BUILD_IDS.length];
     const char = makeCharacter({
       palette: pal, build, seed: (seed + i * 7919) >>> 0, detail, scale,
@@ -78,9 +86,21 @@ export function makeCast({
     char.position.set(pos[0], pos[1], pos[2]);
     if (faceCamera && !positions) char.rotation.y = -pos[0] * 0.055;
     group.add(char);
+    const anim = makeAnimator(char, { seed: (seed + i * 104729) >>> 0 });
+    // Settle the pose before this character is ever rendered. Its rest pose
+    // (anim.js `REST` — hip/torso rotations at zero) is the rig's zero
+    // reference, not a standing stance, and `update()`'s damping takes
+    // several ticks to close the gap to "idle" — with nothing pre-warmed, a
+    // freshly built character visibly rises from lying flat to standing
+    // over its first few frames. Eight ticks at 1/30s clears >99% of the
+    // gap regardless of caller dt (see the exp(-34*dt) factor in anim.js)
+    // for the cost of pure math, no render — this was already the fix the
+    // portrait-bust code used per character; every OTHER caller of a fresh
+    // cast (a roster lock-in, a minigame's cast) needs the same thing.
+    for (let k = 0; k < 8; k++) anim.update(1 / 30, 0);
     members.push({
       index: i, id: p?.id ?? i, name: p?.name || `P${i + 1}`,
-      char, anim: makeAnimator(char, { seed: (seed + i * 104729) >>> 0 }), palette: pal,
+      char, anim, palette: pal,
     });
   }
 

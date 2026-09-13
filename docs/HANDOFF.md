@@ -1,8 +1,11 @@
 # Beat Bash Bonanza — handoff
 
-**Written 2026-08-08.** Branch `claude/rhythm-party-game-713xsk`, all pushed.
-**Pull request: [#12](https://github.com/boenchen1112/Swinger/pull/12)** — this
-branch is the PR, so every further push updates it. Do not open a second one.
+**Updated 2026-09-11 (portfolio-polish pass).** Branch `bbb-portfolio-polish`,
+draft PR [#22](https://github.com/boenchen1112/Bonanza/pull/22) into
+`Mario-Party` (never `master`). The pass is specified in
+`docs/BBB_Portfolio_Polish_Spec.md` and tracked ticket by ticket in
+`docs/BBB_Portfolio_Polish_Tickets.md` — read that file for what changed and
+why; this document is the standing state of play.
 
 Read this first, then `web/ARCHITECTURE.md`. This document is the state of
 play and the plan; ARCHITECTURE.md is the contract.
@@ -26,17 +29,15 @@ verbatim.
 
 | | |
 |---|---|
-| Builds | yes, clean |
-| Runs | yes — all 8 registered scenes load with a clean console |
-| Tests | 27/27 green (`npm --prefix web test`) |
-| Critic rounds completed | **zero** |
-| Minigames built | **five, all playable and passing autoplay at 100%** — none reviewed by a critic |
+| Builds | yes, clean (production build strips the `__BBB__` test API; the harness builds `--mode harness`) |
+| Runs | yes — every registered scene loads console-clean on the real GPU (`tools/harness/sweep.mjs`) |
+| Tests | 92/92 green (`npm --prefix web test`) + `swingKings/verify.mjs` (now on the real GPU, incl. bat-meets-ball contact checks) and `swingKings/smoke-conduct.mjs` ALL PASS |
+| Critic rounds completed | Swing Kings: 4 FAIL rounds, fixes landed for each, round 5 running. Shell: round 1 FAIL, fixes landed, round 2 running. See the tickets file (13, 19) |
+| Minigames | five, all playable; Swing Kings is the polished hero, the other four had a baseline pass |
 
-Wave 1 (six engine builders) and Wave 2 (five minigame builders) were BOTH
-terminated part-way by a monthly API spend limit. Their partial work was recovered and integrated, so the
-engine is real but **nothing has passed the quality bar you set, because no
-critic has run.** Treat every "shipped" claim below as "exists and runs",
-not as "reviewed".
+The earlier waves' builders were cut short by a spend limit and no critic
+ever ran; the portfolio-polish pass is the first time the builder/critic
+loop has actually been exercised.
 
 ### What genuinely exists
 
@@ -46,11 +47,16 @@ not as "reviewed".
 - **Audio** (`web/src/audio/`) — synthesis voices, reverb/delay sends, a
   music player with lookahead scheduling, music theory helpers, and seven
   original tracks as data. Verdict SFX are pitched into the current chord.
-  **Never heard by anyone** — the harness mutes audio. This is the single
-  least-verified area in the project.
+  The harness now captures the mix and checks level + beat sync on every
+  run; no person has listened to it yet.
 - **Look** (`web/src/render/look/`, `env/`) — house toon style, lighting rig,
-  palettes, gradient sky, blob shadows, bloom/vignette/chroma post, and a
-  beat-reactive environment kit.
+  palettes, gradient sky, blob shadows plus one opt-in real shadow map
+  (`look.setShadowFocus`), bloom/vignette/chroma post, and a beat-reactive
+  environment kit.
+- **Mocap on the toy rig** (`web/src/chars/retarget.js`, `clips.gen.js`) —
+  Mixamo clips baked offline into the procedural rig's pose channels and
+  played through the same animator (`anim.play()`); the why is in the
+  tickets file (re-plan note above ticket 07).
 - **VFX** (`web/src/render/fx/`) — pooled sparks, shards, streaks, rings,
   trails, confetti, decals, in-world callouts, plus a `fx.verdict()` that
   composes a layered response and a combo-escalation system.
@@ -63,22 +69,17 @@ not as "reviewed".
 
 ### What is missing
 
-- **Critic review.** Still zero rounds. Every game is mechanically verified
-  but none has been judged for feel, readability or personality.
-- **The conducting gesture is deferred by decision, not oversight.** Swing
-  Kings and Bounce Brigade were built around hold-and-release; both are now
-  plain taps (see §6). Swing Kings derives power from timing accuracy instead
-  of hold length; Bounce Brigade's two-beat charge is a double-tap, on the
-  ramp and off it. Restoring the gesture later is a localised change to each
-  game's `input()` plus its power source.
-- **UI (P5) is half-wired.** `web/src/ui/font.js` (procedural typeface) and
-  `styles.js` landed, but `ui/index.js` was never rewritten to use them. The
-  HUD is still the original debug overlay. This is now the biggest visible
-  quality gap.
-- **`select.js` and `results.js`** are still integrator placeholders.
-- **`party` and `options` views** are referenced by `nav.js` but have no
-  scene files; they currently fall through to `select`.
-- **Audio has still never been heard by anyone** — the harness mutes it.
+- **Critic PASS.** In progress for Swing Kings and the shell (tickets 13,
+  19); the other four games had a baseline pass only, no critic round.
+- **Conducting gesture: Swing Kings only, opt-in** (ADR 0004) — mouse drag
+  and webcam hand tracking, chosen in Options; taps stay the default.
+  Bounce Brigade's charge is still a double-tap.
+- **`select.js` was removed** (2026-09-11): a placeholder nothing in the
+  flow routed to. Title → PARTY / FREE PLAY / OPTIONS; the game picker is
+  `freeplay`. `results`, `party` and `options` are real scenes now.
+- **Audio has still never been heard by a person.** Since 2026-09-11 the
+  harness captures the mix and machine-checks level + beat sync (§3 item 5);
+  Swing Kings passes (on the 8th grid, -4ms bias). Taste is still unjudged.
 - **No calibration, no accessibility pass, no coherence pass.**
 
 ## 3. The harness — read this before trusting any measurement
@@ -92,40 +93,56 @@ Boots the **built** game in headless Chromium, plays it, dumps screenshots +
 `telemetry.json` + `console.log` + `summary.json`. Use your own `--dist` and
 `--out` so parallel agents never collide.
 
-**It renders through SwiftShader at ~2-3fps at 720p.** Three consequences,
-each of which already cost a debugging cycle once:
+**It renders on the machine's real GPU** (since 2026-09-11, portfolio-polish
+ticket 01). Playwright's full Chromium runs in new-headless mode — no window
+opens — with ANGLE/D3D11 on Windows, so frames arrive at display rate and
+`--quality` defaults to `high` (the full post chain). `summary.json` names the
+adapter in `gpu` and sets `softwareRendered` from it; check both before
+trusting a number. Consequences:
 
-1. **`fps`/`frameMs` are meaningless.** Judge perf on `cpuMs` (our JS per
-   frame, budget < 4ms) and `render.drawCalls` (budget < 120).
-2. **Timed effects pile up on screen.** At 2fps three callouts are alive
-   where at 60fps there would be one. Before reporting stacked or overlapping
-   effects, re-run at `--width 480 --height 270` (~5x the frame rate). If it
-   resolves, it is the harness.
-3. **Autoplay is frame-rate independent by construction.** Presses are
+1. **`fps`/`frameMs` mean something again** on the GPU path (~55-60fps for
+   Swing Kings on the dev laptop's Iris Xe). Still budget on `cpuMs` (our JS
+   per frame, < 4ms) and `render.drawCalls` (< 120) — those are the numbers
+   that transfer to other hardware. `drawCalls` now counts the whole frame
+   (shadow + world passes); `postPasses` counts the post chain separately.
+2. **Shots are paced in audio time.** Frame *i* is taken when
+   `Clock.now()` crosses its slot, then after `screenshotReady()` — never
+   after a wall-clock sleep — so what a shot shows cannot drift from the
+   music even if a screenshot is slow.
+3. **`--swiftshader` restores the old software path** for a machine with no
+   usable GPU. On that path (and only there) the old warnings apply: frames
+   run at ~2-3fps, `fps`/`frameMs` are meaningless, and timed effects pile up
+   on screen (three callouts alive where 60fps would show one). Old runs and
+   notes from before 2026-09-11 were all taken this way.
+4. **Autoplay is frame-rate independent by construction.** Presses are
    emitted inside the frame loop carrying the audio time they were *aimed*
    at. `--play perfect` must report `meanAbsErrMs: 0`. Anything else is a
    real defect. (The original setTimeout-driven bot delivered presses
    hundreds of ms late and scored 0 hits / 20 misses — that was very nearly
    filed as a broken game.)
+5. **Audio is captured and checked.** An AudioWorklet taps the master bus
+   (on the context clock — `--mute-audio` silences speakers, not the graph)
+   and writes `audio.wav`; `summary.audio` reports level, clipping, and
+   whether onsets sit on the game's beat grid (`pass`, `bestGrid`, `biasMs`
+   — see `tools/harness/audiocheck.mjs`, unit-tested in
+   `web/tests/audiocheck.test.mjs`). That proves sync, not taste: a person
+   still has to listen to the WAV. `--no-audio` skips it.
+6. **`--video`** writes Playwright's screen recording (`video/*.webm`,
+   fixed 25fps, no audio track). Fine for review; portfolio footage should
+   come from a real browser/OBS capture.
 
-Scenes reachable: `title roster freeplay play results select` and the five
+Scenes reachable: `title roster freeplay party options play results` (+ `chars-demo`) and the five
 game ids. Anything not in `web/src/shell/registry.js` is invisible to review.
 
 ## 4. Next actions, in order
 
-1. **Wave 2 critics.** Every game now plays under the standard harness, so a
-   critic can finally judge one. One fresh critic per game,
-   `critic-brief.md` verbatim, blind A/B against the Mario Party rhythm
-   minigames. Loop until PASS. Known cosmetic defect for triage: Swing Kings'
-   hit-tier callout is dark-on-dark against the crowd.
-2. **Finish P5 (UI)** — the biggest visible gap now that the games exist.
-3. **Audio verification** via `OfflineAudioContext`: assert peak <= 1.0 and
-   non-silence per layer. Nobody has heard this game.
-4. **Real-hardware perf pass.** Draw calls are trustworthy and fine: 73
-   (swing-kings) to 109 (chomp-chorus) against a 120 budget. `cpuMs` is
-   contaminated by SwiftShader and needs a real GPU.
-5. **`select.js` / `results.js`**, then `party`/`options`, coherence,
-   calibration, accessibility.
+See `docs/BBB_Portfolio_Polish_Tickets.md` for the live list. Beyond it:
+
+1. **Critic rounds for the other four games** (they only had a baseline
+   pass). Same brief, same loop.
+2. **A person listens** to every track (`runs/*/audio.wav` from any harness
+   run) and plays the webcam mode once.
+3. Calibration, accessibility.
 
 ### Verified, so stop worrying about it
 
@@ -137,13 +154,40 @@ locked to the transport across every `setBpm`.
 ## 5. Traps already paid for — do not re-introduce
 
 - **`x % 1` for beat phase.** JS modulo keeps the dividend's sign and the
-  transport runs *negative* beats through the lead-in. Use
-  `x - Math.floor(x)`. This bug crashed every free-play preview and had
-  already been guarded against in `clock.test.mjs` for `Beats.barFrac`.
+  transport runs *negative* beats through the lead-in. Use `beatPhase(x)`
+  from `core/util.js` — it is one function now, after being re-derived in a
+  dozen files. This bug crashed every free-play preview.
+- **`clock.onBeat` from a scene.** The clock outlives every scene, so a
+  discarded unsubscribe keeps firing inside whatever loads next. Use
+  `ctx.onBeat`, which main.js releases on the swap. Two call sites had
+  already leaked: the title screen stacked a kick voice per visit and Bounce
+  Brigade's count SFX played inside the following minigame.
+- **`stage.attach()` without the scene id.** Palette inference keys on it; a
+  scene attached without one is graded in the *previous* scene's palette for
+  its first frames and then cross-fades out of it.
+- **`clock.stop()` to pause.** It drops the one-shot schedule. `suspend()`
+  keeps it and returns the beat to resume from.
+- **Returning a raw object from `result()`.** Go through `roundResult()` in
+  `core/result.js`: it is the only thing enforcing that `accuracy` is hit
+  quality 0..1 and that a `field` is a real race order.
+- **A new minigame without `testChart()`.** Without it the critic bot presses
+  'a' on eighths, which in a four-lane game misses every lane and proves
+  nothing. Measured on Chomp Chorus: 16/16 MISS before, 13/13 PERFECT after.
+- **Mutating shared fx/stage state in `load()` and unwinding it in
+  `dispose()`.** Don't — `fx.reset()` and `stage.detach()` restore their own
+  defaults on every swap. Half the mutations used to be one-way, so whatever
+  the last minigame left behind was what the next one inherited.
+- **A blanket `catch {}` around a harness read.** `sweep.mjs` reported
+  "HARNESS FAILURE" on all thirteen scenes for a missing import in itself.
 - **Zeroing `dt` for hitstop.** Subtract only the frozen portion, or a 78ms
   hitstop eats a whole frame on a slow device.
-- **Sampling `renderer.info` after post.** The fullscreen quads overwrite it;
-  every scene reports 1 draw call. `stage.stats` captures it before post.
+- **`renderer.info` resetting per render() call.** The post chain calls
+  render() several times per frame; with the default `autoReset` every
+  scene reported 1 draw call. The stage turns autoReset off and resets once
+  per frame.
+- **Trusting SwiftShader frames.** Many old "bugs" (callout pile-ups, a
+  stuck Chomp beam, CONTEXT_LOST spam) were 2fps software-render artifacts.
+  Re-check on the GPU path before fixing anything seen in an old run.
 - **Two verdict callouts.** `fx` auto-bridges the `judge` bus event into a
   full layered response including an in-world callout. Do not also fire a
   DOM popup for the same verdict.
@@ -151,28 +195,87 @@ locked to the transport across every `setBpm`.
   count — ten of fifteen callouts were unrenderable and nothing errored.
 - **Parallel agents and git.** Builders must never run git commands in a
   shared tree. The integrator commits.
+- **Restarting the transport under a playing track.** Every shell scene
+  calls `clock.start(now, 0)`; the music player now notices
+  (`clock.generation`) and re-anchors. Anything else that caches a beat
+  cursor must do the same, or it goes silent until the new clock catches up.
+- **Lerping raw Euler angles.** Mocap hips spin many turns; blends and
+  damping must take the short way round (anim.js `IS_ANGLE`/`wrapPi`), and
+  the bake must decompose on the continuous branch (`retarget.eulerNear`,
+  hips in yaw-first `HIPS_ORDER`). Re-bake with `node tools/assets/bake-clips.mjs`.
+- **The default arena floor sits at y=0.** A scene that stands its cast on
+  the house floor (-1.6) must set `scene.userData.groundY`, or the arena
+  floor hides everything below 0.
+- **Compiling on the first frame.** On ANGLE/D3D11 a fresh scene's shader
+  compiles blocked the first frame ~1.2s (Swing Kings) with the count-in
+  already running. `activate()` now awaits `stage.warm()` (default set,
+  dress pass, `compileAsync`) before `start()`, so the stall sits under the
+  `play` host's title card instead of inside the game's clock — but the
+  stall itself was still one blocking JS call: `renderer.compile()` (which
+  `compileAsync` calls first) is a plain synchronous pass, confirmed
+  against three's own source, and texture upload is exactly as synchronous
+  when it happens lazily. `warm()` now compiles per unique material (a rig
+  is ~20 segment meshes sharing far fewer real shaders) in small batches
+  via a fake root that forwards `traverse`/`traverseVisible` without
+  reparenting anything, yielding a real animation frame once real time has
+  elapsed, and pre-uploads textures the same way via `renderer.initTexture`
+  (which `compileAsync` never touched). Measured on title/roster/party:
+  compile+upload time roughly halved to a third (2274ms → 866ms on title).
+  **Swing Kings still shows one ~800-900ms frame regardless of batch
+  size** — isolated by per-batch timing to ONE shader whose link time is
+  that expensive on this GPU/driver; splitting it further needs
+  shader-level work (simplify or precompile that specific material), not a
+  scheduling change. `tools/harness/lineup-probe.mjs` measures both
+  halves; `tools/harness/freeze-probe.mjs` / `freeze-auto-probe.mjs` add a
+  CPU-profile + frame-timing breakdown for real in-page navigation and for
+  the harness's own `--play auto` path.
+- **Building N throwaway 3D renders synchronously.** `shell/chars.js`'s
+  portrait cache used to build all character busts (mesh + 20 animator
+  ticks + a WebGL render + a GPU readback, per character) in one tight
+  loop on first use — the single worst frame anywhere in the shell
+  (1216ms cold-boot on roster). `pumpBusts(budgetMs)` now builds a few ms
+  per call; `title.js` pumps it during idle frames, `roster.js` carries
+  the same pump as a fallback plus a repaint sweep for any card/slot face
+  that already drew the cheap placeholder. Cold-boot roster worst frame:
+  1216ms → 66.9ms.
+- **Calling a disposed scene during the next load.** `activate()` clears
+  `current` before awaiting the next `load()`. It used not to, so the loop
+  kept updating the disposed scene — harmless for most, but `play → play`
+  (pause-menu restart) reached the new instance's half-built state.
+- **Only testing games booted directly.** The harness loads a minigame under
+  its own scene id; players reach it through the shell's `play` host. That
+  gap hid a silent soundtrack for every menu-launched game (`play` mapped to
+  "silent" in `trackForScene`; now `HOST_SCENES`). Check anything touching
+  scene activation through `tools/harness/lineup-probe.mjs` too.
+- **`music.stop()` for a pause.** It drops the track; nothing restarts it.
+  Use `music.pause()` / `music.resume()` (cursor kept, lookahead rewound).
+- **Identity through `ctx.players`, not shell imports.** Games read palette,
+  build and `dress()` from `ctx.players` (ARCHITECTURE.md) and must keep a
+  house default for `[]` — the harness boots games directly.
 - **A scene throwing in `load()` used to kill the whole app** — `ready` never
   resolved and the harness reported a 20s timeout pointing nowhere near the
   cause. `activate()` now contains scene failures and records them on
   `window.__BBB__.lastError`. If a scene seems to hang, read that field.
 
-## 6. Input: taps only, for now
+## 6. Input: taps first
 
-The hold-and-release conducting gesture is deliberately deferred. Every
-scored input in every game is a discrete button press. Two consequences:
+Every scored input in every game can be a discrete button press, so the
+standard harness bot exercises all five games. Pass
+`--actions a,left,down,up,right` for lane games; `--division 2` (eighths) is
+the right grid — finer grids make accuracy look worse, see the critic brief.
+`--chart` makes the bot press a scene's own notes (Swing Kings implements
+`testChart()`), one press per note like a person.
 
-- The standard harness bot exercises all five games. Pass
-  `--actions a,left,down,up,right` for lane games; `--division 2` (eighths)
-  is the right grid — finer grids make accuracy look worse, see the critic
-  brief.
-- No per-game verification scripts are needed. `swingKings/verify.mjs` and
-  `chompChorus/verify.mjs` are leftovers from the gesture design and are not
-  part of the verification path.
+Exceptions (harness-exempt, own scripts): Baton Brawl (ADR 0002) and Swing
+Kings' opt-in conduct modes (ADR 0004) — `swingKings/verify.mjs` drives
+hold/release, `swingKings/smoke-conduct.mjs` drives real mouse strokes and
+boots the webcam pipeline on a fake camera.
 
 ## 7. Conventions
 
 - All time is audio time (`Clock.now()`), never `performance.now()`.
 - `damp(a, b, lambda, dt)`, never `lerp(a, b, 0.1)` in an update loop.
 - `makeRng(seed)`, never `Math.random()`, in anything affecting gameplay.
-- No external fetches: every asset is generated in code.
+- No fetches outside the build (ADR 0003): bundled assets only, loaded
+  same-origin through `web/src/assets/index.js`.
 - Minigames implement the interface in ARCHITECTURE.md and are registered.

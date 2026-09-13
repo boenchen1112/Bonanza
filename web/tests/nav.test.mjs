@@ -63,8 +63,10 @@ test('exitRoute: free play returns to the carousel focused on the game just play
   assert.deepEqual(r, { view: 'freeplay', opts: { game: 'swing-kings' } });
 });
 
-test('exitRoute: select and unknown "from" fall back appropriately', () => {
-  assert.equal(exitRoute({ inParty: false, from: 'select' }).view, 'select');
+test('exitRoute: unknown "from" (including the removed select screen) falls back to title', () => {
+  // The placeholder `select` scene was removed: freeplay is the real picker
+  // and nothing in the flow ever routed into select.
+  assert.equal(exitRoute({ inParty: false, from: 'select' }).view, 'title');
   assert.equal(exitRoute({ inParty: false, from: undefined }).view, 'title');
 });
 

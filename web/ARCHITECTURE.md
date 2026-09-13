@@ -22,9 +22,14 @@ borrow from it.
    converts at the boundary; `Input` already does this for you.
 2. **Never `lerp(a, b, 0.1)` in an update loop.** Use `damp(a, b, lambda, dt)`
    from `core/util.js`, or the feel changes with frame rate.
-3. **No external asset fetches.** Everything — geometry, textures, music,
-   SFX — is generated in code or embedded. The game must run from `file://`
-   after a build, offline, with zero network.
+3. **No fetches outside the build** (ADR 0003, `docs/adr/`). Authored assets
+   (`.glb`, textures, wasm, models) may be committed and imported through
+   Vite — they ship inside `dist/` and load same-origin via
+   `src/assets/index.js`. Nothing may be requested from any other origin
+   (CDN, API, font service); the harness aborts and flags it. The build must
+   run offline from any static server. (`file://` is not a target: module
+   scripts are CORS-blocked there and it never worked.) Free sources only —
+   CC0 or Mixamo — with a provenance README beside every asset.
 4. **Every minigame implements the same interface** (below). No exceptions,
    because the shell, the pause menu, the results screen and the automated
    critic harness all drive them generically.
@@ -83,8 +88,31 @@ export default {
   /** Drained input events, already in audio time, in order. */
   input(ctx, events) {},
 
-  /** Return a result once the game is over, else null. */
-  result(ctx) { return null; },  // {score, accuracy, rank, stats, highlights}
+  /**
+   * Return a result once the game is over, else null:
+   *   {score, accuracy, rank, stats, highlights, field?}
+   * `accuracy` is HIT QUALITY in every game — verdict-weighted, 0..1, the
+   * number the results card prints beside PERFECT/GREAT/GOOD/MISS. A game
+   * whose score is something else (Drumline's race points) keeps that in
+   * `score`, never in `accuracy`.
+   * `field` only from a game that actually raced the lineup: one
+   * `{id, place}` per competitor (`id` = ctx.players id, null for a house
+   * extra). A party scores that order as-is; without it, CPU rounds are
+   * simulated and the recap says so.
+   */
+  result(ctx) { return null; },
+
+  /**
+   * The notes a bot should press, for the automated critic — `null` if this
+   * game has none. Each entry is `{action}` plus EITHER `time` (audio time)
+   * or `beat`; prefer `beat`, which main.js re-derives each frame, so a game
+   * that ramps tempo stays exact.
+   *
+   * Without it the bot presses 'a' on eighths, which in a four-lane game
+   * misses every lane and in a call-and-response game answers calls it was
+   * never given. Two games forked the whole harness over this.
+   */
+  testChart(ctx) { return null; },
 
   /** Free GPU resources. Called always, even on abort. */
   dispose(ctx) {},
@@ -105,11 +133,48 @@ export default {
   ui,         // ui/index.js facade: hud, popup(), banner(), countdown()
   fx,         // render/fx/index.js: burst(), ring(), confetti(), trail()
   bus,        // Bus for cross-module events
+  onBeat,     // (fn) => unsubscribe. Use this, never clock.onBeat: the clock
+              // outlives the scene, and registrations made here are released
+              // on the next scene swap even if dispose() never ran.
   rng,        // seeded rng
-  players,    // [{id, name, palette, isCpu, cpuSkill}]
+  players,    // [{id, name, char, palette, build, isCpu, cpuSkill, dress(char)}]
   size,       // {w, h, dpr} — updated on resize
+  opts,       // the activation options — {seed, game, from, ...}
+  hitstop(s), // freeze gameplay time (NOT the clock) for s seconds
+  go(id, o),  // route to another scene. Inside the `play` host, go('results',
+              // result) means "this round is over", not "show that screen".
 }
 ```
+
+The list above is the whole context. It is written out in full because it
+was not: `hitstop`, `opts`, `go` and `onBeat` were used by every minigame
+while being documented nowhere, so a new game's author read a 13-key
+contract and then had to read four existing games to find the rest. The tell
+was `drumlineDash` calling `ctx.env?.crowd?.cheer?.()` — a member that has
+never existed, with optional chaining swallowing the mistake.
+
+Facades reached through the context carry their own surfaces; the ones the
+minigames actually use, beyond what `GameContext` names:
+
+```
+ctx.ui.el(cls, text)        build a DOM node in the UI layer
+ctx.ui.layer                the overlay element, for a game's private HUD
+ctx.ui.countdown(text)      the count-in presenter (core/round.js drives it)
+ctx.stage.createEnv(scene)  an environment disposed with the scene
+ctx.stage.pulse(k)          beat agreement; punchZoom(k) for a one-off
+ctx.stage.beatPulse         0..1, the current beat's envelope
+ctx.stage.rig.{frame,snap,release,setPushGain}
+ctx.stage.look.{materials,setShadowFocus}
+ctx.audio.sfxBus            the SFX bus node, for a game's own voices
+ctx.audio.ctx               the raw AudioContext — prefer clock.rawNow()
+```
+
+`players` is the session lineup, filled by the shell's `play` host
+(`shell/chars.js` `gamePlayers`); `[0]` is the one human. `palette` is a rig
+palette object and `build` a rig build id, both ready for `makeCharacter` /
+`makeCast`; `dress(char)` adds the character's crest to a rig the game built.
+A scene booted directly (the harness) gets `[]` — always keep a house
+default.
 
 ## Shared feel constants
 
@@ -122,7 +187,10 @@ stop feeling like one product.
 
 `tools/harness/` boots the built game in headless Chromium, drives scripted
 input at exact audio times, and dumps screenshots plus a telemetry JSON.
-The game exposes `window.__BBB__` in dev/test builds:
+The game exposes `window.__BBB__` in dev (`vite`) and harness
+(`vite build --mode harness`) builds only — a plain production build strips
+it, so nothing in game code may depend on it at runtime (pass what you need
+through `ctx`/`stage` instead):
 
 ```js
 window.__BBB__ = {

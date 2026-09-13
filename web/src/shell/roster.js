@@ -16,11 +16,12 @@ import * as THREE from 'three';
 import { damp, clamp01, backOut } from '../core/util.js';
 import {
   PAL, num, el, mountRoot, panel, sfx, createWipe, beatPulse, reducedMotion,
+  ensureStyle, tickExit, makeExit, startShellTransport,
 } from './theme.js';
 import { createBackdrop } from './backdrop.js';
-import { CHARS, charById, charMesh, charBeat, disposeChar, drawPortrait } from './chars.js';
+import { CHARS, charById, charMesh, charBeat, disposeChar, drawPortrait, pumpBusts, bustsBuilt } from './chars.js';
 import { CATALOG } from './games.js';
-import { profile, session } from './state.js';
+import { profile, session, partyPlaylist } from './state.js';
 import { goView, rosterExitRoute } from './nav.js';
 
 const COLS = 4;
@@ -46,6 +47,7 @@ export default {
       cursor: 0, slotSel: 0, active: 0, cpuT: 0, goT: 0, exit: null,
       cards: [], slots: [], reduce: reducedMotion(),
       preview: null, previewId: null, previewSpin: 0,
+      bustsSeen: bustsBuilt(),
     };
 
     // party defaults: one human, two normal CPUs, fourth slot off
@@ -61,6 +63,9 @@ export default {
     const stand = new THREE.Group();
     stand.position.set(-3.7, -1.5, 0);
     ctx.scene.add(stand);
+    // House floor at the pedestal base: the preview stands on the pedestal,
+    // the locked-in picks on the floor beside it.
+    ctx.scene.userData.groundY = -1.5;
     S.stand = stand;
     const ped = new THREE.Mesh(
       new THREE.CylinderGeometry(1.5, 1.7, 0.42, 18),
@@ -122,11 +127,18 @@ export default {
       const tag = el('div', 'sh-ros__slotTag', 'P' + (i + 1));
       const face = el('canvas', 'sh-ros__face');
       face.width = 1; face.height = 1;
+      // Name over type in one column; the READY! stamp lands on the portrait,
+      // so the text keeps the whole width (beside it, "CPU · normal" was cut
+      // to "CPU · no…" — the very setting ←→ changes).
+      const text = el('div', 'sh-ros__slotText');
       const name = el('div', 'sh-ros__slotName', '—');
       const type = el('div', 'sh-ros__slotType', '');
+      text.appendChild(name); text.appendChild(type);
+      const faceWrap = el('div', 'sh-ros__faceWrap');
       const stamp = el('div', 'sh-stamp sh-ros__ready', 'READY!');
       stamp.style.opacity = '0';
-      p.appendChild(tag); p.appendChild(face); p.appendChild(name); p.appendChild(type); p.appendChild(stamp);
+      faceWrap.appendChild(face); faceWrap.appendChild(stamp);
+      p.appendChild(tag); p.appendChild(faceWrap); p.appendChild(text);
       strip.appendChild(p);
       S.slots.push({ el: p, face, name, type, stamp, readyT: -1 });
     }
@@ -145,8 +157,7 @@ export default {
   },
 
   start(ctx) {
-    ctx.clock.setBpm(124);
-    ctx.clock.start(ctx.clock.now() + 0.12, 0);
+    startShellTransport(ctx);
   },
 
   update(ctx, dt, beat) {
@@ -154,22 +165,38 @@ export default {
     S.t += dt;
     S.back.update(dt, beat, S.t);
     S.wipe.update(dt);
+    // Fallback pump: title normally finishes warming the portrait cache
+    // before a player ever reaches here, but a fast navigation (or a harness
+    // boot straight into roster) can arrive before it's done. Whichever
+    // cards/faces drew the cheap placeholder get upgraded once their bust
+    // lands — a couple of `drawImage` calls, not another 3D render.
+    pumpBusts();
+    const bustsNow = bustsBuilt();
+    if (bustsNow !== S.bustsSeen) {
+      S.bustsSeen = bustsNow;
+      for (const c of S.cards) drawPortrait(c.cv, c.def, { size: 104 });
+      for (let i = 0; i < 4; i++) {
+        const id = S.picks[i];
+        if (id) drawPortrait(S.slots[i].face, charById(id), { size: 62 });
+      }
+    }
     const pulse = beatPulse(beat, 6);
     const amp = S.reduce ? 0.4 : 1;
 
-    // 3D preview turntable
+    // 3D preview: a slow sway toward camera, not a full turntable — the face
+    // is the character, and a full spin spent half its time showing the back.
     if (S.preview) {
-      S.previewSpin += dt * 0.55;
-      S.preview.rotation.y = S.previewSpin;
+      S.previewSpin += dt;
+      S.preview.rotation.y = 0.35 + Math.sin(S.previewSpin * 0.6) * 0.45;
       charBeat(S.preview, beat, dt);
-      S.preview.rotation.y = S.previewSpin; // charBeat also writes rotation.y
     }
     S.ped.scale.y = 1 + pulse * 0.12;
     for (let i = 0; i < 4; i++) if (S.cast[i]) charBeat(S.cast[i], beat + i * 0.25, dt);
 
     // grid cards: hovered one lifts, taken ones sit back
     const gridOn = S.stage === 'chars';
-    S.grid.style.opacity = gridOn ? '1' : '0.42';
+    // Dimmed, not faded: at 42% opacity the 3D crowd showed through the portraits.
+    S.grid.style.filter = gridOn ? '' : 'saturate(.45) brightness(.5)';
     for (let i = 0; i < S.cards.length; i++) {
       const c = S.cards[i];
       const on = gridOn && i === S.cursor;
@@ -217,13 +244,7 @@ export default {
       S.headMain.style.transform = `scale(${(1 + pulse * 0.05 * amp).toFixed(3)})`;
     }
 
-    if (S.exit) {
-      S.exit.t += dt;
-      if (!S.exit.fired && S.exit.t > 0.1) {
-        S.exit.fired = true;
-        S.wipe.play(S.exit.go, S.exit.color);
-      }
-    }
+    tickExit(S, dt);
 
     ctx.camera.position.x = damp(ctx.camera.position.x, Math.sin(S.t * 0.3) * 0.35, 1.4, dt);
     ctx.camera.lookAt(0, 1.1, 0);
@@ -238,14 +259,17 @@ export default {
         if (e.action === 'up') { S.slotSel = (S.slotSel + 3) % 4; sfx(ctx, 'ui'); }
         else if (e.action === 'down') { S.slotSel = (S.slotSel + 1) % 4; sfx(ctx, 'ui'); }
         else if (e.action === 'left' || e.action === 'right') {
+          // One controller, one human: every minigame is played by P1, so the
+          // other seats are CPU rivals or empty — never a second "YOU" that
+          // the games would silently ignore.
+          if (S.slotSel === 0) { sfx(ctx, 'miss'); flashHead('P1 IS YOU — SET THE RIVALS'); continue; }
           const d = e.action === 'right' ? 1 : -1;
-          S.lineup[S.slotSel] = (S.lineup[S.slotSel] + d + SLOT_TYPES.length) % SLOT_TYPES.length;
-          // slot 1 can never be empty — somebody has to hold the controller
-          if (S.slotSel === 0 && SLOT_TYPES[S.lineup[0]].id === 'off') S.lineup[0] = typeIdx('you');
+          const seat = SEAT_TYPES.indexOf(S.lineup[S.slotSel]);
+          S.lineup[S.slotSel] = SEAT_TYPES[(seat + d + SEAT_TYPES.length) % SEAT_TYPES.length];
           sfx(ctx, 'ui');
           refreshSlots(ctx);
         } else if (e.action === 'a') {
-          if (activeSlots().length < 2) { sfx(ctx, 'miss'); flashHead('NEED AT LEAST 2 PLAYERS'); continue; }
+          if (activeSlots().length < 2) { sfx(ctx, 'miss'); flashHead('SEAT AT LEAST ONE RIVAL'); continue; }
           sfx(ctx, 'ui');
           S.stage = 'chars';
           S.active = nextHuman(-1);
@@ -302,6 +326,8 @@ export default {
 // ---------------------------------------------------------------- helpers
 
 const typeIdx = (id) => SLOT_TYPES.findIndex((t) => t.id === id);
+/** What seats P2–P4 cycle through. */
+const SEAT_TYPES = ['cpu-easy', 'cpu-norm', 'cpu-hard', 'off'].map(typeIdx);
 const activeSlots = () => S.lineup.map((ti, i) => ({ ti, i })).filter((x) => SLOT_TYPES[x.ti].id !== 'off');
 
 function nextHuman(after) {
@@ -337,12 +363,13 @@ function setPreview(ctx, def) {
   S.previewId = def.id;
   if (S.preview) { S.stand.remove(S.preview); disposeChar(S.preview); }
   const m = charMesh(def, {});
-  m.userData.baseScale = 1.55;
   m.scale.setScalar(1.55);
   m.position.y = 0.42;
-  m.userData.baseY = 0.42;
   S.stand.add(m);
   S.preview = m;
+  // Each character introduces itself with the mocap chest-thump taunt, then
+  // settles into its beat idle.
+  m.userData.charApi?.play('taunt', { face: 'smug', beat: 0.3, blend: 0.2 });
   S.back.setAccent(def.color);
   S.infoName.textContent = def.name;
   S.infoTrait.textContent = def.trait;
@@ -364,10 +391,7 @@ function lockIn(ctx, slot, def, isCpu) {
 
   // the pick walks onto the cast deck
   const m = charMesh(def, {});
-  m.position.set((slot - 1.5) * 1.6, 0.5, 0);
-  m.userData.baseY = 0.5;
-  m.userData.phase = slot * 0.3;
-  m.userData.baseScale = 0.8;
+  m.position.set((slot - 1.5) * 1.6, 0, 0);
   m.scale.setScalar(0.8);
   S.castGroup.add(m);
   if (S.cast[slot]) { S.castGroup.remove(S.cast[slot]); disposeChar(S.cast[slot]); }
@@ -395,8 +419,10 @@ function refreshSlots(ctx) {
   for (let i = 0; i < 4; i++) {
     const t = SLOT_TYPES[S.lineup[i]];
     const s = S.slots[i];
-    s.type.textContent = t.id === 'off' ? 'EMPTY' : `${t.label} · ${t.sub}`;
-    s.el.style.opacity = t.id === 'off' ? '0.34' : '1';
+    s.type.textContent = t.id === 'off' ? 'EMPTY' : t.id === 'you' ? 'YOU' : `${t.label} · ${t.sub}`;
+    s.el.style.filter = t.id === 'off' ? 'saturate(.3) brightness(.55)' : '';
+    // Free Play is solo: no rival seats to show.
+    s.el.style.visibility = S.mode === 'free' && i > 0 ? 'hidden' : '';
   }
   refreshHint();
 }
@@ -404,16 +430,16 @@ function refreshSlots(ctx) {
 function refreshHead() {
   if (!S) return;
   if (S.stage === 'lineup') {
-    S.headMain.textContent = "WHO'S PLAYING?";
-    S.headSub.textContent = '↑↓ pick a slot · ←→ set human / CPU / off · A to continue';
+    S.headMain.textContent = 'PICK YOUR RIVALS';
+    S.headSub.textContent = 'you are P1 · ↑↓ pick a seat · ←→ CPU easy / normal / hard / off';
   } else if (S.stage === 'chars') {
-    S.headMain.textContent = `PLAYER ${S.active + 1} — CHOOSE`;
-    S.headSub.textContent = 'move with the arrows · A to lock in · B to go back';
+    S.headMain.textContent = 'CHOOSE YOUR CHARACTER';
+    S.headSub.textContent = 'move with the arrows · SPACE to lock in · X to go back';
   } else if (S.stage === 'cpu') {
     S.headMain.textContent = 'CPU IS CHOOSING…';
     S.headSub.textContent = 'they always take the good one';
   } else {
-    S.headMain.textContent = S.mode === 'party' ? 'LINEUP SET — PRESS A' : 'READY — PRESS A';
+    S.headMain.textContent = S.mode === 'party' ? 'LINEUP SET — PRESS SPACE' : 'READY — PRESS SPACE';
     S.headSub.textContent = S.mode === 'party' ? 'four games, one crown' : 'pick a minigame next';
   }
   refreshHint();
@@ -432,14 +458,19 @@ function flashHead(msg) {
 
 function refreshHint() {
   if (!S) return;
-  S.hint.innerHTML = S.stage === 'lineup'
-    ? '<span><b class="sh-key">←→</b>slot type</span><span><b class="sh-key">SPACE</b>continue</span><span><b class="sh-key">X</b>back</span>'
-    : '<span><b class="sh-key">↑↓←→</b>choose</span><span><b class="sh-key">SPACE</b>lock in</span><span><b class="sh-key">X</b>back</span>';
+  // One legend per stage — it must never say "lock in" once the lineup is set.
+  const HINTS = {
+    lineup: '<span><b class="sh-key">←→</b>slot type</span><span><b class="sh-key">SPACE</b>continue</span><span><b class="sh-key">X</b>back</span>',
+    chars: '<span><b class="sh-key">↑↓←→</b>choose</span><span><b class="sh-key">SPACE</b>lock in</span><span><b class="sh-key">X</b>back</span>',
+    cpu: '<span>CPU choosing…</span>',
+    go: `<span><b class="sh-key">SPACE</b>${S.mode === 'party' ? 'start the party' : 'pick a game'}</span><span><b class="sh-key">X</b>back</span>`,
+  };
+  S.hint.innerHTML = HINTS[S.stage] || HINTS.chars;
 }
 
 function back(ctx) {
   sfx(ctx, 'uiBack');
-  S.exit = { t: 0, fired: false, color: PAL.violet, go: () => goView(ctx, 'title', {}) };
+  S.exit = makeExit(() => goView(ctx, 'title', {}));
 }
 
 function startRun(ctx) {
@@ -449,7 +480,9 @@ function startRun(ctx) {
     if (t.id === 'off') continue;
     const def = charById(S.picks[i] || CHARS[i % CHARS.length].id);
     players.push({
-      name: t.id === 'you' ? (profile.names[i] || 'P' + (i + 1)) : def.name,
+      // The human goes by their character (BOPP beside ZIZZ, not "P1" beside
+      // ZIZZ) unless they've set a name of their own; the hub marks them YOU.
+      name: t.id === 'you' && profile.names[i] && !/^P\d$/.test(profile.names[i]) ? profile.names[i] : def.name,
       char: def.id,
       isCpu: t.id !== 'you',
       cpuSkill: t.skill,
@@ -461,37 +494,22 @@ function startRun(ctx) {
   session.mode = S.mode;
   if (S.mode === 'party') {
     const len = Math.min(CATALOG.length, Math.max(1, profile.options.partyLength || 4));
-    session.startParty(shuffled(CATALOG.map((g) => g.id), ctx.rng).slice(0, len), len);
+    session.startParty(partyPlaylist(CATALOG.map((g) => g.id), len, ctx.rng), len, (ctx.rng() * 2 ** 32) >>> 0);
   }
   sfx(ctx, 'fanfare');
   ctx.stage.flash?.(0.3, PAL.yellow);
   ctx.fx.confetti([0, 1.5, 0], { count: 60 });
   const r = rosterExitRoute(S.mode);
-  S.exit = {
-    t: 0, fired: false, color: S.mode === 'party' ? PAL.yellow : PAL.cyan,
-    go: () => goView(ctx, r.view, r.opts),
-  };
-}
-
-/** Fisher-Yates using the scene's own seeded rng — never Math.random(). */
-function shuffled(arr, rng) {
-  const out = arr.slice();
-  for (let i = out.length - 1; i > 0; i--) {
-    const j = Math.floor(rng() * (i + 1));
-    [out[i], out[j]] = [out[j], out[i]];
-  }
-  return out;
+  S.exit = makeExit(
+    () => goView(ctx, r.view, r.opts),
+    S.mode === 'party' ? PAL.yellow : PAL.cyan,
+  );
 }
 
 // -------------------------------------------------------------------- css
 
-let cssDone = false;
 function injectRosterCss() {
-  if (cssDone || document.getElementById('sh-roster-css')) { cssDone = true; return; }
-  cssDone = true;
-  const s = document.createElement('style');
-  s.id = 'sh-roster-css';
-  s.textContent = `
+  ensureStyle('sh-roster-css', `
   .sh-ros__head{position:absolute;left:4%;top:5%;}
   .sh-ros__title{font-size:clamp(20px,3.5vw,44px);}
   .sh-ros__sub{font-size:clamp(10px,1.35vw,17px);margin-top:.35em;}
@@ -501,7 +519,7 @@ function injectRosterCss() {
   .sh-ros__card{display:flex;align-items:center;justify-content:center;padding:clamp(4px,.5vw,8px);
     will-change:transform;}
   .sh-ros__card canvas{width:100%;height:auto;max-width:110px;}
-  .sh-ros__strip{position:absolute;left:4%;right:3.5%;bottom:4.5%;display:grid;
+  .sh-ros__strip{position:absolute;left:4%;right:3.5%;bottom:10%;display:grid;
     grid-template-columns:repeat(4,1fr);gap:clamp(6px,1vw,16px);height:clamp(74px,13vh,124px);}
   .sh-ros__slot{display:flex;align-items:center;gap:.6em;padding:0 .8em;overflow:hidden;
     will-change:transform;}
@@ -510,10 +528,11 @@ function injectRosterCss() {
   .sh-ros__face{width:62px;height:62px;border-radius:10px;flex:0 0 auto;background:rgba(0,0,0,.25);}
   .sh-ros__slotName{font-weight:900;font-size:clamp(11px,1.5vw,20px);color:#fff;
     text-shadow:0 2px 0 rgba(0,0,0,.6);}
-  .sh-ros__slotType{font-weight:800;font-size:clamp(8px,1.05vw,13px);color:${PAL.dim};margin-left:auto;
-    text-align:right;letter-spacing:.04em;}
-  .sh-ros__ready{right:6%;top:6%;font-size:clamp(10px,1.5vw,19px);background:${PAL.coral};
-    transform:rotate(-12deg);pointer-events:none;}
-  `;
-  document.head.appendChild(s);
+  .sh-ros__slotText{display:flex;flex-direction:column;gap:.2em;min-width:0;flex:1 1 auto;}
+  .sh-ros__slotType{font-weight:800;font-size:clamp(8px,1.05vw,13px);color:${PAL.dim};
+    white-space:nowrap;letter-spacing:.04em;overflow:hidden;text-overflow:ellipsis;}
+  .sh-ros__faceWrap{position:relative;flex:0 0 auto;}
+  .sh-ros__slot .sh-ros__ready{left:50%;bottom:-.2em;margin-left:-2.2em;font-size:clamp(9px,1.05vw,14px);
+    background:${PAL.coral};transform:rotate(-12deg);pointer-events:none;}
+  `);
 }

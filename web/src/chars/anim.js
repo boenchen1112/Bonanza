@@ -34,11 +34,12 @@
 
 import {
   clamp, clamp01, lerp, smootherstep, damp,
-  backOut, elasticOut, anticipate, easeOutCubic, easeOutQuint, makeRng,
+  backOut, elasticOut, anticipate, easeOutCubic, easeOutQuint, makeRng, beatPhase,
 } from '../core/util.js';
+import { CLIPS, CLIP_FPS, CLIP_CHANNELS } from './clips.gen.js';
 
 export const STATES = [
-  'idle', 'ready', 'windup', 'action', 'recover', 'celebrate', 'fail', 'taunt',
+  'idle', 'ready', 'windup', 'action', 'recover', 'celebrate', 'fail', 'taunt', 'clip',
 ];
 
 /**
@@ -58,6 +59,8 @@ export const STATE_DEF = {
   celebrate: { dur: 2.40, blend: 0.10, beat: 1.35, next: 'idle' },
   fail: { dur: 1.70, blend: 0.07, beat: 0.22, next: 'idle' },
   taunt: { dur: 2.00, blend: 0.16, beat: 1.10, next: 'idle' },
+  // Mocap-driven body (see `play()`); dur/next/beat are set per call.
+  clip: { dur: 1, blend: 0.10, beat: 0.25, next: 'idle' },
 };
 
 /** Which state + variant a verdict maps to. Silhouettes, in order: Y, K, W, comma. */
@@ -112,10 +115,31 @@ function resetPose(p) {
   return p;
 }
 
+/**
+ * Euler order of the hips. Yaw outermost: a turning body (the dance spins, a
+ * swing opens the hips ~90°) is one channel and stays far from gimbal lock,
+ * where XYZ put the yaw in the middle and locked at exactly a quarter turn.
+ * The clip bake (tools/assets/bake-clips.mjs) decomposes in this order.
+ */
+export const HIPS_ORDER = 'YXZ';
+
+/**
+ * Which pose keys are Euler angles. Adding a whole turn to one Euler angle
+ * leaves the rotation unchanged, so blends and damping take the short way
+ * round: a spinning mocap dance carries hips angles many turns from zero,
+ * and a straight lerp back to idle (or across the loop's wrap) cartwheeled
+ * the body upside-down on the way.
+ */
+const IS_ANGLE = POSE_KEYS.map((k) => /Rot[XYZ]$|Swing$|Lift$|Twist$|Spread$/.test(k));
+const TAU = Math.PI * 2;
+/** `d` wrapped into [-π, π). */
+const wrapPi = (d) => d - TAU * Math.floor((d + Math.PI) / TAU);
+
 function blendPose(out, a, b, t) {
   for (let i = 0; i < POSE_KEYS.length; i++) {
     const k = POSE_KEYS[i];
-    out[k] = a[k] + (b[k] - a[k]) * t;
+    const d = b[k] - a[k];
+    out[k] = a[k] + (IS_ANGLE[i] ? wrapPi(d) : d) * t;
   }
   return out;
 }
@@ -183,7 +207,7 @@ export function idle(beat, o = {}) {
   const amp = o.amp ?? 1;
   const ph = o.phase ?? 0;
   const b = beat + ph;
-  const f = b - Math.floor(b);
+  const f = beatPhase(b);
 
   // Vertical: hop up through the beat, compress on the beat, crouch before it.
   const y = hop(f) * 0.030 - compress(f) * 0.024 - crouch(f) * 0.020;
@@ -398,7 +422,7 @@ function poseRecover(p, s) {
 function poseCelebrate(p, s) {
   resetPose(p);
   const b = s.beat * 2; // celebrate at double time — joy is faster than idle
-  const f = b - Math.floor(b);
+  const f = beatPhase(b);
   const j = hop(f);
   const entry = backOut(clamp01(s.t / 0.22), 2.6);
   const air = j * entry;
@@ -494,7 +518,7 @@ function poseTaunt(p, s) {
   resetPose(p);
   const b = s.beat;
   const sway = Math.sin(b * Math.PI);
-  const f = b - Math.floor(b);
+  const f = beatPhase(b);
   const e = smootherstep(clamp01(s.t / 0.25));
   p.rootY = (-0.018 + hop(f) * 0.014) * e;
   p.squash = (-0.14 - compress(f) * 0.35) * e;
@@ -518,7 +542,80 @@ function poseTaunt(p, s) {
   return p;
 }
 
+// ------------------------------------------------------------- mocap clips
+//
+// Mixamo motion, retargeted offline onto THIS rig's pose channels
+// (tools/assets/bake-clips.mjs + retarget.js). A clip only ever supplies the
+// body channels; the face stays ours (a preset per call), and everything
+// downstream — crossfade, damping, the additive beat layer, springs,
+// impulses, blinks — treats a clip exactly like a hand-written state.
+
+/** Face presets for clip states. Keys are pose channels; unset = REST. */
+export const CLIP_FACE = {
+  neutral: {},
+  focus: { eyeOpen: 0.78, browY: -0.45, browAngle: 0.5, pupilX: 0.45, mouthCurve: -0.12, mouthW: 0.8 },
+  fierce: { eyeOpen: 1.1, browY: -0.35, browAngle: 0.75, mouthCurve: -0.1, mouthOpen: 0.55, mouthW: 1.15 },
+  joy: { eyeOpen: 0.3, browY: 0.85, browAngle: -0.35, mouthCurve: 1.0, mouthOpen: 0.6, mouthW: 1.35 },
+  smug: { eyeOpen: 0.62, pupilX: -0.55, pupilY: 0.1, browY: 0.3, browAngle: 0.35, mouthCurve: 0.75, mouthW: 0.85 },
+  groove: { eyeOpen: 0.55, browY: 0.4, browAngle: -0.2, mouthCurve: 0.9, mouthOpen: 0.25, mouthW: 1.2 },
+};
+
+const mod = (a, n) => ((a % n) + n) % n;
+
+/** Clip-local time (seconds) a clip spec shows at state time `t` / beat. */
+export function clipTimeAt(spec, t, u, beat) {
+  const len = spec.to - spec.from;
+  if (spec.beatLock) return spec.from + mod(spec.phase + (beat - spec.beat0) * spec.secPerBeat - spec.from, len);
+  if (spec.loop) return spec.from + mod(t * spec.rate, len);
+  return spec.from + clamp01(u) * len;
+}
+
+/** Linear sample of every baked body channel at clip time `time`. */
+export function sampleClip(p, clip, time, legFrac = 0.3) {
+  const x = clamp(time, 0, clip.duration) * CLIP_FPS;
+  const i0 = Math.min(clip.n - 1, Math.floor(x));
+  const i1 = Math.min(clip.n - 1, i0 + 1);
+  const a = x - i0;
+  for (let c = 0; c < CLIP_CHANNELS.length; c++) {
+    const k = CLIP_CHANNELS[c];
+    const tr = clip.ch[k];
+    p[k] = (tr[i0] + (tr[i1] - tr[i0]) * a) * 0.001;
+  }
+  // Baked in leg-lengths; the pose wants fractions of this rig's height.
+  p.hipsY *= legFrac;
+  return p;
+}
+
+function poseClip(p, s) {
+  resetPose(p);
+  const spec = s.variant;
+  const clip = spec && CLIPS[spec.name];
+  if (!clip) return poseIdle(p, s);
+  sampleClip(p, clip, clipTimeAt(spec, s.t, s.u, s.beat), s.legFrac);
+  if (spec.face) Object.assign(p, spec.face);
+  // Optional head turn on top of the mocap (e.g. toward camera, so a batting
+  // stance doesn't hide the face behind the helmet brim).
+  if (spec.headTurn) p.headRotY += spec.headTurn;
+  return p;
+}
+
+/**
+ * Pick how many clip beats fit one game beat (½, 1, 2 or 4) so the playback
+ * rate — clipBeatsPerGameBeat · bpm / clipTempo — is as close to 1 as it can
+ * be. A 196bpm swing-dance loop under a 124bpm song plays at 1.27x with two
+ * of its steps per beat, rather than at 0.63x looking drugged.
+ */
+export function beatLockRatio(clipTempo, bpm) {
+  let best = 1, bestErr = Infinity;
+  for (const m of [0.5, 1, 2, 4]) {
+    const err = Math.abs(Math.log((m * bpm) / clipTempo));
+    if (err < bestErr) { bestErr = err; best = m; }
+  }
+  return best;
+}
+
 const POSE_FN = {
+  clip: poseClip,
   idle: poseIdle,
   ready: poseReady,
   windup: poseWindup,
@@ -571,6 +668,14 @@ export class CharacterAnimator {
     this.beatAmt = 1;
     this.beatAmtTarget = 1;
 
+    /**
+     * How much squash/stretch reaches the root (0 = rigid). Squash is a
+     * non-uniform scale on the WHOLE character, so under a strongly twisted
+     * mocap pose it shears the body into an egg; games turn it down for
+     * those moments.
+     */
+    this.squashScale = opts.squash ?? 1;
+
     // Pose buffers — allocated once, mutated forever. Nothing here allocates
     // per frame, because a GC pause on a downbeat is a missed note.
     this._pA = makePose();
@@ -578,7 +683,12 @@ export class CharacterAnimator {
     this._target = makePose();
     this._cur = makePose();
     this._layer = makePose();
-    this._s = { t: 0, u: 0, beat: 0, variation: this.variation, variant: null, power: 1 };
+    this._s = {
+      t: 0, u: 0, beat: 0, variation: this.variation, variant: null, power: 1,
+      legFrac: this.dims ? this.dims.legLen / this.dims.height : 0.3,
+    };
+    /** Where a finished clip hands off to (per `play()` call). */
+    this._clipNext = 'idle';
 
     // Secondary-motion springs.
     this._headLag = { x: 0, v: 0 };
@@ -634,6 +744,9 @@ export class CharacterAnimator {
     this.prevState = this.state;
     this.prevVariant = this.variant;
     this.prevT = this.t;
+    // The outgoing state's real duration: a retimed windup or a clip must
+    // keep sampling where it was, not at t / (its STATE_DEF default).
+    this.prevDur = this.dur;
     this.state = name;
     this.variant = opts.variant ?? null;
     this.t = 0;
@@ -663,6 +776,57 @@ export class CharacterAnimator {
   relax(opts = {}) { return this.setState('idle', opts); }
 
   taunt(opts = {}) { return this.setState('taunt', { force: true, ...opts }); }
+
+  /**
+   * Play a baked mocap clip through the normal state machine.
+   *
+   * ```js
+   * anim.play('swing', { to: CLIPS.swing.contact, dur: lead, hold: true, face: 'focus' });
+   * anim.play('swing', { from: CLIPS.swing.contact, face: 'fierce' }); // on the note
+   * anim.play('dance', { beatLock: true, bpm: clock.bpm, face: 'groove' });
+   * ```
+   * @param {string} name  clip id in clips.gen.js
+   * @param {object} [o]   {from, to, dur, rate, loop, beatLock, bpm, beat0,
+   *                        hold, next, blend, beat, face, power}
+   *   dur      seconds to spend on [from, to] (retimes the clip; default natural)
+   *   beatLock loop the clip with its own downbeats on the game's beats
+   *   beat     how much of the procedural beat layer rides on top (0..1.4)
+   *   face     a CLIP_FACE preset name or a {channel: value} object
+   */
+  play(name, o = {}) {
+    const clip = CLIPS[name];
+    if (!clip) return this;
+    const from = o.from ?? 0;
+    const to = o.to ?? clip.duration;
+    const rate = Number.isFinite(o.rate) && o.rate > 0 ? o.rate : 1;
+    const spec = {
+      name, from, to, rate,
+      loop: !!(o.loop || o.beatLock),
+      beatLock: !!(o.beatLock && clip.tempo),
+      face: typeof o.face === 'string' ? CLIP_FACE[o.face] : (o.face || null),
+      headTurn: o.headTurn || 0,
+    };
+    if (spec.beatLock) {
+      const m = beatLockRatio(clip.tempo, o.bpm ?? 120);
+      spec.secPerBeat = (m * 60) / clip.tempo;
+      spec.beat0 = o.beat0 ?? Math.floor(this._beat);
+      spec.phase = clip.downbeat ?? 0;
+    }
+    const dur = o.dur ?? (spec.loop ? Infinity : (to - from) / rate);
+    this.setState('clip', {
+      variant: spec, force: true, dur, hold: o.hold ?? false,
+      blend: o.blend ?? STATE_DEF.clip.blend, power: o.power,
+    });
+    this.beatAmtTarget = o.beat ?? STATE_DEF.clip.beat;
+    this._clipNext = o.next ?? 'idle';
+    return this;
+  }
+
+  /** Clip-local time currently shown (null outside a clip) — for mirroring a source rig. */
+  get clipTime() {
+    if (this.state !== 'clip' || !this.variant) return null;
+    return clipTimeAt(this.variant, this.t, clamp01(this.t / this.dur), this._beat);
+  }
 
   /**
    * Verdict reaction. Maps to a state+variant whose silhouettes are mutually
@@ -706,7 +870,8 @@ export class CharacterAnimator {
     // auto-advance
     const def = STATE_DEF[this.state] || STATE_DEF.idle;
     if (!this.hold && isFinite(this.dur) && this.t >= this.dur && def.next) {
-      this.setState(def.next, { variant: this.variant && def.next === 'recover' ? this.variant : null });
+      const next = this.state === 'clip' ? this._clipNext : def.next;
+      this.setState(next, { variant: this.variant && next === 'recover' && this.state !== 'clip' ? this.variant : null });
     }
 
     if (this.blend < 1) this.blend = Math.min(1, this.blend + dt / this.blendDur);
@@ -724,7 +889,7 @@ export class CharacterAnimator {
       target = (POSE_FN[this.state] || poseIdle)(this._pB, s);
     } else {
       const defPrev = STATE_DEF[this.prevState] || STATE_DEF.idle;
-      s.t = this.prevT; s.u = clamp01(this.prevT / defPrev.dur); s.variant = this.prevVariant; s.power = 1;
+      s.t = this.prevT; s.u = clamp01(this.prevT / (this.prevDur ?? defPrev.dur)); s.variant = this.prevVariant; s.power = 1;
       const a = (POSE_FN[this.prevState] || poseIdle)(this._pA, s);
       s.t = this.t; s.u = clamp01(this.t / this.dur); s.variant = this.variant; s.power = this.power;
       const b = (POSE_FN[this.state] || poseIdle)(this._pB, s);
@@ -735,9 +900,23 @@ export class CharacterAnimator {
     // 34 e-folds/sec ≈ 30ms to close 63% of a gap: enough to kill seams,
     // not enough to blunt a snap. Frame-rate independent by construction.
     const cur = this._cur;
+    let bad = false;
     for (let i = 0; i < POSE_KEYS.length; i++) {
       const k = POSE_KEYS[i];
-      cur[k] = damp(cur[k], target[k], 34, dt);
+      cur[k] = IS_ANGLE[i]
+        ? target[k] - wrapPi(target[k] - cur[k]) * Math.exp(-34 * dt)
+        : damp(cur[k], target[k], 34, dt);
+      if (!Number.isFinite(cur[k])) bad = true;
+    }
+    // A NaN in any channel would otherwise persist forever through damp()
+    // and the character would vanish for the rest of the scene. Recover to
+    // the neutral pose, and say so once — this is always a caller bug.
+    if (bad) {
+      if (!this._warnedNaN) {
+        this._warnedNaN = true;
+        console.warn(`CharacterAnimator: non-finite pose in state '${this.state}' — reset to rest`);
+      }
+      resetPose(cur);
     }
 
     // --- 3. additive beat layer -----------------------------------------
@@ -807,14 +986,14 @@ export class CharacterAnimator {
     const fb = this._faceBase;
 
     // root: translation then squash about the feet, volume-compensated.
-    const sy = 1 + p.squash * 0.32;
+    const sy = 1 + p.squash * 0.32 * this.squashScale;
     const sxz = 1 / Math.sqrt(Math.max(0.25, sy));
     j.root.position.y = p.rootY * H;
     j.root.scale.set(sxz, sy, sxz);
     j.root.rotation.set(0, p.rootRotY, p.rootRotZ);
 
     j.hips.position.y = this.dims.hipY + p.hipsY * H;
-    j.hips.rotation.set(p.hipsRotX, p.hipsRotY, p.hipsRotZ);
+    j.hips.rotation.set(p.hipsRotX, p.hipsRotY, p.hipsRotZ, HIPS_ORDER);
     j.torso.rotation.set(p.torsoRotX, p.torsoRotY, p.torsoRotZ);
 
     // Breathing lives on the torso MESH, so it never moves the head or arms.

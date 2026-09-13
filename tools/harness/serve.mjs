@@ -15,6 +15,11 @@ const TYPES = {
   '.json': 'application/json; charset=utf-8',
   '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml',
   '.woff2': 'font/woff2', '.map': 'application/json',
+  '.webp': 'image/webp', '.ktx2': 'image/ktx2',
+  '.glb': 'model/gltf-binary', '.gltf': 'model/gltf+json', '.bin': 'application/octet-stream',
+  // WebAssembly.instantiateStreaming refuses anything but application/wasm.
+  '.wasm': 'application/wasm',
+  '.ogg': 'audio/ogg', '.mp3': 'audio/mpeg', '.wav': 'audio/wav',
 };
 
 createServer(async (req, res) => {

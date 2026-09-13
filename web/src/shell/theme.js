@@ -9,7 +9,7 @@
  * Everything is procedural: no image files, no webfonts, no fetches.
  */
 
-import { clamp01 } from '../core/util.js';
+import { clamp01, beatPhase } from '../core/util.js';
 import { profile } from './state.js';
 
 export const PAL = {
@@ -57,7 +57,7 @@ export function kick(ctx, t, gain = 0.45) {
 }
 
 /** The UI agent owns `ui.layer`; fall back to the raw overlay if it moves. */
-export function uiLayer(ctx) {
+function uiLayer(ctx) {
   return ctx.ui?.layer || document.getElementById('ui') || document.body;
 }
 
@@ -95,17 +95,60 @@ export function display(text, cls = '') {
 
 /** 0..1 sawtooth of the current beat, for pulses that must land ON the beat. */
 export function beatPulse(beat, sharpness = 6) {
-  const f = beat - Math.floor(beat);
+  const f = beatPhase(beat);
   return Math.exp(-f * sharpness);
 }
 
-/** Softer, symmetric breathing — for idle poses that must never look frozen. */
-export function breathe(t, hz = 0.5) {
-  return 0.5 + 0.5 * Math.sin(t * hz * Math.PI * 2);
+// ─────────────────────────────────────────────── the shell screen idioms
+//
+// Six screens (title, roster, freeplay, party, results, options) each used to
+// carry their own copy of the three things below. The copies had drifted:
+// two different exit holds (0.12 and 0.1) and one tick that dropped the
+// `!fired` guard, so that screen could fire its wipe twice.
+
+/**
+ * Inject a screen's stylesheet exactly once. Replaces six hand-written
+ * latches, each double-guarded against itself with a module flag AND a DOM
+ * lookup — two sources of truth for one fact.
+ */
+export function ensureStyle(id, css) {
+  if (document.getElementById(id)) return;
+  const s = document.createElement('style');
+  s.id = id;
+  s.textContent = css;
+  document.head.appendChild(s);
 }
 
-/** Cheap deterministic per-index jitter so rows never move in lockstep. */
-export const stagger = (i, amount = 0.12) => ((i * 0.6180339887) % 1) * amount;
+/** How long a screen holds after a confirm before the wipe starts. */
+export const EXIT_HOLD_S = 0.11;
+
+/**
+ * Deferred navigation: the screen keeps playing its confirm animation for a
+ * beat, then wipes out. `fired: true` means "already gone" — a screen that
+ * routes immediately still wants the record so `tickExit` leaves it alone.
+ */
+export function makeExit(go, color = PAL.violet, fired = false) {
+  return { t: 0, fired, color, go };
+}
+
+/** Advance a screen's pending exit. Call once per frame from update(). */
+export function tickExit(S, dt) {
+  const e = S?.exit;
+  if (!e || e.fired) return;
+  e.t += dt;
+  if (e.t <= EXIT_HOLD_S) return;
+  e.fired = true;
+  S.wipe.play(e.go, e.color);
+}
+
+/** The menus run at one tempo; five screens wrote the number out by hand. */
+export const SHELL_BPM = 124;
+
+/** Start the shell transport. The lead was 0.12 on three screens and 0.1 on two. */
+export function startShellTransport(ctx, lead = 0.12) {
+  ctx.clock.setBpm(SHELL_BPM);
+  ctx.clock.start(ctx.clock.now() + lead, 0);
+}
 
 export function reducedMotion() {
   let osWants = false;
@@ -164,7 +207,7 @@ function shift(c) {
 }
 
 let injected = false;
-export function injectShellStyles() {
+function injectShellStyles() {
   if (injected || document.getElementById('sh-style')) { injected = true; return; }
   injected = true;
   const s = document.createElement('style');
@@ -195,11 +238,13 @@ const CSS = `
   will-change:transform;transform-origin:50% 85%;
   background:linear-gradient(178deg,#fff 6%,${PAL.yellow} 42%,#ff9f45 68%,${PAL.coral} 100%);
   -webkit-background-clip:text;background-clip:text;color:transparent;
-  text-shadow:0 .055em 0 rgba(0,0,0,.85);
-  filter:drop-shadow(0 .04em 0 #2a1d5e) drop-shadow(0 0 .34em rgba(255,190,90,.45));}
+  /* No text-shadow here: with a transparent, background-clipped fill Chrome
+     paints the shadow OVER the gradient, which turned every letter face dark
+     brown. The extrusion lives in the filter chain instead. */
+  filter:drop-shadow(0 .055em 0 rgba(20,10,48,.9)) drop-shadow(0 .02em 0 #2a1d5e) drop-shadow(0 0 .34em rgba(255,190,90,.45));}
 .sh-logo__l--alt{background:linear-gradient(178deg,#fff 6%,${PAL.cyan} 40%,#7aa6ff 70%,${PAL.violet} 100%);
   -webkit-background-clip:text;background-clip:text;
-  filter:drop-shadow(0 .04em 0 #16264f) drop-shadow(0 0 .34em rgba(90,200,255,.45));}
+  filter:drop-shadow(0 .055em 0 rgba(8,14,44,.9)) drop-shadow(0 .02em 0 #16264f) drop-shadow(0 0 .34em rgba(90,200,255,.45));}
 .sh-logo__l--sp{width:.34em;}
 .sh-logo__tag{margin-top:.34em;font-weight:900;letter-spacing:.42em;
   color:${PAL.dim};text-shadow:0 2px 0 rgba(0,0,0,.7);}
@@ -229,6 +274,9 @@ const CSS = `
 .sh-item--sel{color:#fff;background:linear-gradient(90deg,rgba(255,255,255,.20),rgba(255,255,255,.04));
   border-color:var(--accent,${PAL.cyan});box-shadow:0 6px 0 rgba(0,0,0,.5),0 0 30px -6px var(--accent,${PAL.cyan});}
 .sh-item--sel .sh-item__dot{opacity:1;}
+.sh-ping{position:absolute;inset:-3px;border-radius:16px;border:3px solid var(--accent,${PAL.cyan});
+  pointer-events:none;animation:sh-ping .44s cubic-bezier(.2,.7,.3,1) forwards;}
+@keyframes sh-ping{from{transform:scale(1);opacity:.95;}to{transform:scale(1.14,1.6);opacity:0;}}
 
 /* --------------------------------------------------------------- hints */
 .sh-hint{position:absolute;right:3.2%;bottom:3.4%;display:flex;gap:1.1em;align-items:center;
@@ -265,6 +313,9 @@ const CSS = `
 /* ------------------------------------------------------------------ wipe */
 .sh-wipe{position:absolute;left:-25%;top:-12%;width:150%;height:124%;
   will-change:transform;z-index:40;box-shadow:0 0 60px rgba(0,0,0,.6);}
+.sh-play__card{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(-3deg);
+  z-index:41;pointer-events:none;white-space:nowrap;color:#fff;font-size:clamp(34px,6.5vw,92px);
+  text-shadow:0 .07em 0 rgba(0,0,0,.35);}
 
 /* --------------------------------------------------------------- scanline */
 .sh-attract{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;

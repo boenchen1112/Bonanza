@@ -42,10 +42,14 @@ node tools/harness/inspect.mjs --scene <id> --dist dist-<yours> \
 ```
 
 Use your own `--dist`/`--out` when working alongside other agents so builds
-don't collide. Read `docs/HANDOFF.md` §3 before trusting harness numbers —
-it renders through SwiftShader at ~2-3fps, so `fps`/`frameMs` are meaningless
-(judge perf on `cpuMs` and `render.drawCalls` instead), and timed effects
-visibly pile up at that frame rate in a way that doesn't happen at 60fps.
+don't collide. Read `docs/HANDOFF.md` §3 before trusting harness numbers.
+It renders headless on the real GPU (bundled Chromium, ANGLE/D3D11) at
+display rate with `--quality high` by default; `summary.json` → `gpu` /
+`softwareRendered` says what drew the frames. `--swiftshader` forces the old
+~2-3fps software path, where `fps`/`frameMs` are meaningless and timed
+effects pile up. Budget perf on `cpuMs` and `render.drawCalls` either way.
+The harness builds with `vite build --mode harness`; run `npm --prefix web
+install` first in a fresh worktree (Playwright resolves from `web/`).
 
 ### Architecture
 
@@ -58,8 +62,13 @@ state (what's built vs. stubbed vs. never verified).
   `performance.now()` or a raw rAF timestamp.
 - **Determinism.** `makeRng(seed)` from `core/util.js`, never `Math.random()`,
   anywhere that affects gameplay — the harness replays runs.
-- **No external asset fetches.** Geometry, textures, music, SFX are all
-  generated in code or embedded; the build must run from `file://` offline.
+- **No fetches outside the build** (ADR 0003). Authored assets (`.glb`,
+  textures, wasm) may be bundled via Vite and loaded same-origin through
+  `web/src/assets/index.js`; nothing is ever requested from another origin
+  (the harness aborts and flags it). Runs offline from any static server —
+  `file://` was never a working target. Free sources only (CC0 / Mixamo),
+  provenance README beside each asset; raw Mixamo FBX stay in gitignored
+  `Mixamo/`, converted by `tools/assets/convert-mixamo.mjs`.
 - **Every minigame implements the same interface** (`load/start/update/
   input/result/dispose`, documented in full in `web/ARCHITECTURE.md`) so the
   shell, pause menu, results screen, and harness can drive them generically.
@@ -85,9 +94,12 @@ state (what's built vs. stubbed vs. never verified).
 - `src/core/feel.js` (referenced from `web/src/`) holds cross-game feel
   constants (countdown length, hitstop, shake magnitudes, popup lifetimes) —
   change them there, not per-game.
-- **Input is taps-only for now.** The hold-and-release conducting gesture is
-  deliberately deferred (see `docs/HANDOFF.md` §6); don't reintroduce it
-  without reading why it was pulled.
+- **Input is taps-first.** Every game plays on taps and the harness drives
+  taps. Two scoped exceptions: Baton Brawl (ADR 0002) and Swing Kings'
+  opt-in conducting modes — mouse hold/drag and webcam hand tracking,
+  chosen in Options (ADR 0004). Those modes are harness-exempt and covered
+  by `swingKings/verify.mjs` + `swingKings/smoke-conduct.mjs` instead.
+  Don't add gesture input elsewhere without reading `docs/HANDOFF.md` §6.
 - Build process notes: `docs/agents/build-brief.md` and
   `docs/agents/critic-brief.md` define the builder/critic agent workflow
   this codebase is developed under (one builder per module, then a separate
@@ -145,16 +157,6 @@ Phase A closed that gap).
 
 ### v1 scope
 
-- Time signature: 2/4 only. Beat 1 (downbeat/ictus) is scored; beat 2 is not.
-- Input: right Joy-Con only, Bluetooth, raw combined gyro magnitude
-  (no per-axis/dominant-axis calibration in v1).
-- Tempo source: self-generated metronome click (fixed BPM), not real audio.
-- Ictus detection: not the gyro peak, but the sharp deceleration right after
-  it (direction-change event).
-- Calibration: automatic on run, offered via Settings after a round (not
-  forced every session); offset persists to `calibration.json`.
-- 3 misses = out.
-
 Full spec, phase-by-phase build plan, algorithms, thresholds, and deferred
 scope: see `Swinger_Build_Plan_v1.md` in this folder (Phases 0–4, plus
 Section 6 — explicitly deferred items). Later `Swinger_Build_Plan_v2.md`
@@ -173,50 +175,25 @@ python -m pytest tests/test_ictus_detector_smoke.py   # single test file
 Unity: open `UnitySwinger/` in the Unity Editor; `Assets/Scripts/Logic/` is
 plain C# (no UnityEngine dependency) and is the canonical port target.
 
-### Definition of "v0 prototype-ready"
-
-A person with a paired right Joy-Con runs one command, hears a metronome,
-swings once per measure, and sees: a timing judgment (Perfect/Great/Good/
-Miss), a sharpness tier (Bunt/Line Drive/Home Run), an out count, and an
-end-of-round summary of timing offsets and sharpness — with calibration
-available from Settings after the round. Sections 1–5 of the build plan must
-be functional, not stubbed.
-
 ---
 
 ## Folder structure
 
-- `.claude/` — Claude Code project config
-- `web/` — Beat Bash Bonanza (Three.js); see that section above
-- `src/` — Swinger capture/tuning tooling only, not a maintained product
-  (see "Platform roadmap" above): `joycon_stream.py`,
-  `joycon_udp_bridge.py`, `metronome.py`, `beat_schedule.py`,
-  `ictus_detector.py`, `calibration.py`, `scoring.py`, `session_log.py`,
-  plus the retired `game.py`/`settings_menu.py` pygame prototype
+Only the parts a directory listing will not tell you:
+
 - `archive/` (under `src/`) — stale/contaminated captures kept for
   provenance, not for re-deriving anything from
-- `tests/` — frozen Python validation suite backing the Swinger logic
-  modules above
-- `tools/` — `tools/harness/` is the Beat Bash Bonanza critic harness
-  (`inspect.mjs`, `serve.mjs`); `tools/generate_golden_traces.py` and
-  `tools/golden/` feed the Unity port's golden-trace parity tests
-- `UnitySwinger/` — the Unity project; `Assets/Scripts/Logic/` is the
-  canonical, UnityEngine-free ported Swinger logic (keep in sync with
-  `src/`'s logic modules); `Assets/Scripts/Presentation/` and
-  `Assets/Scripts/Input/` are Unity-specific (rendering, UDP receive,
-  calibration flow)
-- `research/` — hand-tracking and gesture-trace exploration (`research/
-  hand_tracking_web/`, `extract_pattern_from_video.py`,
-  `live_trace_view.py`, etc.), separate from both products' shipped code
+- `research/` — hand-tracking and gesture-trace exploration, separate from
+  both products’ shipped code
+- `tools/golden/` + `tools/generate_golden_traces.py` — golden traces
+  backing the Unity port’s parity tests
 - `docs/agents/` — agent-facing process docs: `issue-tracker.md` (GitHub
-  issues in `boenchen1112/Swinger`), `domain.md` (Swinger's `CONTEXT.md` +
+  issues in `boenchen1112/Swinger`), `domain.md` (`CONTEXT.md` +
   `docs/adr/`), `build-brief.md`/`critic-brief.md` (Beat Bash Bonanza
   builder/critic workflow)
 - `docs/design/minigames.md` — Beat Bash Bonanza minigame design docs
 - `docs/HANDOFF.md` — Beat Bash Bonanza current status and next actions
-- `reviews/` — playtest notes, design reviews
-- `progress/` — Beat Bash Bonanza live progress page (`index.html`,
-  `state.json`)
+- `progress/` — Beat Bash Bonanza live progress page
 
 ## Agent skills
 

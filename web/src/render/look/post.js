@@ -294,5 +294,7 @@ export function createPost({ renderer }) {
     render, setSize, setTier, setPalette, setChroma, setFlash, dispose,
     get enabled() { return enabled; },
     get hdr() { return canFloat; },
+    /** Fullscreen draws the chain adds per frame (bright + blurs + composite). */
+    get passCount() { return enabled ? (wide ? 6 : 4) : 0; },
   };
 }

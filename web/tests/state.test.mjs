@@ -8,7 +8,117 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { profile, session } from '../src/shell/state.js';
+import { profile, session, partyPlaylist, cpuRound, rankPlaces, PLACE_POINTS } from '../src/shell/state.js';
+import { makeRng } from '../src/core/util.js';
+
+const IDS = ['swing-kings', 'chomp-chorus', 'drumline-dash', 'bounce-brigade', 'finale-fever'];
+
+test('partyPlaylist() always ends a party on the finale, no repeats, seeded', () => {
+  for (let seed = 1; seed < 40; seed++) {
+    const list = partyPlaylist(IDS, 4, makeRng(seed));
+    assert.equal(list.length, 4);
+    assert.equal(list[3], 'finale-fever', `seed ${seed}: ${list.join(',')}`);
+    assert.equal(new Set(list).size, 4, 'no game twice');
+    assert.deepEqual(partyPlaylist(IDS, 4, makeRng(seed)), list, 'same seed, same party');
+  }
+  assert.deepEqual(partyPlaylist(IDS, 1, makeRng(3)), ['finale-fever']);
+});
+
+test('cpuRound(): skill decides accuracy, the human run sets the score scale', () => {
+  const ref = { score: 10000, accuracy: 1 };
+  const mean = (skill) => {
+    let a = 0;
+    for (let s = 1; s <= 200; s++) a += cpuRound(skill, makeRng(s), ref).accuracy;
+    return a / 200;
+  };
+  assert.ok(mean(0.86) > mean(0.63) + 0.05 && mean(0.63) > mean(0.4) + 0.05, 'hard > normal > easy');
+  const r = cpuRound(0.63, makeRng(7), ref);
+  assert.ok(r.score > 0 && r.score < 10000, `score ${r.score} sits under a perfect human run`);
+  assert.ok(['S', 'A', 'B', 'C', 'D'].includes(r.rank));
+  assert.deepEqual(cpuRound(0.63, makeRng(7), ref), r, 'deterministic');
+  // A zero-score human run still gives the CPUs a real score to post.
+  assert.ok(cpuRound(0.63, makeRng(7), { score: 0, accuracy: 0 }).score > 0);
+});
+
+test('a party round places every player and hands out points; the party has a winner', () => {
+  session.setPlayers([
+    { name: 'P1', char: 'bopp', isCpu: false, cpuSkill: 0 },
+    { name: 'ZIZZ', char: 'zizz', isCpu: true, cpuSkill: 0.4 },
+    { name: 'KWARK', char: 'kwark', isCpu: true, cpuSkill: 0.4 },
+  ]);
+  session.startParty(['swing-kings', 'finale-fever'], 2, 12345);
+  session.recordPartyRound('swing-kings', { score: 10000, accuracy: 1, rank: 'S' });
+  const round = session.party.scores[0];
+  assert.equal(round.players.length, 3);
+  assert.deepEqual(round.players.map((p) => p.place).sort(), [1, 2, 3]);
+  const human = round.players.find((p) => p.id === 0);
+  assert.equal(human.score, 10000, 'the human posts their real score');
+  assert.equal(human.place, 1, 'a perfect run beats two easy CPUs');
+  assert.equal(session.players[0].points, PLACE_POINTS[0]);
+  const total = session.players.reduce((a, p) => a + p.points, 0);
+  assert.equal(total, PLACE_POINTS[0] + PLACE_POINTS[1] + PLACE_POINTS[2]);
+
+  session.recordPartyRound('finale-fever', { score: 8000, accuracy: 0.95, rank: 'A' });
+  assert.equal(session.partyDone, true);
+  assert.equal(session.standings()[0].id, session.party.winner, 'the winner is the standings leader');
+  session.endParty();
+});
+
+test('rankPlaces(): equal values share a place, the next place is skipped (1,1,3)', () => {
+  const rows = [{ id: 0, v: 5 }, { id: 1, v: 9 }, { id: 2, v: 5 }, { id: 3, v: 1 }];
+  const places = rankPlaces(rows, (r) => r.v);
+  assert.deepEqual([0, 1, 2, 3].map((id) => places.get(id)), [2, 1, 2, 4]);
+});
+
+test('a game that raced the lineup reports the field, and its places are the real ones', () => {
+  session.setPlayers([
+    { name: 'P1', char: 'bopp', isCpu: false, cpuSkill: 0 },
+    { name: 'ZIZZ', char: 'zizz', isCpu: true, cpuSkill: 0.4 },
+    { name: 'TUFF', char: 'tuff', isCpu: true, cpuSkill: 0.86 },
+  ]);
+  session.startParty(['drumline-dash', 'finale-fever'], 2, 99);
+  // House racer (no id) finished between them; it is not in the party.
+  session.recordPartyRound('drumline-dash', {
+    score: 640, accuracy: 0.9, rank: 'B',
+    field: [{ id: 2, place: 1 }, { id: null, place: 2 }, { id: 0, place: 3 }, { id: 1, place: 4 }],
+  });
+  const round = session.party.scores[0];
+  assert.equal(round.sim, false, 'nothing simulated this round');
+  const place = (id) => round.players.find((p) => p.id === id).place;
+  assert.deepEqual([place(2), place(0), place(1)], [1, 2, 3], 'ranked among the lineup, in race order');
+  assert.equal(session.players[2].points, PLACE_POINTS[0]);
+  assert.equal(session.players[2].wins, 1);
+  session.endParty();
+});
+
+test('tied round scores share a place and its points; a dead-level party has co-champions', () => {
+  session.setPlayers([
+    { name: 'P1', char: 'bopp', isCpu: false, cpuSkill: 0 },
+    { name: 'ZIZZ', char: 'zizz', isCpu: true, cpuSkill: 0.5 },
+  ]);
+  session.startParty(['drumline-dash'], 1, 5);
+  session.recordPartyRound('drumline-dash', {
+    score: 500, accuracy: 0.8, rank: 'B', field: [{ id: 0, place: 1 }, { id: 1, place: 1 }],
+  });
+  const round = session.party.scores[0];
+  assert.deepEqual(round.players.map((p) => p.place), [1, 1]);
+  assert.deepEqual(session.players.map((p) => p.points), [PLACE_POINTS[0], PLACE_POINTS[0]]);
+  const places = session.standingPlaces();
+  assert.deepEqual([places.get(0), places.get(1)], [1, 1]);
+  assert.deepEqual(session.party.winners.slice().sort(), [0, 1]);
+  session.endParty();
+});
+
+test('points level, wins apart: the tiebreak decides, and places differ', () => {
+  session.setPlayers([
+    { name: 'P1', char: 'bopp', isCpu: false, cpuSkill: 0, points: 0 },
+    { name: 'ZIZZ', char: 'zizz', isCpu: true, cpuSkill: 0.5 },
+  ]);
+  session.players[0].points = 5; session.players[0].wins = 1;
+  session.players[1].points = 5; session.players[1].wins = 2;
+  const places = session.standingPlaces();
+  assert.deepEqual([places.get(1), places.get(0)], [1, 2]);
+});
 
 test('profile.submit() keeps the better score and reports newScore/newRank', () => {
   profile.reset();
@@ -35,7 +145,8 @@ test('session.recordPartyRound() folds a result into party.scores and advances t
 
   session.recordPartyRound('swing-kings', { score: 900, rank: 'B' });
   assert.equal(session.party.scores.length, 1);
-  assert.deepEqual(session.party.scores[0], { game: 'swing-kings', score: 900, rank: 'B' });
+  const r0 = session.party.scores[0];
+  assert.deepEqual([r0.game, r0.score, r0.rank], ['swing-kings', 900, 'B']);
   assert.equal(session.currentGame, 'chomp-chorus');
   assert.equal(session.partyDone, false);
 
@@ -44,6 +155,19 @@ test('session.recordPartyRound() folds a result into party.scores and advances t
   assert.equal(session.partyDone, true);
 
   session.endParty();
+});
+
+test('resetProgress() clears records and stats but keeps the player\'s settings', () => {
+  profile.reset();
+  profile.setOption('offsetMs', 35);
+  profile.setOption('reduceMotion', true);
+  profile.submit('swing-kings', { score: 500, rank: 'B', accuracy: 0.8, stats: { maxCombo: 4 } });
+  profile.resetProgress();
+  assert.equal(profile.record('swing-kings').score, 0);
+  assert.equal(profile.stats.rounds, 0);
+  assert.equal(profile.options.offsetMs, 35, 'timing offset is a setting, not progress');
+  assert.equal(profile.options.reduceMotion, true);
+  profile.reset();
 });
 
 test('recordPartyRound() is a no-op outside a party', () => {

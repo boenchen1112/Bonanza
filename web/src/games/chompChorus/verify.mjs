@@ -81,7 +81,7 @@ function serve(dir, port) {
 }
 
 (async () => {
-  if (!existsSync(DIST)) throw new Error(`no build at ${DIST} — run: npx vite build --outDir dist-g4 (in web/)`);
+  if (!existsSync(DIST)) throw new Error(`no build at ${DIST} — run: npx vite build --mode harness --outDir dist-g4 (in web/)`);
   if (existsSync(OUT)) await rm(OUT, { recursive: true, force: true });
   await mkdir(OUT, { recursive: true });
 

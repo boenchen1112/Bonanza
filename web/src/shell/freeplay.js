@@ -12,9 +12,10 @@
 
 import * as THREE from 'three';
 import { damp, clamp01, easeOutCubic } from '../core/util.js';
-import { PAL, el, mountRoot, panel, sfx, createWipe, beatPulse, fmtScore, RANK_COLOR, reducedMotion } from './theme.js';
+import { PAL, el, mountRoot, panel, sfx, createWipe, beatPulse, fmtScore, RANK_COLOR, reducedMotion, ensureStyle, tickExit, makeExit, startShellTransport } from './theme.js';
 import { createBackdrop } from './backdrop.js';
 import { CATALOG, drawPreview } from './games.js';
+import { cardImage } from './cards.js';
 import { charById, charMesh, charBeat, disposeChar } from './chars.js';
 import { profile, session, ensurePlayers } from './state.js';
 import { goView, goPlay } from './nav.js';
@@ -40,17 +41,15 @@ export default {
     ctx.fx.attach(ctx.scene);
 
     // the roster cheers from the front of the stage
+    ctx.scene.userData.groundY = -1.55;   // the cast stands on the house floor
     S.castGroup = new THREE.Group();
-    S.castGroup.position.set(0, -1.55, 3.2);
+    S.castGroup.position.set(0, -1.55, 1.4);   // far enough back to show their feet
     ctx.scene.add(S.castGroup);
     S.cast = [];
     const players = session.players.length ? session.players : [];
     players.slice(0, 4).forEach((p, i) => {
       const m = charMesh(charById(p.char), {});
-      m.position.set((i - (Math.min(players.length, 4) - 1) / 2) * 2.2, 0.5, 0);
-      m.userData.baseY = 0.5;
-      m.userData.phase = i * 0.4;
-      m.userData.baseScale = 0.72;
+      m.position.set((i - (Math.min(players.length, 4) - 1) / 2) * 2.2, 0, 0);
       m.scale.setScalar(0.72);
       S.castGroup.add(m);
       S.cast.push(m);
@@ -103,7 +102,7 @@ export default {
       rail.appendChild(card);
       const c2d = cv.getContext('2d');
       if (c2d) drawPreview(g.id, c2d, cv.width, cv.height, i * 0.37, 0);
-      S.cards.push({ el: card, cv, c2d, g });
+      S.cards.push({ el: card, cv, c2d, g, real: !!cardImage(g.id) });
     });
 
     const hint = el('div', 'sh-hint');
@@ -115,8 +114,7 @@ export default {
   },
 
   start(ctx) {
-    ctx.clock.setBpm(124);
-    ctx.clock.start(ctx.clock.now() + 0.12, 0);
+    startShellTransport(ctx);
   },
 
   update(ctx, dt, beat) {
@@ -142,16 +140,20 @@ export default {
     }
     const fc = S.cards[focus];
     if (fc?.c2d) drawPreview(fc.g.id, fc.c2d, fc.cv.width, fc.cv.height, beat, S.t);
+    // A side card drawn before its frame decoded showed the fallback sketch
+    // until focused: repaint it the moment the real frame is ready.
+    for (const c of S.cards) {
+      if (c.real || c === fc || !c.c2d || !cardImage(c.g.id)) continue;
+      c.real = true;
+      drawPreview(c.g.id, c.c2d, c.cv.width, c.cv.height, 0, 0);
+    }
 
     for (let i = 0; i < S.cast.length; i++) charBeat(S.cast[i], beat + i * 0.3, dt);
 
     ctx.camera.position.x = damp(ctx.camera.position.x, (S.pos - S.target) * 0.5 + Math.sin(S.t * 0.3) * 0.25, 3, dt);
     ctx.camera.lookAt(0, 1.2, 0);
 
-    if (S.exit) {
-      S.exit.t += dt;
-      if (!S.exit.fired && S.exit.t > 0.12) { S.exit.fired = true; S.wipe.play(S.exit.go, S.exit.color); }
-    }
+    tickExit(S, dt);
   },
 
   input(ctx, events) {
@@ -178,13 +180,13 @@ export default {
         ctx.stage.flash?.(0.22, '#' + g.color.toString(16).padStart(6, '0'));
         ctx.fx.confetti([0, 1.2, 1], { count: 40 });
         session.mode = 'free';
-        S.exit = {
-          t: 0, fired: false, color: '#' + g.color.toString(16).padStart(6, '0'),
-          go: () => goPlay(ctx, g.id, { from: 'freeplay' }),
-        };
+        S.exit = makeExit(
+          () => goPlay(ctx, g.id, { from: 'freeplay' }),
+          '#' + g.color.toString(16).padStart(6, '0'),
+        );
       } else if (e.action === 'b' || e.action === 'pause') {
         sfx(ctx, 'uiBack');
-        S.exit = { t: 0, fired: false, color: PAL.violet, go: () => goView(ctx, 'title', {}) };
+        S.exit = makeExit(() => goView(ctx, 'title', {}));
       }
     }
   },
@@ -215,20 +217,17 @@ function layout(pulse, beat) {
     c.el.style.transform =
       `translate(-50%,-50%) translate3d(${x.toFixed(2)}%, ${y.toFixed(1)}px, ${z.toFixed(0)}px) `
       + `rotateY(${ry.toFixed(2)}deg) scale(${sc.toFixed(3)})`;
-    c.el.style.opacity = String(clamp01(1.25 - ad * 0.55));
+    // Side cards step back by DARKENING, not fading: a translucent card let
+    // the crowd show through its text. Only the ones sliding off fade.
+    c.el.style.opacity = String(clamp01((2.7 - ad) / 0.8));
     c.el.style.zIndex = String(100 - Math.round(ad * 10));
     c.el.classList.toggle('sh-panel--sel', ad < 0.5);
-    c.el.style.filter = ad < 0.5 ? '' : `brightness(${(0.62 + easeOutCubic(1 - clamp01(ad)) * 0.38).toFixed(2)})`;
+    c.el.style.filter = ad < 0.5 ? '' : `brightness(${(0.5 + easeOutCubic(1 - clamp01(ad / 1.6)) * 0.5).toFixed(2)})`;
   }
 }
 
-let cssDone = false;
 function injectCss() {
-  if (cssDone || document.getElementById('sh-fp-css')) { cssDone = true; return; }
-  cssDone = true;
-  const s = document.createElement('style');
-  s.id = 'sh-fp-css';
-  s.textContent = `
+  ensureStyle('sh-fp-css', `
   .sh-fp__head{position:absolute;left:4%;top:5.5%;}
   .sh-fp__rail{position:absolute;left:0;right:0;top:0;bottom:0;perspective:1400px;
     transform-style:preserve-3d;}
@@ -249,6 +248,5 @@ function injectCss() {
     font-size:clamp(11px,1.5vw,19px);}
   .sh-fp__lab{font-size:.55em;color:${PAL.dim};letter-spacing:.12em;}
   .sh-fp__plays{margin-left:auto;font-weight:800;font-size:clamp(8px,1.05vw,13px);color:${PAL.dim};}
-  `;
-  document.head.appendChild(s);
+  `);
 }

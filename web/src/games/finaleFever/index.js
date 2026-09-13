@@ -43,8 +43,10 @@
 
 import * as THREE from 'three';
 import { NoteJudge, rankFor, SCORE } from '../../core/judge.js';
+import { roundResult } from '../../core/result.js';
+import { countIn } from '../../core/round.js';
 import { FEEL, feelForCombo, isMilestone } from '../../core/feel.js';
-import { clamp01, damp } from '../../core/util.js';
+import { clamp01, damp, beatPhase } from '../../core/util.js';
 import { makeCharacter, makeAnimator } from '../../chars/index.js';
 import { createSet, PLACE } from './set.js';
 import {
@@ -63,7 +65,7 @@ let S = null;
 
 /** NEVER `b % 1`: the transport runs negative beats through the lead-in and
  *  JS modulo keeps the dividend's sign. This already crashed the codebase once. */
-const beatFrac = (b) => b - Math.floor(b);
+const beatFrac = beatPhase;
 const hop = (p) => 4 * p * (1 - p);
 
 // ============================================================================
@@ -208,11 +210,12 @@ export default {
     boss.rotation.y = PLACE.bossYaw;
     root.add(boss);
 
-    const pal = ctx.players?.[0]?.palette;
+    const hero = ctx.players?.[0];
     const player = makeCharacter({
-      palette: pal === undefined || pal === null ? 'ember' : pal,
-      build: 'round', seed: 0x51e, detail: 'full', scale: 1.05, name: 'player',
+      palette: hero?.palette ?? 'ember',
+      build: hero?.build || 'round', seed: 0x51e, detail: 'full', scale: 1.05, name: 'player',
     });
+    hero?.dress?.(player);
     player.position.set(PLACE.player[0], PLACE.player[1], PLACE.player[2]);
     player.rotation.y = PLACE.playerYaw;
     root.add(player);
@@ -247,6 +250,7 @@ export default {
     ctx.stage.rig.frame({
       target: [0, 1.55, -0.4], distance: 10.3, height: 2.65, yaw: 0.02, fov: 52, lambda: 2.6,
     });
+    ctx.stage.look.setShadowFocus('rig', 8);   // boss, player and the stage between them
     ctx.stage.rig.snap();
     ctx.stage.rig.setPushGain(1.15);
 
@@ -297,20 +301,18 @@ export default {
     // last game of the series: the shape of the gesture, on screen.
     S.trail = ctx.fx.trail({ color: 0xffe9a8, width: 0.10 });
 
-    S.unsubBeat = clock.onBeat((b, t) => {
-      if (b < 0) {
-        // Beat-locked count-in: the number appears ON the beat, not on a frame.
-        ctx.audio.sfx('count', t, ((b % 4) + 4) % 4);
+    S.unsubBeat = countIn(ctx, {
+      beats: LEAD_BEATS,
+      show: (text) => S.hud.flashCount(text),
+      onBeat: (b) => {
         if (b === -LEAD_BEATS) {
           ctx.ui.banner('FINALE FEVER', { sub: 'It only gets faster.', life: 1.5 });
-        } else if (-b <= 4) {
-          S.hud.flashCount(String(-b));
         }
-      }
-      if (b >= 0 && ((b % BEATS_PER_BAR) + BEATS_PER_BAR) % BEATS_PER_BAR === 0) {
-        // The room agrees with the beat harder as the tempo climbs.
-        ctx.stage.pulse(1.1 + S.heat * 0.55);
-      }
+        if (b >= 0 && ((b % BEATS_PER_BAR) + BEATS_PER_BAR) % BEATS_PER_BAR === 0) {
+          // The room agrees with the beat harder as the tempo climbs.
+          ctx.stage.pulse(1.1 + S.heat * 0.55);
+        }
+      },
     });
 
     S.playerAnim.setState('idle');
@@ -422,7 +424,7 @@ export default {
     let rank = rankFor(acc, S.counts.miss);
     // Losing every heart is not an ejection — but it is not an S, either.
     if (S.survived && (rank === 'S' || rank === 'A')) rank = 'B';
-    return {
+    return roundResult({
       score: Math.round(acc * 1000),
       accuracy: acc,
       rank,
@@ -441,7 +443,21 @@ export default {
         S.survived ? 'Survived to the end' : null,
         S.maxCombo >= 40 ? `${S.maxCombo} combo` : null,
       ].filter(Boolean),
-    };
+    });
+  },
+
+  // ──────────────────────────────────────────────────── harness: testChart
+
+  /**
+   * The answer notes, in BEATS. Times must not be precomputed here: the
+   * transport ramps from 150bpm to 202.5 under the chart, so a time derived
+   * at autoplay start is ~15ms out by the last bar and grows with the ramp.
+   */
+  testChart() {
+    if (!S?.chart) return null;
+    return S.chart
+      .filter((n) => n.type !== 'call' && n.action)
+      .map((n) => ({ beat: n.beat, action: n.action }));
   },
 
   // ---------------------------------------------------------------- dispose

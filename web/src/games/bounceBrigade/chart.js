@@ -28,6 +28,7 @@
  */
 
 import { note, SCALES, degree } from '../../audio/theory.js';
+import { FEEL } from '../../core/feel.js';
 
 // ---------------------------------------------------------------- constants
 
@@ -63,7 +64,7 @@ export const SLAB_DEPTH = 2.25;
 export const SLAB_THICK = 0.34;
 export const FINISH_WIDTH = 11.0;
 
-export const LEAD_IN_BARS = 2;
+export const LEAD_IN_BARS = FEEL.leadInBars;
 export const RUNWAY_BEAT = -LEAD_IN_BARS * BEATS_PER_BAR;   // -8
 export const RUNWAY_ROLL = 7;                                // depart at beat -1
 

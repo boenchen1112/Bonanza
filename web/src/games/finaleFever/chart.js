@@ -26,13 +26,14 @@
  */
 
 import { clamp01 } from '../../core/util.js';
+import { FEEL } from '../../core/feel.js';
 
 export const BPM0 = 150;
 /** Top of the ramp, as a multiple of BPM0. 150 -> 202.5. */
 export const RAMP = 1.35;
 export const BEATS_PER_BAR = 4;
 /** Two bars of lead-in, per the universal rules. */
-export const LEAD_BEATS = 8;
+export const LEAD_BEATS = FEEL.leadInBars * BEATS_PER_BAR;
 
 /** Bar layout. 23 call/answer phrases, a four-bar solo, one finale note. */
 export const DUEL_PHRASES = 23;

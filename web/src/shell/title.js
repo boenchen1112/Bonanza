@@ -18,10 +18,12 @@ import * as THREE from 'three';
 import { damp, clamp01, backOut } from '../core/util.js';
 import {
   PAL, num, el, mountRoot, panel, sfx, kick, createWipe, beatPulse, fmtScore, reducedMotion,
+  startShellTransport,
 } from './theme.js';
 import { createBackdrop } from './backdrop.js';
-import { CHARS, charMesh, charBeat, disposeChar } from './chars.js';
+import { CHARS, charMesh, charBeat, disposeChar, pumpBusts } from './chars.js';
 import { CATALOG, drawPreview } from './games.js';
+import { preloadCards } from './cards.js';
 import { profile } from './state.js';
 import { goView, titleMenuRoute } from './nav.js';
 
@@ -31,7 +33,7 @@ const IDLE_TO_ATTRACT = 8.5;
 const ATTRACT_HOLD = 3.2;
 
 const MENU = [
-  { id: 'party', label: 'PARTY', sub: 'up to 4 players · 4 games · one crown', color: PAL.yellow },
+  { id: 'party', label: 'PARTY', sub: 'you vs CPU rivals · 4 games · one crown', color: PAL.yellow },
   { id: 'free', label: 'FREE PLAY', sub: 'any minigame · chase your best rank', color: PAL.cyan },
   { id: 'options', label: 'OPTIONS', sub: 'mix · timing · reset', color: PAL.green },
 ];
@@ -44,11 +46,18 @@ export default {
   name: 'Title',
 
   load(ctx) {
+    preloadCards();
     S = {
       t: 0, idle: 0, sel: 0, mode: 'menu', selT: 0, confirm: null,
       attractIdx: 0, attractT: 0, attractA: 0, letters: [], items: [], cast: [],
       camTarget: new THREE.Vector3(0, 1.45, 9.2), lastBeat: -1, reduce: reducedMotion(),
     };
+
+    // The menus float in the void rather than standing in the arena set; the
+    // floor sits under the cast's deck. Declared here because the render
+    // layer no longer keeps a list of shell scene names.
+    ctx.scene.userData.envPreset = 'void';
+    ctx.scene.userData.groundY = -4.4;
 
     S.back = createBackdrop(ctx, { accent: num(PAL.yellow) });
     ctx.fx.attach(ctx.scene);
@@ -63,7 +72,7 @@ export default {
       new THREE.CylinderGeometry(4.6, 5.0, 0.5, 24),
       new THREE.MeshStandardMaterial({ color: 0x2b2566, roughness: 0.5, metalness: 0.25, flatShading: true })
     );
-    deck.position.set(0, 0.25, -0.5);
+    deck.position.set(2.9, 0.25, -0.5);   // under the cast, right of the menu
     stage.add(deck);
     S.deck = deck;
 
@@ -71,10 +80,8 @@ export default {
     castIds.forEach((id, i) => {
       const def = CHARS.find((c) => c.id === id) || CHARS[i];
       const m = charMesh(def, {});
-      m.position.set((i - (castIds.length - 1) / 2) * 1.95, 0.5, -0.4 + (i % 2) * 0.5);
-      m.userData.phase = i * 0.37;
-      m.userData.baseY = 0.5;
-      m.userData.baseScale = 0.92;
+      // Right of centre: the menu owns the left half of the frame.
+      m.position.set(2.9 + (i - (castIds.length - 1) / 2) * 1.45, 0.5, -0.4 + (i % 2) * 0.5);
       m.scale.setScalar(0.92);
       stage.add(m);
       S.cast.push(m);
@@ -133,10 +140,13 @@ export default {
 
     // top-right career line — tiny, but it says "this game remembers you"
     const stats = el('div', 'sh-title__stats');
+    // On a dark plate: lavender straight on the cream arch was unreadable.
     stats.style.cssText = 'position:absolute;right:3.2%;top:4.2%;text-align:right;font-weight:800;'
-      + 'font-size:clamp(10px,1.25vw,15px);color:' + PAL.dim + ';text-shadow:0 2px 0 rgba(0,0,0,.6);line-height:1.5;';
+      + 'font-size:clamp(10px,1.25vw,15px);color:#e6e0ff;text-shadow:0 2px 0 rgba(0,0,0,.6);line-height:1.5;'
+      + 'background:rgba(12,8,32,.72);border-radius:12px;padding:.45em .9em;';
     const best = bestOverall();
-    stats.innerHTML = `${profile.stats.rounds} ROUNDS PLAYED<br>`
+    const n = profile.stats.rounds;
+    stats.innerHTML = `${n} ROUND${n === 1 ? '' : 'S'} PLAYED<br>`
       + (best ? `BEST: ${best.name} · ${best.rank} · ${fmtScore(best.score)}` : 'NO RECORDS YET');
     root.appendChild(stats);
 
@@ -169,9 +179,8 @@ export default {
   },
 
   start(ctx) {
-    ctx.clock.setBpm(124);
-    ctx.clock.start(ctx.clock.now() + 0.12, 0);
-    ctx.clock.onBeat((b, t) => {
+    startShellTransport(ctx);
+    ctx.onBeat((b, t) => {
       if (!S) return;
       // A four-on-the-floor pulse under the menu: the title screen should be
       // teaching you the tempo before you have chosen anything.
@@ -179,6 +188,14 @@ export default {
       if (b % 4 === 0) sfx(ctx, 'tick', t);
     });
     try { ctx.audio?.music?.play?.('menu'); } catch { /* optional */ }
+
+    // The cast dances the retargeted mocap swing-dance, beat-locked to the
+    // menu tempo. Each starts a few beats further into the routine, so it is
+    // a line of dancers, not four clones — and every step still lands on a
+    // beat because the offsets are whole beats.
+    S.cast.forEach((m, i) => m.userData.charApi?.play('dance', {
+      beatLock: true, bpm: 124, beat0: -i * 3, face: 'groove', beat: 0.25, blend: 0.3,
+    }));
   },
 
   update(ctx, dt, beat) {
@@ -188,6 +205,13 @@ export default {
     S.selT += dt;
     S.back.update(dt, beat, S.t);
     S.wipe.update(dt);
+    // Roster's character portraits are a throwaway WebGL render per character
+    // (mesh build + 20 anim ticks + a GPU readback) — done all at once it was
+    // a ~500ms freeze on whichever screen asked for one first. Title is where
+    // a player idles longest before ever reaching roster, so it spends a few
+    // ms a frame warming that cache; by the time anyone navigates there it is
+    // normally already full, and roster carries its own pump as a fallback.
+    pumpBusts();
 
     const pulse = beatPulse(beat, 6);
     const down = beatPulse(beat / 4, 2.4);
@@ -353,14 +377,26 @@ function applySelection(ctx, silent) {
   }
   const c = MENU[S.sel].color;
   S.back.setAccent(num(c));
-  if (!silent) {
-    const m = S.cast[S.sel];
-    if (m) {
-      m.userData.baseY = 0.5;
-      ctx.fx.ring([m.position.x, -0.9, m.position.z], { color: num(c), life: 0.45, from: 0.3, to: 2.2 });
-      ctx.fx.burst([m.position.x, -0.6, m.position.z], { color: num(c), count: 9, speed: 3.4, life: 0.42, size: 0.1 });
-    }
-  }
+  // The move answers AT the item: a ring pings out of the button itself (it
+  // used to burst around a dancer on the far side of the screen).
+  if (!silent) ping(S.items[S.sel]);
+}
+
+function ping(item) {
+  const r = el('span', 'sh-ping');
+  item.appendChild(r);
+  setTimeout(() => r.remove(), 480);
+}
+
+/** World point `dist` in front of the camera, under a DOM element's centre. */
+function worldAt(ctx, node, dist = 6) {
+  const box = node.getBoundingClientRect();
+  const host = ctx.renderer?.domElement?.getBoundingClientRect?.() || { left: 0, top: 0, width: innerWidth, height: innerHeight };
+  const nx = ((box.left + box.width / 2 - host.left) / host.width) * 2 - 1;
+  const ny = -(((box.top + box.height / 2 - host.top) / host.height) * 2 - 1);
+  const cam = ctx.camera;
+  const v = new THREE.Vector3(nx, ny, 0.5).unproject(cam).sub(cam.position).normalize();
+  return v.multiplyScalar(dist).add(cam.position).toArray();
 }
 
 function confirm(ctx) {
@@ -369,7 +405,9 @@ function confirm(ctx) {
   sfx(ctx, 'fanfare');
   ctx.stage.flash?.(0.24, m.color);
   ctx.stage.shake?.(0.14, [0, 1, 0]);
-  ctx.fx.confetti([0, 1.4, 0], { count: 46 });
+  // Confetti bursts out of the chosen button, not the middle of the logo.
+  ctx.fx.confetti(worldAt(ctx, S.items[S.sel]), { count: 46 });
+  ping(S.items[S.sel]);
   S.items[S.sel].style.filter = 'brightness(1.6)';
 }
 
@@ -386,11 +424,21 @@ function enterAttract(ctx) {
   sfx(ctx, 'ui');
 }
 
+/**
+ * The player's best game: by rank, then accuracy. Not by score — each game
+ * keeps its own scale (Swing Kings counts in thousands, the rest 0-1000),
+ * so a raw-score comparison always named Swing Kings, even a D.
+ */
 function bestOverall() {
+  const order = ['S', 'A', 'B', 'C', 'D'];
+  const rankIdx = (r) => (order.includes(r) ? order.indexOf(r) : order.length);
   let best = null;
   for (const g of CATALOG) {
     const r = profile.record(g.id);
-    if (r.plays && (!best || r.score > best.score)) best = { name: g.name, score: r.score, rank: r.rank || '-' };
+    if (!r.plays) continue;
+    const cand = { name: g.name, score: r.score, rank: r.rank || '-', acc: r.accuracy || 0 };
+    if (!best || rankIdx(cand.rank) < rankIdx(best.rank)
+      || (rankIdx(cand.rank) === rankIdx(best.rank) && cand.acc > best.acc)) best = cand;
   }
   return best;
 }
