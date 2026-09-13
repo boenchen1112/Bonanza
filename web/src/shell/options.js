@@ -7,7 +7,7 @@
  * anything.
  */
 import * as THREE from 'three';
-import { PAL, num, el, mountRoot, panel, sfx, createWipe, beatPulse, reducedMotion } from './theme.js';
+import { PAL, num, el, mountRoot, panel, sfx, createWipe, beatPulse, reducedMotion, ensureStyle, tickExit, makeExit, startShellTransport } from './theme.js';
 import { createBackdrop } from './backdrop.js';
 import { profile } from './state.js';
 import { charById, charMesh, charBeat, disposeChar } from './chars.js';
@@ -84,8 +84,7 @@ export default {
   },
 
   start(ctx) {
-    ctx.clock.setBpm(124);
-    ctx.clock.start(ctx.clock.now() + 0.1, 0);
+    startShellTransport(ctx);
     S.cast.forEach((m, i) => m.userData.charApi?.play('dance', {
       beatLock: true, bpm: 124, beat0: -i * 5, face: 'groove', beat: 0.25, blend: 0.3,
     }));
@@ -103,10 +102,7 @@ export default {
       const sc = on ? 1.03 + pulse * 0.02 : 1;
       S.rows[i].el.style.transform = `scale(${sc.toFixed(3)})`;
     }
-    if (S.exit) {
-      S.exit.t += dt;
-      if (!S.exit.fired && S.exit.t > 0.1) { S.exit.fired = true; S.wipe.play(S.exit.go, S.exit.color); }
-    }
+    tickExit(S, dt);
   },
 
   input(ctx, events) {
@@ -212,16 +208,11 @@ function applySelection() {
 
 function back(ctx) {
   sfx(ctx, 'uiBack');
-  S.exit = { t: 0, fired: false, color: PAL.violet, go: () => goView(ctx, 'title', {}) };
+  S.exit = makeExit(() => goView(ctx, 'title', {}));
 }
 
-let cssDone = false;
 function injectCss() {
-  if (cssDone || document.getElementById('sh-opt-css')) { cssDone = true; return; }
-  cssDone = true;
-  const s = document.createElement('style');
-  s.id = 'sh-opt-css';
-  s.textContent = `
+  ensureStyle('sh-opt-css', `
   .sh-opt__head{position:absolute;left:50%;top:8%;transform:translateX(-50%);text-align:center;}
   .sh-opt__title{font-size:clamp(22px,3.6vw,44px);}
   .sh-opt__list{position:absolute;left:50%;top:24%;transform:translateX(-50%);
@@ -233,6 +224,5 @@ function injectCss() {
   .sh-opt__row--warn{border-color:${PAL.coral}!important;box-shadow:0 9px 0 rgba(0,0,0,.55),0 0 26px -2px ${PAL.coral}!important;}
   .sh-opt__row--warn .sh-opt__label{color:${PAL.coral};}
   .sh-opt__row--warn .sh-opt__value{color:#ffd0d6;font-size:clamp(10px,1.2vw,14px);}
-  `;
-  document.head.appendChild(s);
+  `);
 }

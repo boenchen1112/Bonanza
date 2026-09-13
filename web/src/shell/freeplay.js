@@ -12,7 +12,7 @@
 
 import * as THREE from 'three';
 import { damp, clamp01, easeOutCubic } from '../core/util.js';
-import { PAL, el, mountRoot, panel, sfx, createWipe, beatPulse, fmtScore, RANK_COLOR, reducedMotion } from './theme.js';
+import { PAL, el, mountRoot, panel, sfx, createWipe, beatPulse, fmtScore, RANK_COLOR, reducedMotion, ensureStyle, tickExit, makeExit, startShellTransport } from './theme.js';
 import { createBackdrop } from './backdrop.js';
 import { CATALOG, drawPreview } from './games.js';
 import { cardImage } from './cards.js';
@@ -114,8 +114,7 @@ export default {
   },
 
   start(ctx) {
-    ctx.clock.setBpm(124);
-    ctx.clock.start(ctx.clock.now() + 0.12, 0);
+    startShellTransport(ctx);
   },
 
   update(ctx, dt, beat) {
@@ -154,10 +153,7 @@ export default {
     ctx.camera.position.x = damp(ctx.camera.position.x, (S.pos - S.target) * 0.5 + Math.sin(S.t * 0.3) * 0.25, 3, dt);
     ctx.camera.lookAt(0, 1.2, 0);
 
-    if (S.exit) {
-      S.exit.t += dt;
-      if (!S.exit.fired && S.exit.t > 0.12) { S.exit.fired = true; S.wipe.play(S.exit.go, S.exit.color); }
-    }
+    tickExit(S, dt);
   },
 
   input(ctx, events) {
@@ -184,13 +180,13 @@ export default {
         ctx.stage.flash?.(0.22, '#' + g.color.toString(16).padStart(6, '0'));
         ctx.fx.confetti([0, 1.2, 1], { count: 40 });
         session.mode = 'free';
-        S.exit = {
-          t: 0, fired: false, color: '#' + g.color.toString(16).padStart(6, '0'),
-          go: () => goPlay(ctx, g.id, { from: 'freeplay' }),
-        };
+        S.exit = makeExit(
+          () => goPlay(ctx, g.id, { from: 'freeplay' }),
+          '#' + g.color.toString(16).padStart(6, '0'),
+        );
       } else if (e.action === 'b' || e.action === 'pause') {
         sfx(ctx, 'uiBack');
-        S.exit = { t: 0, fired: false, color: PAL.violet, go: () => goView(ctx, 'title', {}) };
+        S.exit = makeExit(() => goView(ctx, 'title', {}));
       }
     }
   },
@@ -230,13 +226,8 @@ function layout(pulse, beat) {
   }
 }
 
-let cssDone = false;
 function injectCss() {
-  if (cssDone || document.getElementById('sh-fp-css')) { cssDone = true; return; }
-  cssDone = true;
-  const s = document.createElement('style');
-  s.id = 'sh-fp-css';
-  s.textContent = `
+  ensureStyle('sh-fp-css', `
   .sh-fp__head{position:absolute;left:4%;top:5.5%;}
   .sh-fp__rail{position:absolute;left:0;right:0;top:0;bottom:0;perspective:1400px;
     transform-style:preserve-3d;}
@@ -257,6 +248,5 @@ function injectCss() {
     font-size:clamp(11px,1.5vw,19px);}
   .sh-fp__lab{font-size:.55em;color:${PAL.dim};letter-spacing:.12em;}
   .sh-fp__plays{margin-left:auto;font-weight:800;font-size:clamp(8px,1.05vw,13px);color:${PAL.dim};}
-  `;
-  document.head.appendChild(s);
+  `);
 }

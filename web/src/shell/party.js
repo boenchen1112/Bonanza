@@ -15,7 +15,7 @@
  * player; the CPUs post a skill-shaped result on the human's score scale).
  */
 import * as THREE from 'three';
-import { PAL, num, el, mountRoot, panel, sfx, createWipe, beatPulse, hex } from './theme.js';
+import { PAL, num, el, mountRoot, panel, sfx, createWipe, beatPulse, hex, ensureStyle, tickExit, makeExit, startShellTransport } from './theme.js';
 import { createBackdrop } from './backdrop.js';
 import { CATALOG } from './games.js';
 import { charById, charMesh, charBeat, disposeChar, addCrown } from './chars.js';
@@ -58,7 +58,7 @@ export default {
     if (!session.party) {
       // Reached with no party in progress (e.g. a deep link) — nothing to
       // show, so don't strand the player on a blank screen.
-      S.exit = { t: 0, fired: true, color: PAL.violet, go: () => goView(ctx, 'title', {}) };
+      S.exit = makeExit(() => goView(ctx, 'title', {}), PAL.violet, true);
       S.wipe = createWipe(root, { color: PAL.violet, mode: 'in' });
       S.wipe.play(S.exit.go, S.exit.color);
       return;
@@ -192,8 +192,7 @@ export default {
   },
 
   start(ctx) {
-    ctx.clock.setBpm(124);
-    ctx.clock.start(ctx.clock.now() + 0.1, 0);
+    startShellTransport(ctx);
     sfx(ctx, S?.done ? 'fanfare' : 'ui');
     if (S?.done) {
       const w = S.cast.find((c) => c.place === 0);
@@ -227,10 +226,7 @@ export default {
       c.tag.style.opacity = S.t > c.delay + 0.15 ? '1' : '0';
     }
 
-    if (S.exit && !S.exit.fired) {
-      S.exit.t += dt;
-      if (S.exit.t > 0.1) { S.exit.fired = true; S.wipe.play(S.exit.go, S.exit.color); }
-    }
+    tickExit(S, dt);
   },
 
   input(ctx, events) {
@@ -244,12 +240,12 @@ export default {
         // Wipe out in the next game's colour: its title card is the same colour.
         const next = CATALOG.find((c) => c.id === session.currentGame);
         const color = S.done ? PAL.violet : hex(next?.color ?? PAL.yellow);
-        S.exit = { t: 0, fired: false, color, go: () => goView(ctx, r.view, r.opts) };
+        S.exit = makeExit(() => goView(ctx, r.view, r.opts), color);
       } else if (e.action === 'b' || e.action === 'pause') {
         sfx(ctx, 'uiBack');
         session.endParty();
         const r = partyConfirmRoute({ done: true });
-        S.exit = { t: 0, fired: false, color: PAL.violet, go: () => goView(ctx, r.view, r.opts) };
+        S.exit = makeExit(() => goView(ctx, r.view, r.opts));
       }
     }
   },
@@ -304,13 +300,8 @@ function recapTable(party, players) {
   return wrap;
 }
 
-let cssDone = false;
 function injectCss() {
-  if (cssDone || document.getElementById('sh-party-css')) { cssDone = true; return; }
-  cssDone = true;
-  const s = document.createElement('style');
-  s.id = 'sh-party-css';
-  s.textContent = `
+  ensureStyle('sh-party-css', `
   .sh-party__card{position:absolute;left:50%;top:4%;transform:translate(-50%,0);transform-origin:50% 0;
     width:min(60vw,640px);padding:clamp(12px,1.8vw,24px) clamp(16px,2.4vw,32px);text-align:center;}
   .sh-party__round{font-size:clamp(10px,1.3vw,16px);letter-spacing:.12em;}
@@ -341,6 +332,5 @@ function injectCss() {
   .sh-party__delta{position:absolute;right:-.9em;top:-.8em;padding:.1em .45em;border-radius:999px;
     background:${PAL.green};color:#08131a;font-size:.9em;box-shadow:0 2px 0 rgba(0,0,0,.4);}
   .sh-party__delta--zero{background:#3a3f60;color:${PAL.dim};}
-  `;
-  document.head.appendChild(s);
+  `);
 }

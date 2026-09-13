@@ -9,7 +9,7 @@
  * anything else falls back the way `play.js`'s pause-menu quit does.
  */
 import * as THREE from 'three';
-import { PAL, num, el, hex, mountRoot, panel, sfx, createWipe, fmtScore, RANK_COLOR, reducedMotion } from './theme.js';
+import { PAL, num, el, hex, mountRoot, panel, sfx, createWipe, fmtScore, RANK_COLOR, reducedMotion, ensureStyle, tickExit, makeExit } from './theme.js';
 import { clamp01 } from '../core/util.js';
 import { createBackdrop } from './backdrop.js';
 import { CATALOG } from './games.js';
@@ -183,10 +183,7 @@ export default {
     // (and its NEW RANK! stamp) off to the lower right.
     S.card.style.transform = `translate(-50%,-50%) scale(${(1 + Math.sin(S.t * 3) * 0.006).toFixed(3)})`;
 
-    if (S.exit) {
-      S.exit.t += dt;
-      if (!S.exit.fired && S.exit.t > 0.12) { S.exit.fired = true; S.wipe.play(S.exit.go, S.exit.color); }
-    }
+    tickExit(S, dt);
   },
 
   input(ctx, events) {
@@ -197,7 +194,7 @@ export default {
       if (S.t < REVEAL_END && (e.action === 'a' || e.action === 'b')) { S.t = REVEAL_END; continue; }
       if (e.action === 'a' || e.action === 'b' || e.action === 'pause') {
         sfx(ctx, 'ui');
-        S.exit = { t: 0, fired: false, color: PAL.violet, go: () => routeOut(ctx) };
+        S.exit = makeExit(() => routeOut(ctx));
       }
     }
   },
@@ -217,13 +214,8 @@ function routeOut(ctx) {
   goView(ctx, r.view, r.opts);
 }
 
-let cssDone = false;
 function injectCss() {
-  if (cssDone || document.getElementById('sh-res-css')) { cssDone = true; return; }
-  cssDone = true;
-  const s = document.createElement('style');
-  s.id = 'sh-res-css';
-  s.textContent = `
+  ensureStyle('sh-res-css', `
   .sh-res__card{position:absolute;left:57%;top:44%;transform:translate(-50%,-50%);
     width:min(52vw,600px);padding:clamp(18px,2.4vw,32px);text-align:center;}
   .sh-res__rank{width:2.2em;height:2.2em;margin:0 auto .3em;border-radius:16px;border:3px solid;
@@ -258,6 +250,5 @@ function injectCss() {
     background:${PAL.coral};transform:rotate(-10deg);}
   .sh-res__badge.sh-res__in{transform:rotate(-10deg) scale(1.9);}
   .sh-res__badge.sh-res__in--on{transform:rotate(-10deg);}
-  `;
-  document.head.appendChild(s);
+  `);
 }

@@ -10,6 +10,7 @@
  * scene" gate. Per-scene artifacts land in <out>/<scene>/.
  */
 
+import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import path from 'node:path';
@@ -39,7 +40,13 @@ scenes.forEach((scene, i) => {
   if (i > 0 || a.includes('--no-build')) args.push('--no-build');
   const r = spawnSync(process.execPath, args, { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 << 20 });
   let s = null;
-  try { s = JSON.parse(readFileSync(path.join(ROOT, out, 'summary.json'), 'utf8')); } catch { /* failed run */ }
+  // Narrow catch: this used to swallow every error, so a typo in this file
+  // reported as "HARNESS FAILURE" on all thirteen scenes at once.
+  try {
+    s = JSON.parse(readFileSync(path.join(ROOT, out, 'summary.json'), 'utf8'));
+  } catch (e) {
+    if (e instanceof ReferenceError || e instanceof TypeError) throw e;
+  }
   if (!s || r.status !== 0) {
     dirty++;
     console.log(`${scene.padEnd(15)} HARNESS FAILURE ${(r.stderr || r.stdout || '').trim().split('\n').pop()}`);

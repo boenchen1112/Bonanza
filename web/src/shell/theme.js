@@ -99,6 +99,57 @@ export function beatPulse(beat, sharpness = 6) {
   return Math.exp(-f * sharpness);
 }
 
+// ─────────────────────────────────────────────── the shell screen idioms
+//
+// Six screens (title, roster, freeplay, party, results, options) each used to
+// carry their own copy of the three things below. The copies had drifted:
+// two different exit holds (0.12 and 0.1) and one tick that dropped the
+// `!fired` guard, so that screen could fire its wipe twice.
+
+/**
+ * Inject a screen's stylesheet exactly once. Replaces six hand-written
+ * latches, each double-guarded against itself with a module flag AND a DOM
+ * lookup — two sources of truth for one fact.
+ */
+export function ensureStyle(id, css) {
+  if (document.getElementById(id)) return;
+  const s = document.createElement('style');
+  s.id = id;
+  s.textContent = css;
+  document.head.appendChild(s);
+}
+
+/** How long a screen holds after a confirm before the wipe starts. */
+export const EXIT_HOLD_S = 0.11;
+
+/**
+ * Deferred navigation: the screen keeps playing its confirm animation for a
+ * beat, then wipes out. `fired: true` means "already gone" — a screen that
+ * routes immediately still wants the record so `tickExit` leaves it alone.
+ */
+export function makeExit(go, color = PAL.violet, fired = false) {
+  return { t: 0, fired, color, go };
+}
+
+/** Advance a screen's pending exit. Call once per frame from update(). */
+export function tickExit(S, dt) {
+  const e = S?.exit;
+  if (!e || e.fired) return;
+  e.t += dt;
+  if (e.t <= EXIT_HOLD_S) return;
+  e.fired = true;
+  S.wipe.play(e.go, e.color);
+}
+
+/** The menus run at one tempo; five screens wrote the number out by hand. */
+export const SHELL_BPM = 124;
+
+/** Start the shell transport. The lead was 0.12 on three screens and 0.1 on two. */
+export function startShellTransport(ctx, lead = 0.12) {
+  ctx.clock.setBpm(SHELL_BPM);
+  ctx.clock.start(ctx.clock.now() + lead, 0);
+}
+
 export function reducedMotion() {
   let osWants = false;
   try { osWants = window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { /* no matchMedia */ }

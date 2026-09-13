@@ -16,6 +16,7 @@ import * as THREE from 'three';
 import { damp, clamp01, backOut } from '../core/util.js';
 import {
   PAL, num, el, mountRoot, panel, sfx, createWipe, beatPulse, reducedMotion,
+  ensureStyle, tickExit, makeExit, startShellTransport,
 } from './theme.js';
 import { createBackdrop } from './backdrop.js';
 import { CHARS, charById, charMesh, charBeat, disposeChar, drawPortrait } from './chars.js';
@@ -155,8 +156,7 @@ export default {
   },
 
   start(ctx) {
-    ctx.clock.setBpm(124);
-    ctx.clock.start(ctx.clock.now() + 0.12, 0);
+    startShellTransport(ctx);
   },
 
   update(ctx, dt, beat) {
@@ -228,13 +228,7 @@ export default {
       S.headMain.style.transform = `scale(${(1 + pulse * 0.05 * amp).toFixed(3)})`;
     }
 
-    if (S.exit) {
-      S.exit.t += dt;
-      if (!S.exit.fired && S.exit.t > 0.1) {
-        S.exit.fired = true;
-        S.wipe.play(S.exit.go, S.exit.color);
-      }
-    }
+    tickExit(S, dt);
 
     ctx.camera.position.x = damp(ctx.camera.position.x, Math.sin(S.t * 0.3) * 0.35, 1.4, dt);
     ctx.camera.lookAt(0, 1.1, 0);
@@ -460,7 +454,7 @@ function refreshHint() {
 
 function back(ctx) {
   sfx(ctx, 'uiBack');
-  S.exit = { t: 0, fired: false, color: PAL.violet, go: () => goView(ctx, 'title', {}) };
+  S.exit = makeExit(() => goView(ctx, 'title', {}));
 }
 
 function startRun(ctx) {
@@ -490,21 +484,16 @@ function startRun(ctx) {
   ctx.stage.flash?.(0.3, PAL.yellow);
   ctx.fx.confetti([0, 1.5, 0], { count: 60 });
   const r = rosterExitRoute(S.mode);
-  S.exit = {
-    t: 0, fired: false, color: S.mode === 'party' ? PAL.yellow : PAL.cyan,
-    go: () => goView(ctx, r.view, r.opts),
-  };
+  S.exit = makeExit(
+    () => goView(ctx, r.view, r.opts),
+    S.mode === 'party' ? PAL.yellow : PAL.cyan,
+  );
 }
 
 // -------------------------------------------------------------------- css
 
-let cssDone = false;
 function injectRosterCss() {
-  if (cssDone || document.getElementById('sh-roster-css')) { cssDone = true; return; }
-  cssDone = true;
-  const s = document.createElement('style');
-  s.id = 'sh-roster-css';
-  s.textContent = `
+  ensureStyle('sh-roster-css', `
   .sh-ros__head{position:absolute;left:4%;top:5%;}
   .sh-ros__title{font-size:clamp(20px,3.5vw,44px);}
   .sh-ros__sub{font-size:clamp(10px,1.35vw,17px);margin-top:.35em;}
@@ -529,6 +518,5 @@ function injectRosterCss() {
   .sh-ros__faceWrap{position:relative;flex:0 0 auto;}
   .sh-ros__slot .sh-ros__ready{left:50%;bottom:-.2em;margin-left:-2.2em;font-size:clamp(9px,1.05vw,14px);
     background:${PAL.coral};transform:rotate(-12deg);pointer-events:none;}
-  `;
-  document.head.appendChild(s);
+  `);
 }

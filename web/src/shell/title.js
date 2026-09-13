@@ -18,6 +18,7 @@ import * as THREE from 'three';
 import { damp, clamp01, backOut } from '../core/util.js';
 import {
   PAL, num, el, mountRoot, panel, sfx, kick, createWipe, beatPulse, fmtScore, reducedMotion,
+  startShellTransport,
 } from './theme.js';
 import { createBackdrop } from './backdrop.js';
 import { CHARS, charMesh, charBeat, disposeChar } from './chars.js';
@@ -178,8 +179,7 @@ export default {
   },
 
   start(ctx) {
-    ctx.clock.setBpm(124);
-    ctx.clock.start(ctx.clock.now() + 0.12, 0);
+    startShellTransport(ctx);
     ctx.onBeat((b, t) => {
       if (!S) return;
       // A four-on-the-floor pulse under the menu: the title screen should be
