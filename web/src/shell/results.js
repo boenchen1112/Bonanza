@@ -47,6 +47,10 @@ export default {
     S.fold = profile.submit(gameId, result);
     if (inParty) session.recordPartyRound(gameId, result);
 
+    // Same void set as the title screen — see the note there.
+    ctx.scene.userData.envPreset = 'void';
+    ctx.scene.userData.groundY = -4.4;
+
     S.back = createBackdrop(ctx, { accent: game.color, density: 0.75 });
     ctx.fx.attach(ctx.scene);
     ctx.scene.background = new THREE.Color(0x0b0a1a);

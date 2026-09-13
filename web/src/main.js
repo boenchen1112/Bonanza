@@ -162,7 +162,20 @@ function releaseSceneSubs() {
   subs.length = 0;
 }
 
-async function activate(id, opts = {}) {
+/**
+ * Scene swaps are serialised. A swap has two awaits in it, so two calls
+ * landing inside one await window used to run two swaps concurrently against
+ * the same stage, `current` and `currentCtx`. Reachable from the harness,
+ * which can call goto() faster than a scene loads.
+ */
+let activation = Promise.resolve();
+
+function activate(id, opts = {}) {
+  activation = activation.catch(() => {}).then(() => activateNow(id, opts));
+  return activation;
+}
+
+async function activateNow(id, opts = {}) {
   if (current) {
     try { current.dispose?.(currentCtx); } catch (e) { console.error('dispose', e); }
     // No scene until the next one has loaded: the loop kept calling the
@@ -205,7 +218,7 @@ async function activate(id, opts = {}) {
     },
   });
 
-  stage.attach(scene, camera);
+  stage.attach(scene, camera, id);
 
   // A scene that throws in load() must not take the application down with it.
   // Before this, one game reading a null field during load left `ready`
@@ -214,7 +227,8 @@ async function activate(id, opts = {}) {
   // should be a broken scene, not a broken product.
   try {
     await mod.load?.(currentCtx);
-    stage.sceneId = id;
+    // `attach` already carries the id; load() has now declared the scene's
+    // env preset and ground, which warm() reads while it builds and compiles.
     await stage.warm();
     current = mod;
     mod.start?.(currentCtx);

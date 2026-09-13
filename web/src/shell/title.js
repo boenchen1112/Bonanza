@@ -52,6 +52,12 @@ export default {
       camTarget: new THREE.Vector3(0, 1.45, 9.2), lastBeat: -1, reduce: reducedMotion(),
     };
 
+    // The menus float in the void rather than standing in the arena set; the
+    // floor sits under the cast's deck. Declared here because the render
+    // layer no longer keeps a list of shell scene names.
+    ctx.scene.userData.envPreset = 'void';
+    ctx.scene.userData.groundY = -4.4;
+
     S.back = createBackdrop(ctx, { accent: num(PAL.yellow) });
     ctx.fx.attach(ctx.scene);
 

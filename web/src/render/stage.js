@@ -198,9 +198,16 @@ export function createStage({ canvas, clock }) {
     look.post.setSize(size.w * size.dpr, size.h * size.dpr);
   }
 
-  function attach(s, c) {
+  /**
+   * Take over a freshly built scene. `id` must be the scene's registry id:
+   * palette inference keys on it, so attaching without one grades the first
+   * frames in whatever the *previous* scene left behind and then cross-fades
+   * out of it over 0.7s — visible at the top of every screen.
+   */
+  function attach(s, c, id = null) {
     scene = s;
     camera = c;
+    sceneId = id;
     camBase.copy(c.position);
     look.attach(s, c);
     rigState.active = false;
@@ -220,6 +227,7 @@ export function createStage({ canvas, clock }) {
     // scene goes back to inferring its own.
     paletteLocked = false;
     lastAutoName = null;
+    sceneId = null;
     shakeAmp = 0;
     push = 0;
     roll = 0;
@@ -289,15 +297,16 @@ export function createStage({ canvas, clock }) {
   function ensureDefaultEnv() {
     if (envs.size || !scene) return;
     if (scene.userData.env === false) return;
-    const id = sceneId || '';
-    const shell = id === 'title' || id === 'results';
-    const preset = scene.userData.envPreset || (shell ? 'void' : 'arena');
+    // The scene declares its own set. This used to read `id === 'title' ||
+    // id === 'results'` — the render layer naming shell screens, so renaming
+    // one silently changed its lighting.
+    const preset = scene.userData.envPreset || 'arena';
     const env = createEnv(scene);
     env.stageSet(preset, {
       // A scene can declare where its floor is (roster and freeplay stand
       // their casts on a deck well below 0; the default arena floor at 0 used
       // to slice through them).
-      groundY: look.ground.found ? look.ground.y : (scene.userData.groundY ?? (shell ? -4.4 : 0)),
+      groundY: look.ground.found ? look.ground.y : (scene.userData.groundY ?? 0),
       skipGround: look.ground.found,
     });
   }

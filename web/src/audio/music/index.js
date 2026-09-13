@@ -14,6 +14,7 @@ import chompChorus from './chomp-chorus.js';
 import finaleFever from './finale-fever.js';
 import title from './title.js';
 import results from './results.js';
+import { SCENES } from '../../shell/registry.js';
 
 /** @type {Record<string, object>} keyed by track id. */
 export const TRACKS = Object.fromEntries(
@@ -30,14 +31,8 @@ export const TRACKS = Object.fromEntries(
  * maps straight through.
  */
 const SCENE_TRACK = {
-  title: 'title',
   menu: 'title',
-  options: 'title',
-  freeplay: 'title',
-  roster: 'title',
-  party: 'title',
   results: 'results',
-  podium: 'results',
 };
 
 /**
@@ -49,13 +44,28 @@ const SCENE_TRACK = {
 export const HOST_SCENES = new Set(['play']);
 
 /**
+ * Shell scenes are read off the registry rather than listed here a second
+ * time. The hand-kept copy had already drifted — it carried a `podium` that
+ * no registry entry matches — and adding a screen meant editing this file,
+ * which `ARCHITECTURE.md` rule 5 forbids.
+ */
+const SHELL_SCENES = new Set(
+  SCENES.filter((s) => s.kind === 'shell' && !HOST_SCENES.has(s.id)).map((s) => s.id),
+);
+
+/**
  * @param {string} sceneId
  * @returns {string|null} track id, or null if the scene should be silent.
  */
 export function trackForScene(sceneId) {
   if (!sceneId) return null;
   if (TRACKS[sceneId]) return sceneId;          // minigames: id === track id
-  return SCENE_TRACK[sceneId] ?? null;
+  if (SCENE_TRACK[sceneId]) return SCENE_TRACK[sceneId];
+  // Every other shell screen shares the title bed: the menus are one
+  // continuous place, and restarting the music per screen would make them
+  // feel like separate apps.
+  if (SHELL_SCENES.has(sceneId)) return 'title';
+  return null;
 }
 
 export default TRACKS;
