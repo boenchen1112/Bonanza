@@ -53,7 +53,7 @@ import * as THREE from 'three';
 import { NoteJudge, rankFor, SCORE } from '../../core/judge.js';
 import { roundResult } from '../../core/result.js';
 import { FEEL, feelForCombo } from '../../core/feel.js';
-import { damp, clamp, clamp01, makeRng, easeOutCubic } from '../../core/util.js';
+import { damp, clamp, clamp01, makeRng, easeOutCubic, beatPhase } from '../../core/util.js';
 import { makeCharacter, makeAnimator } from '../../chars/index.js';
 import { buildChart, chartEndBeat, chartDurationBars, maxPoints, ADVANCE_WEIGHT, LEAD_BEATS, OUTRO_BEATS } from './chart.js';
 import { makeTrack, makeRack, makeBeams, makeFinish, makeSnare, makeMajorGear, makeMace } from './props.js';
@@ -105,7 +105,7 @@ const MASH_ADVANCE = 0.18;  // race advance burned by the same press
 // ─────────────────────────────────────────────────────────────────── helpers
 
 /** 0..1 position inside the beat. NEVER `%`: the lead-in runs negative beats. */
-const beatFrac = (b) => b - Math.floor(b);
+const beatFrac = beatPhase;
 
 const hexStr = (h) => '#' + (h >>> 0).toString(16).padStart(6, '0');
 

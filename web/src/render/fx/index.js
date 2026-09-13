@@ -761,6 +761,11 @@ export function createFX({ stage, clock, bus = null }) {
     combo = 0;
     autoCombo = 0;
     ambientBoost = 0;
+    // Shared knobs go back to their defaults on every scene swap. Four games
+    // turned auto-verdict off and one turned it back on, so whatever the last
+    // minigame left behind was what the next one inherited. Unwinding belongs
+    // here, not in five dispose() bodies that are free to forget.
+    auto = true;
   }
 
   function setQuality(name) {

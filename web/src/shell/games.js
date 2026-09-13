@@ -13,6 +13,7 @@
 import { GAMES } from './registry.js';
 import { PAL, num } from './theme.js';
 import { cardImage } from './cards.js';
+import { beatPhase } from '../core/util.js';
 
 const META = {
   'swing-kings': {
@@ -66,7 +67,7 @@ export const gameById = (id) => CATALOG.find((g) => g.id === id) || CATALOG[0];
  * makes Canvas2D throw IndexSizeError — taking the scene's whole update loop
  * down with it. Every beat-phase value in this file goes through here.
  */
-const frac1 = (x) => x - Math.floor(x);
+const frac1 = beatPhase;
 
 export function drawPreview(id, g, w, h, beat, t) {
   // Every preview derives its radii from `h`. A card that is measured before

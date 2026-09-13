@@ -228,6 +228,11 @@ export function createStage({ canvas, clock }) {
     paletteLocked = false;
     lastAutoName = null;
     sceneId = null;
+    // Shared camera-rig knobs go back to their defaults. Three games set a
+    // push gain and one restored it; two called release(). Whatever the last
+    // scene left behind was what the next one inherited.
+    rig.release();
+    pushGain = 1;
     shakeAmp = 0;
     push = 0;
     roll = 0;

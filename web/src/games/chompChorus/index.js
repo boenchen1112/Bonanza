@@ -40,7 +40,7 @@ import * as THREE from 'three';
 import { NoteJudge, rankFor, SCORE } from '../../core/judge.js';
 import { roundResult } from '../../core/result.js';
 import { FEEL, feelForCombo } from '../../core/feel.js';
-import { clamp, clamp01, damp } from '../../core/util.js';
+import { clamp, clamp01, damp, beatPhase } from '../../core/util.js';
 import { makeCast, paletteById } from '../../chars/index.js';
 import { SCALES, chord as chordTones, mtof } from '../../audio/theory.js';
 import { LANES, LANE_ACTIONS, ACTION_TO_LANE, buildChart, FINALE_BEAT, FINALE_END, END_BEAT } from './chart.js';
@@ -494,7 +494,7 @@ export default {
     v.chordN = s.chordN;
     // Beat phase is `x - floor(x)`, NEVER `x % 1`: the transport runs negative
     // beats through the lead-in and `%` keeps the dividend's sign.
-    v.beatPhase = beat - Math.floor(beat);
+    v.beatPhase = beatPhase(beat);
     s.props.update(v);
 
     if (!s.over && beat >= END_BEAT) {

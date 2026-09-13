@@ -19,9 +19,10 @@
 
 import { clamp, clamp01, smoothstep } from '../../core/util.js';
 import { SCORE } from '../../core/judge.js';
+import { FEEL } from '../../core/feel.js';
 
 export const BEATS_PER_BAR = 4;
-export const LEAD_IN_BEATS = 8;      // FEEL.leadInBars * 4
+export const LEAD_IN_BEATS = FEEL.leadInBars * 4;
 export const SCORED_BARS = 32;       // teach 8 + play 16 + escalate 8
 export const FINALE_BEAT = 128;      // the grand slam lands here
 export const END_BEAT = FINALE_BEAT + 12; // three bars of curtain call

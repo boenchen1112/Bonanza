@@ -4,6 +4,17 @@ export const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
 export const clamp01 = (v) => clamp(v, 0, 1);
 export const lerp = (a, b, t) => a + (b - a) * t;
 export const invLerp = (a, b, v) => (b === a ? 0 : (v - a) / (b - a));
+
+/**
+ * Fractional part of a beat, always 0..1. **Never write `x % 1` for this.**
+ *
+ * The transport runs negative beats through the lead-in, and `%` keeps the
+ * dividend's sign — `-0.25 % 1` is `-0.25`, not `0.75`, so every pulse driven
+ * off it inverts for the two bars before the first note. One game's comment
+ * records that this "already crashed the codebase once"; it had been
+ * re-derived in a dozen files before it lived here.
+ */
+export const beatPhase = (x) => x - Math.floor(x);
 export const smoothstep = (t) => { t = clamp01(t); return t * t * (3 - 2 * t); };
 export const smootherstep = (t) => { t = clamp01(t); return t * t * t * (t * (t * 6 - 15) + 10); };
 

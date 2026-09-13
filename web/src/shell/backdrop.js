@@ -11,7 +11,7 @@
  */
 
 import * as THREE from 'three';
-import { damp } from '../core/util.js';
+import { damp, beatPhase } from '../core/util.js';
 import { PAL, num } from './theme.js';
 
 const SHAPES = 44;
@@ -146,7 +146,7 @@ export function createBackdrop(ctx, {
   let accentCol = new THREE.Color(accent);
 
   function update(dt, beat, t) {
-    const bf = beat - Math.floor(beat);
+    const bf = beatPhase(beat);
     pulse = damp(pulse, 0, 7, dt);
     if (bf < 0.12 && pulse < 0.2) pulse = 1;
 

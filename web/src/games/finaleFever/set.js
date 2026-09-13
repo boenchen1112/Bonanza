@@ -19,7 +19,7 @@
  */
 
 import * as THREE from 'three';
-import { clamp01, easeOutCubic, smootherstep } from '../../core/util.js';
+import { clamp01, easeOutCubic, smootherstep, beatPhase } from '../../core/util.js';
 
 /** Where the duel happens, in world space. Read by index.js. */
 export const PLACE = {
@@ -269,7 +269,7 @@ export function createSet(ctx, root) {
      */
     update(dt, beat, time, st) {
       api._beat = beat;
-      const frac = beat - Math.floor(beat);          // never `% 1`: beat goes negative
+      const frac = beatPhase(beat);
       const hop = 4 * frac * (1 - frac);
 
       // --- strike zone ------------------------------------------------------

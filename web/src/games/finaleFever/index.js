@@ -45,7 +45,7 @@ import * as THREE from 'three';
 import { NoteJudge, rankFor, SCORE } from '../../core/judge.js';
 import { roundResult } from '../../core/result.js';
 import { FEEL, feelForCombo, isMilestone } from '../../core/feel.js';
-import { clamp01, damp } from '../../core/util.js';
+import { clamp01, damp, beatPhase } from '../../core/util.js';
 import { makeCharacter, makeAnimator } from '../../chars/index.js';
 import { createSet, PLACE } from './set.js';
 import {
@@ -64,7 +64,7 @@ let S = null;
 
 /** NEVER `b % 1`: the transport runs negative beats through the lead-in and
  *  JS modulo keeps the dividend's sign. This already crashed the codebase once. */
-const beatFrac = (b) => b - Math.floor(b);
+const beatFrac = beatPhase;
 const hop = (p) => 4 * p * (1 - p);
 
 // ============================================================================

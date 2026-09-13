@@ -34,7 +34,7 @@
 
 import {
   clamp, clamp01, lerp, smootherstep, damp,
-  backOut, elasticOut, anticipate, easeOutCubic, easeOutQuint, makeRng,
+  backOut, elasticOut, anticipate, easeOutCubic, easeOutQuint, makeRng, beatPhase,
 } from '../core/util.js';
 import { CLIPS, CLIP_FPS, CLIP_CHANNELS } from './clips.gen.js';
 
@@ -207,7 +207,7 @@ export function idle(beat, o = {}) {
   const amp = o.amp ?? 1;
   const ph = o.phase ?? 0;
   const b = beat + ph;
-  const f = b - Math.floor(b);
+  const f = beatPhase(b);
 
   // Vertical: hop up through the beat, compress on the beat, crouch before it.
   const y = hop(f) * 0.030 - compress(f) * 0.024 - crouch(f) * 0.020;
@@ -422,7 +422,7 @@ function poseRecover(p, s) {
 function poseCelebrate(p, s) {
   resetPose(p);
   const b = s.beat * 2; // celebrate at double time — joy is faster than idle
-  const f = b - Math.floor(b);
+  const f = beatPhase(b);
   const j = hop(f);
   const entry = backOut(clamp01(s.t / 0.22), 2.6);
   const air = j * entry;
@@ -518,7 +518,7 @@ function poseTaunt(p, s) {
   resetPose(p);
   const b = s.beat;
   const sway = Math.sin(b * Math.PI);
-  const f = b - Math.floor(b);
+  const f = beatPhase(b);
   const e = smootherstep(clamp01(s.t / 0.25));
   p.rootY = (-0.018 + hop(f) * 0.014) * e;
   p.squash = (-0.14 - compress(f) * 0.35) * e;

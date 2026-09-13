@@ -22,7 +22,7 @@
 
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { clamp, clamp01, damp, makeRng, smootherstep } from '../core/util.js';
+import { clamp, clamp01, damp, makeRng, smootherstep, beatPhase } from '../core/util.js';
 
 /** Crowd palette — desaturated relative to the cast, so it never competes. */
 const CROWD_COLORS = [
@@ -169,7 +169,7 @@ export function makeCrowd({
 
     for (let i = 0; i < n; i++) {
       const b = (beat + phase[i]) * rate;
-      let f = b - Math.floor(b);
+      let f = beatPhase(b);
       let j = hop(f) * wob[i];
 
       // Travelling wave: a moving gaussian in arc position.

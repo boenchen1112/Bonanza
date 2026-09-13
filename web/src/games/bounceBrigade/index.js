@@ -53,7 +53,7 @@ import { roundResult } from '../../core/result.js';
 import { FEEL, feelForCombo } from '../../core/feel.js';
 import {
   damp, clamp, clamp01, lerp, smoothstep, smootherstep,
-  easeOutCubic, easeOutQuint, easeInCubic, backOut, elasticOut, makeRng,
+  easeOutCubic, easeOutQuint, easeInCubic, backOut, elasticOut, makeRng, beatPhase,
 } from '../../core/util.js';
 import { makeCharacter, makeAnimator } from '../../chars/index.js';
 
@@ -77,7 +77,7 @@ const BOUNCER_FACING = 1.12;    // rad; faces screen-right but keeps its face on
 const SPLASH_Y = WATER_Y + 0.35;
 const HIGHLIGHT_WINDOW = 26;    // platforms around the cursor whose matrices animate
 
-const beatFrac = (x) => x - Math.floor(x);       // NEVER x % 1: beats go negative
+const beatFrac = beatPhase;                      // see core/util.js: NEVER x % 1
 const hopShape = (u) => 4 * u * (1 - u);
 
 // ------------------------------------------------------------------- state

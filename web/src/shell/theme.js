@@ -9,7 +9,7 @@
  * Everything is procedural: no image files, no webfonts, no fetches.
  */
 
-import { clamp01 } from '../core/util.js';
+import { clamp01, beatPhase } from '../core/util.js';
 import { profile } from './state.js';
 
 export const PAL = {
@@ -95,7 +95,7 @@ export function display(text, cls = '') {
 
 /** 0..1 sawtooth of the current beat, for pulses that must land ON the beat. */
 export function beatPulse(beat, sharpness = 6) {
-  const f = beat - Math.floor(beat);
+  const f = beatPhase(beat);
   return Math.exp(-f * sharpness);
 }
 
