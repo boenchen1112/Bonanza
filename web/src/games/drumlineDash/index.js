@@ -51,6 +51,7 @@
 
 import * as THREE from 'three';
 import { NoteJudge, rankFor, SCORE } from '../../core/judge.js';
+import { roundResult } from '../../core/result.js';
 import { FEEL, feelForCombo } from '../../core/feel.js';
 import { damp, clamp, clamp01, makeRng, easeOutCubic } from '../../core/util.js';
 import { makeCharacter, makeAnimator } from '../../chars/index.js';
@@ -428,10 +429,14 @@ export default {
     }
 
     // ---- hud --------------------------------------------------------------
+    // Accuracy is hit quality in every game. This used to show `score01` —
+    // race points, carrying chart multipliers and mash penalties — so the
+    // player watched one number all round and the results card printed
+    // another. The score line is where the race points belong.
     const score01 = clamp01(S.points / MAX_POINTS);
     ctx.ui.hud.setScore(Math.round(score01 * 1000));
     ctx.ui.hud.setCombo(S.combo);
-    ctx.ui.hud.setAccuracy(score01);
+    ctx.ui.hud.setAccuracy(hitQuality(S.tot));
     updateStandings(S);
   },
 
@@ -708,12 +713,8 @@ function finishRound(ctx, S) {
   S.you.anim.setState(place === 1 ? 'celebrate' : 'taunt', { variant: 'perfect', force: true });
 
   const notes = S.tot.perfect + S.tot.great + S.tot.good + S.tot.miss;
-  // Accuracy is hit quality, the same number every game reports; the race
-  // points (which also carry chart multipliers and mash penalties) are the score.
-  const hit01 = notes
-    ? (S.tot.perfect * SCORE.perfect + S.tot.great * SCORE.great + S.tot.good * SCORE.good) / (notes * SCORE.perfect)
-    : 0;
-  S.result = {
+  const hit01 = hitQuality(S.tot);
+  S.result = roundResult({
     score: Math.round(score01 * 1000),
     accuracy: hit01,
     rank: rankFor(hit01, S.tot.miss),
@@ -731,7 +732,18 @@ function finishRound(ctx, S) {
         ? S.errors.reduce((a, b) => a + Math.abs(b), 0) / S.errors.length : 0,
       score: Math.round(score01 * 1000),
     },
-  };
+  });
+}
+
+/**
+ * Hit quality, 0..1 — verdict-weighted, the number `accuracy` means in every
+ * game. Kept apart from the race points on purpose.
+ */
+function hitQuality(tot) {
+  const notes = tot.perfect + tot.great + tot.good + tot.miss;
+  if (!notes) return 0;
+  return (tot.perfect * SCORE.perfect + tot.great * SCORE.great + tot.good * SCORE.good)
+    / (notes * SCORE.perfect);
 }
 
 // ─────────────────────────────────────────────────────────────── call audio

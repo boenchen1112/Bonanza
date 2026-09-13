@@ -49,6 +49,7 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 
 import { NoteJudge, rankFor, SCORE } from '../../core/judge.js';
+import { roundResult } from '../../core/result.js';
 import { FEEL, feelForCombo } from '../../core/feel.js';
 import {
   damp, clamp, clamp01, lerp, smoothstep, smootherstep,
@@ -944,7 +945,7 @@ function updateBuoys(camX, beat) {
 function finalise() {
   done = true;
   const accuracy = clamp01(points / chart.maxPoints);
-  result = {
+  result = roundResult({
     score: Math.round(1000 * accuracy),
     accuracy,
     rank: rankFor(accuracy, missCount),
@@ -955,5 +956,5 @@ function finalise() {
       bias: judge.bias,
     },
     highlights: [],
-  };
+  });
 }

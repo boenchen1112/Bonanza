@@ -46,6 +46,7 @@
 
 import * as THREE from 'three';
 import { NoteJudge, rankFor, WINDOWS_MS } from '../../core/judge.js';
+import { roundResult } from '../../core/result.js';
 import { FEEL, feelForCombo } from '../../core/feel.js';
 import { clamp01, damp, lerp, smoothstep } from '../../core/util.js';
 import { createWorld, LAYOUT } from './world.js';
@@ -984,7 +985,7 @@ export default {
     // The number the HUD counted up (the results card used to show a 0-1000
     // rescale of it, so 38000 on the scoreboard became 870).
     const score = Math.round(this.gotPts);
-    return {
+    return roundResult({
       score,
       accuracy: acc,
       rank: rankFor(acc, s.miss),
@@ -999,7 +1000,7 @@ export default {
         avgPower: this.powerN ? Math.round((this.powerSum / this.powerN) * 100) / 100 : 0,
       },
       highlights: this.swings.filter((x) => x.tier === 'slam' || (x.tier === 'homer' && x.verdict === 'perfect')),
-    };
+    });
   },
 
   // ---------------------------------------------------------------- dispose

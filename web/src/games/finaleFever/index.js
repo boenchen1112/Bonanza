@@ -43,6 +43,7 @@
 
 import * as THREE from 'three';
 import { NoteJudge, rankFor, SCORE } from '../../core/judge.js';
+import { roundResult } from '../../core/result.js';
 import { FEEL, feelForCombo, isMilestone } from '../../core/feel.js';
 import { clamp01, damp } from '../../core/util.js';
 import { makeCharacter, makeAnimator } from '../../chars/index.js';
@@ -424,7 +425,7 @@ export default {
     let rank = rankFor(acc, S.counts.miss);
     // Losing every heart is not an ejection — but it is not an S, either.
     if (S.survived && (rank === 'S' || rank === 'A')) rank = 'B';
-    return {
+    return roundResult({
       score: Math.round(acc * 1000),
       accuracy: acc,
       rank,
@@ -443,7 +444,7 @@ export default {
         S.survived ? 'Survived to the end' : null,
         S.maxCombo >= 40 ? `${S.maxCombo} combo` : null,
       ].filter(Boolean),
-    };
+    });
   },
 
   // ---------------------------------------------------------------- dispose

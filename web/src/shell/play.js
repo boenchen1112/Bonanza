@@ -25,6 +25,7 @@ import { gamePlayers } from './chars.js';
 import { CATALOG } from './games.js';
 import { goView, exitRoute } from './nav.js';
 import { clamp01 } from '../core/util.js';
+import { normaliseResult } from '../core/result.js';
 
 /** Beats of count-in after a pause. Three is the shortest that reads as one. */
 const RESUME_BEATS = 3;
@@ -171,12 +172,10 @@ function openPause(ctx) {
   if (S.paused || S.finished) return;
   S.paused = true;
   S.resumeAt = 0;
-  S.pauseBeat = ctx.clock.beat;
   S.pauseTime = ctx.clock.now();
-  // clock.stop() clears the one-shot schedule, and those entries are keyed by
-  // BEAT, which survives an origin shift — so snapshot and put them back.
-  S.sched = Array.isArray(ctx.clock._scheduled) ? ctx.clock._scheduled.slice() : null;
-  ctx.clock.stop();
+  // suspend(), not stop(): stop() drops the one-shot schedule, and those
+  // entries are keyed by beat, so they survive the resume untouched.
+  S.pauseBeat = ctx.clock.suspend();
   // pause, not stop: stop() dropped the track, and nothing ever restarted it
   const music = ctx.audio?.music;
   if (music?.pause) music.pause(); else music?.stop?.();
@@ -194,10 +193,6 @@ function resume(ctx) {
   const at = ctx.clock.now() + lead;
   ctx.clock.start(at, S.pauseBeat);
   ctx.audio?.music?.resume?.();
-  if (S.sched) {
-    for (const e of S.sched) if (!e.done) ctx.clock.at(e.beat, e.fn);
-    S.sched = null;
-  }
   S.resumeAt = at;
   // Absolute note times the game computed before the pause are now `shift`
   // seconds early. Games that implement `shiftTime` stay in sync; the bus
@@ -206,7 +201,9 @@ function resume(ctx) {
   try { S.mod?.shiftTime?.(ctx, shift); } catch { /* optional hook */ }
   ctx.bus?.emit?.('transport:shift', shift);
   ctx.bus?.emit?.('resume', { beat: S.pauseBeat, shift });
-  ctx.input?.setEnabled?.(true);
+  // No setEnabled(true) here: nothing ever disables Input, and it must stay
+  // enabled while paused — the pause overlay is driven by the same drained
+  // events (see input() above, which routes to S.pause.input while open).
 }
 
 function restart(ctx) {
@@ -250,7 +247,7 @@ function unblur(ctx) {
 
 function finish(ctx, result, source) {
   if (S.finished) return;
-  const res = normalise(result);
+  const res = normaliseResult(result);
   S.finished = { res, source, route: null };
   S.outro = 0;
   session.lastResult = res;
@@ -260,23 +257,6 @@ function finish(ctx, result, source) {
   S.finished.route = () => goView(nav, 'results', {
     result: res, game: S.gameId, from: S.from, party: session.mode === 'party' && !!session.party,
   });
-}
-
-/** Tolerate a partial result object — a half-built minigame must not 500. */
-function normalise(r) {
-  const s = r?.stats || {};
-  return {
-    score: Number(r?.score) || 0,
-    accuracy: Number.isFinite(r?.accuracy) ? r.accuracy : 0,
-    rank: r?.rank || null,
-    stats: {
-      perfect: s.perfect || 0, great: s.great || 0, good: s.good || 0, miss: s.miss || 0,
-      maxCombo: s.maxCombo || 0, errors: Array.isArray(s.errors) ? s.errors : [],
-    },
-    highlights: r?.highlights || null,
-    // Only games that fielded the lineup report one; see session.recordPartyRound.
-    field: Array.isArray(r?.field) ? r.field : null,
-  };
 }
 
 export const PLAY_ACCENT = PAL.yellow;

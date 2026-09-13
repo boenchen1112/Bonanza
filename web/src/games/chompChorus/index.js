@@ -38,6 +38,7 @@
 
 import * as THREE from 'three';
 import { NoteJudge, rankFor, SCORE } from '../../core/judge.js';
+import { roundResult } from '../../core/result.js';
 import { FEEL, feelForCombo } from '../../core/feel.js';
 import { clamp, clamp01, damp } from '../../core/util.js';
 import { makeCast, paletteById } from '../../chars/index.js';
@@ -661,7 +662,7 @@ export default {
     let weakest = null;
     for (const l of lanes) if (l.notes && (!weakest || l.accuracy < weakest.accuracy)) weakest = l;
 
-    s.resultCache = {
+    s.resultCache = roundResult({
       score,
       accuracy,
       rank: rankFor(accuracy, st.miss),
@@ -678,7 +679,7 @@ export default {
         weakest && weakest.miss > 0 ? `Weakest voice: ${weakest.glyph} (${Math.round(weakest.accuracy * 100)}%)` : 'All four voices held',
         s.finale.hit === N ? 'Full four-part finale' : `${s.finale.hit}/4 in the finale`,
       ],
-    };
+    });
     return s.resultCache;
   },
 

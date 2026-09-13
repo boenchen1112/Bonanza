@@ -88,6 +88,21 @@ export class Clock {
     this._scheduled.length = 0;
   }
 
+  /**
+   * Halt the transport but KEEP the one-shot schedule, and report the beat it
+   * halted on. `start(at, thatBeat)` resumes exactly where it left off.
+   *
+   * Scheduled entries are keyed by beat, which survives an origin shift, so
+   * they need no repair — but `stop()` drops them, which is why the pause
+   * menu used to snapshot the private `_scheduled` array and put it back by
+   * hand. Pausing is the clock's job, not the caller's.
+   */
+  suspend() {
+    const at = this.beat;
+    this._running = false;
+    return at;
+  }
+
   get running() { return this._running; }
 
   // ----------------------------------------------------------------- time

@@ -176,3 +176,65 @@ test('Beats helpers', () => {
   assert.ok(Math.abs(Beats.barFrac(6, 4) - 0.5) < 1e-9);
   assert.ok(Beats.barFrac(-1, 4) >= 0, 'negative beats (lead-in) must not go negative');
 });
+
+test('suspend() keeps the one-shot schedule that stop() would drop', () => {
+  // The pause menu used to reach into the private `_scheduled` array and put
+  // the entries back by hand, because stop() cleared them.
+  const ctx = fakeCtx();
+  const c = new Clock(ctx);
+  c.setBpm(120);
+  c.start(0, 0);
+
+  const fired = [];
+  c.at(4, () => fired.push(4));
+  c.at(8, () => fired.push(8));
+
+  ctx.currentTime = 2.0;          // beat 4 at 120bpm
+  c.tick();
+  assert.deepEqual(fired, [4]);
+
+  const at = c.suspend();
+  assert.ok(Math.abs(at - 4) < 0.05, `suspended at beat ${at}`);
+  assert.equal(c.running, false);
+
+  // Resume two seconds later, from the beat we halted on.
+  ctx.currentTime = 10.0;
+  c.start(ctx.currentTime, at);
+  ctx.currentTime = 12.1;         // four more beats
+  c.tick();
+  assert.deepEqual(fired, [4, 8], 'the beat-8 one-shot survived the pause');
+});
+
+test('suspend() does not re-fire what already ran', () => {
+  const ctx = fakeCtx();
+  const c = new Clock(ctx);
+  c.setBpm(120);
+  c.start(0, 0);
+  let n = 0;
+  c.at(2, () => { n += 1; });
+
+  ctx.currentTime = 1.0;
+  c.tick();
+  assert.equal(n, 1);
+
+  const at = c.suspend();
+  ctx.currentTime = 5.0;
+  c.start(ctx.currentTime, at);
+  ctx.currentTime = 6.0;
+  c.tick();
+  assert.equal(n, 1, 'a dispatched one-shot stays dispatched across a pause');
+});
+
+test('stop() still clears the schedule — suspend is the pause, stop is the end', () => {
+  const ctx = fakeCtx();
+  const c = new Clock(ctx);
+  c.setBpm(120);
+  c.start(0, 0);
+  let n = 0;
+  c.at(4, () => { n += 1; });
+  c.stop();
+  c.start(0, 0);
+  ctx.currentTime = 2.1;
+  c.tick();
+  assert.equal(n, 0);
+});
