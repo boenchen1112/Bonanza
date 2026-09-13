@@ -47,9 +47,15 @@ export default {
     S.fold = profile.submit(gameId, result);
     if (inParty) session.recordPartyRound(gameId, result);
 
-    // Same void set as the title screen — see the note there.
+    // Void set, but NOT title's groundY: title's cast stands on its own
+    // separate deck mesh well below the void's ground, so -4.4 puts nothing
+    // under it. This screen's character stands directly on the env's own
+    // ground piece (a lit disc with a glowing edge and confetti — never
+    // empty by design), so the ground has to be at the character's actual
+    // standing height or it renders 3+ units out of frame, leaving the
+    // character floating over a bare backdrop colour below the card.
     ctx.scene.userData.envPreset = 'void';
-    ctx.scene.userData.groundY = -4.4;
+    ctx.scene.userData.groundY = -1.1;
 
     S.back = createBackdrop(ctx, { accent: game.color, density: 0.75 });
     ctx.fx.attach(ctx.scene);

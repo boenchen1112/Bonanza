@@ -160,7 +160,13 @@ PALETTES['swing-kings'] = P({
   fillSky: 0x9dc6ff, fillGround: 0x123f2c, fillIntensity: 1.2,
   rim: 0xffe9a8, rimDir: [0.6, 0.3, -0.75], rimStrength: 0.95,
   fog: 0x1b3a72, fogNear: 20, fogFar: 78,
-  bloom: 0.8, exposure: 1.08,
+  // Key comes in steep and bright (Y=0.82 of the direction, intensity 2.7 vs
+  // BASE's 2.5) for a floodlit-dusk look, so the tops of things it hits
+  // straight-on — a helmet, a raised arm — cleared BASE's 0.72 threshold and
+  // full-bloomed to white regardless of their real colour. Raised to clear
+  // an ordinarily-lit surface under this key while still catching the sun
+  // disc and additive VFX, which sit far above either value.
+  bloom: 0.8, bloomThreshold: 1.35, exposure: 1.08,
 });
 
 /**
@@ -181,7 +187,10 @@ PALETTES['swing-kings-night'] = P({
   fillSky: 0x3f5aa6, fillGround: 0x0b2a1c, fillIntensity: 0.72,
   rim: 0xbfe6ff, rimDir: [0.6, 0.35, -0.75], rimStrength: 1.1,
   fog: 0x0a1638, fogNear: 22, fogFar: 80,
-  bloom: 0.9, exposure: 1.0,
+  // Even steeper and brighter than the day palette (keyIntensity 3.0, same
+  // reasoning as there) — the stadium lights carry the frame at night, so
+  // the same bleach would only be worse without this.
+  bloom: 0.9, bloomThreshold: 1.5, exposure: 1.0,
 });
 
 /** Drumline Dash: hot night parade. Magenta and ember. */

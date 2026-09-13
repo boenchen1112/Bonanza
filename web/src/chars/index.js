@@ -86,9 +86,21 @@ export function makeCast({
     char.position.set(pos[0], pos[1], pos[2]);
     if (faceCamera && !positions) char.rotation.y = -pos[0] * 0.055;
     group.add(char);
+    const anim = makeAnimator(char, { seed: (seed + i * 104729) >>> 0 });
+    // Settle the pose before this character is ever rendered. Its rest pose
+    // (anim.js `REST` — hip/torso rotations at zero) is the rig's zero
+    // reference, not a standing stance, and `update()`'s damping takes
+    // several ticks to close the gap to "idle" — with nothing pre-warmed, a
+    // freshly built character visibly rises from lying flat to standing
+    // over its first few frames. Eight ticks at 1/30s clears >99% of the
+    // gap regardless of caller dt (see the exp(-34*dt) factor in anim.js)
+    // for the cost of pure math, no render — this was already the fix the
+    // portrait-bust code used per character; every OTHER caller of a fresh
+    // cast (a roster lock-in, a minigame's cast) needs the same thing.
+    for (let k = 0; k < 8; k++) anim.update(1 / 30, 0);
     members.push({
       index: i, id: p?.id ?? i, name: p?.name || `P${i + 1}`,
-      char, anim: makeAnimator(char, { seed: (seed + i * 104729) >>> 0 }), palette: pal,
+      char, anim, palette: pal,
     });
   }
 
