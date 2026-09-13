@@ -510,34 +510,18 @@ export default {
     this._s = null;
   },
 
-  // ───────────────────────────────────────── test hooks (harness + verify)
+  // ──────────────────────────────────────────────────── harness: testChart
 
   /**
-   * What the drum major is playing / just played, in beats. The bundled
-   * `verify-call-response.mjs` reads this to answer a call exactly, which is
-   * the only way to prove a call-and-response chart is actually beatable —
-   * the shell's generic eighth-note autoplay cannot.
+   * Every response note, in beats. The generic bot presses eighths, which in
+   * a call-and-response game answers calls it was never given — so this is
+   * the only way the harness can prove the chart is beatable. Beats, not
+   * times: main.js re-derives the audio time each frame.
    */
-  __probe() {
-    const S = this._s;
-    if (!S) return null;
-    const p = phrases[S.phraseIdx] || null;
-    return {
-      mode: S.mode,
-      phrase: p && {
-        index: p.index, section: p.section, bars: p.bars, finale: p.finale,
-        callBeat: p.callBeat, respBeat: p.respBeat, endBeat: p.endBeat,
-        slots: p.slots, callBeats: p.callBeats, noteBeats: p.noteBeats,
-      },
-      totals: { ...S.tot },
-      points: S.points,
-      maxPoints: MAX_POINTS,
-      extras: S.extras,
-      combo: S.combo,
-      maxCombo: S.maxCombo,
-      progress: S.racers.map((r) => ({ name: r.name, p: r.progress, place: r.place })),
-      finished: S.finished,
-    };
+  testChart() {
+    const out = [];
+    for (const p of phrases) for (const b of p.noteBeats) out.push({ beat: b, action: 'a' });
+    return out;
   },
 };
 

@@ -606,41 +606,11 @@ export default {
     noteMap = new Map();
     pushHud();
 
-    // Dev/test hook. `verify.mjs` drives real hold/release through this so a
-    // two-beat charge can be delivered at exact audio times under a software
-    // renderer that only manages 3fps.
-    if (typeof window !== 'undefined') {
-      telemetry = {
-        chargeRuns: [],
-        minAirY: {},
-        pressed: 0,
-        released: 0,
-      };
-      window.__BOUNCE__ = {
-        chart: () => ({
-          platforms: plats.map((p) => ({
-            index: p.index, beat: p.beat, deg: p.deg, midi: p.midi, y: p.y,
-            kind: p.kind, departBeat: p.departBeat, nextBeat: p.nextBeat,
-            flightBeats: p.flightBeats, x: p.contactX,
-          })),
-          waterY: WATER_Y,
-        }),
-        /** Inject a press with an exact audio time, exactly like the harness bot. */
-        press: (down, atTime) => {
-          if (!ctxRef) return;
-          handleEvents(ctxRef, [{ action: 'a', time: atTime, down: !!down, source: 'test' }]);
-        },
-        state: () => ({
-          beat: ctxRef.clock.beat,
-          x: M.x, y: M.y, phase: M.phase, outcome: M.outcome, platform: M.k,
-          held, points, judged, missCount, combo: judge.stats.combo,
-          contactVerdict: contactVerdict.slice(),
-          releaseVerdict: releaseVerdict.slice(),
-          minAirY: telemetry.minAirY,
-        }),
-        reset: () => { telemetry.minAirY = {}; },
-      };
-    }
+    // Press/release counters, read by the game itself. The `window.__BOUNCE__`
+    // surface that used to sit here — chart(), press(), state(), reset() —
+    // served a `bounceBrigade/verify.mjs` that is not in the repo, alongside
+    // `__BBB__.press`, which does the same job through the documented seam.
+    telemetry = { chargeRuns: [], minAirY: {}, pressed: 0, released: 0 };
   },
 
   start(ctx) {
@@ -855,6 +825,18 @@ export default {
     return result;
   },
 
+  /**
+   * The chart, in beats. Taps only — a charge is a hold, and the bot emits
+   * key-downs, so autoplay belly-flops every ramp on purpose rather than
+   * pretending to clear it. That is the honest reading of a tap-only bot.
+   */
+  testChart() {
+    if (!chart) return null;
+    return chart.notes
+      .filter((n) => !n.charge)
+      .map((n) => ({ beat: n.beat, action: n.action || 'a' }));
+  },
+
   dispose(ctx) {
     unsubBeat?.(); unsubBeat = null;
     try { trail?.release(); } catch { /* ignore */ }
@@ -887,7 +869,6 @@ export default {
     root = null; env = null; plats = null; chart = null; judge = null; noteMap = null;
 
     ctx?.ui?.hud?.unmount();
-    if (typeof window !== 'undefined' && window.__BOUNCE__) delete window.__BOUNCE__;
     ctxRef = null;
   },
 };

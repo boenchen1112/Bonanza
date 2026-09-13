@@ -683,6 +683,19 @@ export default {
     return s.resultCache;
   },
 
+  // ──────────────────────────────────────────────────── harness: testChart
+
+  /**
+   * The chart, in beats and lane actions. The generic bot only ever presses
+   * 'a' on eighths, so by construction it misses every lane in this game —
+   * which is why this game had to fork the whole harness to verify itself.
+   */
+  testChart() {
+    const s = this._;
+    if (!s?.chart) return null;
+    return s.chart.map((n) => ({ beat: n.beat, action: LANE_ACTIONS[n.lane] }));
+  },
+
   // ---------------------------------------------------------------- dispose
 
   dispose(ctx) {

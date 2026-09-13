@@ -447,6 +447,20 @@ export default {
     });
   },
 
+  // ──────────────────────────────────────────────────── harness: testChart
+
+  /**
+   * The answer notes, in BEATS. Times must not be precomputed here: the
+   * transport ramps from 150bpm to 202.5 under the chart, so a time derived
+   * at autoplay start is ~15ms out by the last bar and grows with the ramp.
+   */
+  testChart() {
+    if (!S?.chart) return null;
+    return S.chart
+      .filter((n) => n.type !== 'call' && n.action)
+      .map((n) => ({ beat: n.beat, action: n.action }));
+  },
+
   // ---------------------------------------------------------------- dispose
   dispose(ctx) {
     if (!S) return;

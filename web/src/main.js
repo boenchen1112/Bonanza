@@ -57,6 +57,8 @@ let currentCtx = null;
 /** Last scene that threw in load()/start(), for the test API. */
 let lastError = null;
 let pendingScene = null;
+/** Set by `__BBB__.setSeed`; applies to every activation after it. */
+let seedOverride = null;
 let hitstopUntil = 0;
 /** When the current hitstop began, so we only ever subtract time once. */
 let frozenFrom = 0;
@@ -92,10 +94,16 @@ function pumpBot(beat) {
   // way a person plays — one press per note instead of one per grid step.
   if (bot.chart) {
     const now = clock.now();
-    while (bot.cursor < bot.chart.length && bot.chart[bot.cursor].time <= now) {
-      const n = bot.chart[bot.cursor++];
+    while (bot.cursor < bot.chart.length) {
+      const n = bot.chart[bot.cursor];
+      // A note may be keyed by beat instead of by time. Finale Fever ramps
+      // tempo under the chart, so an audio time computed at autoplay start
+      // drifts by the last bar; re-deriving it here is exactly zero off.
+      const t = n.time !== undefined ? n.time : clock.timeAt(n.beat);
+      if (t > now) break;
+      bot.cursor++;
       if (bot.rng() < bot.missRate) continue;
-      botPress(n.action || 'a', n.time + (bot.rng() * 2 - 1) * bot.jitter);
+      botPress(n.action || 'a', t + (bot.rng() * 2 - 1) * bot.jitter);
     }
     return;
   }
@@ -209,7 +217,7 @@ async function activateNow(id, opts = {}) {
 
   currentCtx = Object.assign(Object.create(ctxBase), {
     scene, camera, opts,
-    rng: makeRng(opts.seed ?? 0x5eed),
+    rng: makeRng(opts.seed ?? seedOverride ?? 0x5eed),
     subs: sceneSubs,
     onBeat(fn) {
       const off = clock.onBeat(fn);
@@ -464,7 +472,18 @@ if (TEST_API) window.__BBB__ = {
   goto: (id, opts) => activate(id, opts || {}),
   /** Shell bookkeeping (session/profile) — lets a script stage a party mid-way. */
   shellState: () => import('./shell/state.js'),
-  setSeed: (n) => { ctxBase.rng = makeRng(n); },
+  /**
+   * Reseed the run. This used to assign `ctxBase.rng` only — and every
+   * activation gives the scene context an OWN `rng` property that shadows the
+   * prototype, so it reached nothing at all. It now reseeds the running scene
+   * and every activation after it, which is what "the harness replays runs"
+   * needs in order to be true.
+   */
+  setSeed: (n) => {
+    seedOverride = n;
+    ctxBase.rng = makeRng(n);
+    if (currentCtx) currentCtx.rng = makeRng(n);
+  },
   /**
    * Render quality. The harness forces 'low' by default: it renders through
    * SwiftShader, where the post chain costs hundreds of ms per frame and the
@@ -504,7 +523,8 @@ if (TEST_API) window.__BBB__ = {
     const list = o.chart && typeof current?.testChart === 'function' ? current.testChart(currentCtx) : null;
     if (Array.isArray(list)) {
       const now = clock.now();
-      bot.chart = list.filter((n) => n.time > now).sort((a, b) => a.time - b.time);
+      const at = (n) => (n.time !== undefined ? n.time : clock.timeAt(n.beat));
+      bot.chart = list.filter((n) => at(n) > now).sort((a, b) => at(a) - at(b));
     }
     botPrevBeat = null;
     botPressTotal = 0;

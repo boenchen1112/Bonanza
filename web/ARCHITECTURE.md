@@ -102,6 +102,18 @@ export default {
    */
   result(ctx) { return null; },
 
+  /**
+   * The notes a bot should press, for the automated critic — `null` if this
+   * game has none. Each entry is `{action}` plus EITHER `time` (audio time)
+   * or `beat`; prefer `beat`, which main.js re-derives each frame, so a game
+   * that ramps tempo stays exact.
+   *
+   * Without it the bot presses 'a' on eighths, which in a four-lane game
+   * misses every lane and in a call-and-response game answers calls it was
+   * never given. Two games forked the whole harness over this.
+   */
+  testChart(ctx) { return null; },
+
   /** Free GPU resources. Called always, even on abort. */
   dispose(ctx) {},
 };

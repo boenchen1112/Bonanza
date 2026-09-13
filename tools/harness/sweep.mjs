@@ -10,8 +10,8 @@
  * scene" gate. Per-scene artifacts land in <out>/<scene>/.
  */
 
-import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
 import path from 'node:path';
 
 const a = process.argv.slice(2);
@@ -22,8 +22,12 @@ const OUT = opt('out', 'runs/sweep');
 const SECONDS = opt('seconds', '6');
 const PLAY = opt('play', 'auto');
 
-const registry = readFileSync(path.join(ROOT, 'web/src/shell/registry.js'), 'utf8');
-const all = [...registry.matchAll(/id:\s*'([^']+)'/g)].map((m) => m[1]);
+// Import the registry rather than scraping its source with a regex. Its
+// scene imports are lazy, so the module itself is plain data and loads fine
+// under Node — there is no reason a Node caller had to parse JavaScript to
+// learn which scenes exist.
+const { SCENES } = await import(pathToFileURL(path.join(ROOT, 'web/src/shell/registry.js')).href);
+const all = SCENES.map((s) => s.id);
 const scenes = opt('scenes', null)?.split(',') ?? all;
 
 const inspect = path.join(ROOT, 'tools/harness/inspect.mjs');
