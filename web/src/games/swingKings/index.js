@@ -237,6 +237,10 @@ export default {
     // (It used to be a centre banner AT beat 0, printed over the first hit.)
     this._offBeat = countIn(ctx, {
       beats: LEAD_IN_BEATS,
+      // from: 3, not the default 4 — with `go` the numbers shift down one, so
+      // 4 would start the text a beat earlier than the lead-in was tuned for
+      // (see the note above: short, and gone before the first scored pitch).
+      from: 3,
       go: 'PLAY BALL!',
       show: (text, n) => ctx.ui.popup(text, {
         y: 0.26, scale: n === 1 ? 1.2 : 1.4, color: '#ffe58a', life: n === 1 ? 0.44 : 0.42,
