@@ -291,11 +291,90 @@ export function createStage({ canvas, clock }) {
    * (KHR_parallel_shader_compile). Left to the first frame, Swing Kings'
    * compiles blocked ~1.2s with the count-in already running.
    */
+  /**
+   * Get a freshly built scene onto the GPU before its clock starts: build
+   * the default set, run the dress pass, then compile every program and
+   * upload every texture the scene needs.
+   *
+   * Both of those are synchronous under the hood, confirmed against three's
+   * own source: `renderer.compile()` (which `compileAsync` calls first) is
+   * a plain synchronous pass — only the wait for the driver's background
+   * LINK step is actually async — and texture upload is exactly as
+   * synchronous when it happens lazily on first draw. Doing either
+   * scene-wide in one call blocks one whole frame for however long a fresh
+   * minigame's cast, stadium set and crowd take to get onto the GPU for the
+   * first time. That's the known "scene-entry stall … still exists, now
+   * under the title card" gap: `activate()` awaits this before `start()`,
+   * so the cover hides the flash of an unbuilt scene, but the freeze itself
+   * still runs on the frame loop's own thread — no input is processed and
+   * nothing repaints until it clears.
+   *
+   * Compiling/uploading item-by-item instead, yielding a real frame once
+   * actual time has elapsed, turns that one block into several much
+   * smaller ones. It doesn't reach zero: measured on Swing Kings' cast,
+   * batching down to pairs of materials still leaves one ~800ms frame,
+   * because ONE of its shaders is that expensive to link on this GPU, and
+   * a single gl.compileShader/linkProgram call can't be split further from
+   * here — fixing that needs shader-level work, not a scheduling change.
+   */
   async function warm() {
     if (!scene || !camera) return;
     ensureDefaultEnv();
     look.dress();
-    try { await renderer.compileAsync(scene, camera); } catch (e) { console.warn('warm: compile', e); }
+
+    // One representative object per UNIQUE material, not one call per
+    // object: a character rig alone is ~20 segment meshes, and compiling
+    // each separately re-pays compileAsync's own overhead (a light
+    // traversal plus a ready-poll) for materials an earlier object already
+    // made ready.
+    const materialOwner = new Map();
+    scene.traverse((o) => {
+      if (!(o.isMesh || o.isPoints || o.isLine || o.isSprite)) return;
+      for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
+        if (m && !materialOwner.has(m)) materialOwner.set(m, o);
+      }
+    });
+    const textures = new Set();
+    for (const m of materialOwner.keys()) {
+      for (const key in m) { const v = m[key]; if (v && v.isTexture) textures.add(v); }
+      // ShaderMaterial-based effects (the sky dome, custom rig shaders) keep
+      // their textures inside `uniforms`, one level deeper.
+      for (const key in m.uniforms || {}) { const v = m.uniforms[key]?.value; if (v && v.isTexture) textures.add(v); }
+    }
+
+    let sinceYield = performance.now();
+    const maybeYield = async () => {
+      if (performance.now() - sinceYield <= 8) return;
+      await new Promise((r) => requestAnimationFrame(r));
+      sinceYield = performance.now();
+    };
+
+    // Batching matters as much as chunking does. Each compileAsync() call
+    // pays a fixed tax beyond the real compile — a light traversal plus at
+    // least one polling round-trip, 10ms via setTimeout when the browser
+    // exposes no faster completion signal — which measured out to almost
+    // the WHOLE cost for a scene with 100+ materials at one call each. A
+    // fake root that forwards `.traverse`/`.traverseVisible` to a batch of
+    // real objects, without reparenting any of them, lets one call cover
+    // several materials, paying that tax once per batch instead of once
+    // per material.
+    const batchOf = (objs) => ({
+      traverse: (cb) => { for (const o of objs) o.traverse(cb); },
+      traverseVisible: (cb) => { for (const o of objs) if (o.visible) o.traverseVisible(cb); },
+    });
+    const owners = [...materialOwner.values()];
+    const BATCH = 2;
+    for (let i = 0; i < owners.length; i += BATCH) {
+      const batch = batchOf(owners.slice(i, i + BATCH));
+      try { await renderer.compileAsync(batch, camera, scene); } catch (e) { console.warn('warm: compile', e); }
+      await maybeYield();
+    }
+    for (const tex of textures) {
+      // A texture whose source isn't decoded yet can't be uploaded early;
+      // it just uploads at its normal first-draw time instead.
+      try { renderer.initTexture(tex); } catch { /* not ready yet */ }
+      await maybeYield();
+    }
   }
 
   /** Build the default set for a scene that didn't ask for one. */

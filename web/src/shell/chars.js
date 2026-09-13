@@ -259,14 +259,26 @@ let bustCache = null;
  * and kept as 2D canvases. Empty when WebGL is unavailable — drawPortrait
  * then falls back to the 2D drawing.
  */
-function busts() {
-  if (bustCache) return bustCache;
+// The bust rig is a THROWAWAY WebGLRenderer + scene kept alive only while
+// there are still characters left to render. Building all of them was one
+// synchronous call that did, per character: a full mesh build, 20 animator
+// ticks, a WebGL render, and a GPU->CPU readback (`drawImage` off a live
+// canvas, which forces a driver flush). At 8 characters that was a single
+// ~500-600ms freeze on the FIRST screen that ever asked for a portrait
+// (roster) — this measured as the single worst frame anywhere in the shell.
+// `pumpBusts()` now does a few ms of that per call, so a caller can spread it
+// across frames; nothing blocks on it, because `drawPortrait` already falls
+// back to a cheap procedural placeholder for any id whose bust isn't ready.
+let bustCtx = null;   // { r, scene, cam, box } — alive only mid-build
+let bustCursor = 0;
+
+function ensureBustRig() {
+  if (bustCache || bustCtx) return;
   bustCache = new Map();
-  let r = null;
   try {
     const cv = document.createElement('canvas');
     cv.width = cv.height = BUST;
-    r = new THREE.WebGLRenderer({ canvas: cv, antialias: true, alpha: true, preserveDrawingBuffer: true });
+    const r = new THREE.WebGLRenderer({ canvas: cv, antialias: true, alpha: true, preserveDrawingBuffer: true });
     r.setPixelRatio(1);
     r.setSize(BUST, BUST, false);
     r.setClearColor(0x000000, 0);
@@ -279,37 +291,66 @@ function busts() {
     rim.position.set(-3, 2, -2);
     scene.add(rim);
     const cam = new THREE.PerspectiveCamera(28, 1, 0.05, 50);
-    const box = new THREE.Box3();
-    for (const def of CHARS) {
-      const m = charMesh(def, {});
-      scene.add(m);
-      m.rotation.y = -0.32;
-      const api = m.userData.charApi;
-      for (let i = 0; i < 20; i++) api?.update(1 / 30, 0.5 + i / 30);
-      m.updateMatrixWorld(true);
-      box.setFromObject(m);
-      const h = box.max.y - box.min.y;
-      const ty = box.min.y + h * 0.66;
-      const span = h * 0.78;
-      const dist = span / 2 / Math.tan(THREE.MathUtils.degToRad(14));
-      cam.position.set(0.18 * h, ty + h * 0.06, dist);
-      cam.lookAt(0, ty, 0);
-      r.render(scene, cam);
-      const out = document.createElement('canvas');
-      out.width = out.height = BUST;
-      out.getContext('2d').drawImage(cv, 0, 0);
-      bustCache.set(def.id, out);
-      scene.remove(m);
-      disposeChar(m);
-    }
+    bustCtx = { cv, r, scene, cam, box: new THREE.Box3() };
   } catch (e) {
     console.warn('portrait busts unavailable', e);
-    bustCache.clear();
-  } finally {
-    // dispose() only: forceContextLoss() makes three log "Context Lost".
-    if (r) r.dispose();
+    bustCtx = null;   // bustCache stays the empty Map set above
   }
-  return bustCache;
+}
+
+function buildOneBust(def) {
+  const { cv, r, scene, cam, box } = bustCtx;
+  const m = charMesh(def, {});
+  scene.add(m);
+  m.rotation.y = -0.32;
+  const api = m.userData.charApi;
+  for (let i = 0; i < 20; i++) api?.update(1 / 30, 0.5 + i / 30);
+  m.updateMatrixWorld(true);
+  box.setFromObject(m);
+  const h = box.max.y - box.min.y;
+  const ty = box.min.y + h * 0.66;
+  const span = h * 0.78;
+  const dist = span / 2 / Math.tan(THREE.MathUtils.degToRad(14));
+  cam.position.set(0.18 * h, ty + h * 0.06, dist);
+  cam.lookAt(0, ty, 0);
+  r.render(scene, cam);
+  const out = document.createElement('canvas');
+  out.width = out.height = BUST;
+  out.getContext('2d').drawImage(cv, 0, 0);
+  bustCache.set(def.id, out);
+  scene.remove(m);
+  disposeChar(m);
+}
+
+/**
+ * Build up to `budgetMs` of remaining character busts. Call this every frame
+ * with a small budget rather than once with none. Idempotent once every
+ * character is built (returns false immediately).
+ * @returns {boolean} true while portraits are still being built
+ */
+export function pumpBusts(budgetMs = 4) {
+  ensureBustRig();
+  if (!bustCtx) return false;
+  const t0 = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+  const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
+  while (bustCursor < CHARS.length && now() - t0 < budgetMs) {
+    buildOneBust(CHARS[bustCursor]);
+    bustCursor++;
+  }
+  if (bustCursor >= CHARS.length) {
+    bustCtx.r.dispose();   // dispose() only: forceContextLoss() logs "Context Lost"
+    bustCtx = null;
+    return false;
+  }
+  return true;
+}
+
+/** How many busts exist right now — lets a caller notice new ones landed. */
+export function bustsBuilt() { return bustCache ? bustCache.size : 0; }
+
+function busts() {
+  ensureBustRig();
+  return bustCache || new Map();
 }
 
 /**

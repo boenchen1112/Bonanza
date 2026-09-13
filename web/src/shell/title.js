@@ -21,7 +21,7 @@ import {
   startShellTransport,
 } from './theme.js';
 import { createBackdrop } from './backdrop.js';
-import { CHARS, charMesh, charBeat, disposeChar } from './chars.js';
+import { CHARS, charMesh, charBeat, disposeChar, pumpBusts } from './chars.js';
 import { CATALOG, drawPreview } from './games.js';
 import { preloadCards } from './cards.js';
 import { profile } from './state.js';
@@ -205,6 +205,13 @@ export default {
     S.selT += dt;
     S.back.update(dt, beat, S.t);
     S.wipe.update(dt);
+    // Roster's character portraits are a throwaway WebGL render per character
+    // (mesh build + 20 anim ticks + a GPU readback) — done all at once it was
+    // a ~500ms freeze on whichever screen asked for one first. Title is where
+    // a player idles longest before ever reaching roster, so it spends a few
+    // ms a frame warming that cache; by the time anyone navigates there it is
+    // normally already full, and roster carries its own pump as a fallback.
+    pumpBusts();
 
     const pulse = beatPulse(beat, 6);
     const down = beatPulse(beat / 4, 2.4);

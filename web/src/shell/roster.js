@@ -19,7 +19,7 @@ import {
   ensureStyle, tickExit, makeExit, startShellTransport,
 } from './theme.js';
 import { createBackdrop } from './backdrop.js';
-import { CHARS, charById, charMesh, charBeat, disposeChar, drawPortrait } from './chars.js';
+import { CHARS, charById, charMesh, charBeat, disposeChar, drawPortrait, pumpBusts, bustsBuilt } from './chars.js';
 import { CATALOG } from './games.js';
 import { profile, session, partyPlaylist } from './state.js';
 import { goView, rosterExitRoute } from './nav.js';
@@ -47,6 +47,7 @@ export default {
       cursor: 0, slotSel: 0, active: 0, cpuT: 0, goT: 0, exit: null,
       cards: [], slots: [], reduce: reducedMotion(),
       preview: null, previewId: null, previewSpin: 0,
+      bustsSeen: bustsBuilt(),
     };
 
     // party defaults: one human, two normal CPUs, fourth slot off
@@ -164,6 +165,21 @@ export default {
     S.t += dt;
     S.back.update(dt, beat, S.t);
     S.wipe.update(dt);
+    // Fallback pump: title normally finishes warming the portrait cache
+    // before a player ever reaches here, but a fast navigation (or a harness
+    // boot straight into roster) can arrive before it's done. Whichever
+    // cards/faces drew the cheap placeholder get upgraded once their bust
+    // lands — a couple of `drawImage` calls, not another 3D render.
+    pumpBusts();
+    const bustsNow = bustsBuilt();
+    if (bustsNow !== S.bustsSeen) {
+      S.bustsSeen = bustsNow;
+      for (const c of S.cards) drawPortrait(c.cv, c.def, { size: 104 });
+      for (let i = 0; i < 4; i++) {
+        const id = S.picks[i];
+        if (id) drawPortrait(S.slots[i].face, charById(id), { size: 62 });
+      }
+    }
     const pulse = beatPulse(beat, 6);
     const amp = S.reduce ? 0.4 : 1;
 
