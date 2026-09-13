@@ -250,7 +250,7 @@ export default {
     // ------------------------------------------------------------ transport
     // Beat listeners live on the clock, which OUTLIVES the scene — unsubscribe
     // in dispose() or this fires forever inside the next minigame.
-    s.unsubBeat = clock.onBeat((b, t) => {
+    s.unsubBeat = ctx.onBeat((b, t) => {
       if (b >= 0) return;
       ctx.audio.sfx('count', t, ((b % 4) + 4) % 4);
       if (b >= -4) ctx.ui.banner(String(-b), { life: 0.52, color: '#ffe9a8' });

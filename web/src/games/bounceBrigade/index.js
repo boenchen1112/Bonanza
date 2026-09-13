@@ -85,6 +85,7 @@ let ctxRef = null;
 let root = null;
 let env = null;
 let rng = null;
+let unsubBeat = null;
 
 let chart = null;
 let plats = null;
@@ -669,7 +670,7 @@ export default {
     // groove before the first scored platform.
     ctx.audio.music.play('bounce-brigade', { atBeat: -LEAD_IN_BARS * 4 });
 
-    ctx.clock.onBeat((b, t) => {
+    unsubBeat = ctx.onBeat((b, t) => {
       if (b < 0) ctx.audio.sfx('count', t, ((b % 4) + 4) % 4);
     });
 
@@ -854,6 +855,7 @@ export default {
   },
 
   dispose(ctx) {
+    unsubBeat?.(); unsubBeat = null;
     try { trail?.release(); } catch { /* ignore */ }
     trail = null;
 

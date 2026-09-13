@@ -121,6 +121,9 @@ export default {
   ui,         // ui/index.js facade: hud, popup(), banner(), countdown()
   fx,         // render/fx/index.js: burst(), ring(), confetti(), trail()
   bus,        // Bus for cross-module events
+  onBeat,     // (fn) => unsubscribe. Use this, never clock.onBeat: the clock
+              // outlives the scene, and registrations made here are released
+              // on the next scene swap even if dispose() never ran.
   rng,        // seeded rng
   players,    // [{id, name, char, palette, build, isCpu, cpuSkill, dress(char)}]
   size,       // {w, h, dpr} — updated on resize

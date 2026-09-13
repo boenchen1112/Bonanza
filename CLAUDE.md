@@ -157,16 +157,6 @@ Phase A closed that gap).
 
 ### v1 scope
 
-- Time signature: 2/4 only. Beat 1 (downbeat/ictus) is scored; beat 2 is not.
-- Input: right Joy-Con only, Bluetooth, raw combined gyro magnitude
-  (no per-axis/dominant-axis calibration in v1).
-- Tempo source: self-generated metronome click (fixed BPM), not real audio.
-- Ictus detection: not the gyro peak, but the sharp deceleration right after
-  it (direction-change event).
-- Calibration: automatic on run, offered via Settings after a round (not
-  forced every session); offset persists to `calibration.json`.
-- 3 misses = out.
-
 Full spec, phase-by-phase build plan, algorithms, thresholds, and deferred
 scope: see `Swinger_Build_Plan_v1.md` in this folder (Phases 0–4, plus
 Section 6 — explicitly deferred items). Later `Swinger_Build_Plan_v2.md`
@@ -185,50 +175,25 @@ python -m pytest tests/test_ictus_detector_smoke.py   # single test file
 Unity: open `UnitySwinger/` in the Unity Editor; `Assets/Scripts/Logic/` is
 plain C# (no UnityEngine dependency) and is the canonical port target.
 
-### Definition of "v0 prototype-ready"
-
-A person with a paired right Joy-Con runs one command, hears a metronome,
-swings once per measure, and sees: a timing judgment (Perfect/Great/Good/
-Miss), a sharpness tier (Bunt/Line Drive/Home Run), an out count, and an
-end-of-round summary of timing offsets and sharpness — with calibration
-available from Settings after the round. Sections 1–5 of the build plan must
-be functional, not stubbed.
-
 ---
 
 ## Folder structure
 
-- `.claude/` — Claude Code project config
-- `web/` — Beat Bash Bonanza (Three.js); see that section above
-- `src/` — Swinger capture/tuning tooling only, not a maintained product
-  (see "Platform roadmap" above): `joycon_stream.py`,
-  `joycon_udp_bridge.py`, `metronome.py`, `beat_schedule.py`,
-  `ictus_detector.py`, `calibration.py`, `scoring.py`, `session_log.py`,
-  plus the retired `game.py`/`settings_menu.py` pygame prototype
+Only the parts a directory listing will not tell you:
+
 - `archive/` (under `src/`) — stale/contaminated captures kept for
   provenance, not for re-deriving anything from
-- `tests/` — frozen Python validation suite backing the Swinger logic
-  modules above
-- `tools/` — `tools/harness/` is the Beat Bash Bonanza critic harness
-  (`inspect.mjs`, `serve.mjs`); `tools/generate_golden_traces.py` and
-  `tools/golden/` feed the Unity port's golden-trace parity tests
-- `UnitySwinger/` — the Unity project; `Assets/Scripts/Logic/` is the
-  canonical, UnityEngine-free ported Swinger logic (keep in sync with
-  `src/`'s logic modules); `Assets/Scripts/Presentation/` and
-  `Assets/Scripts/Input/` are Unity-specific (rendering, UDP receive,
-  calibration flow)
-- `research/` — hand-tracking and gesture-trace exploration (`research/
-  hand_tracking_web/`, `extract_pattern_from_video.py`,
-  `live_trace_view.py`, etc.), separate from both products' shipped code
+- `research/` — hand-tracking and gesture-trace exploration, separate from
+  both products’ shipped code
+- `tools/golden/` + `tools/generate_golden_traces.py` — golden traces
+  backing the Unity port’s parity tests
 - `docs/agents/` — agent-facing process docs: `issue-tracker.md` (GitHub
-  issues in `boenchen1112/Swinger`), `domain.md` (Swinger's `CONTEXT.md` +
+  issues in `boenchen1112/Swinger`), `domain.md` (`CONTEXT.md` +
   `docs/adr/`), `build-brief.md`/`critic-brief.md` (Beat Bash Bonanza
   builder/critic workflow)
 - `docs/design/minigames.md` — Beat Bash Bonanza minigame design docs
 - `docs/HANDOFF.md` — Beat Bash Bonanza current status and next actions
-- `reviews/` — playtest notes, design reviews
-- `progress/` — Beat Bash Bonanza live progress page (`index.html`,
-  `state.json`)
+- `progress/` — Beat Bash Bonanza live progress page
 
 ## Agent skills
 

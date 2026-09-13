@@ -311,7 +311,7 @@ export default {
     S.callEvents.sort((a, b) => a.beat - b.beat);
 
     // --- beat-locked countdown --------------------------------------------
-    S.unsubBeat = ctx.clock.onBeat((b, t) => {
+    S.unsubBeat = ctx.onBeat((b, t) => {
       if (b >= 0) return;
       if (b >= -LEAD_BEATS && b < -4) {
         ctx.audio.sfx('count', t + lat(), ((b % 4) + 4) % 4);

@@ -299,7 +299,7 @@ export default {
     // last game of the series: the shape of the gesture, on screen.
     S.trail = ctx.fx.trail({ color: 0xffe9a8, width: 0.10 });
 
-    S.unsubBeat = clock.onBeat((b, t) => {
+    S.unsubBeat = ctx.onBeat((b, t) => {
       if (b < 0) {
         // Beat-locked count-in: the number appears ON the beat, not on a frame.
         ctx.audio.sfx('count', t, ((b % 4) + 4) % 4);

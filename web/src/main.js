@@ -152,6 +152,16 @@ const ctxBase = {
 
 // --------------------------------------------------------------- scene swap
 
+/** Drop every beat listener the outgoing scene registered through `ctx.onBeat`. */
+function releaseSceneSubs() {
+  const subs = currentCtx?.subs;
+  if (!subs) return;
+  for (const off of subs) {
+    try { off?.(); } catch (e) { console.error('release subscription', e); }
+  }
+  subs.length = 0;
+}
+
 async function activate(id, opts = {}) {
   if (current) {
     try { current.dispose?.(currentCtx); } catch (e) { console.error('dispose', e); }
@@ -166,6 +176,10 @@ async function activate(id, opts = {}) {
     clock.clearSchedule();
   }
 
+  // Always, even when the scene never started: load() can subscribe and then
+  // throw, and `current` is still null on that path.
+  releaseSceneSubs();
+
   const mod = await getScene(id);
   if (!mod) { console.error('unknown scene', id); return; }
 
@@ -173,9 +187,22 @@ async function activate(id, opts = {}) {
   const camera = new THREE.PerspectiveCamera(50, stage.size.w / stage.size.h, 0.1, 200);
   camera.position.set(0, 2.2, 8);
 
+  // Subscriptions taken out through `ctx.onBeat` are recorded here and
+  // released on the next scene swap. The clock outlives every scene, so a
+  // discarded unsubscribe keeps firing inside whatever loads next — it cost
+  // us a stacking kick voice on the title screen and count SFX bleeding into
+  // the following minigame before this ledger existed.
+  const sceneSubs = [];
+
   currentCtx = Object.assign(Object.create(ctxBase), {
     scene, camera, opts,
     rng: makeRng(opts.seed ?? 0x5eed),
+    subs: sceneSubs,
+    onBeat(fn) {
+      const off = clock.onBeat(fn);
+      sceneSubs.push(off);
+      return off;
+    },
   });
 
   stage.attach(scene, camera);

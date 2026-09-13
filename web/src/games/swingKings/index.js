@@ -233,7 +233,7 @@ export default {
     // 4-3-2 count and "PLAY BALL!" on the last beat — short, and up top, so
     // it is gone before the first scored pitch reaches the plate at beat 0.
     // (It used to be a centre banner AT beat 0, printed over the first hit.)
-    this._offBeat = clock.onBeat((b, t) => {
+    this._offBeat = ctx.onBeat((b, t) => {
       if (b < 0) {
         ctx.audio.sfx('count', t, ((b % 4) + 4) % 4);
         const n = -b;

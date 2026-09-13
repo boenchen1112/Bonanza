@@ -174,7 +174,7 @@ export default {
   start(ctx) {
     ctx.clock.setBpm(124);
     ctx.clock.start(ctx.clock.now() + 0.12, 0);
-    ctx.clock.onBeat((b, t) => {
+    ctx.onBeat((b, t) => {
       if (!S) return;
       // A four-on-the-floor pulse under the menu: the title screen should be
       // teaching you the tempo before you have chosen anything.
