@@ -691,7 +691,8 @@ function finishRound(ctx, S) {
   });
   ctx.audio.sfx('fanfare', ctx.clock.rawNow() + 0.02);
   ctx.stage.punchZoom(1.14);
-  ctx.env?.crowd?.cheer?.(1.6);
+  // (`ctx.env` does not exist — optional chaining swallowed the mistake and
+  // the working line was always the next one down.)
   S.env.crowd?.cheer?.(1.6);
   ctx.fx.confetti([S.you.x, 2.2, LANE_Z[0]], { count: 120, up: 1.2 });
   S.you.anim.setState(place === 1 ? 'celebrate' : 'taunt', { variant: 'perfect', force: true });

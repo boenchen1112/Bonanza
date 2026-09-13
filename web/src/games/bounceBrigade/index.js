@@ -50,6 +50,7 @@ import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeom
 
 import { NoteJudge, rankFor, SCORE } from '../../core/judge.js';
 import { roundResult } from '../../core/result.js';
+import { countIn } from '../../core/round.js';
 import { FEEL, feelForCombo } from '../../core/feel.js';
 import {
   damp, clamp, clamp01, lerp, smoothstep, smootherstep,
@@ -641,8 +642,17 @@ export default {
     // groove before the first scored platform.
     ctx.audio.music.play('bounce-brigade', { atBeat: -LEAD_IN_BARS * 4 });
 
-    unsubBeat = ctx.onBeat((b, t) => {
-      if (b < 0) ctx.audio.sfx('count', t, ((b % 4) + 4) % 4);
+    // Beat-locked, at last: the numbers used to be printed from update() off
+    // `Math.floor(beat)`, so each one landed on a frame rather than on its
+    // beat — the only count-in in the product that was not on the grid.
+    unsubBeat = countIn(ctx, {
+      beats: LEAD_IN_BARS * 4,
+      from: 3,
+      go: 'GO!',
+      goOnDownbeat: true,
+      show: (text, n) => (n === 0
+        ? ctx.ui.banner(text, { life: 0.75, color: '#9ee87a' })
+        : ctx.ui.banner(text, { life: 0.5, color: '#bdfff2' })),
     });
 
     ctx.ui.banner('BOUNCE BRIGADE', { sub: 'The platforms are the tune.', life: 1.5 });
@@ -656,15 +666,12 @@ export default {
     const m = motionAt(beat);
     const p = plats[m.k];
 
-    // ---- countdown + section banners ---------------------------------------
+    // ---- section banners ----------------------------------------------------
+    // (the count-in moved to core/round.js `countIn`, which is beat-locked)
     const wholeBeat = Math.floor(beat);
     if (wholeBeat !== lastUiBeat) {
       lastUiBeat = wholeBeat;
-      if (wholeBeat >= -3 && wholeBeat <= -1) {
-        ctx.ui.banner(String(-wholeBeat), { life: 0.5, color: '#bdfff2' });
-      } else if (wholeBeat === 0) {
-        ctx.ui.banner('GO!', { life: 0.75, color: '#9ee87a' });
-      } else if (wholeBeat === 96) {
+      if (wholeBeat === 96) {
         ctx.ui.banner('SPRINT!', { sub: 'eighths — do not stop', life: 1.0, color: '#ffd93d' });
       }
     }

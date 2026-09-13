@@ -44,6 +44,7 @@
 import * as THREE from 'three';
 import { NoteJudge, rankFor, SCORE } from '../../core/judge.js';
 import { roundResult } from '../../core/result.js';
+import { countIn } from '../../core/round.js';
 import { FEEL, feelForCombo, isMilestone } from '../../core/feel.js';
 import { clamp01, damp, beatPhase } from '../../core/util.js';
 import { makeCharacter, makeAnimator } from '../../chars/index.js';
@@ -300,20 +301,18 @@ export default {
     // last game of the series: the shape of the gesture, on screen.
     S.trail = ctx.fx.trail({ color: 0xffe9a8, width: 0.10 });
 
-    S.unsubBeat = ctx.onBeat((b, t) => {
-      if (b < 0) {
-        // Beat-locked count-in: the number appears ON the beat, not on a frame.
-        ctx.audio.sfx('count', t, ((b % 4) + 4) % 4);
+    S.unsubBeat = countIn(ctx, {
+      beats: LEAD_BEATS,
+      show: (text) => S.hud.flashCount(text),
+      onBeat: (b) => {
         if (b === -LEAD_BEATS) {
           ctx.ui.banner('FINALE FEVER', { sub: 'It only gets faster.', life: 1.5 });
-        } else if (-b <= 4) {
-          S.hud.flashCount(String(-b));
         }
-      }
-      if (b >= 0 && ((b % BEATS_PER_BAR) + BEATS_PER_BAR) % BEATS_PER_BAR === 0) {
-        // The room agrees with the beat harder as the tempo climbs.
-        ctx.stage.pulse(1.1 + S.heat * 0.55);
-      }
+        if (b >= 0 && ((b % BEATS_PER_BAR) + BEATS_PER_BAR) % BEATS_PER_BAR === 0) {
+          // The room agrees with the beat harder as the tempo climbs.
+          ctx.stage.pulse(1.1 + S.heat * 0.55);
+        }
+      },
     });
 
     S.playerAnim.setState('idle');

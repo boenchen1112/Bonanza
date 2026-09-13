@@ -139,7 +139,34 @@ export default {
   rng,        // seeded rng
   players,    // [{id, name, char, palette, build, isCpu, cpuSkill, dress(char)}]
   size,       // {w, h, dpr} — updated on resize
+  opts,       // the activation options — {seed, game, from, ...}
+  hitstop(s), // freeze gameplay time (NOT the clock) for s seconds
+  go(id, o),  // route to another scene. Inside the `play` host, go('results',
+              // result) means "this round is over", not "show that screen".
 }
+```
+
+The list above is the whole context. It is written out in full because it
+was not: `hitstop`, `opts`, `go` and `onBeat` were used by every minigame
+while being documented nowhere, so a new game's author read a 13-key
+contract and then had to read four existing games to find the rest. The tell
+was `drumlineDash` calling `ctx.env?.crowd?.cheer?.()` — a member that has
+never existed, with optional chaining swallowing the mistake.
+
+Facades reached through the context carry their own surfaces; the ones the
+minigames actually use, beyond what `GameContext` names:
+
+```
+ctx.ui.el(cls, text)        build a DOM node in the UI layer
+ctx.ui.layer                the overlay element, for a game's private HUD
+ctx.ui.countdown(text)      the count-in presenter (core/round.js drives it)
+ctx.stage.createEnv(scene)  an environment disposed with the scene
+ctx.stage.pulse(k)          beat agreement; punchZoom(k) for a one-off
+ctx.stage.beatPulse         0..1, the current beat's envelope
+ctx.stage.rig.{frame,snap,release,setPushGain}
+ctx.stage.look.{materials,setShadowFocus}
+ctx.audio.sfxBus            the SFX bus node, for a game's own voices
+ctx.audio.ctx               the raw AudioContext — prefer clock.rawNow()
 ```
 
 `players` is the session lineup, filled by the shell's `play` host

@@ -39,6 +39,7 @@
 import * as THREE from 'three';
 import { NoteJudge, rankFor, SCORE } from '../../core/judge.js';
 import { roundResult } from '../../core/result.js';
+import { countIn } from '../../core/round.js';
 import { FEEL, feelForCombo } from '../../core/feel.js';
 import { clamp, clamp01, damp, beatPhase } from '../../core/util.js';
 import { makeCast, paletteById } from '../../chars/index.js';
@@ -251,10 +252,9 @@ export default {
     // ------------------------------------------------------------ transport
     // Beat listeners live on the clock, which OUTLIVES the scene — unsubscribe
     // in dispose() or this fires forever inside the next minigame.
-    s.unsubBeat = ctx.onBeat((b, t) => {
-      if (b >= 0) return;
-      ctx.audio.sfx('count', t, ((b % 4) + 4) % 4);
-      if (b >= -4) ctx.ui.banner(String(-b), { life: 0.52, color: '#ffe9a8' });
+    s.unsubBeat = countIn(ctx, {
+      beats: LEAD_BEATS,
+      show: (text) => ctx.ui.banner(text, { life: 0.52, color: '#ffe9a8' }),
     });
 
     ctx.audio.music.play('chomp-chorus');

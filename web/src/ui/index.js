@@ -182,5 +182,15 @@ export function createUI({ root, bus, clock }) {
     unmount() { this._root?.remove(); this._root = null; },
   };
 
-  return { layer, popup, banner, clear, update, hud, el };
+  /**
+   * The count-in number, centred and large. This is the presenter half of
+   * the count-in only — `core/round.js` `countIn()` owns the driving (beat
+   * subscription, tick SFX, which number this beat is), because that is what
+   * five games were each re-implementing.
+   */
+  function countdown(text, opts = {}) {
+    return banner(String(text), { life: 0.5, color: '#ffe9a8', ...opts });
+  }
+
+  return { layer, popup, banner, countdown, clear, update, hud, el };
 }

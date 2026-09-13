@@ -47,6 +47,7 @@
 import * as THREE from 'three';
 import { NoteJudge, rankFor, WINDOWS_MS } from '../../core/judge.js';
 import { roundResult } from '../../core/result.js';
+import { countIn } from '../../core/round.js';
 import { FEEL, feelForCombo } from '../../core/feel.js';
 import { clamp01, damp, lerp, smoothstep } from '../../core/util.js';
 import { createWorld, LAYOUT } from './world.js';
@@ -234,13 +235,12 @@ export default {
     // 4-3-2 count and "PLAY BALL!" on the last beat — short, and up top, so
     // it is gone before the first scored pitch reaches the plate at beat 0.
     // (It used to be a centre banner AT beat 0, printed over the first hit.)
-    this._offBeat = ctx.onBeat((b, t) => {
-      if (b < 0) {
-        ctx.audio.sfx('count', t, ((b % 4) + 4) % 4);
-        const n = -b;
-        if (n <= 4 && n >= 2) ctx.ui.popup(String(n - 1), { y: 0.26, scale: 1.4, color: '#ffe58a', life: 0.42 });
-        if (n === 1) ctx.ui.popup('PLAY BALL!', { y: 0.26, scale: 1.2, color: '#ffe58a', life: 0.44 });
-      }
+    this._offBeat = countIn(ctx, {
+      beats: LEAD_IN_BEATS,
+      go: 'PLAY BALL!',
+      show: (text, n) => ctx.ui.popup(text, {
+        y: 0.26, scale: n === 1 ? 1.2 : 1.4, color: '#ffe58a', life: n === 1 ? 0.44 : 0.42,
+      }),
     });
 
     ctx.audio.music.play('swing-kings');
