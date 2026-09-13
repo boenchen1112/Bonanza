@@ -154,9 +154,31 @@ locked to the transport across every `setBpm`.
 ## 5. Traps already paid for — do not re-introduce
 
 - **`x % 1` for beat phase.** JS modulo keeps the dividend's sign and the
-  transport runs *negative* beats through the lead-in. Use
-  `x - Math.floor(x)`. This bug crashed every free-play preview and had
-  already been guarded against in `clock.test.mjs` for `Beats.barFrac`.
+  transport runs *negative* beats through the lead-in. Use `beatPhase(x)`
+  from `core/util.js` — it is one function now, after being re-derived in a
+  dozen files. This bug crashed every free-play preview.
+- **`clock.onBeat` from a scene.** The clock outlives every scene, so a
+  discarded unsubscribe keeps firing inside whatever loads next. Use
+  `ctx.onBeat`, which main.js releases on the swap. Two call sites had
+  already leaked: the title screen stacked a kick voice per visit and Bounce
+  Brigade's count SFX played inside the following minigame.
+- **`stage.attach()` without the scene id.** Palette inference keys on it; a
+  scene attached without one is graded in the *previous* scene's palette for
+  its first frames and then cross-fades out of it.
+- **`clock.stop()` to pause.** It drops the one-shot schedule. `suspend()`
+  keeps it and returns the beat to resume from.
+- **Returning a raw object from `result()`.** Go through `roundResult()` in
+  `core/result.js`: it is the only thing enforcing that `accuracy` is hit
+  quality 0..1 and that a `field` is a real race order.
+- **A new minigame without `testChart()`.** Without it the critic bot presses
+  'a' on eighths, which in a four-lane game misses every lane and proves
+  nothing. Measured on Chomp Chorus: 16/16 MISS before, 13/13 PERFECT after.
+- **Mutating shared fx/stage state in `load()` and unwinding it in
+  `dispose()`.** Don't — `fx.reset()` and `stage.detach()` restore their own
+  defaults on every swap. Half the mutations used to be one-way, so whatever
+  the last minigame left behind was what the next one inherited.
+- **A blanket `catch {}` around a harness read.** `sweep.mjs` reported
+  "HARNESS FAILURE" on all thirteen scenes for a missing import in itself.
 - **Zeroing `dt` for hitstop.** Subtract only the frozen portion, or a 78ms
   hitstop eats a whole frame on a slow device.
 - **`renderer.info` resetting per render() call.** The post chain calls
