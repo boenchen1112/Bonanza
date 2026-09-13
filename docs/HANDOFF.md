@@ -209,9 +209,35 @@ locked to the transport across every `setBpm`.
 - **Compiling on the first frame.** On ANGLE/D3D11 a fresh scene's shader
   compiles blocked the first frame ~1.2s (Swing Kings) with the count-in
   already running. `activate()` now awaits `stage.warm()` (default set,
-  dress pass, `compileAsync`) before `start()`; the stall is still there,
-  but it sits under the `play` host's title card instead of inside the
-  game's clock. `tools/harness/lineup-probe.mjs` measures both halves.
+  dress pass, `compileAsync`) before `start()`, so the stall sits under the
+  `play` host's title card instead of inside the game's clock — but the
+  stall itself was still one blocking JS call: `renderer.compile()` (which
+  `compileAsync` calls first) is a plain synchronous pass, confirmed
+  against three's own source, and texture upload is exactly as synchronous
+  when it happens lazily. `warm()` now compiles per unique material (a rig
+  is ~20 segment meshes sharing far fewer real shaders) in small batches
+  via a fake root that forwards `traverse`/`traverseVisible` without
+  reparenting anything, yielding a real animation frame once real time has
+  elapsed, and pre-uploads textures the same way via `renderer.initTexture`
+  (which `compileAsync` never touched). Measured on title/roster/party:
+  compile+upload time roughly halved to a third (2274ms → 866ms on title).
+  **Swing Kings still shows one ~800-900ms frame regardless of batch
+  size** — isolated by per-batch timing to ONE shader whose link time is
+  that expensive on this GPU/driver; splitting it further needs
+  shader-level work (simplify or precompile that specific material), not a
+  scheduling change. `tools/harness/lineup-probe.mjs` measures both
+  halves; `tools/harness/freeze-probe.mjs` / `freeze-auto-probe.mjs` add a
+  CPU-profile + frame-timing breakdown for real in-page navigation and for
+  the harness's own `--play auto` path.
+- **Building N throwaway 3D renders synchronously.** `shell/chars.js`'s
+  portrait cache used to build all character busts (mesh + 20 animator
+  ticks + a WebGL render + a GPU readback, per character) in one tight
+  loop on first use — the single worst frame anywhere in the shell
+  (1216ms cold-boot on roster). `pumpBusts(budgetMs)` now builds a few ms
+  per call; `title.js` pumps it during idle frames, `roster.js` carries
+  the same pump as a fallback plus a repaint sweep for any card/slot face
+  that already drew the cheap placeholder. Cold-boot roster worst frame:
+  1216ms → 66.9ms.
 - **Calling a disposed scene during the next load.** `activate()` clears
   `current` before awaiting the next `load()`. It used not to, so the loop
   kept updating the disposed scene — harmless for most, but `play → play`
