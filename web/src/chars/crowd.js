@@ -30,27 +30,56 @@ const CROWD_COLORS = [
   0x8a95e0, 0xff9ab5, 0x9aa6bd, 0xffe08a, 0x7fe0c8,
 ];
 
+/** Tint every vertex of `geo` a flat color — merged geometries must all carry
+ * the same attributes, so the body/head/arms need a (white, i.e. no-op)
+ * `color` attribute too once the eyes below introduce one. */
+function tintGeometry(geo, r, g, b) {
+  const n = geo.attributes.position.count;
+  const arr = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) { arr[i * 3] = r; arr[i * 3 + 1] = g; arr[i * 3 + 2] = b; }
+  geo.setAttribute('color', new THREE.BufferAttribute(arr, 3));
+  return geo;
+}
+
 /**
- * One spectator: body, head and two stubby arms held out in a low V.
- * ~180 triangles. The arms are baked, not articulated — at this size the
- * silhouette does the work and articulation would cost the single draw call.
+ * One spectator: body, head, two stubby arms held out in a low V, and two
+ * eye-bumps. ~190 triangles. The arms and eyes are baked, not articulated —
+ * at this size the silhouette does the work and articulation would cost the
+ * single draw call. The eyes are dark regardless of this spectator's body
+ * color: a per-vertex `color` attribute (white everywhere except the eye
+ * bumps) multiplies with the per-instance tint in the shader, so two tiny
+ * geometric bumps read as a face instead of just two same-colored lumps —
+ * from the stands' typical viewing distance that's enough to stop reading
+ * as a blank silhouette, without a texture, a second material, or a second
+ * draw call.
  */
 function figureGeometry() {
   const parts = [];
   const body = new THREE.CapsuleGeometry(0.17, 0.30, 2, 7);
   body.translate(0, 0.30, 0);
-  parts.push(body);
+  parts.push(tintGeometry(body, 1, 1, 1));
 
   const head = new THREE.SphereGeometry(0.155, 8, 6);
   head.translate(0, 0.62, 0);
-  parts.push(head);
+  parts.push(tintGeometry(head, 1, 1, 1));
 
   for (const sx of [-1, 1]) {
     const arm = new THREE.CapsuleGeometry(0.055, 0.26, 2, 5);
     arm.rotateZ(sx * 0.72);
     arm.translate(sx * 0.20, 0.42, 0);
-    parts.push(arm);
+    parts.push(tintGeometry(arm, 1, 1, 1));
   }
+
+  // Eyes: local +Z is "forward" (facing=0 leaves the per-instance rotation
+  // near-identity, matching this codebase's "character faces +Z" convention
+  // — see chars/rig.js), just above head centre, either side of the seam.
+  for (const sx of [-1, 1]) {
+    const eye = new THREE.SphereGeometry(0.026, 6, 5);
+    eye.scale(1, 1, 0.6);
+    eye.translate(sx * 0.052, 0.655, 0.148);
+    parts.push(tintGeometry(eye, 0.12, 0.12, 0.15));
+  }
+
   return mergeGeometries(parts, false) || body;
 }
 
@@ -75,7 +104,7 @@ export function makeCrowd({
   for (let r = 0; r < rows; r++) n += perRow + r * 3;
 
   const geo = figureGeometry();
-  const mat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+  const mat = new THREE.MeshLambertMaterial({ color: 0xffffff, vertexColors: true });
   const mesh = new THREE.InstancedMesh(geo, mat, n);
   mesh.name = 'crowd';
   mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
