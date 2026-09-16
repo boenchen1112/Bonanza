@@ -925,6 +925,9 @@ export default {
     if (night !== this.nightOn) {
       this.nightOn = night;
       ctx.stage.setPalette(night ? 'swing-kings-night' : 'swing-kings', night ? 2.4 : 0.8);
+      // The grade alone reads as a filter, not a time change - the light
+      // towers actually switching on/off is what sells "later in the set".
+      w.setNight?.(night);
     }
 
     // The grand-slam windup: the ball goes up for eight beats, and the camera

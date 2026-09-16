@@ -101,6 +101,20 @@ export function createWorld(ctx) {
   wall.position.set(0, 0.28, -3);
   root.add(wall);
 
+  // --- roof ring: a slim truss arc above the stands, closing the bowl into
+  // a stadium rather than a bleacher. Same arc/orientation as the stands so
+  // it reads as one structure, not a floating hoop.
+  const roofMat = new THREE.MeshStandardMaterial({ color: 0x1c2436, roughness: 0.55, metalness: 0.35 });
+  const roofRadius = 18.6;
+  const roof = new THREE.Mesh(
+    new THREE.TorusGeometry(roofRadius, 0.22, 8, 64, ARC),
+    roofMat
+  );
+  roof.rotation.x = Math.PI / 2;
+  roof.rotation.y = Math.PI / 2 - (Math.PI - ARC / 2);
+  roof.position.set(0, 7.4, -3);
+  root.add(roof);
+
   // --- crowd: 350-odd spectators, one draw call, and it reacts -------------
   const crowd = makeCrowd({
     rows: 6, perRow: 30, radius: 11.6, rowDepth: 1.2, rowRise: 0.634,
@@ -108,6 +122,43 @@ export function createWorld(ctx) {
   });
   crowd.mesh.userData.keepMaterial = true;
   root.add(crowd.mesh);
+
+  // --- light towers: frame the open (machine-side) edge the stands' arc
+  // doesn't cover, and double as the night switch's visible tell — dark
+  // steel by day, lit banks once ctx.stage.setPalette flips to
+  // 'swing-kings-night' (see setNight below; index.js calls it alongside
+  // that palette swap so the two always change together).
+  const towerMat = new THREE.MeshStandardMaterial({ color: 0x262d3f, roughness: 0.6, metalness: 0.4 });
+  const bankMat = new THREE.MeshStandardMaterial({
+    color: 0x33302a, roughness: 0.4, metalness: 0.1, emissive: 0x000000, emissiveIntensity: 0,
+  });
+  const towerGeos = [];
+  const bankGeos = [];
+  const towerPositions = [[-13, 0, 3.5], [-13, 0, -9.5]];
+  for (const [tx, , tz] of towerPositions) {
+    const shaft = new THREE.CylinderGeometry(0.18, 0.32, 8.6, 8);
+    shaft.translate(tx, 4.3, tz);
+    towerGeos.push(shaft);
+    const bank = new THREE.BoxGeometry(1.7, 1.0, 0.28);
+    bank.translate(tx, 8.5, tz);
+    bankGeos.push(bank);
+  }
+  const towers = new THREE.Mesh(mergeGeometries(towerGeos), towerMat);
+  towers.name = 'swing:lightTowerShafts';
+  root.add(towers);
+  const lightBanks = new THREE.Mesh(mergeGeometries(bankGeos), bankMat);
+  lightBanks.name = 'swing:lightTowerBanks';
+  root.add(lightBanks);
+
+  /** Toggle the light-tower banks between an unlit day silhouette and a lit
+   * night glow. Geometry/position never changes — only whether the banks
+   * are dark steel or a bright emissive panel — which is the cheap, always-
+   * correct way to make "night" change the *set*, not just the grade. */
+  function setNight(on) {
+    bankMat.color.set(on ? 0xfff3d0 : 0x33302a);
+    bankMat.emissive.set(on ? 0xfff3d0 : 0x000000);
+    bankMat.emissiveIntensity = on ? 2.6 : 0;
+  }
 
   // ---------------------------------------------------------------- infield
   // Enough of a diamond to read as baseball from a fixed side camera: the
@@ -699,7 +750,7 @@ export function createWorld(ctx) {
     balls, acquireBall, freeBall,
     armMachine, fireMachine,
     setPips, popPip, clearPips,
-    setOuts, callout, update, dispose, outsAnchor, dropBat, holdBat,
+    setOuts, callout, update, dispose, outsAnchor, dropBat, holdBat, setNight,
     /** World position of the bat's sweet spot, as posed right now. */
     batSweetSpot(out) {
       batGroup.updateWorldMatrix(true, false);   // poses were set this frame, matrices not yet
