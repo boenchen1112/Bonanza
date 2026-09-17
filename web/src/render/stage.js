@@ -358,9 +358,22 @@ export function createStage({ canvas, clock }) {
     // real objects, without reparenting any of them, lets one call cover
     // several materials, paying that tax once per batch instead of once
     // per material.
+    // `traverseVisible` deliberately does NOT skip invisible owners here,
+    // unlike three's own method of that name: `materialOwner` above was
+    // already built from a full, visibility-blind `scene.traverse()`, so
+    // an owner reaching this point already earned its spot. The pooled fx
+    // particle systems (render/fx) sit at `visible=false` as their normal
+    // resting state until something actually fires - skipping them here
+    // (an earlier version of this did, matching what compileAsync's OWN
+    // traverseVisible-based scan would do on a real scene) meant every
+    // game's first-ever flare/ring/burst compiled its shader synchronously
+    // on the frame it first fired, mid-gameplay: a 147-268ms stall miles
+    // from any loading screen, isolated on chompChorus via
+    // freeze-auto-probe.mjs's CPU profile (`getProgramInfoLog` sitting
+    // right at the first judged note).
     const batchOf = (objs) => ({
       traverse: (cb) => { for (const o of objs) o.traverse(cb); },
-      traverseVisible: (cb) => { for (const o of objs) if (o.visible) o.traverseVisible(cb); },
+      traverseVisible: (cb) => { for (const o of objs) o.traverse(cb); },
     });
     const owners = [...materialOwner.values()];
     const BATCH = 2;
