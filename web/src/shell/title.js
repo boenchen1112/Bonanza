@@ -15,7 +15,7 @@
  */
 
 import * as THREE from 'three';
-import { damp, clamp01, backOut } from '../core/util.js';
+import { damp, clamp01, backOut, Save } from '../core/util.js';
 import {
   PAL, num, el, mountRoot, panel, sfx, kick, createWipe, beatPulse, fmtScore, reducedMotion,
   startShellTransport,
@@ -24,7 +24,7 @@ import { createBackdrop } from './backdrop.js';
 import { CHARS, charMesh, charBeat, disposeChar, pumpBusts } from './chars.js';
 import { CATALOG, drawPreview } from './games.js';
 import { preloadCards } from './cards.js';
-import { profile } from './state.js';
+import { profile, PERF_HINT_KEY } from './state.js';
 import { goView, titleMenuRoute } from './nav.js';
 
 const LOGO_TOP = 'BEAT BASH';
@@ -35,7 +35,7 @@ const ATTRACT_HOLD = 3.2;
 const MENU = [
   { id: 'party', label: 'PARTY', sub: 'you vs CPU rivals · 4 games · one crown', color: PAL.yellow },
   { id: 'free', label: 'FREE PLAY', sub: 'any minigame · chase your best rank', color: PAL.cyan },
-  { id: 'options', label: 'OPTIONS', sub: 'mix · timing · reset', color: PAL.green },
+  { id: 'options', label: 'OPTIONS', sub: 'mix · timing · graphics · reset', color: PAL.green },
 ];
 
 /** @type {any} */
@@ -136,6 +136,24 @@ export default {
       startPrompt.style.display = 'none';
     } else {
       ctx.bus?.once('audio:unlocked', () => { S?.startPrompt && (S.startPrompt.style.display = 'none'); });
+    }
+
+    // One-time machine-side hint: Graphics Auto reached its lowest level and
+    // the game still couldn't hold 60fps, so the remaining fixes are outside
+    // the game. Shown once, gone on the next key press.
+    if (Save.get(PERF_HINT_KEY, null) === 'pending') {
+      Save.set(PERF_HINT_KEY, 'shown');
+      const tip = el('div', 'sh-title__perf');
+      tip.style.cssText = 'position:absolute;left:50%;top:3%;transform:translateX(-50%);z-index:7;'
+        + 'max-width:min(92vw,640px);padding:12px 16px;border-radius:12px;'
+        + 'background:rgba(11,10,26,.88);border:1px solid rgba(255,217,61,.55);color:#eef0ff;'
+        + 'font:500 clamp(12px,1.35vw,15px)/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;';
+      tip.innerHTML = '<b style="color:#ffd93d">Running slow on this machine.</b> '
+        + 'Graphics are already at their lowest. Try: Windows power mode <b>Best performance</b>, '
+        + 'play plugged in, update your graphics driver, and set your browser to '
+        + '<b>High performance</b> in Windows Graphics settings. <span style="opacity:.7">(any key to close)</span>';
+      root.appendChild(tip);
+      S.perfTip = tip;
     }
 
     // top-right career line — tiny, but it says "this game remembers you"
@@ -320,6 +338,7 @@ export default {
     for (const e of events) {
       if (!e.down) continue;
       S.idle = 0;
+      if (S.perfTip) { S.perfTip.remove(); S.perfTip = null; }
 
       if (S.mode === 'attract') {
         // Any button leaves the reel. Consume it: nobody wants to wake a demo

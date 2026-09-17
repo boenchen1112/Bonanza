@@ -21,6 +21,11 @@ const NAMES_KEY = 'names';
 const UNLOCK_KEY = 'unlocks';
 const STATS_KEY = 'stats';
 
+/** Save key: 'pending' once Graphics Auto has sat at its lowest level and
+ *  still missed the frame budget; the title screen shows the machine-side
+ *  hint once and marks it 'shown'. */
+export const PERF_HINT_KEY = 'perfHint';
+
 export const DEFAULT_OPTIONS = {
   music: 0.75,
   sfx: 0.85,

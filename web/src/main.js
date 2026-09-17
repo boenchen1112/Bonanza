@@ -25,8 +25,9 @@ import { createFX } from './render/fx/index.js';
 import { SCENES, getScene } from './shell/registry.js';
 import { resolveActivation } from './shell/nav.js';
 import { preloadBlenderBodies } from './chars/index.js';
-import { levelForSetting } from './render/quality.js';
-import { profile } from './shell/state.js';
+import { levelForSetting, ladderFor } from './render/quality.js';
+import { createGovernor } from './render/governor.js';
+import { profile, PERF_HINT_KEY } from './shell/state.js';
 
 const canvas = document.getElementById('stage');
 const uiRoot = document.getElementById('ui');
@@ -310,6 +311,7 @@ function frame(nowMs) {
   const renderEnd = performance.now();
 
   telemetry.push(nowMs, cpuEnd - workStart, renderEnd - cpuEnd);
+  governFrame(rawDt * 1000);
   perf.update(nowMs);
 
   if (pendingScene) {
@@ -420,7 +422,47 @@ bus.on('judge', (j) => telemetry.judgements.push({
 // screen suggest; an Iris Xe at 200% scaling rendered 2560x1440 on the high
 // tier at ~42fps before this existed.
 
-const graphics = { setting: 'auto', auto: true, scale: 1, tier: 'high' };
+const graphics = { setting: 'auto', auto: true, scale: 1, tier: 'high', reason: 'start', governor: null, floorStrikes: 0 };
+
+/** Auto's settled level per device (renderer + pixel ratio). A setting, not
+ *  progress: kept out of the profile's records so a progress reset keeps it. */
+const LEVELS_KEY = 'graphicsLevels';
+
+const deviceRatio = () => Math.min(window.devicePixelRatio || 1, 2);
+const deviceKey = () => `${rendererName()}|${deviceRatio()}`;
+
+function rememberedLevel() {
+  const all = Save.get(LEVELS_KEY, null);
+  return (all && all[deviceKey()]) || null;
+}
+
+function rememberLevel(level) {
+  const all = Save.get(LEVELS_KEY, null) || {};
+  all[deviceKey()] = { scale: level.scale, tier: level.tier };
+  Save.set(LEVELS_KEY, all);
+}
+
+/** What the governor needs to know about this frame. */
+function framePhase() {
+  if (!current) return 'loading';
+  const kind = SCENES.find((s) => s.id === stage.sceneId)?.kind;
+  if (stage.sceneId === 'play' || kind === 'game') return clock.running ? 'playing' : 'paused';
+  return 'between';
+}
+
+function governFrame(frameMs) {
+  const gov = graphics.governor;
+  if (!gov) return;
+  const d = gov.sample(frameMs, framePhase());
+  if (!d) return;
+  graphics.reason = d.reason;
+  if (d.atFloorOverBudget) {
+    if (++graphics.floorStrikes >= 2 && !Save.get(PERF_HINT_KEY, null)) Save.set(PERF_HINT_KEY, 'pending');
+    return;
+  }
+  applyLevel(d);
+  rememberLevel(d);
+}
 
 function rendererName() {
   try {
@@ -440,11 +482,16 @@ function applyLevel(level) {
 function applyGraphics(setting) {
   const level = levelForSetting(setting, {
     renderer: rendererName(),
-    deviceRatio: Math.min(window.devicePixelRatio || 1, 2),
+    deviceRatio: deviceRatio(),
+    remembered: rememberedLevel(),
   });
   graphics.setting = setting;
   graphics.auto = level.auto;
+  graphics.reason = level.auto ? 'start' : 'fixed setting';
   applyLevel(level);
+  const ladder = ladderFor(deviceRatio());
+  const startIndex = Math.max(0, ladder.findIndex((l) => l.scale === level.scale && l.tier === level.tier));
+  graphics.governor = level.auto ? createGovernor({ ladder, startIndex }) : null;
 }
 bus.on('graphics:setting', (s) => applyGraphics(s));
 
@@ -493,7 +540,7 @@ const perf = (() => {
         + (s.longFrames.length
           ? `long frames ${s.longFrames.length}, last ${lastLong(s.longFrames)}\n`
           : 'long frames 0\n')
-        + `render x${graphics.scale} ${graphics.tier} (${graphics.auto ? 'auto' : graphics.setting})\n`
+        + `render x${graphics.scale} ${graphics.tier} (${graphics.auto ? 'auto' : graphics.setting}: ${graphics.reason})\n`
         + `draws ${s.render.drawCalls}  tris ${s.render.triangles}\n`
         + `audio ${audioCtx.state}  latency ${s.outputLatencyMs.toFixed(0)}ms\n`
         + `stalls ${stallCount} (worst ${worstStallMs.toFixed(0)}ms)  scene ${s.scene || '-'}`;
@@ -576,7 +623,10 @@ if (TEST_API) window.__BBB__ = {
   /** Raw consecutive frame durations (ms), oldest first — for budget verdicts. */
   frameTimes: () => telemetry.frames.toArray(),
   /** What the stage is actually drawing at: buffer scale and quality tier. */
-  renderState: () => ({ renderScale: stage.size.dpr, tier: stage.quality, graphics: graphics.auto ? 'auto' : graphics.setting }),
+  renderState: () => ({
+    renderScale: stage.size.dpr, tier: stage.quality,
+    graphics: graphics.auto ? 'auto' : graphics.setting, reason: graphics.reason,
+  }),
   /** Apply a Graphics setting exactly as the Options screen does. */
   setGraphics: (setting) => applyGraphics(setting),
   resetTelemetry: () => telemetry.reset(),
@@ -602,9 +652,10 @@ if (TEST_API) window.__BBB__ = {
    * note reads as a miss. That is a measurement artifact, not a game defect —
    * dropping post restores a real frame rate so timing can actually be judged.
    */
-  setQuality: (tier) => stage.setQuality?.(tier),
+  // Manual overrides pin the level: the Auto governor stops moving it.
+  setQuality: (tier) => { graphics.governor = null; graphics.auto = false; return stage.setQuality?.(tier); },
   /** Buffer pixels per CSS pixel; null = the device's own ratio. */
-  setRenderScale: (s) => stage.setRenderScale(s),
+  setRenderScale: (s) => { graphics.governor = null; graphics.auto = false; return stage.setRenderScale(s); },
   /**
    * Play the game automatically for `seconds`. Frame-rate independent by
    * construction — see pumpBot.
@@ -673,9 +724,15 @@ if (TEST_API) window.__BBB__ = {
   // ?quality= pins a tier for testing ('auto' = the Graphics Auto policy).
   const q = new URLSearchParams(location.search).get('quality');
   if (q === 'auto') applyGraphics('auto');
-  else if (q) { stage.setQuality(q); graphics.tier = stage.quality; graphics.auto = false; graphics.setting = q; }
+  else if (q) {
+    stage.setQuality(q);
+    Object.assign(graphics, { tier: stage.quality, auto: false, setting: q, reason: '?quality', governor: null });
+  }
   const scale = new URLSearchParams(location.search).get('scale');
-  if (scale) { stage.setRenderScale(Number(scale)); graphics.scale = stage.size.dpr; graphics.auto = false; }
+  if (scale) {
+    stage.setRenderScale(Number(scale));
+    Object.assign(graphics, { scale: stage.size.dpr, auto: false, reason: '?scale', governor: null });
+  }
   await audio.init();
   const startScene = new URLSearchParams(location.search).get('scene') || 'title';
   try {
