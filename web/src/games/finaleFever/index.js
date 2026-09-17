@@ -5,7 +5,7 @@
  * conductor-boss states a phrase built out of the verbs you were taught — the
  * commit of Swing Kings, the call-and-response of Drumline Dash, the unbroken
  * groove of Bounce Brigade, the two-lane chords of Chomp Chorus — and you play
- * it back one bar later, while the transport accelerates from 150bpm to 202.5
+ * it back one bar later, while the transport accelerates from 150bpm to 187.5
  * underneath both of you without ever stepping.
  *
  * ── The three things this file gets right on purpose ───────────────────────
@@ -450,7 +450,7 @@ export default {
 
   /**
    * The answer notes, in BEATS. Times must not be precomputed here: the
-   * transport ramps from 150bpm to 202.5 under the chart, so a time derived
+   * transport ramps from 150bpm to 187.5 under the chart, so a time derived
    * at autoplay start is ~15ms out by the last bar and grows with the ramp.
    */
   testChart() {
