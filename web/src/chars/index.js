@@ -124,8 +124,14 @@ function makeMember({ charId, pal, build, charSeed, animSeed, detail, scale, nam
       /** Read-only counterpart to attach() - the bone itself, for a caller
        * that needs to measure it (calibration) rather than hang something
        * off it. No toy-rig equivalent exists (use char.joints there). */
+      // Designed bodies (build-character.py) carry real anchors on the head
+      // bone: 'face' is the centre of the face, 'headTop' the top of the head
+      // shell. Older bodies fall back to the head bone for both.
+      const ANCHORS = { face: 'face_anchor', headTop: 'head_top' };
       scene.getJoint = (jointName) => {
-        const boneName = BONE_MAP[jointName];
+        const anchor = ANCHORS[jointName] && scene.getObjectByName(ANCHORS[jointName]);
+        if (anchor) return anchor;
+        const boneName = jointName === 'headTop' ? BONE_MAP.head : BONE_MAP[jointName];
         return boneName ? scene.getObjectByName(boneName) : (boneName === '' ? scene : null);
       };
       scene.attach = (jointName, obj) => {

@@ -16,6 +16,8 @@ export const CONTRACT = {
   clips: ['celebrate', 'dance', 'fail', 'idle', 'pitch', 'ready', 'swing', 'taunt'],
   maxTriangles: 20000,
   headBone: 'mixamorigHead',
+  /** Empties the game attaches to (getJoint('face'/'headTop')), under the head bone. */
+  headAnchors: ['face_anchor', 'head_top'],
 };
 
 /** Split a GLB buffer into its JSON document and binary chunk. */
@@ -108,6 +110,13 @@ export function checkCastGlb(buf, contract = CONTRACT) {
   const mesh = skinnedMeshes[0];
   const targets = mesh?.extras?.targetNames || [];
   for (const t of contract.morphTargets) if (!targets.includes(t)) problems.push(`missing morph target '${t}'`);
+
+  const headNode = (json.nodes || []).find((n) => n.name === contract.headBone);
+  for (const a of contract.headAnchors) {
+    const i = (json.nodes || []).findIndex((n) => n.name === a);
+    if (i < 0) problems.push(`missing anchor '${a}'`);
+    else if (!headNode || !(headNode.children || []).includes(i)) problems.push(`anchor '${a}' is not parented to ${contract.headBone}`);
+  }
 
   const clips = (json.animations || []).map((a) => a.name.replace(/_rig$/, ''));
   for (const c of contract.clips) if (!clips.includes(c)) problems.push(`missing clip '${c}'`);

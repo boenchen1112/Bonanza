@@ -38,6 +38,25 @@ import { clamp01, damp, smootherstep } from '../core/util.js';
 
 const ONE_SHOT = new Set(['celebrate', 'fail', 'taunt']);
 
+/**
+ * Face states as morph-target weights (the designed cast's shape keys, see
+ * tools/assets/blender/build-character.py). Each character's idle
+ * personality is baked into the mesh itself; these are the readouts.
+ */
+export const FACE_STATES = {
+  idle: {},
+  gulp: { browsUp: 1, mouthOpen: 0.55 },
+  perfect: { smile: 1, mouthOpen: 0.45, browsUp: 0.35 },
+  miss: { lidsDown: 0.85, frown: 1, browsPinch: 1 },
+};
+
+/** `play()`'s `face` names (shared with the toy rig) mapped onto face states. */
+const CLIP_FACES = { joy: ['perfect', 0.8], groove: ['perfect', 0.5], focus: ['gulp', 0.35], ugh: ['miss', 0.7] };
+
+/** How long a reaction face is held before relaxing back to idle. */
+const REACT_HOLD = { perfect: 0.75, great: 0.6, good: 0.45, miss: 0.9 };
+const FACE_RATE = 14;
+
 function wrap(t, dur) {
   if (!(dur > 0)) return 0;
   const m = t % dur;
@@ -82,6 +101,15 @@ export class BlenderCharacterAnimator {
     this._lastYOffset = 0;
     this._impulseSquash = 0;
     this._impulseLift = 0;
+    // Same idea for scale: the scene sets the character's size, the impulse
+    // only multiplies it, so remember the multiplier last applied.
+    this._lastScaleMul = [1, 1, 1];
+
+    // Face: target morph weights and how long to hold them before idling.
+    const designed = root.userData?.designed;
+    this._face = designed?.influences
+      ? { influences: designed.influences, dictionary: designed.dictionary, target: new Float32Array(designed.influences.length), hold: 0 }
+      : null;
 
     this._enter('idle', { blend: 0.001 });
   }
@@ -202,6 +230,8 @@ export class BlenderCharacterAnimator {
       blend: o.blend ?? STATE_DEF.clip.blend, variant: name,
     });
     this._clipNext = o.next ?? 'idle';
+    const clipFace = CLIP_FACES[o.face];
+    if (clipFace) this.setFace(clipFace[0], clipFace[1], Number.isFinite(dur) ? dur : Infinity);
     return this;
   }
 
@@ -214,7 +244,31 @@ export class BlenderCharacterAnimator {
     if (verdict === 'perfect') this.impulse(0.5, 0.03);
     else if (verdict === 'great') this.impulse(0.32, 0.02);
     else if (verdict === 'miss') this.impulse(-0.4, 0);
+    const hold = REACT_HOLD[verdict] ?? REACT_HOLD.good;
+    if (verdict === 'miss') this.setFace('miss', 1, hold);
+    else if (verdict === 'perfect') this.setFace('perfect', 1, hold);
+    else if (verdict === 'great') this.setFace('perfect', 0.7, hold);
+    else this.setFace('perfect', 0.35, hold);
     return m.state;
+  }
+
+  /**
+   * Show a face state: `weight` scales it, `hold` is how long (seconds) before
+   * it relaxes back to idle — `Infinity` holds until the next setFace. A body
+   * without face morph targets ignores this.
+   * @param {'idle'|'gulp'|'perfect'|'miss'} state
+   */
+  setFace(state, weight = 1, hold = Infinity) {
+    const f = this._face;
+    if (!f) return this;
+    const pose = FACE_STATES[state] || FACE_STATES.idle;
+    f.target.fill(0);
+    for (const [name, v] of Object.entries(pose)) {
+      const i = f.dictionary[name];
+      if (i !== undefined) f.target[i] = clamp01(v * weight);
+    }
+    f.hold = state === 'idle' ? 0 : hold;
+    return this;
   }
 
   /** Squash/stretch-style impulse, approximated as a brief root scale/lift
@@ -295,15 +349,34 @@ export class BlenderCharacterAnimator {
     const bob = 0;
 
     // Root-level impulse: a light scale/lift pulse standing in for the toy
-    // rig's per-joint squash/stretch (see impulse() above).
+    // rig's per-joint squash/stretch (see impulse() above). It MULTIPLIES
+    // the scale the scene gave the character: this used to write an absolute
+    // ~1.0 scale, so a character a scene had sized (a podium at 1.5) popped
+    // to unit size on every reaction.
+    let sxz = 1;
+    let sy = 1;
     if (Math.abs(this._impulseSquash) > 0.002 || Math.abs(this._impulseLift) > 0.001) {
-      const sy = 1 + this._impulseSquash * 0.08;
-      const sxz = 1 - this._impulseSquash * 0.03;
-      this.root.scale.set(sxz, sy, sxz);
+      sy = 1 + this._impulseSquash * 0.08;
+      sxz = 1 - this._impulseSquash * 0.03;
       this._impulseSquash = damp(this._impulseSquash, 0, 11, dt);
       this._impulseLift = damp(this._impulseLift, 0, 11, dt);
-    } else if (this.root.scale.y !== 1) {
-      this.root.scale.set(1, 1, 1);
+    }
+    const [lx, ly, lz] = this._lastScaleMul;
+    if (lx !== sxz || ly !== sy || lz !== sxz) {
+      const s = this.root.scale;
+      s.set((s.x / lx) * sxz, (s.y / ly) * sy, (s.z / lz) * sxz);
+      this._lastScaleMul = [sxz, sy, sxz];
+    }
+
+    const f = this._face;
+    if (f) {
+      if (Number.isFinite(f.hold)) {
+        f.hold -= dt;
+        if (f.hold <= 0) f.target.fill(0);
+      }
+      for (let i = 0; i < f.target.length; i++) {
+        f.influences[i] = damp(f.influences[i], f.target[i], FACE_RATE, dt);
+      }
     }
     const trueBaseY = this.root.position.y - this._lastYOffset;
     const yOffset = this._impulseLift + bob;

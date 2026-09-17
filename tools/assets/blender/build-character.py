@@ -130,6 +130,10 @@ class Builder:
     def __init__(self, mats):
         self.mats = mats
         self.parts = []
+        # Named world positions exported as empties on the head bone:
+        # face_anchor (centre of the face surface) and head_top (top of the
+        # head shell) — what the game hangs expressions, crowns and helmets on.
+        self.anchors = {}
 
     def part(self, name, build, role, bone, loc, rot=(0, 0, 0), scale=(1, 1, 1), tags=()):
         """A mesh baked into world space, weighted 100% to `bone`, tagged with
@@ -216,6 +220,8 @@ def build_block(b, arm, head_ext, torso_ext, face):
     face_parts(b, front, cz, W, H, face)
 
     top = cz + H / 2
+    b.anchors['face_anchor'] = (0, front, cz)
+    b.anchors['head_top'] = (0, hy, top)
     for s in (-1, 1):
         d = mathutils.Vector((s * 0.55, 0, 1)).normalized()
         base = mathutils.Vector((s * 0.22, hy, top - 0.04))
@@ -364,6 +370,15 @@ def build():
     bpy.ops.object.join()
     body.name = DEF['id']
     add_shape_keys(body)
+
+    for name, loc in b.anchors.items():
+        empty = bpy.data.objects.new(name, None)
+        bpy.context.collection.objects.link(empty)
+        empty.parent = arm
+        empty.parent_type = 'BONE'
+        empty.parent_bone = HEAD
+        bpy.context.view_layer.update()
+        empty.matrix_world = mathutils.Matrix.Translation(loc)
 
     bpy.ops.object.select_all(action='DESELECT')
     for o in bpy.data.objects:
