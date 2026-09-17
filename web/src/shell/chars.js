@@ -8,36 +8,19 @@
  */
 
 import * as THREE from 'three';
-import { PAL, num } from './theme.js';
 import { makeCast, BUILD_IDS, preloadBlenderBodies, isBlenderReady } from '../chars/index.js';
+import { CAST, BUILD_BY_SHAPE, colourRoles } from './castData.js';
 
 export { isBlenderReady };
 
-/** @typedef {{id:string,name:string,color:number,accent:number,trait:string,shape:string,crest:string}} CharDef */
+/** @typedef {import('./castData.js').CastDef} CharDef */
 
-/** @type {CharDef[]} */
-export const CHARS = [
-  { id: 'bopp', name: 'BOPP', color: num(PAL.yellow), accent: 0xff9f45, trait: 'All rhythm, no brakes.', shape: 'round', crest: 'antenna' },
-  { id: 'zizz', name: 'ZIZZ', color: num(PAL.cyan), accent: 0x7aa6ff, trait: 'Runs on static and spite.', shape: 'spike', crest: 'bolt' },
-  { id: 'kwark', name: 'KWARK', color: num(PAL.coral), accent: 0xff9f45, trait: 'Beak first, ask later.', shape: 'beak', crest: 'plume' },
-  { id: 'tuff', name: 'TUFF', color: num(PAL.green), accent: 0x39d4b4, trait: 'Built like a downbeat.', shape: 'block', crest: 'horns' },
-  { id: 'mimo', name: 'MIMO', color: num(PAL.violet), accent: 0xff7ad9, trait: 'Two beats ahead, always.', shape: 'tall', crest: 'cap' },
-  { id: 'nibb', name: 'NIBB', color: num(PAL.orange), accent: 0xffd93d, trait: 'Small. Loud. Everywhere.', shape: 'tiny', crest: 'antenna' },
-  { id: 'glub', name: 'GLUB', color: num(PAL.teal), accent: 0x4dd6ff, trait: 'Wobbles exactly on time.', shape: 'blob', crest: 'fin' },
-  { id: 'fizz', name: 'FIZZ', color: num(PAL.pink), accent: 0xc08cff, trait: 'Sparkles on the offbeat.', shape: 'star', crest: 'plume' },
-];
+/** The cast (defined in castData.js, shared with the Blender build). @type {CharDef[]} */
+export const CHARS = CAST;
 
 export const charById = (id) => CHARS.find((c) => c.id === id) || CHARS[0];
 
 // ------------------------------------------------------------------ 3D cast
-
-/** Which rig build (silhouette) each 2D character design reads closest to. */
-const BUILD_BY_SHAPE = {
-  round: 'round', beak: 'round', blob: 'round',
-  tall: 'tall',
-  tiny: 'small', star: 'small',
-  spike: 'wide', block: 'wide',
-};
 
 /**
  * Build a single 3D character via `chars/`'s real roster facade (`makeCast`)
@@ -107,17 +90,7 @@ const _c = new THREE.Color();
 export function paletteForChar(def) {
   let p = palCache.get(def.id);
   if (p) return p;
-  const mix = (a, b, t) => _c.setHex(a).lerp(new THREE.Color(b), t).getHex();
-  p = {
-    id: `char:${def.id}`, name: def.name,
-    body: def.color,
-    limb: mix(def.color, 0xffffff, 0.18),
-    trim: mix(def.color, 0x100818, 0.62),
-    skin: mix(def.color, 0xffffff, 0.8),
-    accent: def.accent,
-    eye: mix(def.color, 0x06030c, 0.88),
-    rim: mix(def.color, 0xffffff, 0.35),
-  };
+  p = { id: `char:${def.id}`, name: def.name, ...colourRoles(def) };
   palCache.set(def.id, p);
   return p;
 }
