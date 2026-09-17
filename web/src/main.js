@@ -482,6 +482,10 @@ if (TEST_API) window.__BBB__ = {
   /** Renderer, look, lights — for debugging render cost from the harness. */
   stage,
   telemetry: () => telemetry.snapshot(),
+  /** Raw consecutive frame durations (ms), oldest first — for budget verdicts. */
+  frameTimes: () => telemetry.frames.slice(),
+  /** What the stage is actually drawing at: buffer scale and quality tier. */
+  renderState: () => ({ renderScale: stage.size.dpr, tier: stage.quality }),
   resetTelemetry: () => { telemetry.frames.length = 0; telemetry.judgements.length = 0; },
   goto: (id, opts) => activate(id, opts || {}),
   /** Shell bookkeeping (session/profile) — lets a script stage a party mid-way. */

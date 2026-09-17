@@ -10,8 +10,13 @@
  * Usage:
  *   node tools/harness/inspect.mjs --scene swing-kings --out runs/sk-01 \
  *        [--play auto|perfect|sloppy|none] [--seconds 14] [--shots 12]
- *        [--width 1280] [--height 720] [--video] [--quality high|low]
- *        [--swiftshader]
+ *        [--width 1280] [--height 720] [--video] [--quality auto|high|medium|low]
+ *        [--dpr 2] [--budget [seconds]] [--swiftshader]
+ *
+ * Performance: measure at the player's real pixel ratio (`--dpr 2` for a
+ * 200%-scaled laptop — the default 1 renders a quarter of those pixels) and
+ * add `--budget` for a PASS/FAIL frame-budget verdict in summary.json
+ * (tools/harness/budget.mjs), taken before any screenshots.
  *
  * Rendering: by default this runs Playwright's full Chromium in new-headless
  * mode on the machine's real GPU (ANGLE/D3D11 on Windows) — no window opens,
@@ -38,6 +43,7 @@ import { pathToFileURL } from 'node:url';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { checkAudio, encodeWav, mono } from './audiocheck.mjs';
+import { budgetVerdict } from './budget.mjs';
 
 const argv = parseArgs(process.argv.slice(2));
 const SCENE = argv.scene || 'title';
@@ -53,6 +59,12 @@ const CHART = Boolean(argv.chart);
 // --skip N: play N seconds before the first shot (to look at later sections).
 const SKIP = Number(argv.skip || 0);
 const SOFTWARE = Boolean(argv.swiftshader);
+// --dpr N: device pixel ratio of the browser context. A high-DPI laptop
+// (e.g. 200% Windows scaling) renders 4x the pixels of the default 1.
+const DPR = Number(argv.dpr || 1);
+// --budget [seconds]: before any screenshots (a PNG capture itself stalls
+// frames), measure a clean window of play and report a frame-budget verdict.
+const BUDGET_S = argv.budget === undefined ? 0 : (argv.budget === true ? 20 : Number(argv.budget));
 // On a real GPU the full post chain is affordable, so show the game as a
 // player sees it. SwiftShader cannot afford it (frames hit ~400ms), so the
 // software path keeps the old low-tier default.
@@ -232,7 +244,7 @@ const PORT = Number(argv.port || 5321 + (process.pid % 900));
   const browser = await chromium.launch(launchOptions());
   const context = await browser.newContext({
     viewport: { width: W, height: H },
-    deviceScaleFactor: 1,
+    deviceScaleFactor: DPR,
     recordVideo: argv.video ? { dir: path.join(OUT, 'video'), size: { width: W, height: H } } : undefined,
   });
   const page = await context.newPage();
@@ -311,6 +323,15 @@ const PORT = Number(argv.port || 5321 + (process.pid % 900));
       { mode: PLAY, secs: 600, actions: ACTIONS, division: DIVISION, chart: CHART });
   }
 
+  // ---- frame budget (no screenshots in this window) ----------------------
+  let budget = null;
+  if (BUDGET_S > 0) {
+    await page.evaluate(() => window.__BBB__.resetTelemetry());
+    await page.waitForTimeout(BUDGET_S * 1000);
+    const frames = await page.evaluate(() => window.__BBB__.frameTimes?.() ?? []);
+    budget = budgetVerdict(frames);
+  }
+
   // ---- capture ----------------------------------------------------------
   // Shots are spaced in AUDIO time (Clock.now()), not wall-clock sleeps: the
   // game's own time domain decides when frame i is taken, so a slow
@@ -349,6 +370,7 @@ const PORT = Number(argv.port || 5321 + (process.pid % 900));
   }
 
   const botPresses = await page.evaluate(() => window.__BBB__.botPresses?.() ?? 0);
+  const renderState = await page.evaluate(() => window.__BBB__.renderState?.() ?? null);
   const telemetry = await page.evaluate(() => window.__BBB__.telemetry());
   const domProbe = await page.evaluate(() => ({
     uiNodes: document.getElementById('ui')?.querySelectorAll('*').length ?? 0,
@@ -369,6 +391,11 @@ const PORT = Number(argv.port || 5321 + (process.pid % 900));
     chart: CHART,
     skip: SKIP,
     quality: QUALITY,
+    dpr: DPR,
+    // What the stage ended up drawing at (a governor may move it off QUALITY).
+    renderState,
+    // Present with --budget: PASS/FAIL against tools/harness/budget.mjs.
+    budget,
     actions: ACTIONS,
     division: DIVISION,
     seconds: SECONDS,
