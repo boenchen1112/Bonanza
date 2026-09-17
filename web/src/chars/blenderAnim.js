@@ -72,7 +72,14 @@ export class BlenderCharacterAnimator {
     this._spec = null;        // scrub spec for the CURRENT action, or null (natural playback)
     this._prevSpec = null;
 
-    this._baseY = root.position.y;
+    // NOT captured once here: the caller positions this character (and can
+    // reposition it later - calibrateBatter() nudges char.position.x/z,
+    // and any future caller might touch .y too) AFTER this constructor
+    // runs, so a fixed snapshot goes stale the moment that happens. update()
+    // instead subtracts its OWN last contribution from the current
+    // position each frame to recover the real base, rather than assuming
+    // this is still it.
+    this._lastYOffset = 0;
     this._impulseSquash = 0;
     this._impulseLift = 0;
 
@@ -277,19 +284,31 @@ export class BlenderCharacterAnimator {
 
     this.mixer.update(dt);
 
+    // A beat-synced idle bob (matching the crowd's own hop shape) was tried
+    // here and reverted: even a small one (0.018 units, only in idle/ready)
+    // measurably widened the ball-to-bat gap in swingKings/verify.mjs's own
+    // contact test past its passing threshold on some swings. That test is
+    // this game's actual hit-feel contract; a cosmetic idle wobble isn't
+    // worth risking it. Left as a deliberately-skipped idea, not silently
+    // dropped - see this file's header for the other things skipped the
+    // same way (breathing, blink, per-limb sway).
+    const bob = 0;
+
     // Root-level impulse: a light scale/lift pulse standing in for the toy
     // rig's per-joint squash/stretch (see impulse() above).
     if (Math.abs(this._impulseSquash) > 0.002 || Math.abs(this._impulseLift) > 0.001) {
       const sy = 1 + this._impulseSquash * 0.08;
       const sxz = 1 - this._impulseSquash * 0.03;
       this.root.scale.set(sxz, sy, sxz);
-      this.root.position.y = this._baseY + this._impulseLift;
       this._impulseSquash = damp(this._impulseSquash, 0, 11, dt);
       this._impulseLift = damp(this._impulseLift, 0, 11, dt);
     } else if (this.root.scale.y !== 1) {
       this.root.scale.set(1, 1, 1);
-      this.root.position.y = this._baseY;
     }
+    const trueBaseY = this.root.position.y - this._lastYOffset;
+    const yOffset = this._impulseLift + bob;
+    this.root.position.y = trueBaseY + yOffset;
+    this._lastYOffset = yOffset;
   }
 
   /** Set an action's `.time` for this frame, per its spec (or leave it to
