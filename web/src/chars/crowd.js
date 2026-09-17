@@ -163,7 +163,9 @@ export function makeCrowd({
   // ---- reactive state ----------------------------------------------------
   const st = {
     energy: 0.45, energyTarget: 0.45,
-    hype: 0, sag: 0,
+    // Reactions set goals, never the live values: a hit or miss that wrote
+    // `sag`/`energy` directly teleported all 350 figures in one frame.
+    hype: 0, sag: 0, sagGoal: 0, cap: 1,
     waveT: -1, waveSpeed: 1.6, waveAmt: 0,
     beat: 0,
   };
@@ -178,9 +180,12 @@ export function makeCrowd({
    */
   function update(dt, beat) {
     st.beat = beat;
-    st.energy = damp(st.energy, clamp01(st.energyTarget + st.hype), 3.2, dt);
+    st.cap = damp(st.cap, 1, 1.2, dt);
+    const goal = Math.min(st.cap, clamp01(st.energyTarget + st.hype));
+    st.energy = damp(st.energy, goal, goal < st.energy ? 8 : 3.2, dt);
     st.hype = damp(st.hype, 0, 0.9, dt);
-    st.sag = damp(st.sag, 0, 2.6, dt);
+    st.sagGoal = damp(st.sagGoal, 0, 2.6, dt);
+    st.sag = damp(st.sag, st.sagGoal, 14, dt);
     if (st.waveT >= 0) {
       st.waveT += dt * st.waveSpeed;
       if (st.waveT > 2.2) { st.waveT = -1; st.waveAmt = 0; }
@@ -189,7 +194,11 @@ export function makeCrowd({
     const e = st.energy;
     const sag = st.sag;
     // Energy raises the jump AND the rate: a hyped crowd bounces on eighths.
-    const rate = 1 + (e > 0.72 ? 1 : 0) * smootherstep((e - 0.72) / 0.28);
+    // The rate is a blend between an on-beat and an on-eighth layer, never a
+    // multiplier on `beat`: scaling an absolute beat count (100+ late in a
+    // round) by a rate that drifts with damped energy swept the hop phase
+    // through dozens of cycles a second, and the stands buzzed.
+    const eighths = e > 0.72 ? smootherstep((e - 0.72) / 0.28) : 0;
     const jumpH = (0.10 + e * 0.42) * (1 - sag * 0.9);
     const leanA = 0.10 + e * 0.16;
     const waveOn = st.waveT >= 0;
@@ -197,15 +206,15 @@ export function makeCrowd({
     const wAmt = st.waveAmt;
 
     for (let i = 0; i < n; i++) {
-      const b = (beat + phase[i]) * rate;
-      let f = beatPhase(b);
-      let j = hop(f) * wob[i];
+      const b = beat + phase[i];
+      const h1 = hop(beatPhase(b));
+      let j = (eighths > 0 ? h1 + (hop(beatPhase(b * 2)) - h1) * eighths : h1) * wob[i];
 
       // Travelling wave: a moving gaussian in arc position.
       if (waveOn) {
         const d = uPos[i] - (wt * 0.85 - 0.15);
-        const g = Math.exp(-(d * d) / 0.006);
-        j += g * wAmt * 1.9;
+        const g = Math.exp(-(d * d) / 0.010);
+        j += g * wAmt * 1.6;
       }
 
       const lift = j * jumpH;
@@ -218,7 +227,8 @@ export function makeCrowd({
       const sh = sxz * s;
 
       // sway: a small Z-lean, alternating on a two-beat cycle
-      const lean = Math.sin(b * Math.PI) * leanA;
+      const l1 = Math.sin(b * Math.PI);
+      const lean = (eighths > 0 ? l1 + (Math.sin(b * Math.PI * 2) - l1) * eighths : l1) * leanA;
       const cz = Math.cos(lean), sz = Math.sin(lean);
       const cy = cosF[i], sy2 = sinF[i];
 
@@ -257,19 +267,23 @@ export function makeCrowd({
     /** Combo milestone: go wild, and send a wave for the big ones. */
     hype(amount = 0.6) {
       st.hype = Math.max(st.hype, clamp(amount, 0, 1.2));
-      st.sag = 0;
+      st.sagGoal = 0;
+      st.cap = 1;
       if (amount >= 0.55) this.wave(Math.min(1, amount));
     },
 
     /** A miss. The stands sag — silence you can see. */
     deflate(amount = 1) {
-      st.sag = Math.max(st.sag, clamp01(amount));
+      st.sagGoal = Math.max(st.sagGoal, clamp01(amount));
       st.hype = 0;
-      st.energy = Math.min(st.energy, 0.30);
+      st.cap = Math.min(st.cap, 0.30);
     },
 
     /** Travelling wave through the stands. */
     wave(amount = 1, speed = 1.6) {
+      // Restarting a wave whose crest is still on the arc would drop every
+      // raised figure at once; let it finish travelling off the end first.
+      if (st.waveT >= 0 && st.waveT < 1.6) return;
       st.waveT = 0;
       st.waveAmt = clamp01(amount);
       st.waveSpeed = speed;
