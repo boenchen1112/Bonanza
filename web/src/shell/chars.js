@@ -221,9 +221,6 @@ function addCrest(char, def) {
  * mesh group; `crown.visible` toggles it. Geometry is shared.
  */
 export function addCrown(char) {
-  const j = char.joints;
-  const b = char.build;
-  const hw = b.head.w;
   const gold = crestMat(0xffd23d);
   const band = cgeo('crownBand', () => new THREE.CylinderGeometry(0.5, 0.46, 0.22, 20, 1, true));
   const spike = cgeo('crownSpike', () => new THREE.ConeGeometry(0.09, 0.26, 8));
@@ -240,10 +237,26 @@ export function addCrown(char) {
     d.position.set(Math.sin(a) * 0.5, 0.02, Math.cos(a) * 0.5);
     g.add(d);
   }
-  g.scale.setScalar(hw * 0.62);
-  g.position.set(0, b.head.h * 0.5 + hw * 0.05, 0);
   g.rotation.x = -0.12;
-  j.head.add(g);
+  if (char.userData.isBlenderBody) {
+    // A skinned body has no build.head to size from, and its head bone sits
+    // under a ~0.01 world scale, so size and offset are worked out in world
+    // units from the figure's height and divided back into bone space.
+    char.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(char);
+    const tall = box.max.y - box.min.y;
+    const bone = char.getJoint('head');
+    const s = bone.getWorldScale(new THREE.Vector3());
+    bone.add(g);
+    const k = tall * 0.11;
+    g.scale.set(k / s.x, k / s.y, k / s.z);
+    g.position.set(0, (tall * 0.14) / s.y, 0);
+  } else {
+    const hw = char.build.head.w;
+    g.scale.setScalar(hw * 0.62);
+    g.position.set(0, char.build.head.h * 0.5 + hw * 0.05, 0);
+    char.joints.head.add(g);
+  }
   return g;
 }
 
