@@ -46,6 +46,27 @@ export function blenderBodiesReady() {
 }
 
 /**
+ * For a caller that CAN afford to await (a scene's `load(ctx)` - the shell
+ * awaits it already, unlike `makeCast()` itself) rather than accept
+ * whatever's cached: wait up to `timeoutMs` for one specific character's
+ * body, instead of racing the synchronous `getBlenderTemplate()` check
+ * against however long the fetch happens to take. Never rejects and never
+ * hangs past the timeout - a slow or failed load still resolves, to
+ * whatever `getBlenderTemplate(id)` returns at that point (often still
+ * null, which is the normal, safe "use the toy rig this time" outcome).
+ */
+export function waitForBlenderBody(id, timeoutMs = 2500) {
+  preloadBlenderBodies();
+  if (getBlenderTemplate(id)) return Promise.resolve(true);
+  const key = `cast-${id}`;
+  if (!ASSET_URLS[key]) return Promise.resolve(false);
+  return Promise.race([
+    loadGLB(key).then(() => true, () => false),
+    new Promise((resolve) => setTimeout(() => resolve(false), timeoutMs)),
+  ]);
+}
+
+/**
  * A fresh, independently-posable instance of `id`'s body: a cloned scene
  * (SkeletonUtils.clone — a plain Object3D.clone() shares bones between
  * instances, which would make every clone of the same character strike the

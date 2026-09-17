@@ -447,8 +447,13 @@ export function createWorld(ctx) {
   const hero = ctx.players?.[0] || null;
   const cast = makeCast({
     scene: root, count: 1, builds: [hero?.build || 'round'],
-    players: hero ? [{ id: hero.id, name: hero.name, palette: hero.palette }] : null,
+    players: hero ? [{ id: hero.id, char: hero.char, name: hero.name, palette: hero.palette }] : null,
     positions: [LAYOUT.batter], scale: 1.55, seed: 0x51e, faceCamera: false,
+    // Verified against this game's own toy-rig-specific dependencies (bat
+    // attachment, custom helmet, calibrateBatter()'s pose search) - see
+    // this file's helmet block and calibrateBatter() for the Blender side
+    // of each.
+    allowBlenderBodies: true,
   });
   const batter = cast.get(0);
   hero?.dress?.(batter.char);
@@ -481,7 +486,27 @@ export function createWorld(ctx) {
 
   // Batting helmet instead of the build's headband: the headband sat over
   // the eyes in the stance and slid to the neck in the whiff pratfall.
-  {
+  if (batter.char.userData.isBlenderBody) {
+    // No .joints/.build on a skinned mesh, and its crest is baked into the
+    // mesh itself rather than a separate hideable object - so there is
+    // nothing to hide here, only the helmet to add. Head size is a
+    // heuristic (world bounding height * a human head-to-height ratio,
+    // divided back out of the character's own scale so the offsets below
+    // land correctly once attach() re-parents them under that scale) since
+    // there is no build.head.w/h to read directly - a first pass, worth a
+    // look once rendered rather than assumed correct from the numbers.
+    const box = new THREE.Box3().setFromObject(batter.char);
+    const hw = ((box.max.y - box.min.y) / (batter.char.scale.y || 1)) * 0.09;
+    const helmetMat = new THREE.MeshStandardMaterial({ color: hero?.palette?.trim ?? 0x1f2f6b, roughness: 0.35 });
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(hw * 1.15, 18, 10, 0, Math.PI * 2, 0, Math.PI * 0.5), helmetMat);
+    dome.position.y = hw * 0.85;
+    const brim = new THREE.Mesh(new THREE.CylinderGeometry(hw * 0.82, hw * 0.82, hw * 0.06, 18, 1, false, -Math.PI / 2, Math.PI), helmetMat);
+    brim.position.set(0, hw * 0.5, hw * 0.65);
+    const flap = new THREE.Mesh(new THREE.SphereGeometry(hw * 0.38, 10, 8), helmetMat);
+    flap.scale.set(0.5, 1, 1);
+    flap.position.set(-hw * 1.05, hw * 0.2, 0);
+    for (const m of [dome, brim, flap]) { m.castShadow = true; batter.char.attach('head', m); }
+  } else {
     const j = batter.char.joints;
     const hb = batter.char.build.head;
     if (j.gear && j.gear.parent === j.head) j.gear.visible = false;
@@ -774,14 +799,20 @@ export function createWorld(ctx) {
  */
 function calibrateBatter(batter, batGroup) {
   const { char, anim } = batter;
-  const pose = makePose();
-  const legFrac = char.dims.legLen / char.dims.height;
   const clip = CLIPS.swing;
-  const poseAt = (name, t) => {
-    sampleClip(pose, CLIPS[name], t, legFrac);
-    anim._applyPose(pose);
-    char.updateMatrixWorld(true);
-  };
+  // Same search/optimization below either way; only how a specific clip
+  // frame gets forced onto the skeleton differs. The toy rig retargets a
+  // clip through sampleClip()'s leg-fraction math onto a plain pose object;
+  // a Blender body has the real clip baked for its own skeleton already, so
+  // playing it directly at an exact time is both correct and simpler.
+  const poseAt = char.userData.isBlenderBody
+    ? (name, t) => { anim._sampleRaw(name, t); char.updateMatrixWorld(true); }
+    : (() => {
+      const pose = makePose();
+      const legFrac = char.dims.legLen / char.dims.height;
+      return (name, t) => { sampleClip(pose, CLIPS[name], t, legFrac); anim._applyPose(pose); char.updateMatrixWorld(true); };
+    })();
+  const torsoJoint = char.userData.isBlenderBody ? char.getJoint('torso') : char.joints.torso;
   const v = new THREE.Vector3();
   const q = new THREE.Quaternion();
   const e = new THREE.Euler();
@@ -809,7 +840,7 @@ function calibrateBatter(batter, batGroup) {
     const f = -Math.PI + (i / 72) * Math.PI * 2;
     char.rotation.y = f;
     poseAt('swing', clip.contact);
-    char.joints.torso.getWorldQuaternion(q);
+    torsoJoint.getWorldQuaternion(q);
     const d = v.set(0, 0, 1).applyQuaternion(q).dot(target);
     if (d > bestD) { bestD = d; bestF = f; }
   }

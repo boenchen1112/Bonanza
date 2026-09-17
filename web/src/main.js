@@ -24,6 +24,7 @@ import { createUI } from './ui/index.js';
 import { createFX } from './render/fx/index.js';
 import { SCENES, getScene } from './shell/registry.js';
 import { resolveActivation } from './shell/nav.js';
+import { preloadBlenderBodies } from './chars/index.js';
 
 const canvas = document.getElementById('stage');
 const uiRoot = document.getElementById('ui');
@@ -549,6 +550,12 @@ if (TEST_API) window.__BBB__ = {
 // --------------------------------------------------------------------- boot
 
 (async function boot() {
+  // Earliest possible point to start the 8 Blender-body fetches - real
+  // navigation always passes through here regardless of which scene the
+  // URL requests (a `?scene=` deep link included), so this covers cases
+  // shell/chars.js's own pumpBusts()-triggered preload can't: a game
+  // reached without ever passing through the title screen.
+  preloadBlenderBodies();
   resize();
   const q = new URLSearchParams(location.search).get('quality');
   if (q) stage.setQuality?.(q);

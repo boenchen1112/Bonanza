@@ -226,6 +226,26 @@ export class BlenderCharacterAnimator {
     return this._action.time;
   }
 
+  /**
+   * Force the skeleton to an exact clip frame, bypassing the state machine
+   * entirely — the Blender-side equivalent of reaching into the toy rig's
+   * `anim._applyPose(pose)`. Calibration-only: real gameplay drives poses
+   * through `update()`, never this. Leaves every OTHER action's weight at
+   * 0 so nothing but `name` contributes this frame.
+   */
+  _sampleRaw(name, t) {
+    const action = this.actions[name];
+    if (!action) return;
+    for (const a of Object.values(this.actions)) if (a !== action) a.setEffectiveWeight(0);
+    action.reset();
+    action.paused = true;
+    action.enabled = true;
+    action.setEffectiveWeight(1);
+    action.play();
+    action.time = t;
+    this.mixer.update(0);
+  }
+
   // ------------------------------------------------------------------ update
 
   update(dt, beat) {

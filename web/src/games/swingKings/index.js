@@ -52,7 +52,7 @@ import { FEEL, feelForCombo } from '../../core/feel.js';
 import { clamp01, damp, lerp, smoothstep } from '../../core/util.js';
 import { createWorld, LAYOUT } from './world.js';
 import { createTrace } from './trace.js';
-import { CLIPS } from '../../chars/index.js';
+import { CLIPS, waitForBlenderBody } from '../../chars/index.js';
 import { Save } from '../../core/util.js';
 import { createIctusDetector } from './gesture.js';
 import { createHud } from './hud.js';
@@ -128,9 +128,18 @@ export default {
 
   // -------------------------------------------------------------- lifecycle
 
-  load(ctx) {
+  async load(ctx) {
     ctx.scene.userData.palette = 'swing-kings';
     ctx.stage.setPalette('swing-kings');
+
+    // Worth a bounded wait, not a race: a fresh session that reaches this
+    // game before its hero's Blender body has finished loading would
+    // otherwise build the toy-rig batter and stay on it for the whole
+    // playthrough (the cast isn't rebuilt mid-round). main.js's caller
+    // already awaits load(), so this costs nothing when the body is
+    // already warm (the common case - it's been loading since app boot).
+    const heroChar = ctx.players?.[0]?.char;
+    if (heroChar) await waitForBlenderBody(heroChar);
 
     this.w = createWorld(ctx);
     // Where pitches cross the plate; starts at the calibrated sweet spot and

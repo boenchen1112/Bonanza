@@ -31,8 +31,25 @@ import { CharacterAnimator, makeAnimator, STATES, STATE_DEF, VERDICT_POSE, idle,
 import { makeCrowd } from './crowd.js';
 import { CLIP_FACE } from './anim.js';
 import { CLIPS } from './clips.gen.js';
-import { BlenderCharacterAnimator } from './blenderAnim.js';
-import { BLENDER_CHAR_IDS, getBlenderTemplate, instantiateBlenderBody, preloadBlenderBodies } from './blenderBodies.js';
+
+// blenderAnim.js/blenderBodies.js are loaded lazily (dynamic import, below)
+// rather than statically here. blenderBodies.js reaches assets/index.js,
+// which imports a .glb through Vite's `?url` suffix - meaningless outside
+// Vite, so a static import would make merely IMPORTING chars/index.js (this
+// file is the facade every game and the shell already import) fail under
+// plain Node - which is exactly how tests/swingkings.test.mjs consumes
+// swingKings/index.js, which imports this file for CLIPS. A dynamic import
+// only resolves when actually called, which real gameplay does and a unit
+// test importing pure functions never does.
+let blenderMods = null;
+let blenderModsPromise = null;
+function ensureBlenderMods() {
+  if (!blenderModsPromise) {
+    blenderModsPromise = Promise.all([import('./blenderAnim.js'), import('./blenderBodies.js')])
+      .then(([animMod, bodiesMod]) => { blenderMods = { ...animMod, ...bodiesMod }; });
+  }
+  return blenderModsPromise;
+}
 
 export {
   /** Baked mocap clips (durations, `contact` frames) for `anim.play()`. */
@@ -42,18 +59,34 @@ export {
   CharacterAnimator, makeAnimator, STATES, STATE_DEF, VERDICT_POSE,
   idle, windup, strike, makePose, sampleClip,
   makeCrowd,
-  /** Blender-body pipeline: call once, early (shell/chars.js's warm-up
-   * already does), so bodies are cached by the time a real cast is built.
-   * `isBlenderReady(id)` is for callers that build a character once and
-   * hold onto it (a roster preview, a locked-in cast slot) - a toy-rig
-   * fallback built before its GLB finished loading never upgrades itself,
-   * so the caller polls this and rebuilds via `makeCast()`/`charMesh()`
-   * again once it flips true. */
-  preloadBlenderBodies,
 };
 
+/** Blender-body pipeline: call once, early (shell/chars.js's warm-up
+ * already does), so bodies are cached by the time a real cast is built.
+ * Triggers the lazy module load (see ensureBlenderMods above); safe to
+ * call from anywhere, including a plain-Node context that never awaits
+ * it - the returned promise just never gets awaited there. */
+export function preloadBlenderBodies() {
+  ensureBlenderMods().then(() => blenderMods.preloadBlenderBodies());
+}
+
+/** For callers that build a character once and hold onto it (a roster
+ * preview, a locked-in cast slot) - a toy-rig fallback built before its
+ * GLB finished loading never upgrades itself, so the caller polls this
+ * and rebuilds via `makeCast()`/`charMesh()` again once it flips true.
+ * False (not "unknown") until the Blender subsystem itself has loaded -
+ * the same safe default as "this character's body isn't ready yet". */
 export function isBlenderReady(id) {
-  return !!(id && BLENDER_CHAR_IDS.includes(id) && getBlenderTemplate(id));
+  return !!(blenderMods && id && blenderMods.BLENDER_CHAR_IDS.includes(id) && blenderMods.getBlenderTemplate(id));
+}
+
+/** For a scene's `load(ctx)`, which the shell already awaits: wait up to
+ * a bounded time for one character's body before deciding whether to
+ * build the Blender or toy-rig version, instead of racing whatever's
+ * cached at construction time (see blenderBodies.js). */
+export async function waitForBlenderBody(id, timeoutMs) {
+  await ensureBlenderMods();
+  return blenderMods.waitForBlenderBody(id, timeoutMs);
 }
 
 /**
@@ -63,16 +96,60 @@ export function isBlenderReady(id) {
  * its body is warm just gets the toy rig for that instance, no error.
  */
 function makeMember({ charId, pal, build, charSeed, animSeed, detail, scale, name }) {
-  if (charId && BLENDER_CHAR_IDS.includes(charId) && getBlenderTemplate(charId)) {
-    const tpl = instantiateBlenderBody(charId);
+  if (blenderMods && charId && blenderMods.BLENDER_CHAR_IDS.includes(charId) && blenderMods.getBlenderTemplate(charId)) {
+    const tpl = blenderMods.instantiateBlenderBody(charId);
     if (tpl) {
       const { scene, animations } = tpl;
       scene.updateMatrixWorld(true);
       const mixer = new THREE.AnimationMixer(scene);
       const actions = Object.fromEntries(animations.map((a) => [a.name, mixer.clipAction(a)]));
-      const anim = new BlenderCharacterAnimator(scene, mixer, actions, { seed: animSeed });
+      const anim = new blenderMods.BlenderCharacterAnimator(scene, mixer, actions, { seed: animSeed });
+      scene.scale.setScalar(scale);
       scene.userData.isBlenderBody = true;
+      scene.userData.anim = anim;
       scene.dispose = () => { mixer.stopAllAction(); scene.removeFromParent(); };
+
+      // Same joint-name vocabulary as the toy rig's char.attach() (rig.js),
+      // mapped onto this skeleton's bones - so a caller that already only
+      // knows joint names ('handR', 'head', ...), never rig internals,
+      // doesn't have to branch on which rig it got. 'face' and 'bobble'
+      // have no equivalent (no face joints, no springy appendage on a
+      // skinned mesh) and fall back to the head bone as the closest thing.
+      const BONE_MAP = {
+        root: '', hips: 'mixamorigHips', torso: 'mixamorigSpine2',
+        head: 'mixamorigHead', face: 'mixamorigHead', bobble: 'mixamorigHead',
+        handL: 'mixamorigLeftHand', handR: 'mixamorigRightHand',
+        footL: 'mixamorigLeftFoot', footR: 'mixamorigRightFoot',
+      };
+      /** Read-only counterpart to attach() - the bone itself, for a caller
+       * that needs to measure it (calibration) rather than hang something
+       * off it. No toy-rig equivalent exists (use char.joints there). */
+      scene.getJoint = (jointName) => {
+        const boneName = BONE_MAP[jointName];
+        return boneName ? scene.getObjectByName(boneName) : (boneName === '' ? scene : null);
+      };
+      scene.attach = (jointName, obj) => {
+        const target = scene.getJoint(jointName);
+        if (!target) return null;
+        target.add(obj);
+        // A bone's own world scale is the character's overall root scale
+        // (~0.01, this skeleton's baked cm->m factor, times this build's
+        // silhouette scale) - every bone inherits it, since it's an
+        // ancestor-chain scale, not something bones reset. Left alone, an
+        // attached object's own position/size offsets - authored assuming
+        // real-world metres, same as attaching to a toy-rig joint - end up
+        // shrunk by that same ~100x, landing sub-pixel. Counter-scale here
+        // so a caller's numbers mean the same thing on either rig.
+        const s = new THREE.Vector3();
+        target.getWorldScale(s);
+        obj.scale.set(1 / (s.x || 1), 1 / (s.y || 1), 1 / (s.z || 1));
+        return target;
+      };
+      // Shadow detail: a skinned mesh is 1-2 meshes total (body + optional
+      // crest), nowhere near the toy rig's per-limb mesh count, so there is
+      // no cheaper "core" tier worth having - always cast the whole thing.
+      scene.setShadowDetail = () => { scene.traverse((o) => { if (o.isMesh) o.castShadow = true; }); };
+      scene.setShadowDetail();
       return { char: scene, anim };
     }
   }
