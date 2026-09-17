@@ -29,6 +29,8 @@ export const DEFAULT_OPTIONS = {
   reduceMotion: false,
   /** Swing Kings: 'tap' (keyboard/tap, default) | 'mouse' (hold + conducting drag) | 'camera' (hand tracking). */
   swingInput: 'tap',
+  /** 'auto' (fits the machine) | 'high' | 'medium' | 'low' — see render/quality.js. */
+  graphics: 'auto',
 };
 
 /** @typedef {{score:number, rank:string, accuracy:number, plays:number, maxCombo:number}} Record_ */

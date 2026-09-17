@@ -25,6 +25,8 @@ import { createFX } from './render/fx/index.js';
 import { SCENES, getScene } from './shell/registry.js';
 import { resolveActivation } from './shell/nav.js';
 import { preloadBlenderBodies } from './chars/index.js';
+import { levelForSetting } from './render/quality.js';
+import { profile } from './shell/state.js';
 
 const canvas = document.getElementById('stage');
 const uiRoot = document.getElementById('ui');
@@ -411,6 +413,41 @@ bus.on('judge', (j) => telemetry.judgements.push({
 // turn it on, reproduce the problem, and report back what it actually reads.
 // Toggle with the ` (backquote) key, or start visible with ?perf=1.
 
+// --------------------------------------------------------------- graphics
+//
+// The Graphics option (Auto / High / Medium / Low) as a (render scale, tier)
+// level — policy in render/quality.js. Auto starts from what the GPU and
+// screen suggest; an Iris Xe at 200% scaling rendered 2560x1440 on the high
+// tier at ~42fps before this existed.
+
+const graphics = { setting: 'auto', auto: true, scale: 1, tier: 'high' };
+
+function rendererName() {
+  try {
+    const gl = stage.renderer.getContext();
+    const ext = gl.getExtension('WEBGL_debug_renderer_info');
+    return String(ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
+  } catch { return ''; }
+}
+
+function applyLevel(level) {
+  stage.setQuality(level.tier);
+  stage.setRenderScale(level.scale);
+  graphics.scale = stage.size.dpr;
+  graphics.tier = stage.quality;
+}
+
+function applyGraphics(setting) {
+  const level = levelForSetting(setting, {
+    renderer: rendererName(),
+    deviceRatio: Math.min(window.devicePixelRatio || 1, 2),
+  });
+  graphics.setting = setting;
+  graphics.auto = level.auto;
+  applyLevel(level);
+}
+bus.on('graphics:setting', (s) => applyGraphics(s));
+
 const lastLong = (list) => {
   const f = list[list.length - 1];
   return `${f.frameMs.toFixed(0)}ms = upd ${f.updateMs.toFixed(0)} + rnd ${f.renderMs.toFixed(0)} + other ${f.otherMs.toFixed(0)}`;
@@ -456,6 +493,7 @@ const perf = (() => {
         + (s.longFrames.length
           ? `long frames ${s.longFrames.length}, last ${lastLong(s.longFrames)}\n`
           : 'long frames 0\n')
+        + `render x${graphics.scale} ${graphics.tier} (${graphics.auto ? 'auto' : graphics.setting})\n`
         + `draws ${s.render.drawCalls}  tris ${s.render.triangles}\n`
         + `audio ${audioCtx.state}  latency ${s.outputLatencyMs.toFixed(0)}ms\n`
         + `stalls ${stallCount} (worst ${worstStallMs.toFixed(0)}ms)  scene ${s.scene || '-'}`;
@@ -538,7 +576,9 @@ if (TEST_API) window.__BBB__ = {
   /** Raw consecutive frame durations (ms), oldest first — for budget verdicts. */
   frameTimes: () => telemetry.frames.toArray(),
   /** What the stage is actually drawing at: buffer scale and quality tier. */
-  renderState: () => ({ renderScale: stage.size.dpr, tier: stage.quality }),
+  renderState: () => ({ renderScale: stage.size.dpr, tier: stage.quality, graphics: graphics.auto ? 'auto' : graphics.setting }),
+  /** Apply a Graphics setting exactly as the Options screen does. */
+  setGraphics: (setting) => applyGraphics(setting),
   resetTelemetry: () => telemetry.reset(),
   goto: (id, opts) => activate(id, opts || {}),
   /** Shell bookkeeping (session/profile) — lets a script stage a party mid-way. */
@@ -629,10 +669,13 @@ if (TEST_API) window.__BBB__ = {
   // reached without ever passing through the title screen.
   preloadBlenderBodies();
   resize();
+  applyGraphics(profile.options.graphics || 'auto');
+  // ?quality= pins a tier for testing ('auto' = the Graphics Auto policy).
   const q = new URLSearchParams(location.search).get('quality');
-  if (q) stage.setQuality?.(q);
+  if (q === 'auto') applyGraphics('auto');
+  else if (q) { stage.setQuality(q); graphics.tier = stage.quality; graphics.auto = false; graphics.setting = q; }
   const scale = new URLSearchParams(location.search).get('scale');
-  if (scale) stage.setRenderScale(Number(scale));
+  if (scale) { stage.setRenderScale(Number(scale)); graphics.scale = stage.size.dpr; graphics.auto = false; }
   await audio.init();
   const startScene = new URLSearchParams(location.search).get('scene') || 'title';
   try {

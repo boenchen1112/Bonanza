@@ -18,6 +18,8 @@ const ROWS = [
   { id: 'sfx', label: 'SFX VOLUME', type: 'pct' },
   { id: 'offsetMs', label: 'TIMING OFFSET', type: 'ms' },
   { id: 'reduceMotion', label: 'REDUCE MOTION', type: 'bool' },
+  { id: 'graphics', label: 'GRAPHICS', type: 'choice', choices: ['auto', 'high', 'medium', 'low'],
+    names: { auto: 'AUTO', high: 'HIGH', medium: 'MEDIUM', low: 'LOW' } },
   // Swing Kings' conducting gesture: an optional second input, tap stays default.
   { id: 'swingInput', label: 'SWING KINGS INPUT', type: 'choice', choices: ['tap', 'mouse', 'camera'],
     names: { tap: 'TAP', mouse: 'MOUSE CONDUCT', camera: 'CAMERA CONDUCT' } },
@@ -60,7 +62,7 @@ export default {
 
     const head = el('div', 'sh-opt__head');
     head.appendChild(el('div', 'sh-display sh-opt__title', 'OPTIONS'));
-    head.appendChild(el('div', 'sh-sub', 'mix · timing · reset'));
+    head.appendChild(el('div', 'sh-sub', 'mix · timing · graphics · reset'));
     root.appendChild(head);
 
     const list = el('div', 'sh-opt__list');
@@ -162,6 +164,8 @@ function adjust(ctx, dir) {
   } else if (row.type === 'choice') {
     const i = Math.max(0, row.choices.indexOf(profile.options[row.id]));
     profile.setOption(row.id, row.choices[(i + dir + row.choices.length) % row.choices.length]);
+    // Applied live so the difference is visible before leaving the screen.
+    if (row.id === 'graphics') ctx.bus.emit('graphics:setting', profile.options.graphics);
   } else {
     return;
   }

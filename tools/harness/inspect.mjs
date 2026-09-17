@@ -305,7 +305,9 @@ const PORT = Number(argv.port || 5321 + (process.pid % 900));
   });
   const softwareRendered = SOFTWARE || /swiftshader|llvmpipe|software/i.test(gpu);
 
-  await page.evaluate((q) => window.__BBB__.setQuality?.(q), QUALITY);
+  // 'auto' is the game's Graphics Auto policy (scale + tier), not a tier.
+  if (QUALITY === 'auto') await page.evaluate(() => window.__BBB__.setGraphics('auto'));
+  else await page.evaluate((q) => window.__BBB__.setQuality?.(q), QUALITY);
   if (argv.scale) await page.evaluate((s) => window.__BBB__.setRenderScale?.(s), Number(argv.scale));
   await page.evaluate((s) => window.__BBB__.goto(s), SCENE);
   // Let the freshly loaded scene draw a couple of settled frames before the
