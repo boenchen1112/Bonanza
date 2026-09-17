@@ -11,12 +11,14 @@
  *   node tools/harness/inspect.mjs --scene swing-kings --out runs/sk-01 \
  *        [--play auto|perfect|sloppy|none] [--seconds 14] [--shots 12]
  *        [--width 1280] [--height 720] [--video] [--quality auto|high|medium|low]
- *        [--dpr 2] [--budget [seconds]] [--swiftshader]
+ *        [--dpr 2] [--scale 1.5] [--budget [seconds]] [--swiftshader]
  *
  * Performance: measure at the player's real pixel ratio (`--dpr 2` for a
  * 200%-scaled laptop — the default 1 renders a quarter of those pixels) and
  * add `--budget` for a PASS/FAIL frame-budget verdict in summary.json
- * (tools/harness/budget.mjs), taken before any screenshots.
+ * (tools/harness/budget.mjs), taken before any screenshots. `--budget` runs
+ * the browser with vsync and the frame-rate limit off, so `fps` in that run
+ * is headroom, not display rate.
  *
  * Rendering: by default this runs Playwright's full Chromium in new-headless
  * mode on the machine's real GPU (ANGLE/D3D11 on Windows) — no window opens,
@@ -144,6 +146,9 @@ function launchOptions() {
   // to SwiftShader. ANGLE's D3D11 backend is what Chrome uses on Windows.
   const gpu = ['--ignore-gpu-blocklist', '--enable-gpu'];
   if (process.platform === 'win32') gpu.push('--use-angle=d3d11');
+  // A budget verdict needs frame time = work, not headless display pacing
+  // (see tools/harness/budget.mjs), so --budget runs uncapped.
+  if (BUDGET_S > 0) gpu.push('--disable-gpu-vsync', '--disable-frame-rate-limit');
   return {
     executablePath,
     channel: executablePath ? undefined : 'chromium',
@@ -301,6 +306,7 @@ const PORT = Number(argv.port || 5321 + (process.pid % 900));
   const softwareRendered = SOFTWARE || /swiftshader|llvmpipe|software/i.test(gpu);
 
   await page.evaluate((q) => window.__BBB__.setQuality?.(q), QUALITY);
+  if (argv.scale) await page.evaluate((s) => window.__BBB__.setRenderScale?.(s), Number(argv.scale));
   await page.evaluate((s) => window.__BBB__.goto(s), SCENE);
   // Let the freshly loaded scene draw a couple of settled frames before the
   // clock-based capture starts.

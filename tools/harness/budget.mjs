@@ -1,13 +1,18 @@
 /**
  * Frame-budget verdict for a harness run: consecutive frame durations (ms)
  * in, pass/fail out. The budget is what a 60Hz player needs to see smooth
- * play: p95 within one refresh (plus a little scheduling slack), and at most
- * one visible stall a minute. The first seconds after a scene starts are
- * excluded — shader compiles and asset uploads land there by design.
+ * play: p95 frame work within one refresh, and at most one visible stall a
+ * minute. The first seconds after a scene starts are excluded — shader
+ * compiles and asset uploads land there by design.
+ *
+ * Feed it frames measured with vsync and the frame-rate limit OFF (inspect.mjs
+ * does this under --budget). At display rate, headless Chromium's own frame
+ * pacing puts p95 near 18.7ms even with the game canvas hidden, which says
+ * nothing about the game; uncapped, frame time is the work itself.
  */
 
 export const BUDGET = {
-  p95Ms: 17.5,
+  p95Ms: 1000 / 60,
   longMs: 50,
   longPerMinute: 1,
   warmupMs: 3000,
