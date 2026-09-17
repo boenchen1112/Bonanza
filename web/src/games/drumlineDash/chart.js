@@ -22,10 +22,9 @@
  *                       are harder than notes because there is nothing to
  *                       remember, only an absence, and absences are not
  *                       rehearsable. That is why they land last.
- *   4. SIXTEENTHS     — odd slots, always as a pair with an adjacent even slot
- *                       so they read as an ornament on a beat you know rather
- *                       than a new grid to count.
- *   5. THE FINALE     — two bars held in memory at once, returned whole.
+ *   4. SYNCOPATION    — eighths off the beat, still no sixteenths: the grid
+ *                       never gets finer than the one you were taught.
+ *   5. THE FINALE     — one bar, called twice, returned whole.
  *
  * Every pattern is authored, not generated. A random rhythm is a quiz; a
  * written one has a shape you can hum back, and humming it back is the game.
@@ -58,25 +57,26 @@ export const PLAY = [
 ];
 
 /**
- * ESCALATE — 10 bars. Missing downbeats, sixteenth pickups, capped at 5 notes
- * (was 6-7) — playtesting found the density plus the off-beat starts too much
- * at once, especially when a bar's first hit isn't on the downbeat. Every
- * non-finale bar in the whole chart now tops out at 5 notes; only the finale
- * is allowed to go higher.
+ * ESCALATE — 10 bars. Rests and syncopation on the eighth grid, capped at 5
+ * notes. Playtesting twice found the end of the round too hard: first the
+ * density (was 6-7 notes), then the memory load — sixteenth pickups plus bars
+ * with no downbeat, back to back, right before a two-bar finale. So: no odd
+ * (sixteenth) slots, only two bars that start on a rest, never adjacent.
  */
 export const ESCALATE = [
-  [2, 4, 10, 12, 14],       // no downbeat: the bar starts on a rest
-  [0, 3, 4, 7, 8],          // sixteenth pickups into 2 and 3
-  [0, 2, 6, 8, 10],         // rest where beat 2 should be
-  [2, 6, 8, 11, 12],        // syncopation + a sixteenth, no downbeat
+  [0, 2, 6, 8, 12],         // rest where beat 2 should be
+  [2, 4, 8, 10, 12],        // no downbeat: the bar starts on a rest
+  [0, 6, 8, 10, 12],        // hold the downbeat, then a late eighth run
   [0, 2, 4, 10, 12],        // one hole in the middle
+  [2, 6, 8, 12, 14],        // syncopated, no downbeat
 ];
 
-/** FINALE — a two-bar call returned whole. Worth double. The only phrase
- *  allowed past the 5-notes-per-bar cap (9 total here, ceiling is 10). */
+/** FINALE — a two-bar call returned whole, worth double. The second bar
+ *  repeats the first, so it is one bar to remember played twice: the length
+ *  sells the ending, not a second rhythm to hold in memory. */
 export const FINALE = [
   [0, 4, 6, 12],
-  [0, 2, 6, 8, 12],
+  [0, 4, 6, 12],
 ];
 
 /** How many beats of lead-in the transport runs before beat 0. */
