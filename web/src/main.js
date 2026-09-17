@@ -17,7 +17,7 @@ import * as THREE from 'three';
 import { Clock } from './core/clock.js';
 import { Input } from './core/input.js';
 import { FEEL } from './core/feel.js';
-import { Bus, makeRng, Save } from './core/util.js';
+import { Bus, makeRng, Save, Ring } from './core/util.js';
 import { createStage } from './render/stage.js';
 import { createAudio } from './audio/index.js';
 import { createUI } from './ui/index.js';
@@ -260,6 +260,10 @@ let last = performance.now();
 
 function frame(nowMs) {
   requestAnimationFrame(frame);
+  // `nowMs` is the frame's rAF timestamp, which can be well before this
+  // callback actually runs when the GPU is backed up: measure our own work
+  // from here, or that wait is misreported as game-code time.
+  const workStart = performance.now();
 
   const nowS = nowMs / 1000;
   const rawDt = (nowMs - last) / 1000;
@@ -301,8 +305,9 @@ function frame(nowMs) {
   // game; this number still does.
   const cpuEnd = performance.now();
   stage.render(dt, nowS);
+  const renderEnd = performance.now();
 
-  telemetry.push(nowMs, cpuEnd - nowMs);
+  telemetry.push(nowMs, cpuEnd - workStart, renderEnd - cpuEnd);
   perf.update(nowMs);
 
   if (pendingScene) {
@@ -314,20 +319,51 @@ function frame(nowMs) {
 
 // -------------------------------------------------------------- telemetry
 
+/** A frame counts as "long" past this, and is logged with where its time went. */
+const LONG_FRAME_MS = 2 * (1000 / 60);
+const TELEMETRY_FRAMES = 1800;
+
 const telemetry = {
-  frames: [],
-  cpu: [],
+  frames: new Ring(TELEMETRY_FRAMES),
+  cpu: new Ring(TELEMETRY_FRAMES),
+  /** Where each frame interval went: our update, our render submission, and
+   *  everything else (GPU catch-up, compositor, other main-thread work). */
+  update: new Ring(TELEMETRY_FRAMES),
+  render: new Ring(TELEMETRY_FRAMES),
+  other: new Ring(TELEMETRY_FRAMES),
+  longFrames: [],
   judgements: [],
   _lastMs: performance.now(),
-  push(nowMs, cpuMs) {
+  _prevUpdate: 0,
+  _prevRender: 0,
+  /** Called at the end of a frame. The interval since the previous frame's
+   *  start covers the PREVIOUS frame's work, so that is what it is split by. */
+  push(nowMs, updateMs, renderMs) {
     const d = nowMs - this._lastMs;
     this._lastMs = nowMs;
+    const other = Math.max(0, d - this._prevUpdate - this._prevRender);
     this.frames.push(d);
-    this.cpu.push(cpuMs);
-    if (this.frames.length > 1800) { this.frames.shift(); this.cpu.shift(); }
+    this.cpu.push(updateMs);
+    this.update.push(this._prevUpdate);
+    this.render.push(this._prevRender);
+    this.other.push(other);
+    if (d > LONG_FRAME_MS) {
+      this.longFrames.push({
+        atMs: Math.round(nowMs), frameMs: d, updateMs: this._prevUpdate, renderMs: this._prevRender,
+        otherMs: other, scene: stage.sceneId,
+      });
+      if (this.longFrames.length > 60) this.longFrames.shift();
+    }
+    this._prevUpdate = updateMs;
+    this._prevRender = renderMs;
   },
-  _stats(arr) {
-    const f = arr.slice().sort((a, b) => a - b);
+  reset() {
+    for (const r of [this.frames, this.cpu, this.update, this.render, this.other]) r.clear();
+    this.longFrames.length = 0;
+    this.judgements.length = 0;
+  },
+  _stats(ring) {
+    const f = ring.toArray().sort((a, b) => a - b);
     const pct = (p) => (f.length ? f[Math.min(f.length - 1, Math.floor(f.length * p))] : 0);
     const mean = f.length ? f.reduce((a, b) => a + b, 0) / f.length : 0;
     return { mean, p50: pct(0.5), p95: pct(0.95), p99: pct(0.99), max: f[f.length - 1] || 0 };
@@ -341,6 +377,12 @@ const telemetry = {
       frameMs,
       /** Our JS per frame. THIS is the perf number that survives a software GPU. */
       cpuMs: this._stats(this.cpu),
+      split: {
+        updateMs: this._stats(this.update),
+        renderMs: this._stats(this.render),
+        otherMs: this._stats(this.other),
+      },
+      longFrames: this.longFrames.slice(),
       render: {
         // From the stage, captured before post's fullscreen quads overwrite
         // renderer.info — otherwise every scene reports "1 draw call".
@@ -368,6 +410,11 @@ bus.on('judge', (j) => telemetry.judgements.push({
 // player hitting real lag/audio-dropout/scoring-drift on real hardware can
 // turn it on, reproduce the problem, and report back what it actually reads.
 // Toggle with the ` (backquote) key, or start visible with ?perf=1.
+
+const lastLong = (list) => {
+  const f = list[list.length - 1];
+  return `${f.frameMs.toFixed(0)}ms = upd ${f.updateMs.toFixed(0)} + rnd ${f.renderMs.toFixed(0)} + other ${f.otherMs.toFixed(0)}`;
+};
 
 const perf = (() => {
   let el = null;
@@ -402,7 +449,13 @@ const perf = (() => {
       lastPaint = nowMs;
       const s = telemetry.snapshot();
       ensure().textContent =
-        `fps ${s.fps.toFixed(0)}  cpu ${s.cpuMs.mean.toFixed(1)}ms (p95 ${s.cpuMs.p95.toFixed(1)})\n`
+        `fps ${s.fps.toFixed(0)}  frame p95 ${s.frameMs.p95.toFixed(1)}ms\n`
+        + `update ${s.split.updateMs.mean.toFixed(1)} (p95 ${s.split.updateMs.p95.toFixed(1)})  `
+        + `render ${s.split.renderMs.mean.toFixed(1)} (p95 ${s.split.renderMs.p95.toFixed(1)})  `
+        + `other ${s.split.otherMs.mean.toFixed(1)} (p95 ${s.split.otherMs.p95.toFixed(1)})\n`
+        + (s.longFrames.length
+          ? `long frames ${s.longFrames.length}, last ${lastLong(s.longFrames)}\n`
+          : 'long frames 0\n')
         + `draws ${s.render.drawCalls}  tris ${s.render.triangles}\n`
         + `audio ${audioCtx.state}  latency ${s.outputLatencyMs.toFixed(0)}ms\n`
         + `stalls ${stallCount} (worst ${worstStallMs.toFixed(0)}ms)  scene ${s.scene || '-'}`;
@@ -483,10 +536,10 @@ if (TEST_API) window.__BBB__ = {
   stage,
   telemetry: () => telemetry.snapshot(),
   /** Raw consecutive frame durations (ms), oldest first — for budget verdicts. */
-  frameTimes: () => telemetry.frames.slice(),
+  frameTimes: () => telemetry.frames.toArray(),
   /** What the stage is actually drawing at: buffer scale and quality tier. */
   renderState: () => ({ renderScale: stage.size.dpr, tier: stage.quality }),
-  resetTelemetry: () => { telemetry.frames.length = 0; telemetry.judgements.length = 0; },
+  resetTelemetry: () => telemetry.reset(),
   goto: (id, opts) => activate(id, opts || {}),
   /** Shell bookkeeping (session/profile) — lets a script stage a party mid-way. */
   shellState: () => import('./shell/state.js'),

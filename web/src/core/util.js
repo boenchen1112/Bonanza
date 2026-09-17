@@ -71,6 +71,34 @@ export function makeRng(seed = 0x9e3779b9) {
   return next;
 }
 
+/** Fixed-capacity numeric ring buffer: push is O(1) and never allocates. */
+export class Ring {
+  constructor(capacity) {
+    this.capacity = capacity;
+    this._buf = new Float64Array(capacity);
+    this._start = 0;
+    this.length = 0;
+  }
+
+  push(v) {
+    if (this.length < this.capacity) {
+      this._buf[(this._start + this.length++) % this.capacity] = v;
+    } else {
+      this._buf[this._start] = v;
+      this._start = (this._start + 1) % this.capacity;
+    }
+  }
+
+  clear() { this._start = 0; this.length = 0; }
+
+  /** Oldest first. */
+  toArray() {
+    const out = new Array(this.length);
+    for (let i = 0; i < this.length; i++) out[i] = this._buf[(this._start + i) % this.capacity];
+    return out;
+  }
+}
+
 /** Tiny event bus. */
 export class Bus {
   constructor() { this._m = new Map(); }
