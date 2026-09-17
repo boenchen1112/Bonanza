@@ -43,10 +43,22 @@ export function createUI({ root, bus, clock }) {
     const img = textImage(String(text), fontStyle(styleName, { color: toColor(color) }));
     const d = document.createElement('div');
     d.className = extraClass ? `bbb-t ${extraClass}` : 'bbb-t';
-    d.style.backgroundImage = `url(${img.url})`;
+    setImage(d, img);
     d.style.setProperty('--ratio', String(img.ratio));
     d.style.setProperty('--ar', String(img.aspect));
     return d;
+  }
+
+  /** Point an element at a text image; a first-time string's image is still
+   *  encoding off-thread, so it lands a frame or two later. */
+  function setImage(node, img) {
+    if (img.url) { node.style.backgroundImage = `url(${img.url})`; return; }
+    node.dataset.pending = img.key;
+    img.ready.then((url) => {
+      if (node.dataset.pending !== img.key) return;   // repainted with other text meanwhile
+      delete node.dataset.pending;
+      node.style.backgroundImage = `url(${url})`;
+    });
   }
 
   /**
@@ -79,6 +91,7 @@ export function createUI({ root, bus, clock }) {
       if (i >= chars.length) { c.style.display = 'none'; continue; }
       c.style.display = '';
       if (chars[i] === ' ') {
+        delete c.dataset.pending;
         c.style.backgroundImage = 'none';
         c.style.setProperty('--ratio', '1');
         c.style.setProperty('--ar', String(0.34 + st.tracking));
@@ -86,7 +99,7 @@ export function createUI({ root, bus, clock }) {
         continue;
       }
       const img = cellImage(chars[i], st);
-      c.style.backgroundImage = `url(${img.url})`;
+      setImage(c, img);
       c.style.setProperty('--ratio', String(img.ratio));
       c.style.setProperty('--ar', String(img.aspect));
       // Overlap each cell's padding so glyphs sit exactly where a whole-string

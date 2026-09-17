@@ -524,10 +524,19 @@ export function textImage(text, st = STYLES.display) {
   const cv = document.createElement('canvas');
   cv.width = Math.max(2, Math.ceil((adv + Math.abs(st.slant) + 2 * mx) * s));
   cv.height = Math.max(2, Math.ceil((1 + DESC + 2 * my) * s));
-  paint(cv.getContext('2d'), items, st, s, mx * s, my * s);
+  // CPU-backed on purpose: Chrome GPU-accelerates a canvas this size, and
+  // reading it back to encode then stalls the main thread (profiled at
+  // ~200ms per title-sized string on an Iris Xe).
+  paint(cv.getContext('2d', { willReadFrequently: true }), items, st, s, mx * s, my * s);
 
   const out = {
-    url: cv.toDataURL('image/png'),
+    key,
+    /** Object URL once encoded, null until then — see `ready`. */
+    url: null,
+    /** Resolves with the URL. The PNG encode runs off the main thread
+     *  (toBlob): a synchronous toDataURL of a title-sized string blocked the
+     *  frame for 60-235ms on every count-in beat of a fresh session. */
+    ready: null,
     w: cv.width,
     h: cv.height,
     padX: mx,
@@ -536,11 +545,22 @@ export function textImage(text, st = STYLES.display) {
     ratio: cv.height / s,
     aspect: cv.width / cv.height,
   };
+  out.ready = cv.toBlob
+    ? new Promise((resolve) => cv.toBlob((blob) => {
+      out.url = blob ? URL.createObjectURL(blob) : cv.toDataURL('image/png');
+      resolve(out.url);
+    }, 'image/png'))
+    : Promise.resolve(out.url = cv.toDataURL('image/png'));
   if (imgCache.size > CACHE_MAX) {
     // Cheap eviction: drop the oldest quarter. Strings here are short-lived
-    // labels, so exact LRU is not worth the bookkeeping.
+    // labels, so exact LRU is not worth the bookkeeping. Their blob URLs are
+    // released a little later, in case one is still on screen.
     let n = Math.floor(CACHE_MAX / 4);
-    for (const k of imgCache.keys()) { imgCache.delete(k); if (--n <= 0) break; }
+    for (const [k, v] of imgCache) {
+      imgCache.delete(k);
+      v.ready.then((u) => { if (u.startsWith('blob:')) setTimeout(() => URL.revokeObjectURL(u), 10000); });
+      if (--n <= 0) break;
+    }
   }
   imgCache.set(key, out);
   return out;
