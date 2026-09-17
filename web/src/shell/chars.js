@@ -9,7 +9,9 @@
 
 import * as THREE from 'three';
 import { PAL, num } from './theme.js';
-import { makeCast, BUILD_IDS } from '../chars/index.js';
+import { makeCast, BUILD_IDS, preloadBlenderBodies, isBlenderReady } from '../chars/index.js';
+
+export { isBlenderReady };
 
 /** @typedef {{id:string,name:string,color:number,accent:number,trait:string,shape:string,crest:string}} CharDef */
 
@@ -51,11 +53,19 @@ export function charMesh(def, opts = {}) {
     positions: [[0, 0, 0]],
     builds: [build],
     players: [{ id: def.id, name: def.name, palette: paletteForChar(def) }],
+    // Safe here: the shell's cosmetic displays (title busts, roster,
+    // results podium) never reach into the toy rig's joint internals the
+    // way swingKings/world.js and chompChorus do - see makeCast()'s own
+    // comment on this flag.
+    allowBlenderBodies: true,
     ...opts,
   });
   const member = cast.get(0);
   const obj = member.char;
-  addCrest(obj, def);
+  // A Blender body already has its crest baked into the mesh (see
+  // tools/assets/blender/build-cast.py) and has none of the toy rig's
+  // named joints addCrest() reaches into (char.joints, char.build).
+  if (!obj.userData.isBlenderBody) addCrest(obj, def);
   obj.userData.charApi = member.anim;
   obj.userData.def = def;
   // Kept so disposeChar() can tear down this single-member cast; makeCast's
@@ -79,7 +89,7 @@ export function gamePlayers(players) {
       id: p.id, name: p.name, char: def.id, isCpu: !!p.isCpu, cpuSkill: p.cpuSkill || 0,
       palette: paletteForChar(def),
       build: BUILD_BY_SHAPE[def.shape] || BUILD_IDS[idx % BUILD_IDS.length],
-      dress: (obj) => addCrest(obj, def),
+      dress: (obj) => { if (!obj.userData.isBlenderBody) addCrest(obj, def); },
     };
   });
 }
@@ -329,6 +339,12 @@ function buildOneBust(def) {
  * @returns {boolean} true while portraits are still being built
  */
 export function pumpBusts(budgetMs = 4) {
+  // Internally guarded (a no-op after the first call) - starting this as
+  // early as the title screen's own idle warm-up means the 8 Blender
+  // bodies are very likely already cached by the time a real roster/podium
+  // needs one, instead of every character's first-ever appearance falling
+  // back to the toy rig while its GLB is still in flight.
+  preloadBlenderBodies();
   ensureBustRig();
   if (!bustCtx) return false;
   const t0 = (typeof performance !== 'undefined' ? performance.now() : Date.now());

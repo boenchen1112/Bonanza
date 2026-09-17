@@ -19,7 +19,7 @@ import {
   ensureStyle, tickExit, makeExit, startShellTransport,
 } from './theme.js';
 import { createBackdrop } from './backdrop.js';
-import { CHARS, charById, charMesh, charBeat, disposeChar, drawPortrait, pumpBusts, bustsBuilt } from './chars.js';
+import { CHARS, charById, charMesh, charBeat, disposeChar, drawPortrait, pumpBusts, bustsBuilt, isBlenderReady } from './chars.js';
 import { CATALOG } from './games.js';
 import { profile, session, partyPlaylist } from './state.js';
 import { goView, rosterExitRoute } from './nav.js';
@@ -46,7 +46,7 @@ export default {
       t: 0, mode, stage: mode === 'party' ? 'lineup' : 'chars',
       cursor: 0, slotSel: 0, active: 0, cpuT: 0, goT: 0, exit: null,
       cards: [], slots: [], reduce: reducedMotion(),
-      preview: null, previewId: null, previewSpin: 0,
+      preview: null, previewId: null, previewSpin: 0, previewIsBlender: false,
       bustsSeen: bustsBuilt(),
     };
 
@@ -80,6 +80,7 @@ export default {
     S.castGroup.position.set(2.4, -1.5, -3.4);
     ctx.scene.add(S.castGroup);
     S.cast = [null, null, null, null];
+    S.castIsBlender = [false, false, false, false];
 
     ctx.camera.position.set(0, 1.7, 9.4);
     ctx.camera.lookAt(0, 1.1, 0);
@@ -178,6 +179,26 @@ export default {
       for (let i = 0; i < 4; i++) {
         const id = S.picks[i];
         if (id) drawPortrait(S.slots[i].face, charById(id), { size: 62 });
+      }
+    }
+    // Same idea, for the 3D meshes: a preview or a locked-in cast member
+    // built before its Blender body finished loading is stuck on the toy
+    // rig forever unless something rebuilds it — a plain 3D mesh has no
+    // portrait-style "redraw once the asset lands" path of its own.
+    if (S.preview && !S.previewIsBlender && isBlenderReady(S.previewId)) {
+      setPreview(ctx, charById(S.previewId), true);
+    }
+    for (let i = 0; i < 4; i++) {
+      if (S.cast[i] && !S.castIsBlender[i] && isBlenderReady(S.picks[i])) {
+        const def = charById(S.picks[i]);
+        const m = charMesh(def, {});
+        S.castIsBlender[i] = !!m.userData.isBlenderBody;
+        m.position.set((i - 1.5) * 1.6, 0, 0);
+        m.scale.setScalar(0.8);
+        S.castGroup.add(m);
+        S.castGroup.remove(S.cast[i]);
+        disposeChar(S.cast[i]);
+        S.cast[i] = m;
       }
     }
     const pulse = beatPulse(beat, 6);
@@ -358,11 +379,12 @@ function shakeCard(i) {
   );
 }
 
-function setPreview(ctx, def) {
-  if (S.previewId === def.id) return;
+function setPreview(ctx, def, force = false) {
+  if (S.previewId === def.id && !force) return;
   S.previewId = def.id;
   if (S.preview) { S.stand.remove(S.preview); disposeChar(S.preview); }
   const m = charMesh(def, {});
+  S.previewIsBlender = !!m.userData.isBlenderBody;
   m.scale.setScalar(1.55);
   m.position.y = 0.42;
   S.stand.add(m);
@@ -391,6 +413,7 @@ function lockIn(ctx, slot, def, isCpu) {
 
   // the pick walks onto the cast deck
   const m = charMesh(def, {});
+  S.castIsBlender[slot] = !!m.userData.isBlenderBody;
   m.position.set((slot - 1.5) * 1.6, 0, 0);
   m.scale.setScalar(0.8);
   S.castGroup.add(m);
@@ -409,7 +432,7 @@ function unlock(ctx, slot) {
   S.slots[slot].name.textContent = '—';
   const f = S.slots[slot].face;
   f.width = 1; f.height = 1; f.style.width = '62px'; f.style.height = '62px';
-  if (S.cast[slot]) { S.castGroup.remove(S.cast[slot]); disposeChar(S.cast[slot]); S.cast[slot] = null; }
+  if (S.cast[slot]) { S.castGroup.remove(S.cast[slot]); disposeChar(S.cast[slot]); S.cast[slot] = null; S.castIsBlender[slot] = false; }
   S.stage = 'chars';
   sfx(ctx, 'uiBack');
   refreshSlots(ctx);

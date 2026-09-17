@@ -31,6 +31,8 @@ import { CharacterAnimator, makeAnimator, STATES, STATE_DEF, VERDICT_POSE, idle,
 import { makeCrowd } from './crowd.js';
 import { CLIP_FACE } from './anim.js';
 import { CLIPS } from './clips.gen.js';
+import { BlenderCharacterAnimator } from './blenderAnim.js';
+import { BLENDER_CHAR_IDS, getBlenderTemplate, instantiateBlenderBody, preloadBlenderBodies } from './blenderBodies.js';
 
 export {
   /** Baked mocap clips (durations, `contact` frames) for `anim.play()`. */
@@ -40,7 +42,47 @@ export {
   CharacterAnimator, makeAnimator, STATES, STATE_DEF, VERDICT_POSE,
   idle, windup, strike, makePose, sampleClip,
   makeCrowd,
+  /** Blender-body pipeline: call once, early (shell/chars.js's warm-up
+   * already does), so bodies are cached by the time a real cast is built.
+   * `isBlenderReady(id)` is for callers that build a character once and
+   * hold onto it (a roster preview, a locked-in cast slot) - a toy-rig
+   * fallback built before its GLB finished loading never upgrades itself,
+   * so the caller polls this and rebuilds via `makeCast()`/`charMesh()`
+   * again once it flips true. */
+  preloadBlenderBodies,
 };
+
+export function isBlenderReady(id) {
+  return !!(id && BLENDER_CHAR_IDS.includes(id) && getBlenderTemplate(id));
+}
+
+/**
+ * Build one cast member's 3D representation: the Blender body for `charId`
+ * when it's one of the 8 named cast members AND its GLB has finished
+ * loading, otherwise the toy rig (unchanged) — a character requested before
+ * its body is warm just gets the toy rig for that instance, no error.
+ */
+function makeMember({ charId, pal, build, charSeed, animSeed, detail, scale, name }) {
+  if (charId && BLENDER_CHAR_IDS.includes(charId) && getBlenderTemplate(charId)) {
+    const tpl = instantiateBlenderBody(charId);
+    if (tpl) {
+      const { scene, animations } = tpl;
+      scene.updateMatrixWorld(true);
+      const mixer = new THREE.AnimationMixer(scene);
+      const actions = Object.fromEntries(animations.map((a) => [a.name, mixer.clipAction(a)]));
+      const anim = new BlenderCharacterAnimator(scene, mixer, actions, { seed: animSeed });
+      scene.userData.isBlenderBody = true;
+      scene.dispose = () => { mixer.stopAllAction(); scene.removeFromParent(); };
+      return { char: scene, anim };
+    }
+  }
+  const char = makeCharacter({ palette: pal, build, seed: charSeed, detail, scale, name });
+  const anim = makeAnimator(char, { seed: animSeed });
+  // Settle the pose before this character is ever rendered — see the
+  // longer explanation at the original call site this was lifted from.
+  for (let k = 0; k < 8; k++) anim.update(1 / 30, 0);
+  return { char, anim };
+}
 
 /**
  * Build a roster and its animators in one call.
@@ -62,6 +104,15 @@ export {
 export function makeCast({
   scene, players = null, count = null, positions = null, spacing = 2.1,
   builds = null, detail = 'full', seed = 0x51e, scale = 1, faceCamera = true,
+  // Off by default: several minigames reach past this facade into the toy
+  // rig's own joint API - swingKings/world.js attaches the bat via
+  // `char.attach('handR', ...)` and builds a custom helmet from
+  // `char.joints`/`char.build`, chompChorus reads `.char.joints` directly -
+  // none of which exist on a Blender body. Only a caller that has been
+  // checked against its own game's character-internals usage should turn
+  // this on; the shell's cosmetic displays (title busts, roster, results
+  // podium) have been, minigames have not yet.
+  allowBlenderBodies = false,
 } = {}) {
   const n = count ?? (players ? players.length : 1);
   const members = [];
@@ -78,26 +129,22 @@ export function makeCast({
       : typeof pp === 'object' ? pp
         : typeof pp === 'string' ? paletteById(pp) : paletteFor(pp);
     const build = builds?.[i] ?? BUILD_IDS[i % BUILD_IDS.length];
-    const char = makeCharacter({
-      palette: pal, build, seed: (seed + i * 7919) >>> 0, detail, scale,
-      name: p?.name || `P${i + 1}`,
+    // `char` on a player object is the roster character id (e.g. 'tuff');
+    // the shell's own single-character path (charMesh()) instead passes it
+    // as `id`, since there `id` already IS the character id - see
+    // gamePlayers() vs charMesh() in shell/chars.js.
+    const charId = allowBlenderBodies
+      ? (typeof p?.char === 'string' ? p.char : (typeof p?.id === 'string' ? p.id : null))
+      : null;
+    const { char, anim } = makeMember({
+      charId, pal, build,
+      charSeed: (seed + i * 7919) >>> 0, animSeed: (seed + i * 104729) >>> 0,
+      detail, scale, name: p?.name || `P${i + 1}`,
     });
     const pos = positions?.[i] || [(i - (n - 1) / 2) * spacing, 0, 0];
     char.position.set(pos[0], pos[1], pos[2]);
     if (faceCamera && !positions) char.rotation.y = -pos[0] * 0.055;
     group.add(char);
-    const anim = makeAnimator(char, { seed: (seed + i * 104729) >>> 0 });
-    // Settle the pose before this character is ever rendered. Its rest pose
-    // (anim.js `REST` — hip/torso rotations at zero) is the rig's zero
-    // reference, not a standing stance, and `update()`'s damping takes
-    // several ticks to close the gap to "idle" — with nothing pre-warmed, a
-    // freshly built character visibly rises from lying flat to standing
-    // over its first few frames. Eight ticks at 1/30s clears >99% of the
-    // gap regardless of caller dt (see the exp(-34*dt) factor in anim.js)
-    // for the cost of pure math, no render — this was already the fix the
-    // portrait-bust code used per character; every OTHER caller of a fresh
-    // cast (a roster lock-in, a minigame's cast) needs the same thing.
-    for (let k = 0; k < 8; k++) anim.update(1 / 30, 0);
     members.push({
       index: i, id: p?.id ?? i, name: p?.name || `P${i + 1}`,
       char, anim, palette: pal,
