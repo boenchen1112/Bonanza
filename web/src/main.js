@@ -563,6 +563,8 @@ if (TEST_API) window.__BBB__ = {
    * dropping post restores a real frame rate so timing can actually be judged.
    */
   setQuality: (tier) => stage.setQuality?.(tier),
+  /** Buffer pixels per CSS pixel; null = the device's own ratio. */
+  setRenderScale: (s) => stage.setRenderScale(s),
   /**
    * Play the game automatically for `seconds`. Frame-rate independent by
    * construction — see pumpBot.
@@ -629,6 +631,8 @@ if (TEST_API) window.__BBB__ = {
   resize();
   const q = new URLSearchParams(location.search).get('quality');
   if (q) stage.setQuality?.(q);
+  const scale = new URLSearchParams(location.search).get('scale');
+  if (scale) stage.setRenderScale(Number(scale));
   await audio.init();
   const startScene = new URLSearchParams(location.search).get('scene') || 'title';
   try {

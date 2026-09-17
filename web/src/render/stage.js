@@ -43,7 +43,10 @@ const MAX_ROLL = 0.018;   // radians (~1 degree)
 export function createStage({ canvas, clock }) {
   const renderer = new THREE.WebGLRenderer({
     canvas,
-    antialias: true,
+    // The post chain renders the scene into its own multisampled buffer and
+    // only blits a quad to the canvas, so a multisampled canvas is paid for
+    // twice. Only the low tier draws straight to the canvas.
+    antialias: false,
     powerPreference: 'high-performance',
     alpha: false,
     stencil: false,
@@ -186,16 +189,34 @@ export function createStage({ canvas, clock }) {
 
   // --------------------------------------------------------------------- api
 
+  /** Requested render scale (buffer pixels per CSS pixel); null = the device's. */
+  let requestedScale = null;
+
   function resize(w, h) {
     size.w = Math.max(1, w);
     size.h = Math.max(1, h);
     // Cap DPR: a 3x retina phone rendering a full-screen 3D scene at native
     // resolution will drop frames, and frame drops are worse than soft pixels
     // in a game judged on timing.
-    size.dpr = Math.min(window.devicePixelRatio || 1, 2);
+    size.deviceRatio = Math.min(window.devicePixelRatio || 1, 2);
+    // A requested scale never supersamples past the (capped) device ratio.
+    size.dpr = requestedScale === null ? size.deviceRatio : Math.min(requestedScale, size.deviceRatio);
     renderer.setPixelRatio(size.dpr);
     renderer.setSize(size.w, size.h, false);
     look.post.setSize(size.w * size.dpr, size.h * size.dpr);
+  }
+
+  /**
+   * Render at `scale` buffer pixels per CSS pixel (null = the device ratio).
+   * Independent of the device pixel ratio: a 200%-scaled laptop can draw at
+   * 1.5 and let the browser upscale — soft pixels beat missed frames.
+   * @returns {number} the scale actually in effect
+   */
+  function setRenderScale(scale) {
+    const s = Number(scale);
+    requestedScale = scale === null || scale === undefined || !(s > 0) ? null : s;
+    if (size.w > 1 || size.h > 1) resize(size.w, size.h);
+    return size.dpr;
   }
 
   /**
@@ -616,7 +637,7 @@ export function createStage({ canvas, clock }) {
     set sceneId(v) { sceneId = v; },
 
     // --- look ---
-    look, rig, setPalette, createEnv, pulse, chroma, setQuality, dispose,
+    look, rig, setPalette, createEnv, pulse, chroma, setQuality, setRenderScale, dispose,
     get palette() { return look.palette; },
     get colors() { return look.palette.col; },
     get quality() { return look.tier; },

@@ -80,11 +80,20 @@ export function createLook({ renderer }) {
     } catch { /* ignore */ }
     return 'high';
   }
+  const SHADOW_MAP = { high: 2048, medium: 1024 };
   function setTier(t) {
     tier = t === 'auto' ? detectTier() : t;
     post.setTier(tier);
     // The one real shadow map is a high/medium feature; low keeps blobs only.
-    renderer.shadowMap.enabled = tier !== 'low';
+    const shadowsOn = tier !== 'low';
+    const mapSize = SHADOW_MAP[tier] || 1024;
+    const key = lights.key.shadow;
+    if (key.mapSize.x !== mapSize) {
+      key.mapSize.set(mapSize, mapSize);
+      key.map?.dispose();
+      key.map = null;       // three reallocates at the new size on the next render
+    }
+    renderer.shadowMap.enabled = shadowsOn;
     return tier;
   }
 
