@@ -205,7 +205,9 @@ PALETTES['drumline-dash'] = P({
   fillSky: 0xff9ad8, fillGround: 0x3a0d40, fillIntensity: 1.1,
   rim: 0xff6bd6, rimStrength: 1.0,
   fog: 0x5a1050, fogNear: 15, fogFar: 60,
-  bloom: 1.0,
+  // Same steep, bright key as Swing Kings (see its note) - the lead
+  // performer's spotlit head bleached white at the default threshold.
+  bloom: 1.0, bloomThreshold: 1.3,
 });
 
 /** Bounce Brigade: bright poolside afternoon, cool and clean. */
@@ -220,7 +222,8 @@ PALETTES['bounce-brigade'] = P({
   fillSky: 0x9ef0ff, fillGround: 0x0a3d52, fillIntensity: 1.25,
   rim: 0x7ef7ff, rimStrength: 0.85,
   fog: 0x0d6489, fogNear: 20, fogFar: 76,
-  bloom: 0.75, saturation: 1.1,
+  // Same class of steep key as Swing Kings/Drumline Dash (see their notes).
+  bloom: 0.75, bloomThreshold: 1.3, saturation: 1.1,
 });
 
 /** Chomp Chorus: purple midnight kitchen, acid-lime highlights. */
@@ -236,6 +239,10 @@ PALETTES['chomp-chorus'] = P({
   rim: 0x9ee87a, rimStrength: 1.0, rimPower: 2.2,
   fog: 0x3a0d58, fogNear: 14, fogFar: 58,
   bloom: 1.0,
+  // A key light this steep (2.4, matching what needed headroom in Swing
+  // Kings at 3.0) bleaches the paler cast members' faces white at the
+  // default threshold - see the note there.
+  bloomThreshold: 1.05,
 });
 
 /** Finale Fever: crimson and gold, fireworks over a dark house. */
@@ -250,7 +257,9 @@ PALETTES['finale-fever'] = P({
   fillSky: 0xffa9a0, fillGround: 0x360a24, fillIntensity: 1.1,
   rim: 0xffb45a, rimStrength: 1.05,
   fog: 0x63102a, fogNear: 14, fogFar: 64,
-  bloom: 1.1, exposure: 1.1,
+  // The conductor's spotlit head bleached white at the default threshold -
+  // same steep-key class of bug as Swing Kings (see its note).
+  bloom: 1.1, bloomThreshold: 1.35, exposure: 1.1,
 });
 
 /** Neutral fallback for anything unregistered. */

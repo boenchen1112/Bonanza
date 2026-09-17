@@ -256,6 +256,22 @@ locked to the transport across every `setBpm`.
   resolved and the harness reported a 20s timeout pointing nowhere near the
   cause. `activate()` now contains scene failures and records them on
   `window.__BBB__.lastError`. If a scene seems to hang, read that field.
+- **`warm()` skipped every pooled fx material.** Fixed (see the batching
+  wrapper's `traverseVisible` in `render/stage.js`) — was silently
+  re-applying a visibility filter to owners `materialOwner` had already
+  decided to compile, and every `render/fx` particle system rests at
+  `visible = false` until something fires. Meant the FIRST use of any
+  effect type in a session compiled its shader synchronously, mid-gameplay.
+- **`textImage()`'s `canvas.toDataURL()` (`ui/font.js`) is synchronous and
+  gets paid fresh for every new (style, text) pair** — cached after that,
+  but a score/combo HUD churns through many unique strings a session, and
+  each first render blocks the frame it lands on (measured: 100-270ms on
+  `chompChorus`/`drumlineDash`/`finaleFever`/`bounceBrigade`, all of which
+  use the standard HUD counter). Not fixed: the honest fix is `canvas.
+  toBlob()` + `URL.createObjectURL()` instead of `toDataURL()`, which
+  makes `textImage()` async and ripples into every caller in `ui/index.js`
+  — real scope for whoever finishes wiring `ui/` (see this file's own
+  "Currently half-wired" note), not a drive-by fix.
 
 ## 6. Input: taps first
 
