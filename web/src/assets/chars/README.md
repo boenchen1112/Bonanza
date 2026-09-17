@@ -23,35 +23,27 @@
 Mesh: welded and simplified to 30% of the source triangles (≈16.6k tris per
 character, meshoptimizer error < 0.1%).
 
-## Designed bodies: `cast-tuff.glb`
+## `cast-<id>.glb` (bopp, zizz, kwark, tuff, mimo, nibb, glub, fizz)
 
 The approved cast look (`docs/design/cast-sheet.html`, approved 2026-09-18).
-Characters move here one at a time as they are rebuilt; the rest still use
-the older build described in the next section.
+All eight are built by the designed pipeline below; the older
+`build-cast.py` bodies (one flat colour + a primitive crest) are superseded.
 
 | | |
 | --- | --- |
 | Source | `ybot.glb` above; character data and colour roles from `web/src/shell/castData.js` |
-| Built by | `node tools/assets/blender/build-character.mjs tuff` (Blender 4.2 LTS) — deterministic; see `tools/assets/blender/build-character.py` for every transform |
+| Built by | `node tools/assets/blender/build-character.mjs bopp zizz kwark tuff mimo nibb glub fizz` (Blender 4.2 LTS) — deterministic; see `tools/assets/blender/build-character.py` for every transform, one shape builder per portrait shape |
 | Contents | same skeleton + 8 clips as `ybot.glb`; ONE skinned mesh with five role materials (`body`, `trim`, `skin`, `accent`, `eye`): the mannequin with its head removed, a per-shape head shell with a face, a body shell, crest and outfit parts, each weighted 100% to one bone; face morph targets `mouthOpen`, `smile`, `frown`, `lidsDown`, `browsUp`, `browsPinch` (head-bound vertices only) |
 | Checked by | `node tools/assets/blender/cast-contract.mjs <glb>` (also run by `npm test`) and `node tools/assets/blender/contact-sheet.mjs <glb>` |
-| Cost | TUFF: 18,040 triangles; 6 draw calls in game (5 role materials + a skinned outline hull added at runtime by `chars/blenderBodies.js`) |
+| Cost | 17,592 (ZIZZ) – 19,428 (GLUB) triangles; 6 draw calls in game each (5 role materials + a skinned outline hull added at runtime by `chars/blenderBodies.js`) |
 
-Proportions: the sheet draws TUFF at 3 heads tall; on the unmodified Mixamo
-skeleton (shortening it would break the clips) the head shell lands at about
-4 heads.
+Proportions: the sheet draws the cast at 2.5–3.4 heads tall; on the
+unmodified Mixamo skeleton (shortening it would break the clips) the head
+shells land at roughly 3.5–4.5 heads.
 
-## `cast-<id>.glb` (bopp, zizz, kwark, mimo, nibb, glub, fizz — older build)
-
-| | |
-| --- | --- |
-| Source | `ybot.glb` above, reshaped/recoloured/crested per `shell/chars.js`'s `CHARS` entry for that id |
-| Built by | `node tools/assets/blender/build-cast-all.mjs` — deterministic; see `tools/assets/blender/build-cast.py` for every transform applied |
-| Contents | same skeleton + 8 clips as `ybot.glb` (untouched — only bone rest scale and materials change), plus a bone-skinned crest mesh (antenna/bolt/plume/horns/cap/fin, per character) |
-| Cost | 4–6 draw calls / ~16.6k–19.5k triangles per character (see `runs/verify-cast/summary.json` from the last `verify-cast.mjs` run) |
-
-Won the TUFF bake-off against the toy rig (5 draw calls / 16,720 tris vs. the
-toy rig's 22 / 7,234) on cost and look; picked by the user 2026-09-16.
+Blender bodies won the TUFF bake-off against the toy rig (5 draw calls /
+16,720 tris vs. the toy rig's 22 / 7,234) on cost and look; picked by the
+user 2026-09-16.
 Animated in-game via `chars/blenderAnim.js`, which plays these baked clips
 directly rather than the toy rig's procedural per-joint pose system — see
 that file's header for why the two rigs need different animators.

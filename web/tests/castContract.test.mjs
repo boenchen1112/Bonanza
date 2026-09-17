@@ -9,8 +9,8 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { checkCastGlb } from '../../tools/assets/blender/cast-contract.mjs';
 
-/** Characters rebuilt with build-character.py so far. */
-const DESIGNED = ['tuff'];
+/** Every cast member is built with build-character.py. */
+const DESIGNED = ['bopp', 'zizz', 'kwark', 'tuff', 'mimo', 'nibb', 'glub', 'fizz'];
 
 for (const id of DESIGNED) {
   test(`cast-${id}.glb meets the designed-body contract`, () => {

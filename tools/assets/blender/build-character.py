@@ -217,7 +217,7 @@ def build_block(b, arm, head_ext, torso_ext, face):
     cz = hmn.z - 0.03 + H / 2
     b.part('head_shell', rounded_box((W, D, H), 0.12, 4), 'body', HEAD, (0, hy, cz))
     front = hy - D / 2
-    face_parts(b, front, cz, W, H, face)
+    face_parts(b, lambda x, z: front, cz, W, H, face)
 
     top = cz + H / 2
     b.anchors['face_anchor'] = (0, front, cz)
@@ -241,26 +241,300 @@ def build_block(b, arm, head_ext, torso_ext, face):
         b.part(f'wrist_{side}', cone(0.075, 0.075, 0.13, 14), 'accent', bone, c, rot=aim(hand - fore))
 
 
-def face_parts(b, front, cz, W, H, face):
-    """Eyes, pupils, brows, mouth on the front of a head shell. `face` carries
-    the character's idle defaults from the sheet (brow tilt, mouth style)."""
-    ex = W * 0.23
+def face_parts(b, surface, cz, W, H, face):
+    """Eyes, pupils, brows, mouth on the front of a head shell.
+
+    `surface(x, z)` is the head's front surface (world y) at that point, so
+    features sit on curved heads too. Feature sizes were tuned on TUFF's
+    0.62-wide head and scale with `W`. `face` carries the character's idle
+    defaults from the sheet: eyeSpacing, eyeSquash (half-lids), pupil size,
+    browTilt, browAsym, blush, mouth style."""
+    k = W / 0.62
+    ex = W * face.get('eyeSpacing', 0.23)
     ez = cz + H * 0.07
+    squash = face.get('eyeSquash', 1.0)
+    pupil = face.get('pupil', 1.0)
     for s, tag in ((1, 'fx_eyeL'), (-1, 'fx_eyeR')):
-        b.part(f'eye_white_{s}', sphere(0.078), 'skin', HEAD, (s * ex, front + 0.012, ez), scale=(1, 0.5, 1.15), tags=('fx_eyes', tag))
-        b.part(f'pupil_{s}', sphere(0.038, 10, 8), 'eye', HEAD, (s * ex, front - 0.03, ez - 0.005), scale=(1, 0.5, 1.1), tags=('fx_eyes', tag))
+        x = s * ex
+        front = surface(x, ez)
+        b.part(f'eye_white_{s}', sphere(0.078 * k), 'skin', HEAD, (x, front + 0.012 * k, ez), scale=(1, 0.5, 1.15 * squash), tags=('fx_eyes', tag))
+        b.part(f'pupil_{s}', sphere(0.038 * k * pupil, 10, 8), 'eye', HEAD, (x, front - 0.03 * k, ez - 0.005 * k), scale=(1, 0.5, 1.1 * squash), tags=('fx_eyes', tag))
+        if face.get('glint'):
+            b.part(f'glint_{s}', sphere(0.014 * k, 8, 6), 'skin', HEAD, (x + 0.014 * k, front - 0.045 * k, ez + 0.016 * k), tags=('fx_eyes', tag))
         tilt = face.get('browTilt', 0.0) * s
-        b.part(f'brow_{s}', rounded_box((0.13, 0.035, 0.032), 0.012, 2), 'eye', HEAD,
-               (s * ex, front - 0.012, ez + 0.115), rot=(0, tilt, 0), tags=('fx_brow' + ('L' if s > 0 else 'R'),))
+        lift = face.get('browAsym', 0.0) * (1 if s > 0 else 0) * k
+        bz = ez + 0.115 * k * max(squash, 0.8) + lift
+        b.part(f'brow_{s}', rounded_box((0.13 * k, 0.035 * k, 0.032 * k), 0.012 * k, 2), 'eye', HEAD,
+               (x, surface(x, bz) - 0.012 * k, bz), rot=(0, tilt, 0), tags=('fx_brow' + ('L' if s > 0 else 'R'),))
+        if face.get('blush'):
+            cx, czb = s * ex * 1.25, ez - 0.13 * k
+            b.part(f'blush_{s}', sphere(0.05 * k, 10, 8), 'accent', HEAD, (cx, surface(cx, czb) + 0.004 * k, czb), scale=(1.2, 0.3, 0.55))
+
     mz = cz - H * 0.26
-    b.part('mouth', rounded_box((0.21, 0.03, 0.024), 0.01, 2), 'eye', HEAD, (0, front - 0.006, mz), tags=('fx_mouth',))
-    if face.get('mouth') == 'underbite':
+    mf = surface(0, mz)
+    style = face.get('mouth', 'line')
+    if style == 'underbite':
+        b.part('mouth', rounded_box((0.21 * k, 0.03 * k, 0.024 * k), 0.01 * k, 2), 'eye', HEAD, (0, mf - 0.006 * k, mz), tags=('fx_mouth',))
         for s in (-1, 1):
-            b.part(f'tooth_{s}', cone(0.022, 0.0, 0.05, 8), 'skin', HEAD, (s * 0.055, front - 0.018, mz + 0.03), tags=('fx_teeth',))
+            b.part(f'tooth_{s}', cone(0.022 * k, 0.0, 0.05 * k, 8), 'skin', HEAD, (s * 0.055 * k, mf - 0.018 * k, mz + 0.03 * k), tags=('fx_teeth',))
+    elif style == 'grin':
+        b.part('mouth', sphere(0.5, 16, 10), 'eye', HEAD, (0, mf + 0.01 * k, mz), scale=(0.26 * k, 0.06 * k, 0.11 * k), tags=('fx_mouth',))
+    elif style == 'shout':
+        b.part('mouth', sphere(0.5, 14, 10), 'eye', HEAD, (0, mf + 0.01 * k, mz - 0.01 * k), scale=(0.13 * k, 0.06 * k, 0.15 * k), tags=('fx_mouth',))
+    elif style == 'smirk':
+        b.part('mouth', rounded_box((0.17 * k, 0.03 * k, 0.024 * k), 0.01 * k, 2), 'eye', HEAD, (0.035 * k, mf - 0.006 * k, mz), rot=(0, -0.2, 0), tags=('fx_mouth',))
+    elif style == 'beak':
+        d = mathutils.Vector((0, -1, -0.25)).normalized()
+        b.part('mouth', cone(0.085 * k, 0.0, 0.2 * k, 12), 'accent', HEAD, mathutils.Vector((0, mf - 0.06 * k, mz + 0.06 * k)), rot=aim(d), scale=(1, 1, 1), tags=('fx_mouth',))
+    elif style == 'wavy':
+        for i in range(6):
+            x = (-0.125 + i * 0.05) * k
+            b.part(f'mouth_{i}', sphere(0.021 * k, 8, 6), 'eye', HEAD, (x, surface(x, mz) - 0.004 * k, mz + (0.012 if i % 2 else -0.012) * k), scale=(1.3, 0.6, 0.8), tags=('fx_mouth',))
+    else:  # 'smile' / 'line'
+        b.part('mouth', rounded_box((0.19 * k, 0.03 * k, 0.024 * k), 0.01 * k, 2), 'eye', HEAD, (0, mf - 0.006 * k, mz), tags=('fx_mouth', 'fx_curve'))
+    return k
+
+
+# -------------------------------------------------------------- shape kit
+
+def torus(R, r, major=28, minor=10):
+    def build(bm):
+        rings = []
+        for i in range(major):
+            a = 2 * math.pi * i / major
+            ring = []
+            for j in range(minor):
+                t = 2 * math.pi * j / minor
+                rr = R + r * math.cos(t)
+                ring.append(bm.verts.new((rr * math.cos(a), rr * math.sin(a), r * math.sin(t))))
+            rings.append(ring)
+        for i in range(major):
+            for j in range(minor):
+                a, b2 = rings[i], rings[(i + 1) % major]
+                bm.faces.new((a[j], b2[j], b2[(j + 1) % minor], a[(j + 1) % minor]))
+    return build
+
+
+def prism(points, depth):
+    """A 2D outline in the XZ plane, extruded along Y (the face direction)."""
+    def build(bm):
+        verts = [bm.verts.new((x, -depth / 2, z)) for x, z in points]
+        face = bm.faces.new(verts)
+        geom = bmesh.ops.extrude_face_region(bm, geom=[face])
+        ex = [g for g in geom['geom'] if isinstance(g, bmesh.types.BMVert)]
+        bmesh.ops.translate(bm, vec=(0, depth, 0), verts=ex)
+    return build
+
+
+def star_points(n, r_out, r_in, rot=math.pi / 2):
+    pts = []
+    for i in range(n * 2):
+        a = rot + math.pi * i / n
+        r = r_out if i % 2 == 0 else r_in
+        pts.append((r * math.cos(a), r * math.sin(a)))
+    return pts
+
+
+def ellipsoid_front(hy, cz, W, D, H):
+    def surface(x, z):
+        q = 1 - (x / (W / 2)) ** 2 - ((z - cz) / (H / 2)) ** 2
+        return hy - (D / 2) * math.sqrt(max(0.08, q))
+    return surface
+
+
+def measured(head_ext, torso_ext):
+    (hmn, hmx), (tmn, tmx) = head_ext, torso_ext
+    return dict(
+        hw=hmx.x - hmn.x, hy=(hmn.y + hmx.y) / 2, neck=hmn.z,
+        tw=tmx.x - tmn.x, td=tmx.y - tmn.y, ty=(tmn.y + tmx.y) / 2, tbot=tmn.z, tspan=hmn.z - tmn.z,
+    )
+
+
+def forearm_ring(b, arm, role, radius, depth, t=0.78):
+    for side, bone in ((1, 'mixamorigLeftForeArm'), (-1, 'mixamorigRightForeArm')):
+        fore = bone_origin(arm, bone)
+        hand = bone_origin(arm, bone.replace('ForeArm', 'Hand'))
+        b.part(f'cuff_{side}', cone(radius, radius, depth, 14), role, bone, fore.lerp(hand, t), rot=aim(hand - fore))
+
+
+def plume(b, m, top, k, tip_star=False):
+    for i, (ang, s) in enumerate(((-0.45, 0.85), (0.0, 1.0), (0.45, 0.85))):
+        d = mathutils.Vector((math.sin(ang), 0.25, math.cos(ang))).normalized()
+        c = mathutils.Vector((0, m['hy'] + 0.02 * k, top - 0.03 * k)) + d * (0.13 * k * s)
+        b.part(f'feather_{i}', sphere(0.5, 12, 8), 'accent', HEAD, c, rot=aim(d), scale=(0.07 * k * s, 0.07 * k * s, 0.3 * k * s))
+    if tip_star:
+        b.part('plume_star', prism(star_points(5, 0.07 * k, 0.03 * k), 0.03 * k), 'skin', HEAD, (0, m['hy'] + 0.05 * k, top + 0.28 * k))
+
+
+def antenna(b, m, top, k, x=0.0, tilt=0.0, name='antenna'):
+    d = mathutils.Vector((math.sin(tilt), 0, math.cos(tilt)))
+    L = 0.22 * k
+    base = mathutils.Vector((x, m['hy'], top - 0.02 * k))
+    b.part(f'{name}_stick', cone(0.013 * k, 0.013 * k, L, 8), 'trim', HEAD, base + d * (L / 2), rot=aim(d))
+    b.part(f'{name}_ball', sphere(0.05 * k, 12, 8), 'accent', HEAD, base + d * L)
+
+
+def ellipsoid_head(b, m, Wm, Dm, Hm, drop=0.05):
+    W, D, H = m['hw'] * Wm, m['hw'] * Dm, m['hw'] * Hm
+    cz = m['neck'] - drop * H + H / 2
+    b.part('head_shell', sphere(0.5, 24, 14), 'body', HEAD, (0, m['hy'], cz), scale=(W, D, H))
+    return W, D, H, cz, ellipsoid_front(m['hy'], cz, W, D, H)
+
+
+def round_torso(b, m, Wm=1.25, Hm=0.85, Dm=1.35, zc=0.45):
+    W, D, H = m['tw'] * Wm, m['td'] * Dm, m['tspan'] * Hm
+    z = m['tbot'] + zc * m['tspan']
+    b.part('torso_shell', sphere(0.5, 20, 12), 'body', 'mixamorigSpine1', (0, m['ty'], z), scale=(W, D, H))
+    return W, D, H, z
+
+
+def anchors(b, surface, cz, top, m):
+    b.anchors['face_anchor'] = (0, surface(0, cz), cz)
+    b.anchors['head_top'] = (0, m['hy'], top)
+
+
+# -------------------------------------------------------- characters
+
+def build_round(b, arm, head_ext, torso_ext, face):
+    """BOPP: round head, antenna with a bobbing ball, round belly with a band."""
+    m = measured(head_ext, torso_ext)
+    W, D, H, cz, surf = ellipsoid_head(b, m, 3.1, 2.8, 3.0)
+    k = face_parts(b, surf, cz, W, H, face)
+    top = cz + H / 2
+    anchors(b, surf, cz, top, m)
+    antenna(b, m, top, k)
+    TW, TD, TH, tz = round_torso(b, m)
+    band_z = tz - TH * 0.08
+    b.part('belly_band', torus(0.5, 0.045, 32, 8), 'accent', 'mixamorigSpine1', (0, m['ty'], band_z), scale=(TW * 1.0, TD * 1.0, 1.0))
+
+
+def build_spike(b, arm, head_ext, torso_ext, face):
+    """ZIZZ: hexagon head with a lightning-bolt crest; hex chest with shoulder
+    points, a cropped jacket and a bolt on the chest."""
+    m = measured(head_ext, torso_ext)
+    W, D, H = m['hw'] * 2.95, m['hw'] * 2.4, m['hw'] * 2.95
+    cz = m['neck'] - 0.04 * H + H / 2
+    hex_pts = star_points(3, 0.5, 0.5, rot=math.pi / 2)   # six equal points = hexagon, vertex up
+    b.part('head_shell', prism(hex_pts, 1.0), 'body', HEAD, (0, m['hy'], cz), scale=(W, D, H))
+    front = m['hy'] - D / 2
+    surf = lambda x, z: front
+    k = face_parts(b, surf, cz, W, H, face)
+    top = cz + H / 2
+    anchors(b, surf, cz, top, m)
+    h = 0.26 * k
+    bolt = [(0, 0), (h * 0.18, h * 0.5), (h * 0.02, h * 0.5), (h * 0.22, h), (-h * 0.2, h * 0.38), (-h * 0.02, h * 0.38), (-h * 0.14, 0)]
+    b.part('bolt_crest', prism(bolt, 0.05 * k), 'accent', HEAD, (0.02 * k, m['hy'], top - 0.06 * k), rot=(0, -0.2, 0))
+
+    TW, TD, TH = m['tw'] * 1.3, m['td'] * 1.3, m['tspan'] * 0.82
+    tz = m['tbot'] + 0.46 * m['tspan']
+    b.part('torso_shell', prism(star_points(3, 0.5, 0.5, rot=0), 1.0), 'body', 'mixamorigSpine1', (0, m['ty'], tz), rot=(math.pi / 2, 0, 0), scale=(TW, TH, TD))
+    for side, bone in ((1, 'mixamorigLeftArm'), (-1, 'mixamorigRightArm')):
+        o = bone_origin(arm, bone)
+        d = mathutils.Vector((side, 0, 0.55)).normalized()
+        b.part(f'shoulder_spike_{side}', cone(0.06 * k, 0.0, 0.16 * k, 6), 'body', 'mixamorigSpine2', o + d * 0.05 * k, rot=aim(d))
+    jf = m['ty'] - TD / 2
+    for side in (-1, 1):
+        b.part(f'jacket_{side}', rounded_box((TW * 0.3, 0.05 * k, TH * 0.62), 0.02 * k, 2), 'trim', 'mixamorigSpine1', (side * TW * 0.3, jf - 0.01 * k, tz + TH * 0.08))
+    hb = 0.16 * k
+    chest_bolt = [(0, 0), (hb * 0.18, hb * 0.5), (hb * 0.02, hb * 0.5), (hb * 0.22, hb), (-hb * 0.2, hb * 0.38), (-hb * 0.02, hb * 0.38), (-hb * 0.14, 0)]
+    b.part('chest_bolt', prism(chest_bolt, 0.03 * k), 'accent', 'mixamorigSpine1', (0.01 * k, jf - 0.03 * k, tz + TH * 0.02))
+
+
+def build_beak(b, arm, head_ext, torso_ext, face):
+    """KWARK: round head, orange beak, three-feather plume; round body, scarf."""
+    m = measured(head_ext, torso_ext)
+    W, D, H, cz, surf = ellipsoid_head(b, m, 3.0, 2.8, 2.9)
+    k = face_parts(b, surf, cz, W, H, face)
+    top = cz + H / 2
+    anchors(b, surf, cz, top, m)
+    plume(b, m, top, k)
+    TW, TD, TH, tz = round_torso(b, m)
+    neck_z = m['neck'] - 0.02 * k
+    b.part('scarf', torus(0.5, 0.055, 28, 10), 'accent', 'mixamorigSpine2', (0, m['ty'], neck_z), scale=(TW * 0.62, TD * 0.75, 1.0))
+    b.part('scarf_tail', rounded_box((0.07 * k, 0.04 * k, 0.24 * k), 0.02 * k, 2), 'accent', 'mixamorigSpine2',
+           (0.09 * k, m['ty'] - TD * 0.36, neck_z - 0.12 * k), rot=(0, -0.25, 0))
+
+
+def build_tall(b, arm, head_ext, torso_ext, face):
+    """MIMO: tall capsule head with a pink cap; long torso, hoodie cuffs."""
+    m = measured(head_ext, torso_ext)
+    W, D, H = m['hw'] * 2.9, m['hw'] * 2.7, m['hw'] * 4.0
+    cz = m['neck'] - 0.03 * H + H / 2
+    b.part('head_shell', rounded_box((W, D, H), min(W, D) * 0.45, 5), 'body', HEAD, (0, m['hy'], cz))
+    front = m['hy'] - D / 2
+    surf = lambda x, z: front
+    k = face_parts(b, surf, cz, W, H * 0.8, face)
+    top = cz + H / 2
+    anchors(b, surf, cz, top, m)
+    b.part('cap_dome', sphere(0.5, 24, 12), 'accent', HEAD, (0, m['hy'], top - H * 0.12), scale=(W * 1.04, D * 1.04, H * 0.34))
+    b.part('cap_brim', rounded_box((W * 0.78, D * 0.55, 0.035 * k), 0.015 * k, 2), 'accent', HEAD, (0, m['hy'] - D * 0.5, top - H * 0.2), rot=(-0.08, 0, 0))
+    TW, TD, TH = m['tw'] * 1.2, m['td'] * 1.25, m['tspan'] * 0.86
+    tz = m['tbot'] + 0.46 * m['tspan']
+    b.part('torso_shell', rounded_box((TW, TD, TH), min(TW, TD) * 0.45, 4), 'body', 'mixamorigSpine1', (0, m['ty'], tz))
+    forearm_ring(b, arm, 'trim', 0.07 * k, 0.12 * k)
+
+
+def build_tiny(b, arm, head_ext, torso_ext, face):
+    """NIBB: oversized round head, twin antennae; tiny body, whistle on a lanyard."""
+    m = measured(head_ext, torso_ext)
+    W, D, H, cz, surf = ellipsoid_head(b, m, 3.8, 3.3, 3.6, drop=0.08)
+    k = face_parts(b, surf, cz, W, H, face)
+    top = cz + H / 2
+    anchors(b, surf, cz, top, m)
+    for side in (-1, 1):
+        antenna(b, m, top, k, x=side * W * 0.18, tilt=side * 0.38, name=f'antenna_{side}')
+    TW, TD, TH, tz = round_torso(b, m, Wm=1.2, Hm=0.8)
+    chest = mathutils.Vector((0, m['ty'] - TD / 2 - 0.01 * k, tz + TH * 0.05))
+    for side in (-1, 1):
+        start = mathutils.Vector((side * TW * 0.3, m['ty'] - TD * 0.3, tz + TH * 0.45))
+        d = chest - start
+        b.part(f'lanyard_{side}', cone(0.01 * k, 0.01 * k, d.length, 6), 'trim', 'mixamorigSpine1', start + d * 0.5, rot=aim(d))
+    b.part('whistle', cone(0.03 * k, 0.03 * k, 0.08 * k, 10), 'accent', 'mixamorigSpine1', chest + mathutils.Vector((0, -0.01 * k, -0.03 * k)), rot=aim((1, 0, 0)))
+
+
+def build_blob(b, arm, head_ext, torso_ext, face):
+    """GLUB: wide blob head sunk into a drip-shaped body, dorsal fin, bubble collar."""
+    m = measured(head_ext, torso_ext)
+    W, D, H, cz, surf = ellipsoid_head(b, m, 3.4, 2.9, 2.6, drop=0.3)
+    k = face_parts(b, surf, cz, W, H, face)
+    top = cz + H / 2
+    anchors(b, surf, cz, top, m)
+    fd = mathutils.Vector((0, 0.35, 1)).normalized()
+    b.part('fin', cone(0.15 * k, 0.0, 0.26 * k, 3), 'accent', HEAD, mathutils.Vector((0, m['hy'] + D * 0.18, top - 0.02 * k)) + fd * 0.1 * k, rot=aim(fd), scale=(0.25, 1, 1))
+    TW, TD, TH, tz = round_torso(b, m, Wm=1.4, Hm=0.95, Dm=1.45, zc=0.42)
+    ring_z = cz - H / 2 + 0.02 * k      # where the sunken head meets the body
+    for i in range(9):
+        a = 2 * math.pi * i / 9
+        p = (math.cos(a) * TW * 0.42, m['ty'] + math.sin(a) * TD * 0.46, ring_z + 0.02 * k)
+        b.part(f'bubble_{i}', sphere(0.05 * k, 8, 6), 'skin', 'mixamorigSpine2', p)
+
+
+def build_star(b, arm, head_ext, torso_ext, face):
+    """FIZZ: six-point star head, star-tipped plume; small body, star cape, blush."""
+    m = measured(head_ext, torso_ext)
+    W, D, H = m['hw'] * 3.5, m['hw'] * 2.3, m['hw'] * 3.5
+    cz = m['neck'] - 0.08 * H + H / 2
+    b.part('head_shell', prism(star_points(6, 0.5, 0.36), 1.0), 'body', HEAD, (0, m['hy'], cz), scale=(W, D, H))
+    front = m['hy'] - D / 2
+    surf = lambda x, z: front
+    k = face_parts(b, surf, cz, W * 0.82, H * 0.8, face)
+    top = cz + H / 2
+    anchors(b, surf, cz, top, m)
+    plume(b, m, top - H * 0.04, k, tip_star=True)
+    TW, TD, TH, tz = round_torso(b, m, Wm=1.2, Hm=0.8)
+    b.part('star_cape', prism(star_points(6, 0.5, 0.3), 1.0), 'accent', 'mixamorigSpine2',
+           (0, m['ty'] + TD * 0.55, tz + TH * 0.1), scale=(TW * 1.9, 0.03 * k, TH * 1.7))
 
 
 SHAPE_BUILDERS = {
     'block': build_block,
+    'round': build_round,
+    'spike': build_spike,
+    'beak': build_beak,
+    'tall': build_tall,
+    'tiny': build_tiny,
+    'blob': build_blob,
+    'star': build_star,
 }
 
 
@@ -278,6 +552,24 @@ def add_shape_keys(obj):
     inv = mw.inverted()
     world = [mw @ v.co for v in obj.data.vertices]
 
+    # A resting smile, baked into the base mesh before any key exists.
+    curve = tagged.get('fx_curve', [])
+    if curve:
+        cc = sum((world[i] for i in curve), mathutils.Vector()) / len(curve)
+        ch = max(abs(world[i].x - cc.x) for i in curve) or 1
+        for i in curve:
+            world[i] = world[i] + mathutils.Vector((0, 0, 0.03 * (ch / 0.105) * ((world[i].x - cc.x) / ch) ** 2))
+            obj.data.vertices[i].co = inv @ world[i]
+
+    # Feature scale relative to TUFF's (mouth half-width 0.105, brow 0.13),
+    # which the key amplitudes below were tuned on.
+    mouth_half = 0.105
+    if tagged.get('fx_mouth'):
+        ids = tagged['fx_mouth']
+        mcx = sum(world[i].x for i in ids) / len(ids)
+        mouth_half = max(abs(world[i].x - mcx) for i in ids) or 0.105
+    kk = mouth_half / 0.105
+
     obj.shape_key_add(name='Basis', from_mix=False)
 
     def key(name, move):
@@ -294,11 +586,14 @@ def add_shape_keys(obj):
     if mouth:
         mc = centre(mouth)
         half = max(abs(world[i].x - mc.x) for i in mouth) or 1
-        open_ = {i: mathutils.Vector((mc.x + (world[i].x - mc.x) * 0.8, world[i].y, mc.z + (world[i].z - mc.z) * 5.0 - 0.02)) for i in mouth}
-        open_.update({i: world[i] + mathutils.Vector((0, 0, -0.06)) for i in teeth})
+        height = (max(world[i].z for i in mouth) - min(world[i].z for i in mouth)) or 0.024
+        # A thin line opens 5x; an already-open grin or shout opens less.
+        stretch = max(1.3, min(5.0, 0.12 * kk / height))
+        open_ = {i: mathutils.Vector((mc.x + (world[i].x - mc.x) * 0.8, world[i].y, mc.z + (world[i].z - mc.z) * stretch - 0.02 * kk)) for i in mouth}
+        open_.update({i: world[i] + mathutils.Vector((0, 0, -0.06 * kk)) for i in teeth})
         key('mouthOpen', open_)
-        key('smile', {i: world[i] + mathutils.Vector((0, 0, 0.075 * ((world[i].x - mc.x) / half) ** 2)) for i in mouth})
-        key('frown', {i: world[i] + mathutils.Vector((0, 0, -0.075 * ((world[i].x - mc.x) / half) ** 2)) for i in mouth})
+        key('smile', {i: world[i] + mathutils.Vector((0, 0, 0.075 * kk * ((world[i].x - mc.x) / half) ** 2)) for i in mouth})
+        key('frown', {i: world[i] + mathutils.Vector((0, 0, -0.075 * kk * ((world[i].x - mc.x) / half) ** 2)) for i in mouth})
 
     lids = {}
     for tag in ('fx_eyeL', 'fx_eyeR'):
@@ -314,7 +609,7 @@ def add_shape_keys(obj):
 
     brows = tagged.get('fx_browL', []) + tagged.get('fx_browR', [])
     if brows:
-        key('browsUp', {i: world[i] + mathutils.Vector((0, 0, 0.05)) for i in brows})
+        key('browsUp', {i: world[i] + mathutils.Vector((0, 0, 0.05 * kk)) for i in brows})
         pinch = {}
         for tag in ('fx_browL', 'fx_browR'):
             ids = tagged.get(tag, [])
@@ -326,7 +621,7 @@ def add_shape_keys(obj):
             span = abs(outer - inner) or 1
             for i in ids:
                 t = 1 - abs(world[i].x - inner) / span        # 1 at the inner end
-                pinch[i] = world[i] + mathutils.Vector((0, 0, -0.04 * t))
+                pinch[i] = world[i] + mathutils.Vector((0, 0, -0.04 * kk * t))
         key('browsPinch', pinch)
 
     for g in [g for g in obj.vertex_groups if g.name.startswith('fx_')]:

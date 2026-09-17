@@ -23,13 +23,13 @@ const { CAST, BUILD_BY_SHAPE, colourRoles } = await import(pathToFileURL(path.jo
 /** Idle-face defaults per character, from the design sheet. */
 const FACE = {
   bopp: { mouth: 'grin', browTilt: 0 },
-  zizz: { mouth: 'smirk', browTilt: 0.18 },
-  kwark: { mouth: 'beak', browTilt: -0.18 },
+  zizz: { mouth: 'smirk', browTilt: 0.12, browAsym: 0.035 },
+  kwark: { mouth: 'beak', browTilt: -0.18, eyeSpacing: 0.15 },
   tuff: { mouth: 'underbite', browTilt: -0.2 },
-  mimo: { mouth: 'smile', browTilt: 0 },
-  nibb: { mouth: 'shout', browTilt: 0.18 },
-  glub: { mouth: 'wavy', browTilt: 0 },
-  fizz: { mouth: 'smile', browTilt: 0 },
+  mimo: { mouth: 'smile', browTilt: 0, eyeSquash: 0.72 },
+  nibb: { mouth: 'shout', browTilt: 0.18, pupil: 0.6 },
+  glub: { mouth: 'wavy', browTilt: 0, eyeSpacing: 0.25 },
+  fizz: { mouth: 'smile', browTilt: 0, glint: true, blush: true },
 };
 
 const ids = process.argv.slice(2);
