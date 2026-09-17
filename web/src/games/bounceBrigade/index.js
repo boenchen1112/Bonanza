@@ -603,7 +603,7 @@ export default {
     // Judge before the first pushHud(): pushHud reads judge.stats, and building
     // the HUD one line too early threw during load(), which took the whole boot
     // down rather than just this scene.
-    judge = new NoteJudge();
+    judge = new NoteJudge({ offsetMs: ctx.offsetMs });
     noteMap = new Map();
     pushHud();
 

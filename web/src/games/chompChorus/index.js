@@ -156,7 +156,7 @@ export default {
     }
 
     // ---------------------------------------------------------------- judge
-    s.judge = new NoteJudge();
+    s.judge = new NoteJudge({ offsetMs: ctx.offsetMs });
     const chart = buildChart();
     s.chart = chart;
     s.maxPoints = chart.reduce((a, n) => a + SCORE.perfect * (n.finale ? 2 : 1), 0);

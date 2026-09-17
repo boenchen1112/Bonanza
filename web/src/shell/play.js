@@ -20,7 +20,7 @@
 import { getScene } from './registry.js';
 import { createPause } from './pause.js';
 import { mountRoot, sfx, PAL, createWipe, el, hex } from './theme.js';
-import { session, ensurePlayers } from './state.js';
+import { session, profile, ensurePlayers } from './state.js';
 import { gamePlayers } from './chars.js';
 import { CATALOG } from './games.js';
 import { goView, exitRoute } from './nav.js';
@@ -61,6 +61,8 @@ export default {
     // The lineup the roster built is who plays: the human's character is the
     // hero, the named CPUs are the rivals in games that field any.
     ctx.players = gamePlayers(ensurePlayers());
+    // The player's latency calibration from Options, for each game's NoteJudge.
+    ctx.offsetMs = profile.options.offsetMs || 0;
 
     // Title card over the swap: the menu's wipe covers the exit, this one
     // holds while the game builds and its shaders compile (a blocking ~1s on

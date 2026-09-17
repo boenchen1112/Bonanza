@@ -288,7 +288,7 @@ export default {
     clock.start(clock.now() + 0.55, -LEAD_BEATS);
 
     S.chart = buildChart();
-    const judge = new NoteJudge();
+    const judge = new NoteJudge({ offsetMs: ctx.offsetMs });
     // Empty on purpose: notes are armed bar-by-bar by `armNotes`, and their
     // times are re-derived every frame by `refreshTimes`.
     judge.load([]);

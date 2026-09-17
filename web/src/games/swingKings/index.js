@@ -161,7 +161,7 @@ export default {
     ctx.ui.hud.mount();
 
     this.pitches = buildSchedule();
-    this.judge = new NoteJudge();
+    this.judge = new NoteJudge({ offsetMs: ctx.offsetMs });
     this.hitBalls = [];
     this.reset();
 

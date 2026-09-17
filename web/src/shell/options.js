@@ -24,7 +24,9 @@ const ROWS = [
   { id: 'reset', label: 'RESET PROGRESS', type: 'action' },
   { id: 'back', label: 'BACK', type: 'action' },
 ];
-const OFFSET_MIN = -150, OFFSET_MAX = 150, OFFSET_STEP = 5;
+// Wide enough for Bluetooth output, which commonly adds 150-300ms the browser
+// doesn't report. Negative = your presses land late (judge.js adds this).
+const OFFSET_MIN = -300, OFFSET_MAX = 300, OFFSET_STEP = 5;
 
 let S = null;
 

@@ -138,6 +138,7 @@ export default {
               // on the next scene swap even if dispose() never ran.
   rng,        // seeded rng
   players,    // [{id, name, char, palette, build, isCpu, cpuSkill, dress(char)}]
+  offsetMs,   // player's timing calibration (Options); pass to new NoteJudge({offsetMs})
   size,       // {w, h, dpr} — updated on resize
   opts,       // the activation options — {seed, game, from, ...}
   hitstop(s), // freeze gameplay time (NOT the clock) for s seconds

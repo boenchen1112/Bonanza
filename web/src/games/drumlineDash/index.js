@@ -243,7 +243,7 @@ export default {
     ctx.fx.setGroundY(0);
     ctx.fx.setFocus([1.2, 1.4, 0.4]);
 
-    S.judge = new NoteJudge();
+    S.judge = new NoteJudge({ offsetMs: ctx.offsetMs });
     S.rng = makeRng(0xd12b + (ctx.opts?.seed | 0));
 
     // --- state -------------------------------------------------------------
