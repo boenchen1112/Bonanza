@@ -84,7 +84,7 @@ function glyphAtlas() {
  * @param {number[]} o.headY    world head height per lane
  * @param {THREE.Color[]} o.colors lane colours
  */
-export function makeLaneProps({ pedTop, headY, colors }) {
+export function makeLaneProps({ pedTop, headY, colors, humanLane = null }) {
   const group = new THREE.Group();
   group.name = 'chomp:props';
   const owned = [];
@@ -136,6 +136,8 @@ export function makeLaneProps({ pedTop, headY, colors }) {
     glyphTex = glyphAtlas();
     const parts = [];
     for (let i = 0; i < N; i++) {
+      // Only the player's singer carries a key: the CPU voices need none.
+      if (humanLane !== null && i !== humanLane) continue;
       const q = new THREE.PlaneGeometry(0.86, 0.86);
       const uv = q.attributes.uv;
       for (let k = 0; k < uv.count; k++) uv.setX(k, (uv.getX(k) + i) / 4);

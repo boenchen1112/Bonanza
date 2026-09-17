@@ -1,18 +1,14 @@
 #!/usr/bin/env node
 /**
- * Chomp Chorus — lane-accurate verification harness.  [G4 builder owns this dir]
+ * Chomp Chorus — player-lane verification harness.  [G4 builder owns this dir]
  *
- * The shared harness's autoplay only ever presses 'a' on eighth beats, so by
- * construction it misses every lane in this game. That proves nothing about
- * whether the game is beatable, and nothing at all about whether four
- * simultaneous notes on four different actions judge as four separate notes.
+ * The player sings one voice (lane `HUMAN`, booted with no lineup); the other
+ * three are CPU singers that play themselves and never reach the judge.
  *
- * This script reads the actual chart, presses the CORRECT key for every note at
- * that note's exact audio time, and reports:
+ * This script reads the actual chart, presses the player's key for every one
+ * of their notes at that note's exact audio time, and reports:
  *   - overall verdict counts and mean |err|
- *   - per-lane counts (proving every lane is reachable and judged separately)
- *   - chord integrity: for every beat with k>1 notes, were all k judged, on the
- *     k distinct lanes the chart asked for?
+ *   - that only the player's lane was ever judged
  *
  * Presses carry the beat they were AIMED at, not the wall-clock moment they
  * were dispatched, and are emitted up to `--lookahead` seconds early so that a
@@ -29,7 +25,7 @@ import { existsSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { buildChart, LANES } from './chart.js';
+import { buildChart, humanLaneFor, LANES } from './chart.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '../../../..');
@@ -61,15 +57,10 @@ const CHROME = process.env.PW_CHROMIUM
   || (existsSync('/opt/pw-browsers/chromium-1194/chrome-linux/chrome')
     ? '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' : undefined);
 
-const chart = buildChart().map((n) => ({ beat: n.beat, lane: n.lane, action: LANES[n.lane].action }));
-
-/** beat -> lanes expected, for the chord-integrity check. */
-const chordMap = new Map();
-for (const n of chart) {
-  const k = n.beat.toFixed(4);
-  if (!chordMap.has(k)) chordMap.set(k, []);
-  chordMap.get(k).push(n.lane);
-}
+const HUMAN = humanLaneFor(null);
+const chart = buildChart({ humanLane: HUMAN })
+  .filter((n) => n.lane === HUMAN)
+  .map((n) => ({ beat: n.beat, lane: n.lane, action: LANES[n.lane].action }));
 
 function serve(dir, port) {
   return new Promise((res) => {
@@ -172,22 +163,7 @@ function serve(dir, port) {
     };
   });
 
-  // chord integrity: every multi-note beat must produce one judgement per lane
-  const byBeat = new Map();
-  for (const j of judged) {
-    const k = Number(j.beat).toFixed(4);
-    if (!byBeat.has(k)) byBeat.set(k, []);
-    byBeat.get(k).push(j.lane);
-  }
-  let chordBeats = 0; let chordOk = 0; const chordFails = [];
-  for (const [k, lanes] of chordMap) {
-    if (lanes.length < 2) continue;
-    chordBeats++;
-    const got = (byBeat.get(k) || []).slice().sort();
-    const want = lanes.slice().sort();
-    if (got.length === want.length && got.every((v, i2) => v === want[i2])) chordOk++;
-    else chordFails.push({ beat: Number(k), want, got });
-  }
+  const otherLaneJudgements = judged.filter((j) => j.lane !== HUMAN).length;
 
   const hits = judged.filter((j) => j.verdict !== 'miss');
   const summary = {
@@ -199,7 +175,8 @@ function serve(dir, port) {
     counts,
     meanAbsErrMs: hits.length ? hits.reduce((a, j) => a + Math.abs(j.errMs), 0) / hits.length : null,
     perLane,
-    chord: { multiNoteBeats: chordBeats, intact: chordOk, failures: chordFails.slice(0, 12) },
+    humanLane: HUMAN,
+    otherLaneJudgements,
     cpuMs: telemetry.cpuMs,
     render: telemetry.render,
     consoleErrors: logs.filter((l) => l.startsWith('[pageerror]') || l.startsWith('[error]')).length,

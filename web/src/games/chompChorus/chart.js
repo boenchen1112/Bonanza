@@ -5,9 +5,14 @@
  * this module directly in Node to drive the correct key for every note, and a
  * chart that needed a WebGL context to describe itself could not be checked.
  *
+ * ── Who sings what ─────────────────────────────────────────────────────────
+ * The human sings ONE voice (`humanLaneFor`); the other three are CPU singers.
+ * Playtesting found one player covering all four keys was a dexterity test,
+ * not a party game. Any lane key or Space presses the human's voice.
+ *
  * ── The lane mapping ───────────────────────────────────────────────────────
- * Four singers stand left to right. The keys are the four arrows (or WASD,
- * which the input layer aliases onto the same actions):
+ * Four singers stand left to right, each with its own arrow (WASD aliases onto
+ * the same actions):
  *
  *     ←  lane 0   far left    round build      lowest chord tone
  *     ↓  lane 1   mid left    WIDE + LOW       3rd
@@ -38,6 +43,13 @@ export const LANES = [
 export const LANE_ACTIONS = LANES.map((l) => l.action);
 export const ACTION_TO_LANE = Object.fromEntries(LANES.map((l) => [l.action, l.i]));
 
+/** The human's lane: their slot in the lineup (`ctx.players`), lane 0 when
+ *  booted with no lineup. */
+export function humanLaneFor(players) {
+  const i = (players || []).findIndex((p) => !p.isCpu);
+  return i < 0 ? 0 : i % LANES.length;
+}
+
 /** Bars of scored content after beat 0 (lead-in is separate). */
 export const PLAY_BARS = 40;
 /** Beat of the held four-part finale chord. */
@@ -62,7 +74,7 @@ export const END_BEAT = 164;
  *   bars 36-38  BUILD     into the big inhale (bar 38 beats 2-4 are silent)
  *   bar  39     FINALE    all four, held through the last bar. Worth double.
  */
-export function buildChart() {
+export function buildChart({ humanLane = 0 } = {}) {
   const notes = [];
   const add = (beat, lanes, extra) => {
     for (const l of lanes) notes.push({ beat, lane: l, ...extra });
@@ -70,10 +82,11 @@ export function buildChart() {
   const B = (bar, beat = 0) => bar * 4 + beat;
 
   // --- TEACH: bars 0-7 ------------------------------------------------------
-  // Two bars per lane. The first note of each lane is flagged so the game can
-  // pop that lane's key glyph, big, at the moment the lane is introduced.
+  // Two bars per lane, the human's own voice first, then the CPU singers are
+  // introduced one at a time so the whole choir has been heard before it
+  // starts weaving. The first note of each lane is flagged `intro`.
   for (let bar = 0; bar < 8; bar++) {
-    const lane = bar >> 1;
+    const lane = (humanLane + (bar >> 1)) % 4;
     const first = bar % 2 === 0;
     add(B(bar, 0), [lane], first ? { intro: true } : undefined);
     add(B(bar, 2), [lane]);
@@ -172,30 +185,11 @@ export function buildChart() {
   // moment in the round that asks for something the player has not done before.
   add(FINALE_BEAT, [0, 1, 2, 3], { finale: true, lead: 4, holdBeats: FINALE_END - FINALE_BEAT });
 
+  // The chart used to be thinned to half density per lane, when one player
+  // pressed all four; with one voice each (~2 notes a bar) it no longer is,
+  // so the CPU singers fill every chord the arrangement writes.
   notes.sort((a, b) => a.beat - b.beat || a.lane - b.lane);
-  return thinCallFrequency(notes);
-}
-
-/**
- * Halve how often each lane is called on, post-TEACH (bars 0-7 are already
- * sparse tutorial content and stay untouched). Thins every other note in
- * chronological order PER LANE, independent of the other lanes in the same
- * chord — which fits the game's own "a lane that has dropped out leaves a
- * hole you can hear and point at" design rather than fighting it. Beats
- * themselves are never moved, so the backing track's chord changes and the
- * bed/gulp audio cues (keyed off remaining notes) stay in sync. Runs are
- * exempt — a run is one travelling-wave phrase across all four lanes, not
- * four independent calls, and thinning it per lane would tear a hole in the
- * middle of the wave instead of dropping a whole note cleanly.
- */
-function thinCallFrequency(notes) {
-  const TEACH_END = 8 * 4;
-  const perLaneCount = [0, 0, 0, 0];
-  return notes.filter((n) => {
-    if (n.beat < TEACH_END || n.intro || n.finale || n.run != null) return true;
-    const k = perLaneCount[n.lane]++;
-    return k % 2 === 0;
-  });
+  return notes;
 }
 
 /** Per-lane beat lists, for the telegraph lookahead. */

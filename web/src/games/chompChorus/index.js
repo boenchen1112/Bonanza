@@ -1,10 +1,11 @@
 /**
  * G4 · CHOMP CHORUS — "Four lanes. One groove."
- * 140bpm · 4/4 · four keys (← ↓ ↑ →, or A S W D)
+ * 140bpm · 4/4 · one voice is yours (any arrow, WASD or Space)
  *
  * Four singing creatures stand in a row. Each one is a voice in a four-part
  * chord. They gulp air on the offbeat — that gulp is the telegraph — and sing
- * on the beat; you press their lane to let them.
+ * on the beat. One singer is the player's; the other three are CPU singers
+ * whose skill comes from the lineup, so they drop out now and then too.
  *
  * ── The twist, and why it is built the way it is ───────────────────────────
  * The consequence of a mistake is AUDIBLE and SPECIFIC. Every bar, each lane
@@ -37,14 +38,14 @@
  */
 
 import * as THREE from 'three';
-import { NoteJudge, rankFor, SCORE } from '../../core/judge.js';
+import { NoteJudge, rankFor, SCORE, WINDOWS_MS, verdictFor } from '../../core/judge.js';
 import { roundResult } from '../../core/result.js';
 import { countIn } from '../../core/round.js';
 import { FEEL, feelForCombo, hitstopFor } from '../../core/feel.js';
-import { clamp, clamp01, damp, beatPhase } from '../../core/util.js';
+import { clamp, clamp01, damp, beatPhase, makeRng } from '../../core/util.js';
 import { makeCast, paletteById } from '../../chars/index.js';
 import { SCALES, chord as chordTones, mtof } from '../../audio/theory.js';
-import { LANES, LANE_ACTIONS, ACTION_TO_LANE, buildChart, FINALE_BEAT, FINALE_END, END_BEAT } from './chart.js';
+import { LANES, LANE_ACTIONS, ACTION_TO_LANE, buildChart, humanLaneFor, FINALE_BEAT, FINALE_END, END_BEAT } from './chart.js';
 import { makeLaneProps } from './props.js';
 
 const N = 4;
@@ -59,10 +60,10 @@ const FALLBACK_CHORD = [45, 48, 52, 55];
 export default {
   id: 'chomp-chorus',
   name: 'Chomp Chorus',
-  blurb: 'Four singers, four keys: ← ↓ ↑ →. They gulp on the offbeat — let them sing on the beat. Drop a lane and you will hear the hole in the chord.',
+  blurb: 'Four singers, one of them is you. When your singer gulps on the offbeat, press on the beat (any arrow or Space). Miss and you will hear the hole in the chord.',
   bpm: 140,
   durationBars: 42,
-  controls: '← ↓ ↑ →',
+  controls: 'any arrow / Space',
 
   // ------------------------------------------------------------------- state
   _: null,
@@ -94,6 +95,20 @@ export default {
     s.view.chord = s.chordFlag;
     this._ = s;
 
+    // One voice is the human's; the lineup's CPUs sing the rest, in order.
+    s.human = humanLaneFor(ctx.players);
+    s.humanAction = LANES[s.human].action;
+    const cpus = (ctx.players || []).filter((p) => p.isCpu);
+    s.cpuSkill = [0, 0, 0, 0];
+    for (let i = 0, k = 0; i < N; i++) {
+      if (i === s.human) continue;
+      const p = cpus[k++];
+      s.cpuSkill[i] = p ? clamp01(p.cpuSkill) : 0.8;
+    }
+    s.cpuRng = makeRng(ctx.opts?.seed ?? 0xc40f);
+    s.cpuNotes = null;
+    s.cpuAt = 0;
+
     ctx.scene.userData.palette = 'chomp-chorus';
     ctx.scene.add(s.root);
 
@@ -124,7 +139,7 @@ export default {
       m.char.rotation.y = -LANES[i].x * 0.05;
     }
 
-    s.props = makeLaneProps({ pedTop: s.pedTop, headY: s.headY, colors: s.colors });
+    s.props = makeLaneProps({ pedTop: s.pedTop, headY: s.headY, colors: s.colors, humanLane: s.human });
     s.root.add(s.props.group);
 
     // ------------------------------------------------------------- the set
@@ -156,10 +171,12 @@ export default {
     }
 
     // ---------------------------------------------------------------- judge
+    // The judge only ever holds the human's notes, so combo, accuracy, score
+    // and rank are theirs; CPU voices are resolved by `_pumpCpu`.
     s.judge = new NoteJudge({ offsetMs: ctx.offsetMs });
-    const chart = buildChart();
+    const chart = buildChart({ humanLane: s.human });
     s.chart = chart;
-    s.maxPoints = chart.reduce((a, n) => a + SCORE.perfect * (n.finale ? 2 : 1), 0);
+    s.maxPoints = chart.reduce((a, n) => a + (n.lane === s.human ? SCORE.perfect * (n.finale ? 2 : 1) : 0), 0);
 
     ctx.ui.hud.mount();
     this._mountVoiceDots(ctx, s);
@@ -182,7 +199,8 @@ export default {
       const hex = '#' + s.colors[i].getHexString(THREE.SRGBColorSpace);
       d.style.cssText = 'width:clamp(14px,2.1vw,26px);height:clamp(14px,2.1vw,26px);border-radius:50%;'
         + `background:${hex};box-shadow:0 0 14px ${hex},0 2px 0 rgba(0,0,0,.5);`
-        + 'transition:opacity .12s linear,transform .12s linear;';
+        + 'transition:opacity .12s linear,transform .12s linear;'
+        + (i === s.human ? 'outline:3px solid #fff;outline-offset:4px;' : '');
       wrap.appendChild(d);
       s.dotEls.push(d);
     }
@@ -211,13 +229,27 @@ export default {
       intro: !!n.intro,
       run: n.run ?? null,
     }));
-    s.judge.load(notes);
+    s.judge.load(notes.filter((n) => n.lane === s.human));
     s.notes = s.judge.notes;
+
+    // CPU voices: each performance is rolled up front from the singer's skill
+    // (seeded, so a harness replay is identical), then played out on time.
+    const rnd = s.cpuRng;
+    s.cpuNotes = notes.filter((n) => n.lane !== s.human).map((n) => {
+      const skill = s.cpuSkill[n.lane];
+      const miss = rnd() < 0.02 + (1 - skill) * 0.22;
+      const g = Math.sqrt(-2 * Math.log(1 - rnd())) * Math.cos(2 * Math.PI * rnd());
+      const errMs = miss ? WINDOWS_MS.claim : g * (10 + (1 - skill) * 50);
+      const verdict = miss ? 'miss' : verdictFor(errMs);
+      return { ...n, judged: false, cpuVerdict: verdict, cpuErrMs: errMs, dueAt: n.time + Math.max(0, errMs) / 1000 };
+    }).sort((a, b) => a.dueAt - b.dueAt);
+    s.cpuAt = 0;
 
     // Per-lane lookahead lists. The telegraph asks "what is the next thing this
     // lane has to do", which is also exactly what the player asks.
     s.laneList = [[], [], [], []];
-    for (const n of s.notes) s.laneList[n.lane].push({ beat: n.beat, lead: n.lead, note: n });
+    for (const n of [...s.notes, ...s.cpuNotes]) s.laneList[n.lane].push({ beat: n.beat, lead: n.lead, note: n });
+    for (const list of s.laneList) list.sort((a, b) => a.beat - b.beat);
     // Lead-in demonstration: a cascade, one lane per beat, so a player who has
     // never seen this watches a full gulp-and-sing on every lane before a
     // single note is scored.
@@ -231,7 +263,7 @@ export default {
     // `clock.at()` re-sorting a 300-entry array on load.
     const cues = [];
     let lastGulp = [-99, -99, -99, -99];
-    for (const n of s.notes) {
+    for (const n of [...s.notes, ...s.cpuNotes].sort((a, b) => a.beat - b.beat)) {
       const g = n.beat - n.lead * 0.94;
       if (g - lastGulp[n.lane] > 0.45) {
         cues.push({ beat: g, kind: 'gulp', lane: n.lane, big: n.lead > 1 });
@@ -258,7 +290,7 @@ export default {
     });
 
     ctx.audio.music.play('chomp-chorus');
-    ctx.ui.banner(this.name, { sub: 'Four lanes. One groove.', life: 1.5 });
+    ctx.ui.banner(this.name, { sub: 'You sing the ringed voice. Any arrow or Space.', life: 1.8 });
   },
 
   // -------------------------------------------------------------- harmony
@@ -352,19 +384,21 @@ export default {
 
   // --------------------------------------------------------------- verdicts
 
-  _onJudged(ctx, note, verdict, errMs) {
+  /** @param {boolean} [cpu] a CPU singer's note: same voice and visuals, but
+   *  none of the player's feedback (combo, HUD, hitstop, verdict sfx). */
+  _onJudged(ctx, note, verdict, errMs, cpu = false) {
     const s = this._;
     const i = note.lane;
     const lane = s.lanes[i];
     const now = ctx.clock.now();
-    const combo = s.judge.stats.combo;
+    const combo = cpu ? 0 : s.judge.stats.combo;
     const f = feelForCombo(verdict, combo);
     const hit = verdict !== 'miss';
-    // Four notes of a chord judge in the same frame. Camera, flash and the
-    // world callout belong to the group, not to each member, or a four-part
-    // chord reads as one white flash and nothing else.
-    const dense = now - s.lastVerdictAt < 0.055;
-    s.lastVerdictAt = now;
+    // CPU voices judge alongside the player's in the same frame. Camera, flash
+    // and the world callout belong to the player's note, or a chord reads as
+    // one white flash and nothing else.
+    const dense = cpu || now - s.lastVerdictAt < 0.055;
+    if (!cpu) s.lastVerdictAt = now;
 
     lane.stat.notes++;
     lane.stat[verdict]++;
@@ -396,17 +430,18 @@ export default {
 
     if (!dense) ctx.audio.sfx(verdict, pressAt);
 
-    const scale = note.finale ? 1.35 : (dense ? 0.82 : 1);
+    const scale = note.finale ? 1.35 : (cpu ? 0.7 : dense ? 0.82 : 1);
     ctx.fx.verdict(verdict, [LANES[i].x, s.headY[i] + 0.12, 0.05], {
       dir: [LANES[i].x * 0.09, 1, 0.15],
       combo, scale, stage: !dense, text: !dense,
       groundY: s.pedTop[i],
     });
 
+    if (note.finale && hit) s.finale.hit++;
+    if (cpu) return;
+
     ctx.hitstop(note.finale ? FEEL.hitstop.finale : hitstopFor(f.hitstop, s.judge.notes, note));
     ctx.bus.emit('judge', { verdict, errMs, beat: note.beat, lane: i });
-
-    if (note.finale && hit) s.finale.hit++;
 
     ctx.ui.hud.setCombo(s.judge.stats.combo);
     ctx.ui.hud.setAccuracy(s.judge.accuracy);
@@ -426,13 +461,13 @@ export default {
     if (!s || s.over) return;
     for (const e of events) {
       if (!e.down) continue;
-      const lane = ACTION_TO_LANE[e.action];
-      if (lane === undefined) continue;
-      const r = s.judge.press(e.action, e.time);
+      // Any lane key or Space sings the player's own voice.
+      if (ACTION_TO_LANE[e.action] === undefined && e.action !== 'a') continue;
+      const r = s.judge.press(s.humanAction, e.time);
       if (!r) {
         // A press that claimed no note. Silence here feels broken and a full
         // verdict feels punishing, so: a tick, and the singer flinches.
-        s.lanes[lane].flinch = 1;
+        s.lanes[s.human].flinch = 1;
         ctx.audio.sfx('tick');
       }
     }
@@ -448,6 +483,7 @@ export default {
     const now = clock.now();
 
     s.judge.update(now);
+    this._pumpCpu(ctx, now);
     this._pumpCues(ctx, now, beat);
     this._telegraph(ctx, dt, beat);
     this._finale(ctx, dt, beat);
@@ -500,6 +536,17 @@ export default {
     if (!s.over && beat >= END_BEAT) {
       s.over = true;
       s.done = true;
+    }
+  },
+
+  /** Play out the CPU singers' pre-rolled notes as their moment arrives. */
+  _pumpCpu(ctx, now) {
+    const s = this._;
+    while (s.cpuAt < s.cpuNotes.length && s.cpuNotes[s.cpuAt].dueAt <= now) {
+      const n = s.cpuNotes[s.cpuAt++];
+      n.judged = true;
+      n.verdict = n.cpuVerdict;
+      this._onJudged(ctx, n, n.cpuVerdict, n.cpuErrMs, true);
     }
   },
 
@@ -595,7 +642,7 @@ export default {
 
     if (!F.banner && beat >= FINALE_BEAT - 3.2) {
       F.banner = true;
-      ctx.ui.banner('ALL FOUR!', { sub: '← ↓ ↑ →  hold it', life: 1.3, color: '#ffe9a8' });
+      ctx.ui.banner('ALL FOUR!', { sub: 'big note — hold it', life: 1.3, color: '#ffe9a8' });
       ctx.audio.sfx('swoosh');
       ctx.stage.rig.frame({ target: [0, 1.3, 0], distance: 6.7, height: 1.25, lambda: 1.1 });
     }
@@ -616,14 +663,14 @@ export default {
     }
 
     // Sustain: hold the beams and the voices up through the last bar. Holding
-    // the four keys for real is tracked separately and reported as a stat.
+    // the player's key for real is tracked separately and reported as a stat.
     F.frames++;
-    let held = 0;
+    let held = ctx.input.isHeld('a');
     for (let i = 0; i < N; i++) {
-      if (ctx.input.isHeld(LANE_ACTIONS[i])) held++;
+      if (ctx.input.isHeld(LANE_ACTIONS[i])) held = true;
       if (s.lanes[i].alive) s.lanes[i].sing = Math.max(s.lanes[i].sing, 0.55 + 0.45 * Math.abs(Math.sin(beat * Math.PI)));
     }
-    if (held === N) F.heldFrames++;
+    if (held) F.heldFrames++;
 
     if (!F.done && beat >= FINALE_END) {
       F.done = true;
@@ -659,8 +706,7 @@ export default {
         accuracy: q.notes ? scored / (q.notes * SCORE.perfect) : 1,
       };
     });
-    let weakest = null;
-    for (const l of lanes) if (l.notes && (!weakest || l.accuracy < weakest.accuracy)) weakest = l;
+    const mine = lanes[s.human];
 
     s.resultCache = roundResult({
       score,
@@ -670,13 +716,12 @@ export default {
         ...st,
         bias: s.judge.bias,
         lanes,
-        weakestLane: weakest ? weakest.lane : null,
-        weakestKey: weakest ? weakest.key : null,
+        humanLane: s.human,
         finaleHits: s.finale.hit,
         finaleSustain: s.finale.frames ? s.finale.heldFrames / s.finale.frames : 0,
       },
       highlights: [
-        weakest && weakest.miss > 0 ? `Weakest voice: ${weakest.glyph} (${Math.round(weakest.accuracy * 100)}%)` : 'All four voices held',
+        mine.miss > 0 ? `Your voice held ${Math.round(mine.accuracy * 100)}% of its notes` : 'Your voice never dropped out',
         s.finale.hit === N ? 'Full four-part finale' : `${s.finale.hit}/4 in the finale`,
       ],
     });
@@ -685,15 +730,11 @@ export default {
 
   // ──────────────────────────────────────────────────── harness: testChart
 
-  /**
-   * The chart, in beats and lane actions. The generic bot only ever presses
-   * 'a' on eighths, so by construction it misses every lane in this game —
-   * which is why this game had to fork the whole harness to verify itself.
-   */
+  /** The player's notes, in beats. CPU voices play themselves. */
   testChart() {
     const s = this._;
     if (!s?.chart) return null;
-    return s.chart.map((n) => ({ beat: n.beat, action: LANE_ACTIONS[n.lane] }));
+    return s.chart.filter((n) => n.lane === s.human).map((n) => ({ beat: n.beat, action: s.humanAction }));
   },
 
   // ---------------------------------------------------------------- dispose
