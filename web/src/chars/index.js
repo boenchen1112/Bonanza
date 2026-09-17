@@ -148,7 +148,7 @@ function makeMember({ charId, pal, build, charSeed, animSeed, detail, scale, nam
       // Shadow detail: a skinned mesh is 1-2 meshes total (body + optional
       // crest), nowhere near the toy rig's per-limb mesh count, so there is
       // no cheaper "core" tier worth having - always cast the whole thing.
-      scene.setShadowDetail = () => { scene.traverse((o) => { if (o.isMesh) o.castShadow = true; }); };
+      scene.setShadowDetail = () => { scene.traverse((o) => { if (o.isMesh && !o.userData.isOutline) o.castShadow = true; }); };
       scene.setShadowDetail();
       return { char: scene, anim };
     }

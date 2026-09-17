@@ -250,9 +250,13 @@ export function createMaterialSystem() {
           ${scaleWithDepth ? 'mv.xyz += n * uThick * -mv.z * 0.14;' : 'mv.xyz += n * uThick;'}
           gl_Position = projectionMatrix * mv;
         }`,
+      // Preprocessor lines must start their own line (this never compiled).
       fragmentShader: /* glsl */`
         uniform vec3 uColor;
-        void main() { gl_FragColor = vec4( uColor, 1.0 ); #include <colorspace_fragment> }`,
+        void main() {
+          gl_FragColor = vec4( uColor, 1.0 );
+          #include <colorspace_fragment>
+        }`,
       side: THREE.BackSide,
       toneMapped: false,
       fog: false,

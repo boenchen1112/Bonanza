@@ -23,7 +23,25 @@
 Mesh: welded and simplified to 30% of the source triangles (≈16.6k tris per
 character, meshoptimizer error < 0.1%).
 
-## `cast-<id>.glb` (bopp, zizz, kwark, tuff, mimo, nibb, glub, fizz)
+## Designed bodies: `cast-tuff.glb`
+
+The approved cast look (`docs/design/cast-sheet.html`, approved 2026-09-18).
+Characters move here one at a time as they are rebuilt; the rest still use
+the older build described in the next section.
+
+| | |
+| --- | --- |
+| Source | `ybot.glb` above; character data and colour roles from `web/src/shell/castData.js` |
+| Built by | `node tools/assets/blender/build-character.mjs tuff` (Blender 4.2 LTS) — deterministic; see `tools/assets/blender/build-character.py` for every transform |
+| Contents | same skeleton + 8 clips as `ybot.glb`; ONE skinned mesh with five role materials (`body`, `trim`, `skin`, `accent`, `eye`): the mannequin with its head removed, a per-shape head shell with a face, a body shell, crest and outfit parts, each weighted 100% to one bone; face morph targets `mouthOpen`, `smile`, `frown`, `lidsDown`, `browsUp`, `browsPinch` (head-bound vertices only) |
+| Checked by | `node tools/assets/blender/cast-contract.mjs <glb>` (also run by `npm test`) and `node tools/assets/blender/contact-sheet.mjs <glb>` |
+| Cost | TUFF: 18,040 triangles; 6 draw calls in game (5 role materials + a skinned outline hull added at runtime by `chars/blenderBodies.js`) |
+
+Proportions: the sheet draws TUFF at 3 heads tall; on the unmodified Mixamo
+skeleton (shortening it would break the clips) the head shell lands at about
+4 heads.
+
+## `cast-<id>.glb` (bopp, zizz, kwark, mimo, nibb, glub, fizz — older build)
 
 | | |
 | --- | --- |
