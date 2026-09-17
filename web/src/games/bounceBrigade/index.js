@@ -51,7 +51,7 @@ import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeom
 import { NoteJudge, rankFor, SCORE } from '../../core/judge.js';
 import { roundResult } from '../../core/result.js';
 import { countIn } from '../../core/round.js';
-import { FEEL, feelForCombo } from '../../core/feel.js';
+import { FEEL, feelForCombo, hitstopFor } from '../../core/feel.js';
 import {
   damp, clamp, clamp01, lerp, smoothstep, smootherstep,
   easeOutCubic, easeOutQuint, easeInCubic, backOut, elasticOut, makeRng, beatPhase,
@@ -345,14 +345,14 @@ function onJudged(note, verdict, errMs) {
     }
   }
 
-  reactVisually(p, verdict, meta);
+  reactVisually(p, verdict, meta, note);
   ctxRef.bus.emit('judge', {
     verdict, errMs, beat: ctxRef.clock.beatAt(note.time), kind: meta.kind,
   });
   pushHud();
 }
 
-function reactVisually(p, verdict, meta) {
+function reactVisually(p, verdict, meta, note) {
   const f = feelForCombo(verdict, judge.stats.combo);
   const big = p.kind === 'X' || (p.kind === 'F' && meta.kind === 'release');
   const scale = big ? 1.7 : meta.kind === 'release' ? 1.25 : 1;
@@ -365,7 +365,7 @@ function reactVisually(p, verdict, meta) {
     groundY: WATER_Y,
     color: verdict === 'miss' ? undefined : lighten(p.color, 0.18),
   });
-  ctxRef.hitstop(Math.min(FEEL.hitstopMax, f.hitstop * (big ? 2.1 : 1)));
+  ctxRef.hitstop(hitstopFor(Math.min(FEEL.hitstopMax, f.hitstop * (big ? 2.1 : 1)), judge.notes, note));
   if (verdict === 'miss') {
     anim?.react('miss', { dur: 0.5 });
   } else {

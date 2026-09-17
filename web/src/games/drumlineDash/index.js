@@ -52,7 +52,7 @@
 import * as THREE from 'three';
 import { NoteJudge, rankFor, SCORE } from '../../core/judge.js';
 import { roundResult } from '../../core/result.js';
-import { FEEL, feelForCombo } from '../../core/feel.js';
+import { FEEL, feelForCombo, hitstopFor } from '../../core/feel.js';
 import { damp, clamp, clamp01, makeRng, easeOutCubic, beatPhase } from '../../core/util.js';
 import { makeCharacter, makeAnimator } from '../../chars/index.js';
 import { buildChart, chartEndBeat, chartDurationBars, maxPoints, ADVANCE_WEIGHT, LEAD_BEATS, OUTRO_BEATS } from './chart.js';
@@ -604,7 +604,7 @@ function onJudged(ctx, S, note, verdict, errMs) {
     scale: mul > 1 ? 1.35 : 1,
     groundY: 0,
   });
-  ctx.hitstop(p?.finale ? Math.min(FEEL.hitstopMax, f.hitstop * 1.5) : f.hitstop);
+  ctx.hitstop(hitstopFor(p?.finale ? Math.min(FEEL.hitstopMax, f.hitstop * 1.5) : f.hitstop, S.judge.notes, note));
 
   const t = ctx.clock.rawNow() + 0.005;
   if (hit) {

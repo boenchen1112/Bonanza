@@ -244,6 +244,26 @@ export function feelFor(verdict) {
   };
 }
 
+/**
+ * Hitstop for a judged note, shortened so the freeze always ends well before
+ * the next unjudged note arrives. The rule stated on FEEL.hitstop (the next
+ * note must stay readable) was only true at the base values; combo escalation
+ * and dense late charts (74-150ms gaps at Finale Fever's top tempo) froze
+ * characters and FX straight through the following note.
+ * @param {number} requested  seconds
+ * @param {{time:number, judged?:boolean}[]} notes  sorted by time
+ * @param {{time:number}} note  the note just judged
+ */
+export function hitstopFor(requested, notes, note) {
+  let gap = Infinity;
+  for (const n of notes) {
+    if (n.judged || n.time <= note.time + 1e-3) continue;
+    gap = n.time - note.time;
+    break;
+  }
+  return Math.max(0, Math.min(requested, gap * 0.4));
+}
+
 /** How many combo milestones `combo` has passed. 0..comboMilestones.length */
 export function comboTier(combo) {
   const m = FEEL.comboMilestones;

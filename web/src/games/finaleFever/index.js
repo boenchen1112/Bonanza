@@ -45,7 +45,7 @@ import * as THREE from 'three';
 import { NoteJudge, rankFor, SCORE } from '../../core/judge.js';
 import { roundResult } from '../../core/result.js';
 import { countIn } from '../../core/round.js';
-import { FEEL, feelForCombo, isMilestone } from '../../core/feel.js';
+import { FEEL, feelForCombo, isMilestone, hitstopFor } from '../../core/feel.js';
 import { clamp01, damp, beatPhase } from '../../core/util.js';
 import { makeCharacter, makeAnimator } from '../../chars/index.js';
 import { createSet, PLACE } from './set.js';
@@ -455,8 +455,8 @@ export default {
    */
   testChart() {
     if (!S?.chart) return null;
-    return S.chart
-      .filter((n) => n.type !== 'call' && n.action)
+    return S.chart.notes
+      .filter((n) => n.action)
       .map((n) => ({ beat: n.beat, action: n.action }));
   },
 
@@ -656,7 +656,7 @@ function onJudged(ctx, note, verdict, errMs) {
   if (verdict !== 'miss') playerVoice(ctx, note);
 
   const f = feelForCombo(verdict, S.combo);
-  ctx.hitstop(Math.min(FEEL.hitstopMax, f.hitstop * (note.kind === 'solo' ? 1.25 : 1)));
+  ctx.hitstop(hitstopFor(Math.min(FEEL.hitstopMax, f.hitstop * (note.kind === 'solo' ? 1.25 : 1)), S.judge.notes, note));
   S.set.hitZone(verdict === 'miss' ? 0.25 : (big ? 1.4 : 0.9));
 
   if (verdict === 'miss') {

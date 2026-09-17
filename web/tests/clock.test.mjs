@@ -76,6 +76,27 @@ test('absurd or missing outputLatency falls back rather than poisoning timing', 
   assert.equal(noneAtAll.refreshOutputLatency(), 0);
 });
 
+test('a changed latency estimate never jumps the beat while the transport runs', () => {
+  const ctx = fakeCtx({ outputLatency: 0.02 });
+  const c = new Clock(ctx);
+  c.refreshOutputLatency();
+  c.setBpm(120);
+  c.start(0, 0);
+  ctx.currentTime = 10;
+
+  ctx.outputLatency = 0.021; // wobble inside the deadband: ignored
+  c.refreshOutputLatency();
+  assert.equal(c.outputLatency, 0.02);
+
+  ctx.outputLatency = 0.06; // a real change: slewed in, never stepped
+  const before = c.beat;
+  c.refreshOutputLatency();
+  assert.ok(Math.abs(c.outputLatency - 0.022) < 1e-9);
+  assert.ok(Math.abs(c.beat - before) < 0.005, 'one refresh may move the beat by at most the slew');
+  for (let i = 0; i < 40; i++) c.refreshOutputLatency();
+  assert.ok(Math.abs(c.outputLatency - 0.06) <= 0.002, 'repeated refreshes converge on the new estimate');
+});
+
 test('integer beats fire exactly once, in order, none skipped', () => {
   const ctx = fakeCtx();
   const c = new Clock(ctx);

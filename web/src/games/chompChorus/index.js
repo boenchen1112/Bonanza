@@ -40,7 +40,7 @@ import * as THREE from 'three';
 import { NoteJudge, rankFor, SCORE } from '../../core/judge.js';
 import { roundResult } from '../../core/result.js';
 import { countIn } from '../../core/round.js';
-import { FEEL, feelForCombo } from '../../core/feel.js';
+import { FEEL, feelForCombo, hitstopFor } from '../../core/feel.js';
 import { clamp, clamp01, damp, beatPhase } from '../../core/util.js';
 import { makeCast, paletteById } from '../../chars/index.js';
 import { SCALES, chord as chordTones, mtof } from '../../audio/theory.js';
@@ -403,7 +403,7 @@ export default {
       groundY: s.pedTop[i],
     });
 
-    ctx.hitstop(note.finale ? FEEL.hitstop.finale : f.hitstop);
+    ctx.hitstop(note.finale ? FEEL.hitstop.finale : hitstopFor(f.hitstop, s.judge.notes, note));
     ctx.bus.emit('judge', { verdict, errMs, beat: note.beat, lane: i });
 
     if (note.finale && hit) s.finale.hit++;

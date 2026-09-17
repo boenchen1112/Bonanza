@@ -530,6 +530,7 @@ export function textImage(text, st = STYLES.display) {
     url: cv.toDataURL('image/png'),
     w: cv.width,
     h: cv.height,
+    padX: mx,
     capPx: s,
     baseline: my * s + s,
     ratio: cv.height / s,

@@ -49,16 +49,51 @@ export function createUI({ root, bus, clock }) {
     return d;
   }
 
-  /** Replace a mounted glyph node's image in place, skipping work if the text
-   *  didn't actually change — these are called from hot per-frame HUD setters. */
+  /**
+   * Show a HUD number (score, combo, accuracy) in place. Every hit produces a
+   * string never seen before, and rasterising + PNG-encoding a whole string
+   * per hit stalled the frame (HANDOFF §5, 100-270ms). Instead the number is
+   * a row of per-character cells, each drawn from a permanent one-glyph image
+   * cache — after the first few hits nothing is ever rasterised again.
+   */
+  const glyphCells = new Map();
+  function cellImage(ch, st) {
+    const key = `${st.capPx}|${st.color}|${ch}`;
+    let img = glyphCells.get(key);
+    if (!img) { img = textImage(ch, st); glyphCells.set(key, img); }
+    return img;
+  }
   function repaint(holder, text, opts) {
     const s = String(text);
     if (holder.dataset.text === s) return;
     holder.dataset.text = s;
-    const img = textImage(s, fontStyle(opts.styleName || 'hud', { color: toColor(opts.color || '#fff') }));
-    holder.style.backgroundImage = `url(${img.url})`;
-    holder.style.setProperty('--ratio', String(img.ratio));
-    holder.style.setProperty('--ar', String(img.aspect));
+    const st = fontStyle(opts.styleName || 'hud', { color: toColor(opts.color || '#fff') });
+    if (!holder.classList.contains('bbb-num')) {
+      holder.classList.remove('bbb-t');
+      holder.classList.add('bbb-num');
+    }
+    const chars = [...s];
+    while (holder.children.length < chars.length) holder.appendChild(el('bbb-t'));
+    for (let i = 0; i < holder.children.length; i++) {
+      const c = /** @type {HTMLElement} */ (holder.children[i]);
+      if (i >= chars.length) { c.style.display = 'none'; continue; }
+      c.style.display = '';
+      if (chars[i] === ' ') {
+        c.style.backgroundImage = 'none';
+        c.style.setProperty('--ratio', '1');
+        c.style.setProperty('--ar', String(0.34 + st.tracking));
+        c.style.marginLeft = '0';
+        continue;
+      }
+      const img = cellImage(chars[i], st);
+      c.style.backgroundImage = `url(${img.url})`;
+      c.style.setProperty('--ratio', String(img.ratio));
+      c.style.setProperty('--ar', String(img.aspect));
+      // Overlap each cell's padding so glyphs sit exactly where a whole-string
+      // layout would put them: advance + tracking apart.
+      const overlap = i === 0 ? 0 : Math.abs(st.slant) + 2 * img.padX - st.tracking;
+      c.style.marginLeft = `calc(var(--cap) * ${-overlap})`;
+    }
   }
 
   /** Verdict popup at a screen position (0..1 normalised). */
@@ -149,6 +184,11 @@ export function createUI({ root, bus, clock }) {
       layer.appendChild(d);
       this._root = d;
       this._lastCombo = 0;
+      // Rasterise every HUD digit now, during load, not on the first hits.
+      for (const color of ['#fff', '#9fb2ff', '#ffd93d']) {
+        const st = fontStyle('hud', { color });
+        for (const ch of '0123456789.%') cellImage(ch, st);
+      }
       repaint(d.querySelector('[data-score]'), '0', { styleName: 'hud' });
       repaint(d.querySelector('[data-acc]'), '0.0%', { styleName: 'hud', color: '#9fb2ff' });
       const comboWrap = d.querySelector('[data-combo-wrap]');

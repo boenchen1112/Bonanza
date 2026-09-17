@@ -442,17 +442,30 @@ if (window.visualViewport) {
   window.visualViewport.addEventListener('resize', onViewport, { passive: true });
 }
 
-// Autoplay policy: the context starts suspended until a real gesture.
-async function unlock() {
+// Autoplay policy: the context starts suspended until a real gesture. This
+// used to run (and re-read output latency) on every keypress for the whole
+// session; now it does its work once and the latency is refreshed on a slow
+// timer instead (see refreshOutputLatency's slew).
+const UNLOCK_EVENTS = ['pointerdown', 'keydown', 'touchstart'];
+async function unlock(e) {
+  if (e?.repeat) return;
   if (audioCtx.state !== 'running') {
     try { await audioCtx.resume(); } catch { /* ignore */ }
   }
+  if (audioCtx.state !== 'running') return;
+  for (const ev of UNLOCK_EVENTS) window.removeEventListener(ev, unlock);
   clock.refreshOutputLatency();
   bus.emit('audio:unlocked');
 }
-for (const ev of ['pointerdown', 'keydown', 'touchstart']) {
+for (const ev of UNLOCK_EVENTS) {
   window.addEventListener(ev, unlock, { passive: true });
 }
+audioCtx.addEventListener?.('statechange', () => {
+  if (audioCtx.state === 'running') { clock.refreshOutputLatency(); return; }
+  // The OS can suspend the context later (e.g. iOS interruptions): re-arm.
+  for (const ev of UNLOCK_EVENTS) window.addEventListener(ev, unlock, { passive: true });
+});
+setInterval(() => { if (audioCtx.state === 'running') clock.refreshOutputLatency(); }, 1000);
 
 // ------------------------------------------------------------------ test API
 
