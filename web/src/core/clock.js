@@ -18,6 +18,8 @@
 
 const LOOKAHEAD_S = 0.12; // how far ahead scheduled events are dispatched
 const DOMAIN_SMOOTHING = 0.02; // EMA weight for perf->audio offset
+const LATENCY_DEADBAND = 0.002; // ignore output-latency wobble below this
+const LATENCY_SLEW = 0.002; // max output-latency change per refresh while running
 
 export class Clock {
   /** @param {AudioContext} ctx */
@@ -68,13 +70,39 @@ export class Clock {
   start(audioTime = this.now() + 0.1, startBeat = 0) {
     this._origin = audioTime;
     this._beatAtOrigin = startBeat;
+    this._startBeat = startBeat;
     this._running = true;
     this._lastDispatchedBeat = startBeat - 1e-9;
+    this._generation = (this._generation || 0) + 1;
   }
+
+  /**
+   * Bumped by every start(). Anything holding a cursor in beats (the music
+   * player) compares it to notice the transport was restarted under it.
+   */
+  get generation() { return this._generation || 0; }
+
+  /** The beat the last start() began counting from (0 for a fresh transport). */
+  get startBeat() { return this._startBeat || 0; }
 
   stop() {
     this._running = false;
     this._scheduled.length = 0;
+  }
+
+  /**
+   * Halt the transport but KEEP the one-shot schedule, and report the beat it
+   * halted on. `start(at, thatBeat)` resumes exactly where it left off.
+   *
+   * Scheduled entries are keyed by beat, which survives an origin shift, so
+   * they need no repair — but `stop()` drops them, which is why the pause
+   * menu used to snapshot the private `_scheduled` array and put it back by
+   * hand. Pausing is the clock's job, not the caller's.
+   */
+  suspend() {
+    const at = this.beat;
+    this._running = false;
+    return at;
   }
 
   get running() { return this._running; }
@@ -89,15 +117,30 @@ export class Clock {
   /** Raw audio time — use this when scheduling into WebAudio nodes. */
   rawNow() { return this.ctx.currentTime; }
 
+  /**
+   * Re-read the device's output latency. While the transport runs, a new
+   * estimate is slewed in (deadband, then at most LATENCY_SLEW per call):
+   * `now()` subtracts this value, so applying a jump directly would jump the
+   * beat on screen and shift every press being judged.
+   */
   refreshOutputLatency() {
     const l = this.ctx.outputLatency;
+    let next;
     if (typeof l === 'number' && isFinite(l) && l >= 0 && l < 0.5) {
-      this._outputLatency = l;
+      next = l;
     } else {
       // Safari and some Firefox builds don't expose outputLatency. baseLatency
       // is a floor, not the truth, but it beats assuming zero.
       const b = this.ctx.baseLatency;
-      this._outputLatency = (typeof b === 'number' && isFinite(b)) ? b : 0;
+      next = (typeof b === 'number' && isFinite(b)) ? b : 0;
+    }
+    if (!this._running) {
+      this._outputLatency = next;
+    } else {
+      const d = next - this._outputLatency;
+      if (Math.abs(d) > LATENCY_DEADBAND) {
+        this._outputLatency += Math.max(-LATENCY_SLEW, Math.min(LATENCY_SLEW, d));
+      }
     }
     return this._outputLatency;
   }

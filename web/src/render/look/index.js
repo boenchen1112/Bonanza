@@ -80,10 +80,26 @@ export function createLook({ renderer }) {
     } catch { /* ignore */ }
     return 'high';
   }
+  const SHADOW_MAP = { high: 2048, medium: 1024 };
   function setTier(t) {
     tier = t === 'auto' ? detectTier() : t;
     post.setTier(tier);
+    // The one real shadow map is a high/medium feature; low keeps blobs only.
+    const shadowsOn = tier !== 'low';
+    const mapSize = SHADOW_MAP[tier] || 1024;
+    const key = lights.key.shadow;
+    if (key.mapSize.x !== mapSize) {
+      key.mapSize.set(mapSize, mapSize);
+      key.map?.dispose();
+      key.map = null;       // three reallocates at the new size on the next render
+    }
+    renderer.shadowMap.enabled = shadowsOn;
     return tier;
+  }
+
+  /** See lighting.js — the tight box where the key casts a real shadow. */
+  function setShadowFocus(center, radius) {
+    lights.setShadowFocus(center, radius);
   }
   setTier('auto');
 
@@ -104,6 +120,7 @@ export function createLook({ renderer }) {
   function detach() {
     if (scene) scene.remove(rig);
     shadows.clear();
+    lights.setShadowFocus(null);
     for (const m of spawned) { materials.owned.delete(m); m.dispose(); }
     spawned.clear();
     scene = null;
@@ -150,6 +167,7 @@ export function createLook({ renderer }) {
           rim: 0.25, pulse: 0.05, name: 'houseGround',
         });
         o.userData.houseGround = true;
+        o.receiveShadow = true;   // free unless the scene sets a shadow focus
         o.getWorldPosition(_wp);
         ground.found = true;
         ground.y = _wp.y;
@@ -235,7 +253,7 @@ export function createLook({ renderer }) {
 
   return {
     palette, materials, sky, lights, shadows, post, rig, ground,
-    attach, detach, dress, update, setPalette, setTier, dispose,
+    attach, detach, dress, update, setPalette, setTier, setShadowFocus, dispose,
     get tier() { return tier; },
     get colors() { return palette.col; },
     get spec() { return palette.spec; },

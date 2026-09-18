@@ -44,9 +44,9 @@
 const TAU = Math.PI * 2;
 
 /** Fill pen width, em. */
-export const PEN = 0.215;
+const PEN = 0.215;
 /** Extra outline pen per side, em. */
-export const OUTLINE = 0.055;
+const OUTLINE = 0.055;
 /** Half the widest pen — the inset every glyph must keep from its own box. */
 const H = (PEN + 2 * OUTLINE) / 2; // 0.1375
 /** How far below the baseline a descender (comma, Q tail, J) may reach. */
@@ -80,7 +80,7 @@ function bowl(k, top, bottom, right) {
 /** A round dot (zero-length stroke with a round cap). */
 const dot = (x, y) => [['M', x, y], ['L', x + 0.0008, y]];
 
-export const GLYPHS = {
+const GLYPHS = {
   A: G(0.90, (k) => {
     const y = 0.63;
     const x = k.L + (k.C - k.L) * (k.B - y) / (k.B - k.T);
@@ -200,11 +200,13 @@ export const GLYPHS = {
     ['Q', k.R, 0.42, k.R, 0.64], ['Q', k.R, k.B, k.C - 0.04, k.B],
     ['Q', k.L, k.B, k.L, k.B - 0.16],
   ]),
+  // 6 and 9: a long, nearly straight stem into the bowl. The old short curled
+  // flick left a "6" that read as "c" or "ó" in the HUD score.
   6: G(0.80, (k) => {
     const r = k.rx, cyb = k.B - r;
     return [
-      ['M', k.R - 0.02, k.T + 0.12],
-      ['C', k.R - 0.30, k.T - 0.06, k.L, k.T + 0.28, k.L, cyb],
+      ['M', k.R - 0.06, k.T],
+      ['Q', k.L + 0.02, k.T + 0.16, k.L, cyb],
       ['E', k.cx, cyb, r, r, Math.PI, Math.PI + TAU, false],
     ];
   }),
@@ -219,8 +221,8 @@ export const GLYPHS = {
   9: G(0.80, (k) => {
     const r = k.rx, cyt = k.T + r;
     return [
-      ['M', k.L + 0.02, k.B - 0.12],
-      ['C', k.L + 0.30, k.B + 0.06, k.R, k.B - 0.28, k.R, cyt],
+      ['M', k.L + 0.06, k.B],
+      ['Q', k.R - 0.02, k.B - 0.16, k.R, cyt],
       ['E', k.cx, cyt, r, r, 0, TAU, false],
     ];
   }),
@@ -357,7 +359,7 @@ const css = (c, a = 1) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
  */
 
 /** @type {BashStyle} */
-export const BASE_STYLE = {
+const BASE_STYLE = {
   capPx: 128,
   tracking: 0.03,
   slant: 0.115,         // tan of the italic angle (~6.6 degrees)
@@ -372,7 +374,7 @@ export const BASE_STYLE = {
 };
 
 /** Named presets. Sizes are raster resolution, not layout size. */
-export const STYLES = {
+const STYLES = {
   /** Verdicts, banners, big numbers. */
   display: { ...BASE_STYLE, capPx: 150 },
   /** Titles — a touch more tracking so long words don't read as a wall. */
@@ -400,7 +402,7 @@ const imgCache = new Map();
 const CACHE_MAX = 320;
 
 /** Advance width of a string, in em. */
-export function advanceOf(text, st = STYLES.display) {
+function advanceOf(text, st = STYLES.display) {
   const s = st.uppercase ? text.toUpperCase() : text;
   let a = 0;
   for (const ch of s) {
@@ -522,22 +524,46 @@ export function textImage(text, st = STYLES.display) {
   const cv = document.createElement('canvas');
   cv.width = Math.max(2, Math.ceil((adv + Math.abs(st.slant) + 2 * mx) * s));
   cv.height = Math.max(2, Math.ceil((1 + DESC + 2 * my) * s));
-  paint(cv.getContext('2d'), items, st, s, mx * s, my * s);
+  // CPU-backed on purpose: Chrome GPU-accelerates a canvas this size, and
+  // reading it back to encode then stalls the main thread (profiled at
+  // ~200ms per title-sized string on an Iris Xe).
+  paint(cv.getContext('2d', { willReadFrequently: true }), items, st, s, mx * s, my * s);
 
   const out = {
-    url: cv.toDataURL('image/png'),
+    key,
+    /** Set by a caller that keeps this image forever (the HUD's per-character
+     *  cells): eviction must not revoke a URL still on screen. */
+    pinned: false,
+    /** Object URL once encoded, null until then — see `ready`. */
+    url: null,
+    /** Resolves with the URL. The PNG encode runs off the main thread
+     *  (toBlob): a synchronous toDataURL of a title-sized string blocked the
+     *  frame for 60-235ms on every count-in beat of a fresh session. */
+    ready: null,
     w: cv.width,
     h: cv.height,
+    padX: mx,
     capPx: s,
     baseline: my * s + s,
     ratio: cv.height / s,
     aspect: cv.width / cv.height,
   };
+  out.ready = cv.toBlob
+    ? new Promise((resolve) => cv.toBlob((blob) => {
+      out.url = blob ? URL.createObjectURL(blob) : cv.toDataURL('image/png');
+      resolve(out.url);
+    }, 'image/png'))
+    : Promise.resolve(out.url = cv.toDataURL('image/png'));
   if (imgCache.size > CACHE_MAX) {
     // Cheap eviction: drop the oldest quarter. Strings here are short-lived
-    // labels, so exact LRU is not worth the bookkeeping.
+    // labels, so exact LRU is not worth the bookkeeping. Their blob URLs are
+    // released a little later, in case one is still on screen.
     let n = Math.floor(CACHE_MAX / 4);
-    for (const k of imgCache.keys()) { imgCache.delete(k); if (--n <= 0) break; }
+    for (const [k, v] of imgCache) {
+      imgCache.delete(k);
+      if (!v.pinned) v.ready.then((u) => { if (u.startsWith('blob:')) setTimeout(() => URL.revokeObjectURL(u), 10000); });
+      if (--n <= 0) break;
+    }
   }
   imgCache.set(key, out);
   return out;
@@ -549,7 +575,7 @@ export function textImage(text, st = STYLES.display) {
  * exactly one cell advances one digit and nothing shifts sideways.
  */
 const stripCache = new Map();
-export function digitStrip(st = STYLES.hud) {
+function digitStrip(st = STYLES.hud) {
   const key = keyOf(st);
   const hit = stripCache.get(key);
   if (hit) return hit;
@@ -580,7 +606,7 @@ export function digitStrip(st = STYLES.hud) {
 }
 
 /** Direct canvas drawing, for components that own a canvas (the timing bar). */
-export function drawText(g, text, x, y, capPx, st = STYLES.chip) {
+function drawText(g, text, x, y, capPx, st = STYLES.chip) {
   const src = st.uppercase ? text.toUpperCase() : text;
   const s = capPx;
   g.save();
@@ -611,6 +637,3 @@ export function drawText(g, text, x, y, capPx, st = STYLES.chip) {
   return adv * capPx;
 }
 
-export const Font = {
-  GLYPHS, STYLES, style, textImage, digitStrip, advanceOf, drawText, PEN, OUTLINE,
-};

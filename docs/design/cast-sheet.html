@@ -1,0 +1,416 @@
+<title>Beat Bash Cast Sheet</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Figtree:wght@400;500;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --stage: #0b0a1a;
+    --panel: #15133a;
+    --panel-2: #1b1947;
+    --rule: #2a2766;
+    --text: #eef0ff;
+    --dim: #a9b0e0;
+    --faint: #6f74a8;
+    --outline: #120f2e;
+    --brand: #ffd93d;
+    --display: "Bungee", "Arial Black", Impact, sans-serif;
+    --body: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--stage); }
+  body {
+    margin: 0; background: var(--stage); color: var(--text);
+    font: 400 15px/1.55 var(--body);
+    padding-inline: clamp(16px, 4vw, 56px); padding-block: 40px 72px;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; display: grid; gap: 56px; }
+
+  header { display: grid; gap: 14px; }
+  .eyebrow { font: 500 12px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--dim); display: flex; flex-wrap: wrap; gap: 8px 18px; }
+  .eyebrow b { color: var(--brand); font-weight: 500; }
+  h1 { font: 400 clamp(34px, 6vw, 64px)/1 var(--display); margin: 0; letter-spacing: .01em; text-wrap: balance; }
+  h1 span { color: var(--brand); }
+  .lede { max-width: 66ch; color: var(--dim); margin: 0; font-size: 16px; }
+  .lede strong { color: var(--text); font-weight: 700; }
+
+  h2 { font: 800 13px/1 var(--body); letter-spacing: .16em; text-transform: uppercase; color: var(--dim); margin: 0 0 18px; display: flex; align-items: center; gap: 12px; }
+  h2::after { content: ""; flex: 1; height: 1px; background: var(--rule); }
+
+  /* lineup */
+  .lineup { background: linear-gradient(180deg, #120f33 0%, #0e0c26 70%, #191640 70.2%, #141236 100%); border: 1px solid var(--rule); border-radius: 14px; overflow-x: auto; }
+  .lineup svg { display: block; min-width: 880px; width: 100%; height: auto; }
+  .caption { color: var(--faint); font-size: 13px; margin: 10px 0 0; max-width: 80ch; }
+
+  /* cast cards */
+  .cast { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 540px), 1fr)); gap: 20px; }
+  .card { background: var(--panel); border: 1px solid var(--rule); border-radius: 14px; display: grid; grid-template-columns: minmax(0, 250px) minmax(0, 1fr); overflow: hidden; }
+  .turn { background: radial-gradient(120% 80% at 50% 100%, color-mix(in srgb, var(--c) 22%, transparent), transparent 70%), #0f0d2b; display: grid; grid-template-rows: 1fr auto; border-right: 1px solid var(--rule); }
+  .turn svg { width: 100%; height: auto; display: block; }
+  .views { display: flex; justify-content: space-around; font: 500 10px/1 var(--mono); letter-spacing: .12em; color: var(--faint); padding: 0 8px 12px; text-transform: uppercase; }
+  .spec { padding: 20px 22px 22px; display: grid; gap: 14px; align-content: start; min-width: 0; }
+  .name { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  .name h3 { font: 400 30px/1 var(--display); margin: 0; color: var(--c); }
+  .build { font: 500 11px/1 var(--mono); color: var(--dim); border: 1px solid var(--rule); border-radius: 99px; padding: 5px 9px; letter-spacing: .06em; }
+  .trait { margin: -6px 0 0; color: var(--dim); font-style: italic; }
+  .chips { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+  .chip { display: grid; gap: 5px; }
+  .chip i { display: block; height: 28px; border-radius: 6px; background: var(--v); box-shadow: inset 0 0 0 1px rgba(238,240,255,.18); }
+  .chip span { font: 500 10px/1.2 var(--mono); color: var(--faint); overflow-wrap: anywhere; }
+  .chip span b { display: block; color: var(--dim); font-weight: 500; letter-spacing: .04em; }
+  dl { margin: 0; display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 7px 14px; font-size: 14px; }
+  dt { font: 500 11px/1.9 var(--mono); color: var(--faint); letter-spacing: .08em; text-transform: uppercase; }
+  dd { margin: 0; color: var(--text); }
+
+  /* faces */
+  .faces { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; }
+  .face { background: var(--panel); border: 1px solid var(--rule); border-radius: 12px; padding: 12px 12px 14px; display: grid; gap: 8px; justify-items: center; text-align: center; }
+  .face svg { width: 100%; max-width: 150px; height: auto; }
+  .face b { font: 800 12px/1 var(--body); letter-spacing: .12em; text-transform: uppercase; }
+  .face small { color: var(--faint); font-size: 12.5px; line-height: 1.4; }
+
+  /* notes + decisions */
+  .two { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 40px; align-items: start; }
+  .notes { display: grid; gap: 12px; }
+  .note { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 14px; padding-bottom: 12px; border-bottom: 1px solid var(--rule); }
+  .note:last-child { border-bottom: 0; }
+  .note dt, .note .k { font: 500 11px/1.7 var(--mono); color: var(--brand); letter-spacing: .08em; text-transform: uppercase; }
+  .note p { margin: 0; color: var(--dim); max-width: 60ch; }
+  .note p code { font: 500 12.5px var(--mono); color: var(--text); }
+  .decisions { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+  .decisions li { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 14px; background: var(--panel-2); border: 1px solid var(--rule); border-radius: 12px; padding: 14px 16px; }
+  .decisions .tag { font: 400 20px/1 var(--display); color: var(--stage); background: var(--brand); border-radius: 8px; height: 34px; display: grid; place-items: center; }
+  .decisions p { margin: 0; color: var(--dim); }
+  .decisions p strong { color: var(--text); display: block; margin-bottom: 2px; }
+
+  @media (max-width: 620px) {
+    .card { grid-template-columns: 1fr; }
+    .turn { border-right: 0; border-bottom: 1px solid var(--rule); }
+    .turn svg { max-width: 320px; margin: 0 auto; }
+    .note { grid-template-columns: 1fr; gap: 4px; }
+  }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow"><span>Beat Bash Bonanza</span><span>Character model sheet</span><b>For approval · rev A</b></div>
+    <h1>The cast gets <span>faces.</span></h1>
+    <p class="lede">Today every Blender body is the same faceless mannequin in one flat colour with one primitive on its head. This sheet proposes what each of the eight becomes: <strong>a big head shell with a real face</strong>, a body shell that matches the menu portrait's shape, and a five-role colour split — all hung on the existing Mixamo skeleton, so every animation still works. Approve or redline the lettered decisions at the bottom.</p>
+  </header>
+
+  <section>
+    <h2>Lineup at game scale</h2>
+    <div class="lineup" id="lineup"></div>
+    <p class="caption">Heights in head units (the ruler at left). Tall build 3.4 heads, wide and round 3.0, small 2.5. Every silhouette must read on its own from this distance — that is the Swing Kings batter's size on screen.</p>
+  </section>
+
+  <section>
+    <h2>Turnarounds</h2>
+    <div class="cast" id="cast"></div>
+  </section>
+
+  <section>
+    <h2>Face states — the face is a readout</h2>
+    <div class="faces" id="faces"></div>
+    <p class="caption">One face rig for all eight: eye whites, pupils, two brows, a mouth with an open shape key. Games drive the state; Chomp Chorus uses GULP, every verdict uses the other three.</p>
+  </section>
+
+  <section class="two">
+    <div>
+      <h2>How it builds</h2>
+      <div class="notes">
+        <div class="note"><span class="k">Skeleton</span><p>Unchanged Mixamo rig. Head shell and face parts skin 100% to <code>mixamorigHead</code>; body shell to <code>mixamorigSpine2</code>; the mannequin head is hidden under the shell.</p></div>
+        <div class="note"><span class="k">Materials</span><p>Five slots per body — <code>body</code>, <code>trim</code>, <code>skin</code>, <code>accent</code>, <code>eye</code> — mapped at runtime onto the house toon material with the colours below, plus the unused inverted-hull outline.</p></div>
+        <div class="note"><span class="k">Budget</span><p>≤ 20k triangles and ≤ 6 draw calls per character (today 16.6k / 1–2; the old toy rig was 22). Shadow casting stays whole-body.</p></div>
+        <div class="note"><span class="k">Game hooks</span><p><code>getJoint('face')</code> returns a real face node; a <code>mouthOpen</code> shape key and brow bones replace the toy rig's <code>mouth</code>/<code>gape</code> scaling, so Chomp Chorus and the other three games can move onto these bodies.</p></div>
+        <div class="note"><span class="k">Colours</span><p>Derived exactly as the game already does (<code>paletteForChar</code>): trim = body mixed 62% toward <code>#100818</code>, skin = 80% toward white, eye = 88% toward <code>#06030c</code>.</p></div>
+      </div>
+    </div>
+    <div>
+      <h2>Decisions to approve</h2>
+      <ol class="decisions">
+        <li><span class="tag">A</span><p><strong>Big head shells, ~1/3 of height.</strong> Chibi proportions over the realistic mannequin head — faces must read at batter size. Alternative: keep the mannequin head and add a face decal (cheaper, reads far smaller).</p></li>
+        <li><span class="tag">B</span><p><strong>Body shells follow the portrait shapes.</strong> Beak, spike, star and blob finally exist in 3D, so menu portrait and 3D figure are one character.</p></li>
+        <li><span class="tag">C</span><p><strong>Split the doubled crests.</strong> BOPP and NIBB both had one antenna; KWARK and FIZZ both a plume. Proposed: NIBB gets twin antennae, FIZZ a star-tipped plume.</p></li>
+        <li><span class="tag">D</span><p><strong>One outfit read each, in trim.</strong> Shoes and one garment (band, jacket, scarf, plate, hoodie, lanyard, collar, cape) — no textures, flat toon colour only.</p></li>
+        <li><span class="tag">E</span><p><strong>Same face rig for all eight.</strong> Personality comes from default brow angle and mouth shape, not eight different rigs.</p></li>
+        <li><span class="tag">F</span><p><strong>Toon outline on.</strong> Wire the existing inverted-hull outline for the cast only, matching the portraits' dark stroke.</p></li>
+      </ol>
+    </div>
+  </section>
+</div>
+
+<script>
+(() => {
+  const INK = '#120f2e';
+  const mixHex = (a, b, t) => {
+    const pa = parseInt(a.slice(1), 16), pb = parseInt(b.slice(1), 16);
+    const ch = (s) => Math.round(((pa >> s) & 255) * (1 - t) + ((pb >> s) & 255) * t);
+    return '#' + [16, 8, 0].map((s) => ch(s).toString(16).padStart(2, '0')).join('');
+  };
+  const roles = (c, a) => ({
+    body: c, trim: mixHex(c, '#100818', 0.62), skin: mixHex(c, '#ffffff', 0.8), accent: a,
+    eye: mixHex(c, '#06030c', 0.88), limb: mixHex(c, '#ffffff', 0.18),
+  });
+
+  const CAST = [
+    { id: 'BOPP', color: '#ffd93d', accent: '#ff9f45', shape: 'round', build: 'round', h: 3.0, trait: 'All rhythm, no brakes.',
+      head: 'Round shell, antenna with a bobbing ball', body: 'Round belly shell, orange belly band', outfit: 'Band + trim sneakers', face: 'Wide grin, round pupils', mouth: 'grin', brow: 0 },
+    { id: 'ZIZZ', color: '#4dd6ff', accent: '#7aa6ff', shape: 'spike', build: 'wide', h: 3.0, trait: 'Runs on static and spite.',
+      head: 'Faceted hexagon shell, lightning-bolt crest', body: 'Hex chest shell with shoulder points', outfit: 'Cropped jacket, bolt on chest', face: 'Smirk, one brow up', mouth: 'smirk', brow: 1 },
+    { id: 'KWARK', color: '#ff5d73', accent: '#ff9f45', shape: 'beak', build: 'round', h: 3.0, trait: 'Beak first, ask later.',
+      head: 'Round shell, orange beak, three-feather plume', body: 'Round shell, scarf at the neck', outfit: 'Scarf + trim boots', face: 'Close-set eyes, the beak is the mouth', mouth: 'beak', brow: -1 },
+    { id: 'TUFF', color: '#9ee87a', accent: '#39d4b4', shape: 'block', build: 'wide', h: 3.0, trait: 'Built like a downbeat.',
+      head: 'Rounded cube, cream horns', body: 'Block torso, teal chest plate', outfit: 'Chest plate + wrist guards', face: 'Underbite with two teeth, flat brows', mouth: 'underbite', brow: -1 },
+    { id: 'MIMO', color: '#c08cff', accent: '#ff7ad9', shape: 'tall', build: 'tall', h: 3.4, trait: 'Two beats ahead, always.',
+      head: 'Tall capsule shell, pink cap', body: 'Long capsule torso', outfit: 'Hoodie cuffs + hightops', face: 'Half-lidded, knowing smile', mouth: 'smile', brow: 0, lids: true },
+    { id: 'NIBB', color: '#ff9f45', accent: '#ffd93d', shape: 'tiny', build: 'small', h: 2.5, trait: 'Small. Loud. Everywhere.',
+      head: 'Oversized round shell, twin antennae', body: 'Tiny round body', outfit: 'Whistle on a lanyard', face: 'Mouth always open, tiny pupils', mouth: 'shout', brow: 1, twin: true },
+    { id: 'GLUB', color: '#39d4b4', accent: '#4dd6ff', shape: 'blob', build: 'round', h: 3.0, trait: 'Wobbles exactly on time.',
+      head: 'Blob shell merged into body, dorsal fin', body: 'Drip-shaped body, no neck', outfit: 'Bubble-ring collar', face: 'Wide-set eyes, wavy mouth', mouth: 'wavy', brow: 0 },
+    { id: 'FIZZ', color: '#ff7ad9', accent: '#c08cff', shape: 'star', build: 'small', h: 2.5, trait: 'Sparkles on the offbeat.',
+      head: 'Six-point star shell, star-tipped plume', body: 'Small round body, star cape', outfit: 'Violet star cape', face: 'Star glints in the eyes, blush', mouth: 'smile', brow: 0, star: true, blush: true },
+  ];
+
+  const f = (n) => +n.toFixed(1);
+  const S = (d, fill, extra = '') => `<path d="${d}" fill="${fill}" stroke="${INK}" stroke-width="3" stroke-linejoin="round" ${extra}/>`;
+  const E = (cx, cy, rx, ry, fill, extra = '') => `<ellipse cx="${f(cx)}" cy="${f(cy)}" rx="${f(rx)}" ry="${f(ry)}" fill="${fill}" stroke="${INK}" stroke-width="3" ${extra}/>`;
+  const rrect = (x, y, w, h, r) => `M${f(x + r)} ${f(y)}H${f(x + w - r)}Q${f(x + w)} ${f(y)} ${f(x + w)} ${f(y + r)}V${f(y + h - r)}Q${f(x + w)} ${f(y + h)} ${f(x + w - r)} ${f(y + h)}H${f(x + r)}Q${f(x)} ${f(y + h)} ${f(x)} ${f(y + h - r)}V${f(y + r)}Q${f(x)} ${f(y)} ${f(x + r)} ${f(y)}Z`;
+  const poly = (cx, cy, rx, ry, n, rot, inner) => {
+    const pts = [];
+    const k = inner ? n * 2 : n;
+    for (let i = 0; i < k; i++) {
+      const a = rot + (i / k) * Math.PI * 2;
+      const m = inner && i % 2 ? inner : 1;
+      pts.push(`${f(cx + Math.cos(a) * rx * m)} ${f(cy + Math.sin(a) * ry * m)}`);
+    }
+    return 'M' + pts.join('L') + 'Z';
+  };
+
+  /** One figure. `turn` 0 = front, 1 = three-quarter. Units: head radius R. */
+  function figure(c, turn, x0, base, R) {
+    const P = roles(c.color, c.accent);
+    const q = turn ? 0.86 : 1;            // three-quarter squash
+    const fx = turn ? R * 0.28 : 0;       // features slide toward camera side
+    const H = c.h * R * 2;                // total height
+    const headCy = base - H + R * (c.shape === 'tall' ? 1.25 : 1);
+    const hr = c.shape === 'tall' ? R * 0.84 : R;
+    const bodyTop = headCy + R * (c.shape === 'tall' ? 1.05 : 0.8);
+    const legH = c.build === 'small' ? R * 0.55 : c.build === 'tall' ? R * 1.2 : R * 0.8;
+    const bodyBot = base - legH;
+    const bw = (c.build === 'wide' ? R * 1.05 : c.build === 'small' ? R * 0.62 : c.build === 'tall' ? R * 0.62 : R * 0.9) * q;
+    const bh = bodyBot - bodyTop;
+    let s = '';
+
+    // far arm (three-quarter only), legs, shoes
+    const armY = bodyTop + bh * 0.2;
+    const arm = (side, far) => {
+      const ax = x0 + side * bw * 0.92;
+      const hx = ax + side * R * 0.34;
+      const hy = armY + bh * 0.62;
+      return `<path d="M${f(ax)} ${f(armY)}Q${f(ax + side * R * 0.42)} ${f(armY + bh * 0.3)} ${f(hx)} ${f(hy)}" fill="none" stroke="${INK}" stroke-width="${f(R * 0.3 + 6)}" stroke-linecap="round" ${far ? 'opacity=".9"' : ''}/>`
+        + `<path d="M${f(ax)} ${f(armY)}Q${f(ax + side * R * 0.42)} ${f(armY + bh * 0.3)} ${f(hx)} ${f(hy)}" fill="none" stroke="${far ? mixHex(P.limb, INK, 0.25) : P.limb}" stroke-width="${f(R * 0.3)}" stroke-linecap="round"/>`
+        + E(hx, hy + R * 0.06, R * 0.2, R * 0.19, far ? mixHex(P.skin, INK, 0.2) : P.skin);
+    };
+    if (turn) s += arm(-1, true);
+    for (const side of [-1, 1]) {
+      const lx = x0 + side * bw * 0.42 + (turn ? R * 0.08 : 0);
+      s += `<path d="M${f(lx)} ${f(bodyBot - R * 0.2)}V${f(base - R * 0.2)}" stroke="${INK}" stroke-width="${f(R * 0.34 + 6)}" stroke-linecap="round"/>`;
+      s += `<path d="M${f(lx)} ${f(bodyBot - R * 0.2)}V${f(base - R * 0.2)}" stroke="${P.limb}" stroke-width="${f(R * 0.34)}" stroke-linecap="round"/>`;
+      s += S(rrect(lx - R * 0.3 + (turn ? R * 0.1 : 0), base - R * 0.3, R * 0.6, R * 0.3, R * 0.14), P.trim);
+    }
+
+    // body shell
+    let bodyD;
+    switch (c.shape) {
+      case 'spike': bodyD = poly(x0, bodyTop + bh * 0.5, bw * 1.08, bh * 0.56, 6, -Math.PI / 2); break;
+      case 'block': bodyD = rrect(x0 - bw, bodyTop, bw * 2, bh, R * 0.22); break;
+      case 'tall': bodyD = rrect(x0 - bw, bodyTop, bw * 2, bh, bw * 0.9); break;
+      case 'blob': bodyD = `M${f(x0 - bw * 0.7)} ${f(bodyTop)}C${f(x0 - bw * 1.25)} ${f(bodyTop + bh * 0.5)} ${f(x0 - bw * 1.2)} ${f(bodyBot)} ${f(x0 - bw * 0.3)} ${f(bodyBot)}Q${f(x0)} ${f(bodyBot + R * 0.12)} ${f(x0 + bw * 0.3)} ${f(bodyBot)}C${f(x0 + bw * 1.2)} ${f(bodyBot)} ${f(x0 + bw * 1.25)} ${f(bodyTop + bh * 0.5)} ${f(x0 + bw * 0.7)} ${f(bodyTop)}Z`; break;
+      default: bodyD = `M${f(x0)} ${f(bodyTop)}C${f(x0 + bw * 1.3)} ${f(bodyTop)} ${f(x0 + bw * 1.15)} ${f(bodyBot)} ${f(x0)} ${f(bodyBot)}C${f(x0 - bw * 1.15)} ${f(bodyBot)} ${f(x0 - bw * 1.3)} ${f(bodyTop)} ${f(x0)} ${f(bodyTop)}Z`;
+    }
+    s += S(bodyD, P.body);
+
+    // outfit read
+    const midY = bodyTop + bh * 0.58;
+    switch (c.id) {
+      case 'BOPP': s += S(rrect(x0 - bw * 1.02, midY - R * 0.14, bw * 2.04, R * 0.28, R * 0.1), P.accent); break;
+      case 'ZIZZ':
+        s += S(`M${f(x0 - bw * 0.95)} ${f(bodyTop + bh * 0.22)}L${f(x0 - bw * 0.25)} ${f(bodyTop + bh * 0.08)}L${f(x0 - bw * 0.2)} ${f(bodyTop + bh * 0.72)}L${f(x0 - bw * 0.85)} ${f(bodyTop + bh * 0.8)}Z`, P.trim);
+        s += S(`M${f(x0 + bw * 0.95)} ${f(bodyTop + bh * 0.22)}L${f(x0 + bw * 0.25)} ${f(bodyTop + bh * 0.08)}L${f(x0 + bw * 0.2)} ${f(bodyTop + bh * 0.72)}L${f(x0 + bw * 0.85)} ${f(bodyTop + bh * 0.8)}Z`, P.trim);
+        s += S(`M${f(x0 + fx * 0.4 + R * 0.05)} ${f(midY - R * 0.36)}L${f(x0 + fx * 0.4 - R * 0.14)} ${f(midY + R * 0.02)}L${f(x0 + fx * 0.4)} ${f(midY + R * 0.02)}L${f(x0 + fx * 0.4 - R * 0.06)} ${f(midY + R * 0.34)}L${f(x0 + fx * 0.4 + R * 0.16)} ${f(midY - R * 0.06)}L${f(x0 + fx * 0.4 + R * 0.02)} ${f(midY - R * 0.06)}Z`, P.accent);
+        break;
+      case 'KWARK': s += S(`M${f(x0 - bw * 0.85)} ${f(bodyTop + R * 0.06)}Q${f(x0)} ${f(bodyTop + R * 0.5)} ${f(x0 + bw * 0.85)} ${f(bodyTop + R * 0.06)}L${f(x0 + bw * 0.55)} ${f(bodyTop + R * 0.72)}L${f(x0 + bw * 0.3)} ${f(bodyTop + R * 0.4)}Q${f(x0)} ${f(bodyTop + R * 0.5)} ${f(x0 - bw * 0.8)} ${f(bodyTop + R * 0.3)}Z`, P.accent); break;
+      case 'TUFF': s += S(rrect(x0 - bw * 0.62 + fx * 0.3, bodyTop + bh * 0.16, bw * 1.24, bh * 0.5, R * 0.14), P.accent); break;
+      case 'MIMO': s += S(rrect(x0 - bw * 1.04, bodyBot - bh * 0.22, bw * 2.08, bh * 0.22, R * 0.14), P.trim); s += `<path d="M${f(x0 + fx * 0.3)} ${f(bodyTop + R * 0.25)}V${f(bodyTop + bh * 0.55)}" stroke="${P.accent}" stroke-width="4" stroke-linecap="round"/>`; break;
+      case 'NIBB': s += `<path d="M${f(x0 - bw * 0.55)} ${f(bodyTop + R * 0.08)}L${f(x0 + fx * 0.3)} ${f(midY + R * 0.1)}L${f(x0 + bw * 0.55)} ${f(bodyTop + R * 0.08)}" fill="none" stroke="${P.trim}" stroke-width="5"/>` + S(rrect(x0 + fx * 0.3 - R * 0.2, midY + R * 0.06, R * 0.4, R * 0.18, R * 0.08), P.accent); break;
+      case 'GLUB': for (let i = -2; i <= 2; i++) s += E(x0 + i * bw * 0.36, bodyTop + R * 0.12 + Math.abs(i) * R * 0.05, R * 0.14, R * 0.14, mixHex(P.accent, '#ffffff', 0.45), 'fill-opacity=".85"'); break;
+      case 'FIZZ': s = S(poly(x0 - (turn ? R * 0.2 : 0), bodyTop + bh * 0.55, bw * 1.75, bh * 0.75, 6, -Math.PI / 2, 0.62), P.accent) + s; break;
+    }
+
+    if (turn) {} else s += arm(-1, false);
+    s += arm(1, false);
+
+    // head shell
+    let headD;
+    const hw = hr * q;
+    switch (c.shape) {
+      case 'spike': headD = poly(x0, headCy, hw * 1.08, hr * 1.02, 6, -Math.PI / 2); break;
+      case 'block': headD = rrect(x0 - hw, headCy - hr * 0.92, hw * 2, hr * 1.84, hr * 0.36); break;
+      case 'tall': headD = rrect(x0 - hw * 0.86, headCy - hr * 1.3, hw * 1.72, hr * 2.4, hw * 0.85); break;
+      case 'star': headD = poly(x0, headCy, hw * 1.22, hr * 1.22, 6, -Math.PI / 2, 0.74); break;
+      case 'blob': headD = `M${f(x0 - hw)} ${f(headCy + hr * 0.5)}C${f(x0 - hw * 1.1)} ${f(headCy - hr * 1.25)} ${f(x0 + hw * 1.1)} ${f(headCy - hr * 1.25)} ${f(x0 + hw)} ${f(headCy + hr * 0.5)}C${f(x0 + hw * 0.6)} ${f(headCy + hr * 1.05)} ${f(x0 - hw * 0.6)} ${f(headCy + hr * 1.05)} ${f(x0 - hw)} ${f(headCy + hr * 0.5)}Z`; break;
+      default: headD = `M${f(x0 - hw)} ${f(headCy)}A${f(hw)} ${f(hr)} 0 1 1 ${f(x0 + hw)} ${f(headCy)}A${f(hw)} ${f(hr)} 0 1 1 ${f(x0 - hw)} ${f(headCy)}Z`;
+    }
+    const top = headCy - hr * (c.shape === 'tall' ? 1.3 : c.shape === 'star' ? 1.2 : 1);
+
+    // crests behind/above the head
+    let crest = '';
+    const cx = x0 + fx * 0.2;
+    switch (c.id) {
+      case 'BOPP': crest = `<path d="M${f(cx)} ${f(top + 4)}V${f(top - R * 0.5)}" stroke="${INK}" stroke-width="7" stroke-linecap="round"/><path d="M${f(cx)} ${f(top + 4)}V${f(top - R * 0.5)}" stroke="${P.trim}" stroke-width="3"/>` + E(cx, top - R * 0.62, R * 0.17, R * 0.17, P.accent); break;
+      case 'NIBB': for (const d of [-1, 1]) crest += `<path d="M${f(cx + d * R * 0.35)} ${f(top + R * 0.12)}L${f(cx + d * R * 0.62)} ${f(top - R * 0.45)}" stroke="${INK}" stroke-width="7" stroke-linecap="round"/><path d="M${f(cx + d * R * 0.35)} ${f(top + R * 0.12)}L${f(cx + d * R * 0.62)} ${f(top - R * 0.45)}" stroke="${P.trim}" stroke-width="3"/>` + E(cx + d * R * 0.65, top - R * 0.55, R * 0.15, R * 0.15, P.accent); break;
+      case 'ZIZZ': crest = S(`M${f(cx - R * 0.05)} ${f(top + R * 0.15)}L${f(cx + R * 0.32)} ${f(top - R * 0.4)}L${f(cx + R * 0.08)} ${f(top - R * 0.36)}L${f(cx + R * 0.3)} ${f(top - R * 0.85)}L${f(cx - R * 0.26)} ${f(top - R * 0.2)}L${f(cx - R * 0.02)} ${f(top - R * 0.24)}L${f(cx - R * 0.2)} ${f(top + R * 0.15)}Z`, P.accent); break;
+      case 'KWARK': case 'FIZZ':
+        for (const [a, sc] of [[-0.45, 0.8], [0.45, 0.8], [0, 1]]) {
+          const tx = cx + Math.sin(a) * R * 0.75 * sc, ty = top - Math.cos(a) * R * 0.75 * sc;
+          crest += S(`M${f(cx - R * 0.08)} ${f(top + R * 0.1)}Q${f(tx - R * 0.18)} ${f((top + ty) / 2)} ${f(tx)} ${f(ty)}Q${f(tx + R * 0.18)} ${f((top + ty) / 2)} ${f(cx + R * 0.08)} ${f(top + R * 0.1)}Z`, P.accent);
+        }
+        if (c.id === 'FIZZ') crest += S(poly(cx, top - R * 0.8, R * 0.24, R * 0.24, 5, -Math.PI / 2, 0.45), '#fff6c8');
+        break;
+      case 'TUFF': for (const d of [-1, 1]) crest += S(`M${f(x0 + d * hw * 0.5)} ${f(top + R * 0.12)}Q${f(x0 + d * hw * 1.25)} ${f(top - R * 0.05)} ${f(x0 + d * hw * 1.05)} ${f(top - R * 0.62)}Q${f(x0 + d * hw * 0.95)} ${f(top - R * 0.1)} ${f(x0 + d * hw * 0.2)} ${f(top + R * 0.3)}Z`, '#fff1d6'); break;
+      case 'GLUB': crest = S(`M${f(cx - R * 0.35)} ${f(top + R * 0.35)}Q${f(cx - R * 0.1)} ${f(top - R * 0.7)} ${f(cx + R * 0.45)} ${f(top - R * 0.55)}Q${f(cx + R * 0.15)} ${f(top - R * 0.1)} ${f(cx + R * 0.35)} ${f(top + R * 0.35)}Z`, P.accent); break;
+    }
+    s += crest + S(headD, P.body);
+
+    // cap sits over the head
+    if (c.id === 'MIMO') {
+      s += S(`M${f(x0 - hw * 0.9)} ${f(top + hr * 0.62)}Q${f(x0)} ${f(top - hr * 0.35)} ${f(x0 + hw * 0.9)} ${f(top + hr * 0.62)}Z`, P.accent);
+      s += S(rrect(x0 + (turn ? hw * 0.2 : -hw * 0.2), top + hr * 0.5, hw * 1.25, hr * 0.2, hr * 0.1), mixHex(P.accent, INK, 0.25));
+    }
+
+    // face plate + face
+    const eyeY = headCy + hr * (c.shape === 'tall' ? 0.12 : 0.02);
+    const faceX = x0 + fx;
+    const plate = c.shape !== 'beak' ? E(faceX, eyeY + hr * 0.3, hw * 0.62, hr * 0.42, P.skin, 'stroke-width="0" fill-opacity=".9"') : '';
+    s += plate;
+    s += face(c, P, faceX, eyeY, hr, turn, 'idle');
+    return s;
+  }
+
+  function face(c, P, fx, ey, R, turn, state) {
+    let s = '';
+    const gap = R * (c.id === 'KWARK' ? 0.26 : c.id === 'GLUB' ? 0.5 : 0.38) * (turn ? 0.85 : 1);
+    const er = R * (c.id === 'NIBB' ? 0.25 : 0.22);
+    const look = turn ? R * 0.06 : 0;
+    for (const d of [-1, 1]) {
+      const x = fx + d * gap;
+      const near = turn ? (d > 0 ? 1 : 0.82) : 1;
+      const lid = state === 'miss' ? 0.55 : c.lids && state === 'idle' ? 0.7 : 1;
+      s += E(x, ey, er * near, er * 1.15 * lid, '#ffffff', 'stroke-width="2.5"');
+      const pr = state === 'perfect' ? er * 0.62 : c.id === 'NIBB' ? er * 0.34 : er * 0.52;
+      if (state === 'perfect') {
+        s += `<path d="M${f(x - er * 0.6)} ${f(ey + er * 0.2)}Q${f(x)} ${f(ey - er * 0.9)} ${f(x + er * 0.6)} ${f(ey + er * 0.2)}" fill="none" stroke="${P.eye}" stroke-width="4" stroke-linecap="round"/>`;
+      } else {
+        s += `<ellipse cx="${f(x + look)}" cy="${f(ey + er * (lid < 1 ? 0.25 : 0.1))}" rx="${f(pr * near)}" ry="${f(pr * 1.1 * Math.min(1, lid + 0.2))}" fill="${P.eye}"/>`;
+        s += c.star
+          ? `<path d="${poly(x + look + pr * 0.3, ey - pr * 0.25, pr * 0.55, pr * 0.55, 4, 0, 0.35)}" fill="#fff"/>`
+          : `<circle cx="${f(x + look + pr * 0.35)}" cy="${f(ey - pr * 0.3)}" r="${f(pr * 0.3)}" fill="#fff"/>`;
+      }
+      // brows
+      let tilt = c.brow * 0.18 * (c.id === 'ZIZZ' ? (d > 0 ? 1 : -0.4) : -d);
+      let by = ey - er * 1.55;
+      if (state === 'miss') { tilt = 0.28 * d; by += er * 0.2; }
+      if (state === 'perfect') { tilt = -0.12 * d; by -= er * 0.25; }
+      if (state === 'gulp') { by -= er * 0.35; tilt = 0; }
+      s += `<path d="M${f(x - er * 0.8)} ${f(by + tilt * er * 2)}L${f(x + er * 0.8)} ${f(by - tilt * er * 2)}" stroke="${INK}" stroke-width="${f(Math.max(4, R * 0.09))}" stroke-linecap="round"/>`;
+      if (c.blush && state !== 'miss') s += `<ellipse cx="${f(x + d * er * 0.55)}" cy="${f(ey + er * 1.55)}" rx="${f(er * 0.5)}" ry="${f(er * 0.22)}" fill="${c.accent}" opacity=".55"/>`;
+    }
+    const my = ey + R * 0.42;
+    const mw = R * 0.32;
+    const m = state === 'idle' ? c.mouth : state;
+    const line = (d) => `<path d="${d}" fill="none" stroke="${INK}" stroke-width="${f(Math.max(4, R * 0.08))}" stroke-linecap="round" stroke-linejoin="round"/>`;
+    switch (m) {
+      case 'beak': s += S(`M${f(fx - R * 0.22)} ${f(my - R * 0.18)}L${f(fx + R * (turn ? 0.62 : 0.3))} ${f(my - R * 0.02)}L${f(fx - R * 0.22)} ${f(my + R * 0.16)}Z`, c.accent); break;
+      case 'grin': s += S(`M${f(fx - mw)} ${f(my - R * 0.05)}Q${f(fx)} ${f(my + R * 0.36)} ${f(fx + mw)} ${f(my - R * 0.05)}Z`, '#3a1030'); break;
+      case 'smirk': s += line(`M${f(fx - mw * 0.8)} ${f(my + R * 0.04)}Q${f(fx + mw * 0.2)} ${f(my + R * 0.1)} ${f(fx + mw)} ${f(my - R * 0.1)}`); break;
+      case 'underbite': s += line(`M${f(fx - mw)} ${f(my)}H${f(fx + mw)}`) + S(`M${f(fx - mw * 0.55)} ${f(my)}l${f(R * 0.08)} ${f(-R * 0.14)}l${f(R * 0.08)} ${f(R * 0.14)}Z`, '#fff') + S(`M${f(fx + mw * 0.25)} ${f(my)}l${f(R * 0.08)} ${f(-R * 0.14)}l${f(R * 0.08)} ${f(R * 0.14)}Z`, '#fff'); break;
+      case 'shout': case 'gulp': s += E(fx, my + R * 0.05, R * (m === 'gulp' ? 0.14 : 0.2), R * (m === 'gulp' ? 0.17 : 0.2), '#3a1030'); break;
+      case 'wavy': s += line(`M${f(fx - mw * 1.2)} ${f(my)}q${f(mw * 0.3)} ${f(-R * 0.1)} ${f(mw * 0.6)} 0t${f(mw * 0.6)} 0t${f(mw * 0.6)} 0t${f(mw * 0.6)} 0`); break;
+      case 'perfect': s += S(`M${f(fx - mw * 1.1)} ${f(my - R * 0.08)}Q${f(fx)} ${f(my + R * 0.5)} ${f(fx + mw * 1.1)} ${f(my - R * 0.08)}Z`, '#3a1030'); break;
+      case 'miss': s += line(`M${f(fx - mw)} ${f(my + R * 0.1)}Q${f(fx - mw * 0.5)} ${f(my - R * 0.06)} ${f(fx)} ${f(my + R * 0.06)}T${f(fx + mw)} ${f(my + R * 0.02)}`); break;
+      default: s += line(`M${f(fx - mw)} ${f(my)}Q${f(fx)} ${f(my + R * 0.24)} ${f(fx + mw)} ${f(my)}`);
+    }
+    return s;
+  }
+
+  // ---- lineup
+  {
+    const W = 1100, Hh = 330, base = 285, R = 36;
+    let s = `<svg viewBox="0 0 ${W} ${Hh}" role="img" aria-label="All eight characters standing in a row at game scale, from BOPP to FIZZ">`;
+    for (let u = 0; u <= 3.5; u += 0.5) {
+      const y = base - u * R * 2;
+      s += `<line x1="62" x2="${W - 20}" y1="${f(y)}" y2="${f(y)}" stroke="#ffffff" stroke-opacity="${u % 1 ? 0.04 : 0.09}" stroke-dasharray="${u % 1 ? '2 6' : '0'}"/>`;
+      if (u % 1 === 0) s += `<text x="20" y="${f(y + 4)}" fill="#6f74a8" font-family="IBM Plex Mono, monospace" font-size="11">${u}h</text>`;
+    }
+    CAST.forEach((c, i) => {
+      const x = 120 + i * 128;
+      s += `<ellipse cx="${x}" cy="${base + 2}" rx="${R * 1.2}" ry="7" fill="#000" opacity=".35"/>`;
+      s += figure(c, 0, x, base, R);
+      s += `<text x="${x}" y="${base + 32}" text-anchor="middle" fill="${c.color}" font-family="Bungee, Impact, sans-serif" font-size="14">${c.id}</text>`;
+    });
+    document.getElementById('lineup').innerHTML = s + '</svg>';
+  }
+
+  // ---- cards
+  {
+    const host = document.getElementById('cast');
+    for (const c of CAST) {
+      const P = roles(c.color, c.accent);
+      const R = 34, base = 290;
+      const svg = `<svg viewBox="0 0 250 320" role="img" aria-label="${c.id} front and three-quarter views">${figure(c, 0, 72, base, R)}${figure(c, 1, 180, base, R)}</svg>`;
+      const chip = (k) => `<div class="chip"><i style="--v:${P[k]}"></i><span><b>${k}</b>${P[k]}</span></div>`;
+      const card = document.createElement('article');
+      card.className = 'card';
+      card.style.setProperty('--c', c.color);
+      card.innerHTML = `
+        <div class="turn">${svg}<div class="views"><span>Front</span><span>Three-quarter</span></div></div>
+        <div class="spec">
+          <div class="name"><h3>${c.id}</h3><span class="build">${c.build} build · ${c.h} heads</span></div>
+          <p class="trait">“${c.trait}”</p>
+          <div class="chips">${['body', 'trim', 'skin', 'accent', 'eye'].map(chip).join('')}</div>
+          <dl>
+            <dt>Head</dt><dd>${c.head}</dd>
+            <dt>Body</dt><dd>${c.body}</dd>
+            <dt>Outfit</dt><dd>${c.outfit}</dd>
+            <dt>Face</dt><dd>${c.face}</dd>
+          </dl>
+        </div>`;
+      host.appendChild(card);
+    }
+  }
+
+  // ---- face states (BOPP)
+  {
+    const c = CAST[0];
+    const P = roles(c.color, c.accent);
+    const STATES = [
+      ['idle', 'Idle', 'Default brows and mouth — each character’s personality.'],
+      ['gulp', 'Gulp', 'Brows up, small O. Chomp Chorus telegraph.'],
+      ['perfect', 'Perfect', 'Happy-arc eyes, open grin.'],
+      ['miss', 'Miss', 'Lids drop, brows pinch, wobbly mouth.'],
+    ];
+    const host = document.getElementById('faces');
+    for (const [st, label, note] of STATES) {
+      const R = 52;
+      const head = `<ellipse cx="80" cy="78" rx="${R}" ry="${R}" fill="${P.body}" stroke="${INK}" stroke-width="3"/>`
+        + `<ellipse cx="80" cy="96" rx="${R * 0.62}" ry="${R * 0.42}" fill="${P.skin}" opacity=".9"/>`;
+      const el = document.createElement('div');
+      el.className = 'face';
+      el.innerHTML = `<svg viewBox="0 0 160 150" role="img" aria-label="${label} face">${head}${face(c, P, 80, 80, R, 0, st)}</svg><b>${label}</b><small>${note}</small>`;
+      host.appendChild(el);
+    }
+  }
+})();
+</script>

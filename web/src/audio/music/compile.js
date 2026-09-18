@@ -15,6 +15,8 @@
  *   . - _ (space)   rest
  */
 
+import { beatPhase } from '../../core/util.js';
+
 const VEL = { x: 1, X: 1, o: 0.62, s: 0.22, g: 0.34 };
 
 function velOf(ch) {
@@ -32,7 +34,7 @@ function velOf(ch) {
  */
 function swingOffset(beat, s) {
   if (!s) return 0;
-  const frac = beat - Math.floor(beat);
+  const frac = beatPhase(beat);
   if (Math.abs(frac - 0.5) < 1e-6) return s;
   if (Math.abs(frac - 0.25) < 1e-6 || Math.abs(frac - 0.75) < 1e-6) return s * 0.5;
   return 0;

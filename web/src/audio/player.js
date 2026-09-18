@@ -49,6 +49,12 @@ export function createMusicPlayer({ ctx, clock, voices, buses, sends, tracks }) 
   let pos = 0;
   let loopIndex = 0;
   let barCursor = -1;
+  /** The clock.generation the cursor was laid against (see reanchor). */
+  let anchorGen = 0;
+  /** The transport's beat at the last pump — what a restart is compared to. */
+  let lastBeat = 0;
+  /** Stopped by pause(): the cursor is kept for resume(). */
+  let paused = false;
 
   // adaptive state
   let intensity = 1;
@@ -128,6 +134,7 @@ export function createMusicPlayer({ ctx, clock, voices, buses, sends, tracks }) 
     if (!t) return false;
     if (track === t && playing) return true;
 
+    paused = false;
     track = t;
     compiled = compileTrack(t);
     if (!compiled.events.length) { track = null; return false; }
@@ -148,6 +155,7 @@ export function createMusicPlayer({ ctx, clock, voices, buses, sends, tracks }) 
     pos = 0;
     loopIndex = 0;
     barCursor = -1;
+    anchorGen = clock.generation ?? 0;
     manual = opts.intensity !== undefined;
     intensity = pendingIntensity = opts.intensity ?? 1;
     playing = true;
@@ -163,7 +171,37 @@ export function createMusicPlayer({ ctx, clock, voices, buses, sends, tracks }) 
     return true;
   }
 
+  /**
+   * Pause menu: silence the track but keep its cursor. The pause stops the
+   * transport and resume() restarts it at the same beat, so the track picks
+   * up in step with the chart. (Using stop() here left every minigame silent
+   * for the rest of the round after a pause.)
+   */
+  function pause({ fade = 0.08 } = {}) {
+    if (!playing) return;
+    // Take back what the lookahead queued past this instant: it sounds under
+    // the fade-out, and without a rewind resume() would start after it.
+    const now = clock.now();
+    const { events, loopBeats } = compiled;
+    while (pos > 0 && timeOf(startBeat + loopIndex * loopBeats + events[pos - 1].beat) > now) pos--;
+    stop({ fade });
+    paused = true;
+  }
+
+  function resume({ fade = 0.12 } = {}) {
+    if (!paused || !track) return;
+    paused = false;
+    playing = true;
+    const g = trackGain.gain;
+    const n = ctx.currentTime;
+    g.cancelScheduledValues(n);
+    g.setValueAtTime(Math.max(g.value, 1e-4), n);
+    g.linearRampToValueAtTime(track.mix ?? 1, n + fade);
+    pump();
+  }
+
   function stop({ fade = 0.25 } = {}) {
+    paused = false;
     if (!playing) return;
     playing = false;
     const g = trackGain.gain;
@@ -220,9 +258,38 @@ export function createMusicPlayer({ ctx, clock, voices, buses, sends, tracks }) 
     if (onEvent) onEvent({ ...ev, time: t, absBeat, bar, intensity });
   }
 
+  /**
+   * The transport was restarted under a playing track. Every shell scene
+   * starts it over at beat 0 while the menu track plays on; the cursor was
+   * still at the old screen's beat count, so nothing sounded until the new
+   * clock caught up — seconds of dead air per screen. Continue from the next
+   * bar of the loop on the new grid's next bar line. A restart that carries
+   * the beat count on (pause/resume) leaves the cursor where it is.
+   */
+  function reanchor() {
+    anchorGen = clock.generation;
+    const { events, bars, beatsPerBar: bpb } = compiled;
+    const now = clock.now();
+    // A continuation restarts counting from (about) where the transport was;
+    // a new screen restarts from 0. Judged by the beat count, not by how
+    // near the next event lands: after a short screen the old cursor was
+    // near in time too, and kept, it left a bar of dead air.
+    if (useClock && clock.startBeat >= lastBeat - 0.5) return;
+    useClock = true;
+    const next = (((barCursor + 1) % bars) + bars) % bars;
+    const line = Math.ceil(clock.beatAt(now + 0.05) / bpb) * bpb;
+    startBeat = line - next * bpb;
+    loopIndex = 0;
+    pos = events.findIndex((e) => e.bar >= next);
+    if (pos < 0) pos = events.length;
+    barCursor = next - 1;
+  }
+
   /** Idempotent: safe to call from several sources in the same frame. */
   function pump() {
     if (!playing || !track) return;
+    if (clock.running && (clock.generation ?? 0) !== anchorGen) reanchor();
+    if (clock.running) lastBeat = clock.beat;
     const now = clock.now();
     const horizon = now + HORIZON;
     const { events, loopBeats } = compiled;
@@ -293,7 +360,7 @@ export function createMusicPlayer({ ctx, clock, voices, buses, sends, tracks }) 
   }
 
   return {
-    play, stop, pump, setIntensity, suggestIntensity, info, scaleInfo,
+    play, stop, pause, resume, pump, setIntensity, suggestIntensity, info, scaleInfo,
     onBar: (fn) => { barListeners.add(fn); return () => barListeners.delete(fn); },
     set onEvent(fn) { onEvent = fn; },
     get onEvent() { return onEvent; },

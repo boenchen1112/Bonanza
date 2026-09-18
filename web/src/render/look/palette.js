@@ -160,7 +160,37 @@ PALETTES['swing-kings'] = P({
   fillSky: 0x9dc6ff, fillGround: 0x123f2c, fillIntensity: 1.2,
   rim: 0xffe9a8, rimDir: [0.6, 0.3, -0.75], rimStrength: 0.95,
   fog: 0x1b3a72, fogNear: 20, fogFar: 78,
-  bloom: 0.8, exposure: 1.08,
+  // Key comes in steep and bright (Y=0.82 of the direction, intensity 2.7 vs
+  // BASE's 2.5) for a floodlit-dusk look, so the tops of things it hits
+  // straight-on — a helmet, a raised arm — cleared BASE's 0.72 threshold and
+  // full-bloomed to white regardless of their real colour. Raised to clear
+  // an ordinarily-lit surface under this key while still catching the sun
+  // disc and additive VFX, which sit far above either value.
+  bloom: 0.8, bloomThreshold: 1.35, exposure: 1.08,
+});
+
+/**
+ * Swing Kings, late innings: the sun is gone and the stadium lights carry the
+ * frame. The chart's fast off-beat section cross-fades into this, so the
+ * stage escalates with the music instead of looking the same for 70 seconds.
+ */
+PALETTES['swing-kings-night'] = P({
+  skyTop: 0x040a24, skyMid: 0x0f2258, skyBot: 0x5b3a8c,
+  sun: 0xb8d4ff, sunDir: [0.35, 0.1, -1], sunStrength: 0.45, sunSize: 0.18,
+  // Rich, not milky: a warm floodlight key over a dim blue fill keeps the
+  // turf green and the dirt warm (a bright blue fill washed both to teal/grey).
+  ground: 0x176a3a, groundAlt: 0x1d7a44, groundRim: 0xd8f0ff,
+  band: 0x0e2458, bandAlt: 0x2346a0,
+  accent: 0xffe066, accent2: 0x7fe7ff, accent3: 0xff5d7a,
+  crowd: [0xffe066, 0x7fe7ff, 0xff5d7a, 0xffffff, 0xb28cff],
+  key: 0xfff0d6, keyDir: [-0.35, 0.9, 0.3], keyIntensity: 3.0,
+  fillSky: 0x3f5aa6, fillGround: 0x0b2a1c, fillIntensity: 0.72,
+  rim: 0xbfe6ff, rimDir: [0.6, 0.35, -0.75], rimStrength: 1.1,
+  fog: 0x0a1638, fogNear: 22, fogFar: 80,
+  // Even steeper and brighter than the day palette (keyIntensity 3.0, same
+  // reasoning as there) — the stadium lights carry the frame at night, so
+  // the same bleach would only be worse without this.
+  bloom: 0.9, bloomThreshold: 1.5, exposure: 1.0,
 });
 
 /** Drumline Dash: hot night parade. Magenta and ember. */
@@ -175,7 +205,9 @@ PALETTES['drumline-dash'] = P({
   fillSky: 0xff9ad8, fillGround: 0x3a0d40, fillIntensity: 1.1,
   rim: 0xff6bd6, rimStrength: 1.0,
   fog: 0x5a1050, fogNear: 15, fogFar: 60,
-  bloom: 1.0,
+  // Same steep, bright key as Swing Kings (see its note) - the lead
+  // performer's spotlit head bleached white at the default threshold.
+  bloom: 1.0, bloomThreshold: 1.3,
 });
 
 /** Bounce Brigade: bright poolside afternoon, cool and clean. */
@@ -190,7 +222,8 @@ PALETTES['bounce-brigade'] = P({
   fillSky: 0x9ef0ff, fillGround: 0x0a3d52, fillIntensity: 1.25,
   rim: 0x7ef7ff, rimStrength: 0.85,
   fog: 0x0d6489, fogNear: 20, fogFar: 76,
-  bloom: 0.75, saturation: 1.1,
+  // Same class of steep key as Swing Kings/Drumline Dash (see their notes).
+  bloom: 0.75, bloomThreshold: 1.3, saturation: 1.1,
 });
 
 /** Chomp Chorus: purple midnight kitchen, acid-lime highlights. */
@@ -206,6 +239,10 @@ PALETTES['chomp-chorus'] = P({
   rim: 0x9ee87a, rimStrength: 1.0, rimPower: 2.2,
   fog: 0x3a0d58, fogNear: 14, fogFar: 58,
   bloom: 1.0,
+  // A key light this steep (2.4, matching what needed headroom in Swing
+  // Kings at 3.0) bleaches the paler cast members' faces white at the
+  // default threshold - see the note there.
+  bloomThreshold: 1.05,
 });
 
 /** Finale Fever: crimson and gold, fireworks over a dark house. */
@@ -220,7 +257,9 @@ PALETTES['finale-fever'] = P({
   fillSky: 0xffa9a0, fillGround: 0x360a24, fillIntensity: 1.1,
   rim: 0xffb45a, rimStrength: 1.05,
   fog: 0x63102a, fogNear: 14, fogFar: 64,
-  bloom: 1.1, exposure: 1.1,
+  // The conductor's spotlit head bleached white at the default threshold -
+  // same steep-key class of bug as Swing Kings (see its note).
+  bloom: 1.1, bloomThreshold: 1.35, exposure: 1.1,
 });
 
 /** Neutral fallback for anything unregistered. */

@@ -33,7 +33,7 @@ import { makeRng } from '../core/util.js';
 import { makeImpulse, makeDriveCurve } from './dsp.js';
 import { createVoices } from './voices.js';
 import { createMusicPlayer } from './player.js';
-import { TRACKS, trackForScene } from './music/index.js';
+import { TRACKS, trackForScene, HOST_SCENES } from './music/index.js';
 import { SCALES, arpUp, snapToChord, degree, note } from './theory.js';
 
 /** Fallback key when nothing is playing, so SFX are never atonal. */
@@ -334,6 +334,7 @@ export function createAudio({ ctx, clock, bus, offline = false }) {
       bus.on('judge', onJudge);
       bus.on('scene:active', (id) => {
         streak = 0; missRun = 0;
+        if (HOST_SCENES.has(id)) return;
         const wanted = trackForScene(id);
         // A minigame that picked its own track during start() keeps it.
         if (!wanted) { player.stop(); return; }
@@ -358,6 +359,9 @@ export function createAudio({ ctx, clock, bus, offline = false }) {
       return ok;
     },
     stop(opts) { player.stop(opts || {}); },
+    /** Pause menu: silent, cursor kept; resume() continues in step with the transport. */
+    pause(opts) { player.pause(opts || {}); },
+    resume(opts) { player.resume(opts || {}); },
     setIntensity(n, opts) { player.setIntensity(n, opts); },
     get intensity() { return player.intensity; },
     get playing() { return player.playing; },
@@ -404,7 +408,9 @@ export function createAudio({ ctx, clock, bus, offline = false }) {
 
   // Dev/test reach-in so the harness can drive an offline render without the
   // integrator having to thread audio through `window.__BBB__`.
-  if (!offline && typeof window !== 'undefined') window.__BBB_AUDIO__ = facade;
+  // Dev/harness builds only (see TEST_API in main.js).
+  const testApi = import.meta.env && (import.meta.env.DEV || import.meta.env.MODE === 'harness');
+  if (testApi && !offline && typeof window !== 'undefined') window.__BBB_AUDIO__ = facade;
 
   return facade;
 }

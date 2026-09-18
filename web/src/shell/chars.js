@@ -7,34 +7,20 @@
  * longer probes for it or falls back to a stand-in shape when it's absent.
  */
 
-import { PAL, num } from './theme.js';
-import { makeCast, paletteFor, BUILD_IDS } from '../chars/index.js';
+import * as THREE from 'three';
+import { makeCast, BUILD_IDS, preloadBlenderBodies, isBlenderReady, headRadius } from '../chars/index.js';
+import { CAST, BUILD_BY_SHAPE, colourRoles } from './castData.js';
 
-/** @typedef {{id:string,name:string,color:number,accent:number,trait:string,shape:string,crest:string}} CharDef */
+export { isBlenderReady, headRadius };
 
-/** @type {CharDef[]} */
-export const CHARS = [
-  { id: 'bopp', name: 'BOPP', color: num(PAL.yellow), accent: 0xff9f45, trait: 'All rhythm, no brakes.', shape: 'round', crest: 'antenna' },
-  { id: 'zizz', name: 'ZIZZ', color: num(PAL.cyan), accent: 0x7aa6ff, trait: 'Runs on static and spite.', shape: 'spike', crest: 'bolt' },
-  { id: 'kwark', name: 'KWARK', color: num(PAL.coral), accent: 0xff9f45, trait: 'Beak first, ask later.', shape: 'beak', crest: 'plume' },
-  { id: 'tuff', name: 'TUFF', color: num(PAL.green), accent: 0x39d4b4, trait: 'Built like a downbeat.', shape: 'block', crest: 'horns' },
-  { id: 'mimo', name: 'MIMO', color: num(PAL.violet), accent: 0xff7ad9, trait: 'Two beats ahead, always.', shape: 'tall', crest: 'cap' },
-  { id: 'nibb', name: 'NIBB', color: num(PAL.orange), accent: 0xffd93d, trait: 'Small. Loud. Everywhere.', shape: 'tiny', crest: 'antenna' },
-  { id: 'glub', name: 'GLUB', color: num(PAL.teal), accent: 0x4dd6ff, trait: 'Wobbles exactly on time.', shape: 'blob', crest: 'fin' },
-  { id: 'fizz', name: 'FIZZ', color: num(PAL.pink), accent: 0xc08cff, trait: 'Sparkles on the offbeat.', shape: 'star', crest: 'plume' },
-];
+/** @typedef {import('./castData.js').CastDef} CharDef */
+
+/** The cast (defined in castData.js, shared with the Blender build). @type {CharDef[]} */
+export const CHARS = CAST;
 
 export const charById = (id) => CHARS.find((c) => c.id === id) || CHARS[0];
 
 // ------------------------------------------------------------------ 3D cast
-
-/** Which rig build (silhouette) each 2D character design reads closest to. */
-const BUILD_BY_SHAPE = {
-  round: 'round', beak: 'round', blob: 'round',
-  tall: 'tall',
-  tiny: 'small', star: 'small',
-  spike: 'wide', block: 'wide',
-};
 
 /**
  * Build a single 3D character via `chars/`'s real roster facade (`makeCast`)
@@ -49,11 +35,20 @@ export function charMesh(def, opts = {}) {
     count: 1,
     positions: [[0, 0, 0]],
     builds: [build],
-    players: [{ id: def.id, name: def.name, palette: paletteFor(idx) }],
+    players: [{ id: def.id, name: def.name, palette: paletteForChar(def) }],
+    // Safe here: the shell's cosmetic displays (title busts, roster,
+    // results podium) never reach into the toy rig's joint internals the
+    // way swingKings/world.js and chompChorus do - see makeCast()'s own
+    // comment on this flag.
+    allowBlenderBodies: true,
     ...opts,
   });
   const member = cast.get(0);
   const obj = member.char;
+  // A Blender body already has its crest baked into the mesh (see
+  // tools/assets/blender/build-cast.py) and has none of the toy rig's
+  // named joints addCrest() reaches into (char.joints, char.build).
+  if (!obj.userData.isBlenderBody) addCrest(obj, def);
   obj.userData.charApi = member.anim;
   obj.userData.def = def;
   // Kept so disposeChar() can tear down this single-member cast; makeCast's
@@ -61,6 +56,183 @@ export function charMesh(def, opts = {}) {
   // shared caches other live characters still use.
   obj.userData.castHandle = cast;
   return obj;
+}
+
+/**
+ * The session lineup as a minigame sees it (`ctx.players`, ARCHITECTURE.md):
+ * each slot's rig palette and build, plus `dress(char)` to put the crest on a
+ * character the game built itself. Games never import the shell, so identity
+ * travels as data and one callback.
+ */
+export function gamePlayers(players) {
+  return players.map((p) => {
+    const def = charById(p.char);
+    const idx = Math.max(0, CHARS.findIndex((c) => c.id === def.id));
+    return {
+      id: p.id, name: p.name, char: def.id, isCpu: !!p.isCpu, cpuSkill: p.cpuSkill || 0,
+      palette: paletteForChar(def),
+      build: BUILD_BY_SHAPE[def.shape] || BUILD_IDS[idx % BUILD_IDS.length],
+      dress: (obj) => { if (!obj.userData.isBlenderBody) addCrest(obj, def); },
+    };
+  });
+}
+
+// ------------------------------------------------- identity: palette + crest
+
+const palCache = new Map();
+const _c = new THREE.Color();
+
+/**
+ * The rig palette for a 2D character design, derived from its own colour and
+ * accent so the 3D figure and the menu portrait are the same character —
+ * bright body, darker trim for value contrast, a pale head, dark eyes.
+ */
+export function paletteForChar(def) {
+  let p = palCache.get(def.id);
+  if (p) return p;
+  p = { id: `char:${def.id}`, name: def.name, ...colourRoles(def) };
+  palCache.set(def.id, p);
+  return p;
+}
+
+const crestMats = new Map();
+function crestMat(hex, side = THREE.FrontSide) {
+  const key = `${hex}:${side}`;
+  let m = crestMats.get(key);
+  if (!m) { m = new THREE.MeshStandardMaterial({ color: hex, roughness: 0.4, side }); crestMats.set(key, m); }
+  return m;
+}
+const crestGeos = new Map();
+function cgeo(key, make) {
+  let g = crestGeos.get(key);
+  if (!g) { g = make(); crestGeos.set(key, g); }
+  return g;
+}
+
+/**
+ * Give the 3D figure its portrait's crest (antenna, bolt, plume, horns, cap,
+ * fin). Crests that should wobble hang off the rig's `bobble` joint, which
+ * the animator already drives with a lagging spring — so a plume or a fin
+ * keeps swinging a beat after the body stops, for free. The crest replaces
+ * the build's generic head gear so the silhouettes stay distinct.
+ */
+function addCrest(char, def) {
+  const j = char.joints;
+  const b = char.build;
+  const headTop = b.head.h * 0.5;
+  const hw = b.head.w;
+  const acc = crestMat(def.accent);
+  const dark = crestMat(_c.setHex(def.color).lerp(new THREE.Color(0x100818), 0.55).getHex());
+  if (j.gear && j.gear.parent === j.head) j.gear.visible = false;
+  const keepBall = def.crest === 'antenna';
+  if (j.bobbleMesh && !keepBall) j.bobbleMesh.visible = false;
+  const add = (parent, geo, mat, x, y, z, rx = 0, ry = 0, rz = 0) => {
+    const m = new THREE.Mesh(geo, mat);
+    m.position.set(x, y, z);
+    m.rotation.set(rx, ry, rz);
+    m.castShadow = true;
+    parent.add(m);
+    return m;
+  };
+  // The bobble joint sits `bobbleY` above the head centre; offsets below are
+  // in its frame, so y = headTop - bobbleY is the scalp.
+  const scalp = headTop - b.bobbleY;
+  switch (def.crest) {
+    case 'antenna': {
+      const L = Math.max(0.04, -scalp);
+      add(j.bobble, cgeo(`ant:${b.id}`, () => new THREE.CylinderGeometry(0.016, 0.02, L, 6)), dark, 0, -L / 2, 0);
+      break;
+    }
+    case 'bolt': {
+      const g = cgeo(`bolt:${b.id}`, () => {
+        const s = new THREE.Shape();
+        const h = hw * 0.75;
+        s.moveTo(0, 0); s.lineTo(h * 0.18, h * 0.5); s.lineTo(h * 0.02, h * 0.5);
+        s.lineTo(h * 0.22, h); s.lineTo(-h * 0.2, h * 0.38); s.lineTo(-h * 0.02, h * 0.38); s.lineTo(-h * 0.14, 0);
+        const e = new THREE.ExtrudeGeometry(s, { depth: 0.05, bevelEnabled: false });
+        e.translate(0, 0, -0.025);
+        return e;
+      });
+      add(j.bobble, g, acc, 0, scalp - 0.02, 0);
+      break;
+    }
+    case 'plume': {
+      const g = cgeo(`plume:${b.id}`, () => new THREE.SphereGeometry(hw * 0.13, 10, 8).scale(0.55, 2.4, 0.55));
+      for (const [ang, s] of [[-0.45, 0.85], [0, 1], [0.45, 0.85]]) {
+        const m = add(j.bobble, g, acc, Math.sin(ang) * hw * 0.12, scalp + hw * 0.24 * s, -hw * 0.05, -0.35, 0, ang);
+        m.scale.setScalar(s);
+      }
+      break;
+    }
+    case 'horns': {
+      const g = cgeo(`horn:${b.id}`, () => new THREE.ConeGeometry(hw * 0.1, hw * 0.34, 10));
+      for (const s of [-1, 1]) add(j.head, g, crestMat(0xfff1d6), s * hw * 0.34, headTop + hw * 0.08, 0, 0, 0, -s * 0.55);
+      break;
+    }
+    case 'cap': {
+      const dome = cgeo(`capd:${b.id}`, () => new THREE.SphereGeometry(hw * 0.52, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2));
+      const brim = cgeo(`capb:${b.id}`, () => new THREE.CylinderGeometry(hw * 0.42, hw * 0.42, 0.025, 18, 1, false, -Math.PI / 2, Math.PI));
+      add(j.head, dome, acc, 0, headTop - hw * 0.18, 0);
+      add(j.head, brim, acc, 0, headTop - hw * 0.16, hw * 0.28);
+      break;
+    }
+    case 'fin': {
+      const g = cgeo(`fin:${b.id}`, () => {
+        const c = new THREE.CircleGeometry(hw * 0.36, 16, 0, Math.PI);
+        c.rotateY(Math.PI / 2);
+        return c;
+      });
+      add(j.bobble, g, crestMat(def.accent, THREE.DoubleSide), 0, scalp - 0.01, 0);
+      break;
+    }
+    default: break;
+  }
+}
+
+/**
+ * A gold crown on the character's head (party leader / winner). Returns the
+ * mesh group; `crown.visible` toggles it. Geometry is shared.
+ */
+export function addCrown(char) {
+  const gold = crestMat(0xffd23d);
+  const band = cgeo('crownBand', () => new THREE.CylinderGeometry(0.5, 0.46, 0.22, 20, 1, true));
+  const spike = cgeo('crownSpike', () => new THREE.ConeGeometry(0.09, 0.26, 8));
+  const gem = cgeo('crownGem', () => new THREE.SphereGeometry(0.06, 10, 8));
+  const g = new THREE.Group();
+  const bandMesh = new THREE.Mesh(band, crestMat(0xffd23d, THREE.DoubleSide));
+  g.add(bandMesh);
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2;
+    const s = new THREE.Mesh(spike, gold);
+    s.position.set(Math.sin(a) * 0.47, 0.22, Math.cos(a) * 0.47);
+    g.add(s);
+    const d = new THREE.Mesh(gem, crestMat(i % 2 ? 0xff4d8a : 0x39d4ff));
+    d.position.set(Math.sin(a) * 0.5, 0.02, Math.cos(a) * 0.5);
+    g.add(d);
+  }
+  g.rotation.x = -0.12;
+  if (char.userData.isBlenderBody) {
+    // A skinned body has no build.head to size from: measure the head shell
+    // from its own anchors (headCentre -> headSide is the head's radius) and
+    // sit the crown on headTop. Everything is worked out in world units and
+    // converted back through the anchor, whose own scale is the skeleton's.
+    char.updateMatrixWorld(true);
+    const r = headRadius(char);
+    const top = char.getJoint('headTop') || char.getJoint('head');
+    const size = r * 1.25;
+    const s = top.getWorldScale(new THREE.Vector3());
+    const wanted = top.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(0, size * 0.18, 0));
+    top.add(g);
+    g.scale.set(size / s.x, size / s.y, size / s.z);
+    top.updateWorldMatrix(true, false);
+    g.position.copy(top.worldToLocal(wanted));
+  } else {
+    const hw = char.build.head.w;
+    g.scale.setScalar(hw * 0.62);
+    g.position.set(0, char.build.head.h * 0.5 + hw * 0.05, 0);
+    char.joints.head.add(g);
+  }
+  return g;
 }
 
 /** Per-frame idle/dance, driven by the real beat-phase animator. */
@@ -75,6 +247,115 @@ export function disposeChar(obj) {
 }
 
 // ------------------------------------------------------------- portraits
+
+const BUST = 256;
+let bustCache = null;
+
+/**
+ * Head-and-shoulders renders of every character, made once on a throwaway
+ * WebGL context (so the main renderer's post chain and state are untouched)
+ * and kept as 2D canvases. Empty when WebGL is unavailable — drawPortrait
+ * then falls back to the 2D drawing.
+ */
+// The bust rig is a THROWAWAY WebGLRenderer + scene kept alive only while
+// there are still characters left to render. Building all of them was one
+// synchronous call that did, per character: a full mesh build, 20 animator
+// ticks, a WebGL render, and a GPU->CPU readback (`drawImage` off a live
+// canvas, which forces a driver flush). At 8 characters that was a single
+// ~500-600ms freeze on the FIRST screen that ever asked for a portrait
+// (roster) — this measured as the single worst frame anywhere in the shell.
+// `pumpBusts()` now does a few ms of that per call, so a caller can spread it
+// across frames; nothing blocks on it, because `drawPortrait` already falls
+// back to a cheap procedural placeholder for any id whose bust isn't ready.
+let bustCtx = null;   // { r, scene, cam, box } — alive only mid-build
+let bustCursor = 0;
+
+function ensureBustRig() {
+  if (bustCache || bustCtx) return;
+  bustCache = new Map();
+  try {
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = BUST;
+    const r = new THREE.WebGLRenderer({ canvas: cv, antialias: true, alpha: true, preserveDrawingBuffer: true });
+    r.setPixelRatio(1);
+    r.setSize(BUST, BUST, false);
+    r.setClearColor(0x000000, 0);
+    const scene = new THREE.Scene();
+    scene.add(new THREE.HemisphereLight(0xdfe6ff, 0x2a1d5e, 1.6));
+    const key = new THREE.DirectionalLight(0xffffff, 2.2);
+    key.position.set(2, 3, 4);
+    scene.add(key);
+    const rim = new THREE.DirectionalLight(0x9fd0ff, 1.2);
+    rim.position.set(-3, 2, -2);
+    scene.add(rim);
+    const cam = new THREE.PerspectiveCamera(28, 1, 0.05, 50);
+    bustCtx = { cv, r, scene, cam, box: new THREE.Box3() };
+  } catch (e) {
+    console.warn('portrait busts unavailable', e);
+    bustCtx = null;   // bustCache stays the empty Map set above
+  }
+}
+
+function buildOneBust(def) {
+  const { cv, r, scene, cam, box } = bustCtx;
+  const m = charMesh(def, {});
+  scene.add(m);
+  m.rotation.y = -0.32;
+  const api = m.userData.charApi;
+  for (let i = 0; i < 20; i++) api?.update(1 / 30, 0.5 + i / 30);
+  m.updateMatrixWorld(true);
+  box.setFromObject(m);
+  const h = box.max.y - box.min.y;
+  const ty = box.min.y + h * 0.66;
+  const span = h * 0.78;
+  const dist = span / 2 / Math.tan(THREE.MathUtils.degToRad(14));
+  cam.position.set(0.18 * h, ty + h * 0.06, dist);
+  cam.lookAt(0, ty, 0);
+  r.render(scene, cam);
+  const out = document.createElement('canvas');
+  out.width = out.height = BUST;
+  out.getContext('2d').drawImage(cv, 0, 0);
+  bustCache.set(def.id, out);
+  scene.remove(m);
+  disposeChar(m);
+}
+
+/**
+ * Build up to `budgetMs` of remaining character busts. Call this every frame
+ * with a small budget rather than once with none. Idempotent once every
+ * character is built (returns false immediately).
+ * @returns {boolean} true while portraits are still being built
+ */
+export function pumpBusts(budgetMs = 4) {
+  // Internally guarded (a no-op after the first call) - starting this as
+  // early as the title screen's own idle warm-up means the 8 Blender
+  // bodies are very likely already cached by the time a real roster/podium
+  // needs one, instead of every character's first-ever appearance falling
+  // back to the toy rig while its GLB is still in flight.
+  preloadBlenderBodies();
+  ensureBustRig();
+  if (!bustCtx) return false;
+  const t0 = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+  const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
+  while (bustCursor < CHARS.length && now() - t0 < budgetMs) {
+    buildOneBust(CHARS[bustCursor]);
+    bustCursor++;
+  }
+  if (bustCursor >= CHARS.length) {
+    bustCtx.r.dispose();   // dispose() only: forceContextLoss() logs "Context Lost"
+    bustCtx = null;
+    return false;
+  }
+  return true;
+}
+
+/** How many busts exist right now — lets a caller notice new ones landed. */
+export function bustsBuilt() { return bustCache ? bustCache.size : 0; }
+
+function busts() {
+  ensureBustRig();
+  return bustCache || new Map();
+}
 
 /**
  * Draw a character portrait into a canvas, procedurally. Deliberately drawn
@@ -109,6 +390,14 @@ export function drawPortrait(canvas, def, { size = 128, bg = true } = {}) {
     rg.addColorStop(1, hexA(col, 0));
     g.fillStyle = rg;
     g.fillRect(0, 0, S, S);
+  }
+
+  // The portrait IS the 3D character: a bust rendered once from the real rig
+  // (the hand-drawn smileys and hexagons didn't resemble the models at all).
+  const b = busts().get(def.id);
+  if (b) {
+    g.drawImage(b, 0, 0, S, S);
+    return canvas;
   }
 
   const cx = S * 0.5;

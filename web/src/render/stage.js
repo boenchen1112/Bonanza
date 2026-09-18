@@ -43,7 +43,10 @@ const MAX_ROLL = 0.018;   // radians (~1 degree)
 export function createStage({ canvas, clock }) {
   const renderer = new THREE.WebGLRenderer({
     canvas,
-    antialias: true,
+    // The post chain renders the scene into its own multisampled buffer and
+    // only blits a quad to the canvas, so a multisampled canvas is paid for
+    // twice. Only the low tier draws straight to the canvas.
+    antialias: false,
     powerPreference: 'high-performance',
     alpha: false,
     stencil: false,
@@ -53,6 +56,15 @@ export function createStage({ canvas, clock }) {
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.0;
   renderer.autoClear = true;
+  // Accumulate draw stats across every render() call in a frame (world, then
+  // each post pass) and reset once per frame in render() below. With the
+  // default autoReset each post pass wiped the count, so telemetry reported
+  // one draw call for every scene.
+  renderer.info.autoReset = false;
+  // One soft shadow map, cast only inside a scene's declared focus box
+  // (look.setShadowFocus); scenes that never declare one pay nothing.
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFShadowMap;   // r185: PCFSoft is deprecated; shadow.radius softens
 
   const size = { w: 1, h: 1, dpr: 1 };
 
@@ -177,21 +189,46 @@ export function createStage({ canvas, clock }) {
 
   // --------------------------------------------------------------------- api
 
+  /** Requested render scale (buffer pixels per CSS pixel); null = the device's. */
+  let requestedScale = null;
+
   function resize(w, h) {
     size.w = Math.max(1, w);
     size.h = Math.max(1, h);
     // Cap DPR: a 3x retina phone rendering a full-screen 3D scene at native
     // resolution will drop frames, and frame drops are worse than soft pixels
     // in a game judged on timing.
-    size.dpr = Math.min(window.devicePixelRatio || 1, 2);
+    size.deviceRatio = Math.min(window.devicePixelRatio || 1, 2);
+    // A requested scale never supersamples past the (capped) device ratio.
+    size.dpr = requestedScale === null ? size.deviceRatio : Math.min(requestedScale, size.deviceRatio);
     renderer.setPixelRatio(size.dpr);
     renderer.setSize(size.w, size.h, false);
     look.post.setSize(size.w * size.dpr, size.h * size.dpr);
   }
 
-  function attach(s, c) {
+  /**
+   * Render at `scale` buffer pixels per CSS pixel (null = the device ratio).
+   * Independent of the device pixel ratio: a 200%-scaled laptop can draw at
+   * 1.5 and let the browser upscale — soft pixels beat missed frames.
+   * @returns {number} the scale actually in effect
+   */
+  function setRenderScale(scale) {
+    const s = Number(scale);
+    requestedScale = scale === null || scale === undefined || !(s > 0) ? null : s;
+    if (size.w > 1 || size.h > 1) resize(size.w, size.h);
+    return size.dpr;
+  }
+
+  /**
+   * Take over a freshly built scene. `id` must be the scene's registry id:
+   * palette inference keys on it, so attaching without one grades the first
+   * frames in whatever the *previous* scene left behind and then cross-fades
+   * out of it over 0.7s — visible at the top of every screen.
+   */
+  function attach(s, c, id = null) {
     scene = s;
     camera = c;
+    sceneId = id;
     camBase.copy(c.position);
     look.attach(s, c);
     rigState.active = false;
@@ -207,6 +244,16 @@ export function createStage({ canvas, clock }) {
     look.detach();
     scene = null;
     camera = null;
+    // A game's explicit palette choice lasts for that game only; the next
+    // scene goes back to inferring its own.
+    paletteLocked = false;
+    lastAutoName = null;
+    sceneId = null;
+    // Shared camera-rig knobs go back to their defaults. Three games set a
+    // push gain and one restored it; two called release(). Whatever the last
+    // scene left behind was what the next one inherited.
+    rig.release();
+    pushGain = 1;
     shakeAmp = 0;
     push = 0;
     roll = 0;
@@ -220,10 +267,16 @@ export function createStage({ canvas, clock }) {
 
   let paletteLocked = false;
   let lastAutoName = null;
+  /**
+   * Id of the scene that finished loading (set by main.js). Palette and
+   * default-environment inference key on it. This used to be read off the
+   * `window.__BBB__` test API, which production builds don't ship.
+   */
+  let sceneId = null;
 
   function autoPalette(immediate = false) {
     if (paletteLocked) return;
-    const id = scene?.userData?.palette || window.__BBB__?.scene || null;
+    const id = scene?.userData?.palette || sceneId || null;
     if (!id || id === lastAutoName) return;
     lastAutoName = id;
     const named = look.paletteNamed(id);
@@ -253,16 +306,125 @@ export function createStage({ canvas, clock }) {
     return env;
   }
 
+  /**
+   * Get a freshly built scene to the GPU before its clock starts: build the
+   * default set, run the dress pass, and compile every program in parallel
+   * (KHR_parallel_shader_compile). Left to the first frame, Swing Kings'
+   * compiles blocked ~1.2s with the count-in already running.
+   */
+  /**
+   * Get a freshly built scene onto the GPU before its clock starts: build
+   * the default set, run the dress pass, then compile every program and
+   * upload every texture the scene needs.
+   *
+   * Both of those are synchronous under the hood, confirmed against three's
+   * own source: `renderer.compile()` (which `compileAsync` calls first) is
+   * a plain synchronous pass — only the wait for the driver's background
+   * LINK step is actually async — and texture upload is exactly as
+   * synchronous when it happens lazily on first draw. Doing either
+   * scene-wide in one call blocks one whole frame for however long a fresh
+   * minigame's cast, stadium set and crowd take to get onto the GPU for the
+   * first time. That's the known "scene-entry stall … still exists, now
+   * under the title card" gap: `activate()` awaits this before `start()`,
+   * so the cover hides the flash of an unbuilt scene, but the freeze itself
+   * still runs on the frame loop's own thread — no input is processed and
+   * nothing repaints until it clears.
+   *
+   * Compiling/uploading item-by-item instead, yielding a real frame once
+   * actual time has elapsed, turns that one block into several much
+   * smaller ones. It doesn't reach zero: measured on Swing Kings' cast,
+   * batching down to pairs of materials still leaves one ~800ms frame,
+   * because ONE of its shaders is that expensive to link on this GPU, and
+   * a single gl.compileShader/linkProgram call can't be split further from
+   * here — fixing that needs shader-level work, not a scheduling change.
+   */
+  async function warm() {
+    if (!scene || !camera) return;
+    ensureDefaultEnv();
+    look.dress();
+
+    // One representative object per UNIQUE material, not one call per
+    // object: a character rig alone is ~20 segment meshes, and compiling
+    // each separately re-pays compileAsync's own overhead (a light
+    // traversal plus a ready-poll) for materials an earlier object already
+    // made ready.
+    const materialOwner = new Map();
+    scene.traverse((o) => {
+      if (!(o.isMesh || o.isPoints || o.isLine || o.isSprite)) return;
+      for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
+        if (m && !materialOwner.has(m)) materialOwner.set(m, o);
+      }
+    });
+    const textures = new Set();
+    for (const m of materialOwner.keys()) {
+      for (const key in m) { const v = m[key]; if (v && v.isTexture) textures.add(v); }
+      // ShaderMaterial-based effects (the sky dome, custom rig shaders) keep
+      // their textures inside `uniforms`, one level deeper.
+      for (const key in m.uniforms || {}) { const v = m.uniforms[key]?.value; if (v && v.isTexture) textures.add(v); }
+    }
+
+    let sinceYield = performance.now();
+    const maybeYield = async () => {
+      if (performance.now() - sinceYield <= 8) return;
+      await new Promise((r) => requestAnimationFrame(r));
+      sinceYield = performance.now();
+    };
+
+    // Batching matters as much as chunking does. Each compileAsync() call
+    // pays a fixed tax beyond the real compile — a light traversal plus at
+    // least one polling round-trip, 10ms via setTimeout when the browser
+    // exposes no faster completion signal — which measured out to almost
+    // the WHOLE cost for a scene with 100+ materials at one call each. A
+    // fake root that forwards `.traverse`/`.traverseVisible` to a batch of
+    // real objects, without reparenting any of them, lets one call cover
+    // several materials, paying that tax once per batch instead of once
+    // per material.
+    // `traverseVisible` deliberately does NOT skip invisible owners here,
+    // unlike three's own method of that name: `materialOwner` above was
+    // already built from a full, visibility-blind `scene.traverse()`, so
+    // an owner reaching this point already earned its spot. The pooled fx
+    // particle systems (render/fx) sit at `visible=false` as their normal
+    // resting state until something actually fires - skipping them here
+    // (an earlier version of this did, matching what compileAsync's OWN
+    // traverseVisible-based scan would do on a real scene) meant every
+    // game's first-ever flare/ring/burst compiled its shader synchronously
+    // on the frame it first fired, mid-gameplay: a 147-268ms stall miles
+    // from any loading screen, isolated on chompChorus via
+    // freeze-auto-probe.mjs's CPU profile (`getProgramInfoLog` sitting
+    // right at the first judged note).
+    const batchOf = (objs) => ({
+      traverse: (cb) => { for (const o of objs) o.traverse(cb); },
+      traverseVisible: (cb) => { for (const o of objs) o.traverse(cb); },
+    });
+    const owners = [...materialOwner.values()];
+    const BATCH = 2;
+    for (let i = 0; i < owners.length; i += BATCH) {
+      const batch = batchOf(owners.slice(i, i + BATCH));
+      try { await renderer.compileAsync(batch, camera, scene); } catch (e) { console.warn('warm: compile', e); }
+      await maybeYield();
+    }
+    for (const tex of textures) {
+      // A texture whose source isn't decoded yet can't be uploaded early;
+      // it just uploads at its normal first-draw time instead.
+      try { renderer.initTexture(tex); } catch { /* not ready yet */ }
+      await maybeYield();
+    }
+  }
+
   /** Build the default set for a scene that didn't ask for one. */
   function ensureDefaultEnv() {
     if (envs.size || !scene) return;
     if (scene.userData.env === false) return;
-    const id = window.__BBB__?.scene || '';
-    const shell = id === 'title' || id === 'select' || id === 'results';
-    const preset = scene.userData.envPreset || (shell ? 'void' : 'arena');
+    // The scene declares its own set. This used to read `id === 'title' ||
+    // id === 'results'` — the render layer naming shell screens, so renaming
+    // one silently changed its lighting.
+    const preset = scene.userData.envPreset || 'arena';
     const env = createEnv(scene);
     env.stageSet(preset, {
-      groundY: look.ground.found ? look.ground.y : (shell ? -4.4 : 0),
+      // A scene can declare where its floor is (roster and freeplay stand
+      // their casts on a deck well below 0; the default arena floor at 0 used
+      // to slice through them).
+      groundY: look.ground.found ? look.ground.y : (scene.userData.groundY ?? 0),
       skipGround: look.ground.found,
     });
   }
@@ -347,12 +509,14 @@ export function createStage({ canvas, clock }) {
   function render(dt, nowS) {
     if (!scene || !camera) return;
     timeS += dt;
+    renderer.info.reset();
 
     autoPalette();
     ensureDefaultEnv();
     trackBeat(dt);
 
     // --- world --------------------------------------------------------------
+    if (rigState.active) look.lights.follow(rigState.target);
     look.update(dt, { camera, beatPulse, time: timeS });
     for (const e of envs) e.update(dt, clock?.beat || 0, timeS, look.palette);
 
@@ -435,9 +599,7 @@ export function createStage({ canvas, clock }) {
       flashEl.style.opacity = flashA > 0.001 ? String(clamp01(flashA)) : '0';
     }
 
-    // Scene cost, captured before the post chain's fullscreen passes overwrite
-    // renderer.info. Without this the telemetry reports "1 draw call" for any
-    // scene, because the last thing drawn is always a quad.
+    // Scene cost for the whole frame (info accumulates — see autoReset above).
     stats.drawCalls = renderer.info.render.calls;
     stats.triangles = renderer.info.render.triangles;
     if (posted) {
@@ -466,14 +628,16 @@ export function createStage({ canvas, clock }) {
 
   return {
     // --- original surface (do not break) ---
-    renderer, size, resize, attach, detach, render,
+    renderer, size, resize, attach, detach, render, warm,
     stats,
     shake, flash, punchZoom, setClear,
     get scene() { return scene; },
     get camera() { return camera; },
+    get sceneId() { return sceneId; },
+    set sceneId(v) { sceneId = v; },
 
     // --- look ---
-    look, rig, setPalette, createEnv, pulse, chroma, setQuality, dispose,
+    look, rig, setPalette, createEnv, pulse, chroma, setQuality, setRenderScale, dispose,
     get palette() { return look.palette; },
     get colors() { return look.palette.col; },
     get quality() { return look.tier; },
@@ -482,7 +646,5 @@ export function createStage({ canvas, clock }) {
      *  this instead of FEEL.color directly so the grade stays coherent. */
     verdictColor(v) { return look.palette.verdictHex(v); },
     verdictHex(v) { return look.palette.verdict[v]?.getHex() ?? 0xffffff; },
-    /** Named palettes, for menus and debug overlays. */
-    palettes() { return Object.keys(look.paletteNamed('__none__') ? {} : {}); },
   };
 }

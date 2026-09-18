@@ -22,6 +22,16 @@ UnitySwinger_*.log
 research/logs/
 research/hand_tracking_web/logs/
 
+# Raw Mixamo FBX downloads (Adobe terms: ship inside the game, don't
+# redistribute the raw files). Only converted game-ready .glb is committed.
+Mixamo/
+
+# Blender build scratch output (tools/assets/blender/) — only the .glb a
+# build script copies into web/src/assets/ is committed, never the throwaway
+# export a script writes next to itself while iterating.
+tools/assets/blender/*.glb
+tools/assets/blender/*.blend1
+
 # web build + deps
 web/node_modules/
 web/dist/

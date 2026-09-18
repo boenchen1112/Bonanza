@@ -10,13 +10,11 @@
 
 export const SCENES = [
   { id: 'title', kind: 'shell', load: () => import('./title.js') },
-  { id: 'select', kind: 'shell', load: () => import('./select.js') },
   { id: 'results', kind: 'shell', load: () => import('./results.js') },
 
-  // Registered per the contract in nav.js: a view with its own entry routes
-  // straight to it, otherwise it is hosted inside `select`. Registering these
-  // is the pure upgrade that note describes — deep links and __BBB__.goto()
-  // start working and nothing else changes.
+  // Every shell view has its own entry (deep links and __BBB__.goto() work).
+  // Game choice happens in `freeplay`; the old placeholder `select` scene was
+  // never routed to by the flow and has been removed.
   { id: 'roster', kind: 'shell', load: () => import('./roster.js') },
   { id: 'freeplay', kind: 'shell', load: () => import('./freeplay.js') },
   { id: 'party', kind: 'shell', load: () => import('./party.js') },

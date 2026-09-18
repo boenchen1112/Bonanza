@@ -51,8 +51,9 @@
 
 import * as THREE from 'three';
 import { NoteJudge, rankFor, SCORE } from '../../core/judge.js';
-import { FEEL, feelForCombo } from '../../core/feel.js';
-import { damp, clamp, clamp01, makeRng, easeOutCubic } from '../../core/util.js';
+import { roundResult } from '../../core/result.js';
+import { FEEL, feelForCombo, hitstopFor } from '../../core/feel.js';
+import { damp, clamp, clamp01, makeRng, easeOutCubic, beatPhase } from '../../core/util.js';
 import { makeCharacter, makeAnimator } from '../../chars/index.js';
 import { buildChart, chartEndBeat, chartDurationBars, maxPoints, ADVANCE_WEIGHT, LEAD_BEATS, OUTRO_BEATS } from './chart.js';
 import { makeTrack, makeRack, makeBeams, makeFinish, makeSnare, makeMajorGear, makeMace } from './props.js';
@@ -104,7 +105,7 @@ const MASH_ADVANCE = 0.18;  // race advance burned by the same press
 // ─────────────────────────────────────────────────────────────────── helpers
 
 /** 0..1 position inside the beat. NEVER `%`: the lead-in runs negative beats. */
-const beatFrac = (b) => b - Math.floor(b);
+const beatFrac = beatPhase;
 
 const hexStr = (h) => '#' + (h >>> 0).toString(16).padStart(6, '0');
 
@@ -187,11 +188,32 @@ export default {
       return r;
     };
 
-    S.you = mkRacer(0, 'YOU', 'sunburst', 'round', 'full');
+    // The field is the shell's lineup: P1 marches in lane one, the named CPU
+    // rivals take the next lanes at a pace set by their difficulty, and house
+    // drummers fill any empty lane. Booted cold, it's the house field.
+    const hero = ctx.players?.[0];
+    const rivals = (ctx.players || []).filter((p) => p.isCpu).slice(0, CPUS.length);
+    S.you = mkRacer(0, 'YOU', hero?.palette ?? 'sunburst', hero?.build || 'round', 'full');
+    S.you.playerId = hero ? hero.id : null;
+    hero?.dress?.(S.you.char);
     CPUS.forEach((c, k) => {
-      const r = mkRacer(k + 1, c.name, c.palette, c.build, 'lite');
-      r.skill = c.skill;
-      r.stumbleChance = c.stumble;
+      const p = rivals[k];
+      // A party races only its own lineup: a house drummer in the spare lane
+      // ranked you 4th on the board while the party called it 3rd.
+      // (Free Play's lineup is you alone: no rivals seated, so the house races.)
+      if (!p && rivals.length) { S.laneColors.push(0x3a2a55); return; }
+      const r = mkRacer(k + 1, p ? p.name : c.name, p ? p.palette : c.palette, p ? p.build : c.build, 'lite');
+      if (p) {
+        // Easy .40 → 0.73 pace, hard .86 → 0.90: the ace is still CRASH-fast.
+        r.skill = 0.58 + 0.37 * p.cpuSkill;
+        r.stumbleChance = 0.28 - 0.23 * p.cpuSkill;
+        r.playerId = p.id;
+        p.dress?.(r.char);
+      } else {
+        r.skill = c.skill;
+        r.stumbleChance = c.stumble;
+        r.playerId = null;
+      }
     });
 
     // the player carries a snare, so "you are the drummer" needs no caption
@@ -221,7 +243,7 @@ export default {
     ctx.fx.setGroundY(0);
     ctx.fx.setFocus([1.2, 1.4, 0.4]);
 
-    S.judge = new NoteJudge();
+    S.judge = new NoteJudge({ offsetMs: ctx.offsetMs });
     S.rng = makeRng(0xd12b + (ctx.opts?.seed | 0));
 
     // --- state -------------------------------------------------------------
@@ -268,6 +290,7 @@ export default {
     S.musicDuck = 0.72;
 
     ctx.stage.rig.frame({ ...CAM_RESP, lambda: 3.4, immediate: true });
+    ctx.stage.look.setShadowFocus('rig', 9);   // real shadows follow the camera between call and response
     ctx.stage.rig.setPushGain(0.7);
 
     // --- schedule every call, once, at absolute audio times ----------------
@@ -289,7 +312,7 @@ export default {
     S.callEvents.sort((a, b) => a.beat - b.beat);
 
     // --- beat-locked countdown --------------------------------------------
-    S.unsubBeat = ctx.clock.onBeat((b, t) => {
+    S.unsubBeat = ctx.onBeat((b, t) => {
       if (b >= 0) return;
       if (b >= -LEAD_BEATS && b < -4) {
         ctx.audio.sfx('count', t + lat(), ((b % 4) + 4) % 4);
@@ -406,10 +429,14 @@ export default {
     }
 
     // ---- hud --------------------------------------------------------------
+    // Accuracy is hit quality in every game. This used to show `score01` —
+    // race points, carrying chart multipliers and mash penalties — so the
+    // player watched one number all round and the results card printed
+    // another. The score line is where the race points belong.
     const score01 = clamp01(S.points / MAX_POINTS);
     ctx.ui.hud.setScore(Math.round(score01 * 1000));
     ctx.ui.hud.setCombo(S.combo);
-    ctx.ui.hud.setAccuracy(score01);
+    ctx.ui.hud.setAccuracy(hitQuality(S.tot));
     updateStandings(S);
   },
 
@@ -483,34 +510,18 @@ export default {
     this._s = null;
   },
 
-  // ───────────────────────────────────────── test hooks (harness + verify)
+  // ──────────────────────────────────────────────────── harness: testChart
 
   /**
-   * What the drum major is playing / just played, in beats. The bundled
-   * `verify-call-response.mjs` reads this to answer a call exactly, which is
-   * the only way to prove a call-and-response chart is actually beatable —
-   * the shell's generic eighth-note autoplay cannot.
+   * Every response note, in beats. The generic bot presses eighths, which in
+   * a call-and-response game answers calls it was never given — so this is
+   * the only way the harness can prove the chart is beatable. Beats, not
+   * times: main.js re-derives the audio time each frame.
    */
-  __probe() {
-    const S = this._s;
-    if (!S) return null;
-    const p = phrases[S.phraseIdx] || null;
-    return {
-      mode: S.mode,
-      phrase: p && {
-        index: p.index, section: p.section, bars: p.bars, finale: p.finale,
-        callBeat: p.callBeat, respBeat: p.respBeat, endBeat: p.endBeat,
-        slots: p.slots, callBeats: p.callBeats, noteBeats: p.noteBeats,
-      },
-      totals: { ...S.tot },
-      points: S.points,
-      maxPoints: MAX_POINTS,
-      extras: S.extras,
-      combo: S.combo,
-      maxCombo: S.maxCombo,
-      progress: S.racers.map((r) => ({ name: r.name, p: r.progress, place: r.place })),
-      finished: S.finished,
-    };
+  testChart() {
+    const out = [];
+    for (const p of phrases) for (const b of p.noteBeats) out.push({ beat: b, action: 'a' });
+    return out;
   },
 };
 
@@ -593,7 +604,7 @@ function onJudged(ctx, S, note, verdict, errMs) {
     scale: mul > 1 ? 1.35 : 1,
     groundY: 0,
   });
-  ctx.hitstop(p?.finale ? Math.min(FEEL.hitstopMax, f.hitstop * 1.5) : f.hitstop);
+  ctx.hitstop(hitstopFor(p?.finale ? Math.min(FEEL.hitstopMax, f.hitstop * 1.5) : f.hitstop, S.judge.notes, note));
 
   const t = ctx.clock.rawNow() + 0.005;
   if (hit) {
@@ -680,16 +691,20 @@ function finishRound(ctx, S) {
   });
   ctx.audio.sfx('fanfare', ctx.clock.rawNow() + 0.02);
   ctx.stage.punchZoom(1.14);
-  ctx.env?.crowd?.cheer?.(1.6);
+  // (`ctx.env` does not exist — optional chaining swallowed the mistake and
+  // the working line was always the next one down.)
   S.env.crowd?.cheer?.(1.6);
   ctx.fx.confetti([S.you.x, 2.2, LANE_Z[0]], { count: 120, up: 1.2 });
   S.you.anim.setState(place === 1 ? 'celebrate' : 'taunt', { variant: 'perfect', force: true });
 
   const notes = S.tot.perfect + S.tot.great + S.tot.good + S.tot.miss;
-  S.result = {
+  const hit01 = hitQuality(S.tot);
+  S.result = roundResult({
     score: Math.round(score01 * 1000),
-    accuracy: score01,
-    rank: rankFor(score01, S.tot.miss),
+    accuracy: hit01,
+    rank: rankFor(hit01, S.tot.miss),
+    // The race was run against the lineup: the party takes these places as-is.
+    field: S.racers.map((r) => ({ id: r.playerId ?? null, place: r.place })),
     stats: {
       ...S.tot,
       notes,
@@ -702,7 +717,18 @@ function finishRound(ctx, S) {
         ? S.errors.reduce((a, b) => a + Math.abs(b), 0) / S.errors.length : 0,
       score: Math.round(score01 * 1000),
     },
-  };
+  });
+}
+
+/**
+ * Hit quality, 0..1 — verdict-weighted, the number `accuracy` means in every
+ * game. Kept apart from the race points on purpose.
+ */
+function hitQuality(tot) {
+  const notes = tot.perfect + tot.great + tot.good + tot.miss;
+  if (!notes) return 0;
+  return (tot.perfect * SCORE.perfect + tot.great * SCORE.great + tot.good * SCORE.good)
+    / (notes * SCORE.perfect);
 }
 
 // ─────────────────────────────────────────────────────────────── call audio

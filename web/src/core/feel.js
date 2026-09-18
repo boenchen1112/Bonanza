@@ -22,8 +22,28 @@
  */
 
 export const FEEL = {
-  /** Countdown before a round: bars of lead-in the player gets to lock on. */
+  /**
+   * Countdown before a round: bars of lead-in the player gets to lock on.
+   * Every chart derives its own LEAD_BEATS from this; four of them used to
+   * hardcode 8, one writing `FEEL.leadInBars * 4` as a comment beside it.
+   */
   leadInBars: 2,
+
+  /**
+   * Scheduling horizons, seconds. These look like the same number and are
+   * NOT — do not collapse them.
+   *
+   *   Clock.LOOKAHEAD_S (0.12, core/clock.js)  how far ahead the transport
+   *     dispatches one-shots, so a WebAudio node gets a real head start.
+   *   player.js HORIZON (0.30)                 how far ahead the music player
+   *     renders its own note events; longer, because a dropped frame there is
+   *     an audible gap in the backing track, not a late SFX.
+   *   a game's own cue lookahead (0.14-0.16)   how early a minigame hands its
+   *     scheduled voices to WebAudio, tuned per game against its own chart.
+   *
+   * Kept here as one place to read them, not as one value to share.
+   */
+  horizons: { clockDispatch: 0.12, musicRender: 0.30, gameCue: 0.15 },
 
   /**
    * Hitstop, seconds. Applied to gameplay time only, never to the clock.
@@ -222,6 +242,26 @@ export function feelFor(verdict) {
     color: FEEL.color[verdict] ?? 0xffffff,
     label: FEEL.label[verdict] ?? '',
   };
+}
+
+/**
+ * Hitstop for a judged note, shortened so the freeze always ends well before
+ * the next unjudged note arrives. The rule stated on FEEL.hitstop (the next
+ * note must stay readable) was only true at the base values; combo escalation
+ * and dense late charts (74-150ms gaps at Finale Fever's top tempo) froze
+ * characters and FX straight through the following note.
+ * @param {number} requested  seconds
+ * @param {{time:number, judged?:boolean}[]} notes  sorted by time
+ * @param {{time:number}} note  the note just judged
+ */
+export function hitstopFor(requested, notes, note) {
+  let gap = Infinity;
+  for (const n of notes) {
+    if (n.judged || n.time <= note.time + 1e-3) continue;
+    gap = n.time - note.time;
+    break;
+  }
+  return Math.max(0, Math.min(requested, gap * 0.4));
 }
 
 /** How many combo milestones `combo` has passed. 0..comboMilestones.length */

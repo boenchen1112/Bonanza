@@ -12,7 +12,7 @@
  */
 
 import { clamp01, backOut } from '../core/util.js';
-import { PAL, el, panel, sfx, beatPulse } from './theme.js';
+import { PAL, el, panel, sfx, beatPulse, ensureStyle } from './theme.js';
 
 const ITEMS = [
   { id: 'resume', label: 'RESUME', sub: 'back to it', color: PAL.green },
@@ -112,13 +112,8 @@ export function createPause(root, { onSelect, title = 'PAUSED' } = {}) {
   };
 }
 
-let cssDone = false;
 function injectCss() {
-  if (cssDone || document.getElementById('sh-pause-css')) { cssDone = true; return; }
-  cssDone = true;
-  const s = document.createElement('style');
-  s.id = 'sh-pause-css';
-  s.textContent = `
+  ensureStyle('sh-pause-css', `
   .sh-pause{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
     z-index:30;will-change:opacity;}
   .sh-pause__box{position:relative;padding:clamp(14px,2vw,28px) clamp(18px,2.6vw,38px);
@@ -129,6 +124,5 @@ function injectCss() {
   .sh-pause__count{position:absolute;left:50%;top:44%;transform:translate(-50%,-50%);
     font-size:clamp(60px,15vw,190px);color:#fff;pointer-events:none;
     text-shadow:0 .06em 0 rgba(0,0,0,.6),0 0 .4em rgba(120,190,255,.6);}
-  `;
-  document.head.appendChild(s);
+  `);
 }

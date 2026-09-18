@@ -26,13 +26,15 @@
  */
 
 import { clamp01 } from '../../core/util.js';
+import { FEEL } from '../../core/feel.js';
 
 export const BPM0 = 150;
-/** Top of the ramp, as a multiple of BPM0. 150 -> 202.5. */
-export const RAMP = 1.35;
+/** Top of the ramp, as a multiple of BPM0. 150 -> 187.5. (Was 1.35 -> 202.5:
+ *  with eighth runs up there, presses 74-148ms apart outran players.) */
+export const RAMP = 1.25;
 export const BEATS_PER_BAR = 4;
 /** Two bars of lead-in, per the universal rules. */
-export const LEAD_BEATS = 8;
+export const LEAD_BEATS = FEEL.leadInBars * BEATS_PER_BAR;
 
 /** Bar layout. 23 call/answer phrases, a four-bar solo, one finale note. */
 export const DUEL_PHRASES = 23;
@@ -68,6 +70,11 @@ export const SECTIONS = {
  * Patterns, in beats from the top of the bar.
  * A bare number is a tap; `{ b, chord: true }` is a two-lane chord;
  * `{ b, kind }` overrides the read of the note.
+ *
+ * Density rule: offbeat eighths are the texture, but no pattern past the
+ * teach section asks for more than six presses in a bar or more than three
+ * eighths in a row, and nothing is finer than an eighth. The full eight-
+ * eighth `groove` only appears in the teach section, at the bottom of the ramp.
  */
 const P = {
   swing: [{ b: 0, kind: 'swing' }, { b: 2, kind: 'swing' }],
@@ -77,11 +84,12 @@ const P = {
   echoB: [0, 0.5, 1.5, 3],
   echoC: [0.5, 1, 2, 2.5, 3],
   groove: [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5],
-  groove2: [0, 0.5, 1, 2, 2.5, 3, 3.5],
+  groove2: [0, 0.5, 1, 2, 2.5, 3],
+  groove3: [0, 0.5, 1.5, 2, 3, 3.5],
   chord: [{ b: 0, chord: true }, 1.5, { b: 2, chord: true }, 3],
   chordMix: [0, { b: 1, chord: true }, 2, 2.5, { b: 3, chord: true }],
-  rush: [0, 0.5, 1, 1.5, { b: 2, chord: true }, 2.75, 3, 3.5],
-  rush2: [0, 0.75, 1, 1.5, 2, 2.5, { b: 3, chord: true }, 3.5],
+  rush: [0, 0.5, 1, { b: 2, chord: true }, 3, 3.5],
+  rush2: [0, 0.5, 1.5, 2, { b: 3, chord: true }, 3.5],
 };
 
 /**
@@ -94,9 +102,9 @@ const RUN = [
   ['swing', 'teach'], ['echoA', 'teach'], ['groove', 'teach'],
   ['hook', 'teach'], ['echoB', 'teach'], ['groove2', 'teach'],
   // play — the verbs start mixing, chords arrive
-  ['hook', 'play'], ['echoC', 'play'], ['groove', 'play'], ['chord', 'play'],
-  ['echoA', 'play'], ['hook', 'play'], ['groove2', 'play'], ['chordMix', 'play'],
-  ['echoB', 'play'], ['hook', 'play'], ['groove', 'play'], ['echoC', 'play'],
+  ['hook', 'play'], ['echoC', 'play'], ['groove2', 'play'], ['chord', 'play'],
+  ['echoA', 'play'], ['hook', 'play'], ['groove3', 'play'], ['chordMix', 'play'],
+  ['echoB', 'play'], ['hook', 'play'], ['groove2', 'play'], ['echoC', 'play'],
   ['chordMix', 'play'], ['hook', 'play'],
   // escalate — everything, at once, with two beats of warning
   ['rush', 'escalate'], ['chordMix', 'escalate'], ['rush2', 'escalate'],

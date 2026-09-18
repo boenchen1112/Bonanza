@@ -43,22 +43,80 @@ export function createUI({ root, bus, clock }) {
     const img = textImage(String(text), fontStyle(styleName, { color: toColor(color) }));
     const d = document.createElement('div');
     d.className = extraClass ? `bbb-t ${extraClass}` : 'bbb-t';
-    d.style.backgroundImage = `url(${img.url})`;
+    setImage(d, img);
     d.style.setProperty('--ratio', String(img.ratio));
     d.style.setProperty('--ar', String(img.aspect));
     return d;
   }
 
-  /** Replace a mounted glyph node's image in place, skipping work if the text
-   *  didn't actually change — these are called from hot per-frame HUD setters. */
+  /** Point an element at a text image; a first-time string's image is still
+   *  encoding off-thread, so it lands a frame or two later. */
+  function setImage(node, img) {
+    if (img.url) {
+      // Clear any earlier pending encode, or when it lands it paints its own
+      // (older) text back over this one.
+      delete node.dataset.pending;
+      node.style.backgroundImage = `url(${img.url})`;
+      return;
+    }
+    node.dataset.pending = img.key;
+    img.ready.then((url) => {
+      if (node.dataset.pending !== img.key) return;   // repainted with other text meanwhile
+      delete node.dataset.pending;
+      node.style.backgroundImage = `url(${url})`;
+    });
+  }
+
+  /**
+   * Show a HUD number (score, combo, accuracy) in place. Every hit produces a
+   * string never seen before, and rasterising + PNG-encoding a whole string
+   * per hit stalled the frame (HANDOFF §5, 100-270ms). Instead the number is
+   * a row of per-character cells, each drawn from a permanent one-glyph image
+   * cache — after the first few hits nothing is ever rasterised again.
+   */
+  const glyphCells = new Map();
+  function cellImage(ch, st) {
+    const key = `${st.capPx}|${st.color}|${ch}`;
+    let img = glyphCells.get(key);
+    if (!img) {
+      img = textImage(ch, st);
+      img.pinned = true;   // kept forever here, so font.js must not revoke it
+      glyphCells.set(key, img);
+    }
+    return img;
+  }
   function repaint(holder, text, opts) {
     const s = String(text);
     if (holder.dataset.text === s) return;
     holder.dataset.text = s;
-    const img = textImage(s, fontStyle(opts.styleName || 'hud', { color: toColor(opts.color || '#fff') }));
-    holder.style.backgroundImage = `url(${img.url})`;
-    holder.style.setProperty('--ratio', String(img.ratio));
-    holder.style.setProperty('--ar', String(img.aspect));
+    const st = fontStyle(opts.styleName || 'hud', { color: toColor(opts.color || '#fff') });
+    if (!holder.classList.contains('bbb-num')) {
+      holder.classList.remove('bbb-t');
+      holder.classList.add('bbb-num');
+    }
+    const chars = [...s];
+    while (holder.children.length < chars.length) holder.appendChild(el('bbb-t'));
+    for (let i = 0; i < holder.children.length; i++) {
+      const c = /** @type {HTMLElement} */ (holder.children[i]);
+      if (i >= chars.length) { c.style.display = 'none'; continue; }
+      c.style.display = '';
+      if (chars[i] === ' ') {
+        delete c.dataset.pending;
+        c.style.backgroundImage = 'none';
+        c.style.setProperty('--ratio', '1');
+        c.style.setProperty('--ar', String(0.34 + st.tracking));
+        c.style.marginLeft = '0';
+        continue;
+      }
+      const img = cellImage(chars[i], st);
+      setImage(c, img);
+      c.style.setProperty('--ratio', String(img.ratio));
+      c.style.setProperty('--ar', String(img.aspect));
+      // Overlap each cell's padding so glyphs sit exactly where a whole-string
+      // layout would put them: advance + tracking apart.
+      const overlap = i === 0 ? 0 : Math.abs(st.slant) + 2 * img.padX - st.tracking;
+      c.style.marginLeft = `calc(var(--cap) * ${-overlap})`;
+    }
   }
 
   /** Verdict popup at a screen position (0..1 normalised). */
@@ -90,7 +148,15 @@ export function createUI({ root, bus, clock }) {
     layer.innerHTML = '';
   }
 
-  function update(dt) {
+  // Lifetimes age on REAL elapsed time, not the frame dt main.js hands us:
+  // that dt is clamped (and zeroed in hitstop), so a 900ms load hitch used to
+  // leave a title banner up for seconds over live play while the audio-timed
+  // count-in and pitches marched on underneath it.
+  let lastMs = null;
+  function update() {
+    const nowMs = performance.now();
+    const dt = lastMs === null ? 0 : Math.min(2, (nowMs - lastMs) / 1000);
+    lastMs = nowMs;
     for (let i = live.length - 1; i >= 0; i--) {
       const p = live[i];
       p.life += dt;
@@ -141,6 +207,11 @@ export function createUI({ root, bus, clock }) {
       layer.appendChild(d);
       this._root = d;
       this._lastCombo = 0;
+      // Rasterise every HUD digit now, during load, not on the first hits.
+      for (const color of ['#fff', '#9fb2ff', '#ffd93d']) {
+        const st = fontStyle('hud', { color });
+        for (const ch of '0123456789.%') cellImage(ch, st);
+      }
       repaint(d.querySelector('[data-score]'), '0', { styleName: 'hud' });
       repaint(d.querySelector('[data-acc]'), '0.0%', { styleName: 'hud', color: '#9fb2ff' });
       const comboWrap = d.querySelector('[data-combo-wrap]');
@@ -174,5 +245,15 @@ export function createUI({ root, bus, clock }) {
     unmount() { this._root?.remove(); this._root = null; },
   };
 
-  return { layer, popup, banner, clear, update, hud, el };
+  /**
+   * The count-in number, centred and large. This is the presenter half of
+   * the count-in only — `core/round.js` `countIn()` owns the driving (beat
+   * subscription, tick SFX, which number this beat is), because that is what
+   * five games were each re-implementing.
+   */
+  function countdown(text, opts = {}) {
+    return banner(String(text), { life: 0.5, color: '#ffe9a8', ...opts });
+  }
+
+  return { layer, popup, banner, countdown, clear, update, hud, el };
 }

@@ -64,7 +64,7 @@ const QUALITY = {
 
 const PENDING = 160;
 
-export function createFX({ stage, clock }) {
+export function createFX({ stage, clock, bus = null }) {
   const rng = makeRng(0xfeed);
   const tex = spriteAtlas();
   let host = null;
@@ -114,6 +114,9 @@ export function createFX({ stage, clock }) {
   });
 
   const rings = new RingPool({ max: CAP.rings, rng });
+  // A few rings that ignore depth: a climax ring big enough to reach the
+  // ground was sliced flat by the field (`ring(pos, { overlay: true })`).
+  const overlayRings = new RingPool({ max: 8, rng, depthTest: false });
   const trails = new TrailSystem({
     max: FEEL.fx.trail.maxTrails,
     segs: FEEL.fx.trail.segments,
@@ -122,7 +125,7 @@ export function createFX({ stage, clock }) {
   const popText = new PopTextPool({ max: CAP.text, words: VOCAB });
 
   const families = [
-    ambient, decals, trails, smoke, confetti, sparks, shards, streaks, flare, rings, popText,
+    ambient, decals, trails, smoke, confetti, sparks, shards, streaks, flare, rings, overlayRings, popText,
   ];
 
   // ------------------------------------------------------------- state
@@ -427,7 +430,8 @@ export function createFX({ stage, clock }) {
           color: heatUp(FEEL.color.combo, 0), life: 0.5 + k * 0.08,
           from: 0.3 + k * 0.5, to: 2.4 + k * 1.5,
           thick0: 0.16 - k * 0.03, thick1: 0.02,
-          wobble: 0.02 + k * 0.015, alpha: 0.85 - k * 0.2,
+          // The wave grows with k; so must its roundness, or a ×10 ring is a lumpy loop.
+          wobble: 0.012 + k * 0.003, alpha: 0.85 - k * 0.2,
         });
         const e = flare.begin();
         e.x = r.x; e.y = r.y; e.z = r.z;
@@ -489,6 +493,10 @@ export function createFX({ stage, clock }) {
       const layer = recipe[i][0];
       const delay = recipe[i][1];
       if (layer === L.TEXT && opts.text === false) continue;
+      // `rings: false` — the big outward wave and its echo. In a game whose
+      // subject stands AT the impact point they draw wobbly loops through the
+      // character; the core flash and shards still sell the hit.
+      if (opts.rings === false && (layer === L.RING_OUT || layer === L.ECHO)) continue;
       if (delay <= 0) {
         // Act 1 fires INLINE, on the same frame as the press. Queuing it would
         // cost a frame of latency, and that frame is the whole product.
@@ -501,7 +509,7 @@ export function createFX({ stage, clock }) {
 
     // Combo escalation adds PHYSICAL layers, not just bigger numbers: extra
     // shockwaves trailing the first one, each wider, later, and fainter.
-    for (let k = 1; k <= f.extraRings; k++) {
+    for (let k = 1; opts.rings !== false && k <= f.extraRings; k++) {
       schedule(L.RING_OUT, 0.09 + k * 0.055, V, k);
     }
 
@@ -586,10 +594,10 @@ export function createFX({ stage, clock }) {
   /** Expanding shock ring — the single most legible "you hit it" cue. */
   function ring(pos, {
     color = 0xffffff, life = 0.42, from = 0.35, to = 3.2, billboard = true,
-    thick0 = 0.24, thick1 = 0.035, wobble = 0.03, alpha = 1, normal = null, spin = 0,
+    thick0 = 0.24, thick1 = 0.035, wobble = 0.03, alpha = 1, normal = null, spin = 0, overlay = false,
   } = {}) {
     readVec(pos, tmpDir, focus);
-    rings.spawn(tmpDir, {
+    (overlay ? overlayRings : rings).spawn(tmpDir, {
       color, life, from, to, thick0, thick1, wobble, alpha, spin,
       normal: billboard ? null : (normal || [0, 1, 0]),
     });
@@ -710,9 +718,9 @@ export function createFX({ stage, clock }) {
   let autoCombo = 0;
 
   function tryBridge() {
-    if (bridged || typeof window === 'undefined') return;
-    const bus = window.__BBB__ && window.__BBB__.bus;
-    if (!bus || !bus.on) return;
+    // The bus is injected by main.js; it used to be fished off the
+    // `window.__BBB__` test API, which production builds don't ship.
+    if (bridged || !bus || !bus.on) return;
     bridged = true;
     bus.on('judge', (j) => {
       if (!auto || !host || !j || !j.verdict) return;
@@ -753,6 +761,11 @@ export function createFX({ stage, clock }) {
     combo = 0;
     autoCombo = 0;
     ambientBoost = 0;
+    // Shared knobs go back to their defaults on every scene swap. Four games
+    // turned auto-verdict off and one turned it back on, so whatever the last
+    // minigame left behind was what the next one inherited. Unwinding belongs
+    // here, not in five dispose() bodies that are free to forget.
+    auto = true;
   }
 
   function setQuality(name) {

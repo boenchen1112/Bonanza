@@ -49,10 +49,12 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 
 import { NoteJudge, rankFor, SCORE } from '../../core/judge.js';
-import { FEEL, feelForCombo } from '../../core/feel.js';
+import { roundResult } from '../../core/result.js';
+import { countIn } from '../../core/round.js';
+import { FEEL, feelForCombo, hitstopFor } from '../../core/feel.js';
 import {
   damp, clamp, clamp01, lerp, smoothstep, smootherstep,
-  easeOutCubic, easeOutQuint, easeInCubic, backOut, elasticOut, makeRng,
+  easeOutCubic, easeOutQuint, easeInCubic, backOut, elasticOut, makeRng, beatPhase,
 } from '../../core/util.js';
 import { makeCharacter, makeAnimator } from '../../chars/index.js';
 
@@ -76,7 +78,7 @@ const BOUNCER_FACING = 1.12;    // rad; faces screen-right but keeps its face on
 const SPLASH_Y = WATER_Y + 0.35;
 const HIGHLIGHT_WINDOW = 26;    // platforms around the cursor whose matrices animate
 
-const beatFrac = (x) => x - Math.floor(x);       // NEVER x % 1: beats go negative
+const beatFrac = beatPhase;                      // see core/util.js: NEVER x % 1
 const hopShape = (u) => 4 * u * (1 - u);
 
 // ------------------------------------------------------------------- state
@@ -85,6 +87,7 @@ let ctxRef = null;
 let root = null;
 let env = null;
 let rng = null;
+let unsubBeat = null;
 
 let chart = null;
 let plats = null;
@@ -342,14 +345,14 @@ function onJudged(note, verdict, errMs) {
     }
   }
 
-  reactVisually(p, verdict, meta);
+  reactVisually(p, verdict, meta, note);
   ctxRef.bus.emit('judge', {
     verdict, errMs, beat: ctxRef.clock.beatAt(note.time), kind: meta.kind,
   });
   pushHud();
 }
 
-function reactVisually(p, verdict, meta) {
+function reactVisually(p, verdict, meta, note) {
   const f = feelForCombo(verdict, judge.stats.combo);
   const big = p.kind === 'X' || (p.kind === 'F' && meta.kind === 'release');
   const scale = big ? 1.7 : meta.kind === 'release' ? 1.25 : 1;
@@ -362,7 +365,7 @@ function reactVisually(p, verdict, meta) {
     groundY: WATER_Y,
     color: verdict === 'miss' ? undefined : lighten(p.color, 0.18),
   });
-  ctxRef.hitstop(Math.min(FEEL.hitstopMax, f.hitstop * (big ? 2.1 : 1)));
+  ctxRef.hitstop(hitstopFor(Math.min(FEEL.hitstopMax, f.hitstop * (big ? 2.1 : 1)), judge.notes, note));
   if (verdict === 'miss') {
     anim?.react('miss', { dur: 0.5 });
   } else {
@@ -561,13 +564,14 @@ export default {
     env.root.position.y = 0;
 
     // --- the bouncer ---------------------------------------------------------
-    const pal = ctx.players?.[0]?.palette ?? 'lagoon';
+    const hero = ctx.players?.[0];
     bouncerRoot = new THREE.Group();
     bouncerRoot.name = 'bb:bouncer';
     bouncer = makeCharacter({
-      palette: pal, build: 'round', seed: 0xb0c3, detail: 'full',
+      palette: hero?.palette ?? 'lagoon', build: hero?.build || 'round', seed: 0xb0c3, detail: 'full',
       scale: BOUNCER_SCALE, name: 'bb:hero',
     });
+    hero?.dress?.(bouncer);
     bouncer.rotation.y = BOUNCER_FACING;
     bouncerRoot.add(bouncer);
     root.add(bouncerRoot);
@@ -591,51 +595,23 @@ export default {
       distance: CAM_DISTANCE, height: CAM_HEIGHT, yaw: CAM_YAW,
       lambda: CAM_LAMBDA, immediate: true,
     });
+    // Real shadows ride along with the camera as it follows the platforms.
+    ctx.stage.look.setShadowFocus('rig', 8);
 
     ctx.ui.hud.mount();
 
     // Judge before the first pushHud(): pushHud reads judge.stats, and building
     // the HUD one line too early threw during load(), which took the whole boot
     // down rather than just this scene.
-    judge = new NoteJudge();
+    judge = new NoteJudge({ offsetMs: ctx.offsetMs });
     noteMap = new Map();
     pushHud();
 
-    // Dev/test hook. `verify.mjs` drives real hold/release through this so a
-    // two-beat charge can be delivered at exact audio times under a software
-    // renderer that only manages 3fps.
-    if (typeof window !== 'undefined') {
-      telemetry = {
-        chargeRuns: [],
-        minAirY: {},
-        pressed: 0,
-        released: 0,
-      };
-      window.__BOUNCE__ = {
-        chart: () => ({
-          platforms: plats.map((p) => ({
-            index: p.index, beat: p.beat, deg: p.deg, midi: p.midi, y: p.y,
-            kind: p.kind, departBeat: p.departBeat, nextBeat: p.nextBeat,
-            flightBeats: p.flightBeats, x: p.contactX,
-          })),
-          waterY: WATER_Y,
-        }),
-        /** Inject a press with an exact audio time, exactly like the harness bot. */
-        press: (down, atTime) => {
-          if (!ctxRef) return;
-          handleEvents(ctxRef, [{ action: 'a', time: atTime, down: !!down, source: 'test' }]);
-        },
-        state: () => ({
-          beat: ctxRef.clock.beat,
-          x: M.x, y: M.y, phase: M.phase, outcome: M.outcome, platform: M.k,
-          held, points, judged, missCount, combo: judge.stats.combo,
-          contactVerdict: contactVerdict.slice(),
-          releaseVerdict: releaseVerdict.slice(),
-          minAirY: telemetry.minAirY,
-        }),
-        reset: () => { telemetry.minAirY = {}; },
-      };
-    }
+    // Press/release counters, read by the game itself. The `window.__BOUNCE__`
+    // surface that used to sit here — chart(), press(), state(), reset() —
+    // served a `bounceBrigade/verify.mjs` that is not in the repo, alongside
+    // `__BBB__.press`, which does the same job through the documented seam.
+    telemetry = { chargeRuns: [], minAirY: {}, pressed: 0, released: 0 };
   },
 
   start(ctx) {
@@ -666,8 +642,17 @@ export default {
     // groove before the first scored platform.
     ctx.audio.music.play('bounce-brigade', { atBeat: -LEAD_IN_BARS * 4 });
 
-    ctx.clock.onBeat((b, t) => {
-      if (b < 0) ctx.audio.sfx('count', t, ((b % 4) + 4) % 4);
+    // Beat-locked, at last: the numbers used to be printed from update() off
+    // `Math.floor(beat)`, so each one landed on a frame rather than on its
+    // beat — the only count-in in the product that was not on the grid.
+    unsubBeat = countIn(ctx, {
+      beats: LEAD_IN_BARS * 4,
+      from: 3,
+      go: 'GO!',
+      goOnDownbeat: true,
+      show: (text, n) => (n === 0
+        ? ctx.ui.banner(text, { life: 0.75, color: '#9ee87a' })
+        : ctx.ui.banner(text, { life: 0.5, color: '#bdfff2' })),
     });
 
     ctx.ui.banner('BOUNCE BRIGADE', { sub: 'The platforms are the tune.', life: 1.5 });
@@ -681,15 +666,12 @@ export default {
     const m = motionAt(beat);
     const p = plats[m.k];
 
-    // ---- countdown + section banners ---------------------------------------
+    // ---- section banners ----------------------------------------------------
+    // (the count-in moved to core/round.js `countIn`, which is beat-locked)
     const wholeBeat = Math.floor(beat);
     if (wholeBeat !== lastUiBeat) {
       lastUiBeat = wholeBeat;
-      if (wholeBeat >= -3 && wholeBeat <= -1) {
-        ctx.ui.banner(String(-wholeBeat), { life: 0.5, color: '#bdfff2' });
-      } else if (wholeBeat === 0) {
-        ctx.ui.banner('GO!', { life: 0.75, color: '#9ee87a' });
-      } else if (wholeBeat === 96) {
+      if (wholeBeat === 96) {
         ctx.ui.banner('SPRINT!', { sub: 'eighths — do not stop', life: 1.0, color: '#ffd93d' });
       }
     }
@@ -850,7 +832,20 @@ export default {
     return result;
   },
 
+  /**
+   * The chart, in beats. Taps only — a charge is a hold, and the bot emits
+   * key-downs, so autoplay belly-flops every ramp on purpose rather than
+   * pretending to clear it. That is the honest reading of a tap-only bot.
+   */
+  testChart() {
+    if (!chart) return null;
+    return chart.notes
+      .filter((n) => !n.charge)
+      .map((n) => ({ beat: n.beat, action: n.action || 'a' }));
+  },
+
   dispose(ctx) {
+    unsubBeat?.(); unsubBeat = null;
     try { trail?.release(); } catch { /* ignore */ }
     trail = null;
 
@@ -881,7 +876,6 @@ export default {
     root = null; env = null; plats = null; chart = null; judge = null; noteMap = null;
 
     ctx?.ui?.hud?.unmount();
-    if (typeof window !== 'undefined' && window.__BOUNCE__) delete window.__BOUNCE__;
     ctxRef = null;
   },
 };
@@ -939,7 +933,7 @@ function updateBuoys(camX, beat) {
 function finalise() {
   done = true;
   const accuracy = clamp01(points / chart.maxPoints);
-  result = {
+  result = roundResult({
     score: Math.round(1000 * accuracy),
     accuracy,
     rank: rankFor(accuracy, missCount),
@@ -950,5 +944,5 @@ function finalise() {
       bias: judge.bias,
     },
     highlights: [],
-  };
+  });
 }

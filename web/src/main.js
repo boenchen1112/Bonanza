@@ -17,13 +17,17 @@ import * as THREE from 'three';
 import { Clock } from './core/clock.js';
 import { Input } from './core/input.js';
 import { FEEL } from './core/feel.js';
-import { Bus, makeRng, Save } from './core/util.js';
+import { Bus, makeRng, Save, Ring } from './core/util.js';
 import { createStage } from './render/stage.js';
 import { createAudio } from './audio/index.js';
 import { createUI } from './ui/index.js';
 import { createFX } from './render/fx/index.js';
 import { SCENES, getScene } from './shell/registry.js';
 import { resolveActivation } from './shell/nav.js';
+import { preloadBlenderBodies } from './chars/index.js';
+import { levelForSetting, ladderFor } from './render/quality.js';
+import { createGovernor } from './render/governor.js';
+import { profile, PERF_HINT_KEY } from './shell/state.js';
 
 const canvas = document.getElementById('stage');
 const uiRoot = document.getElementById('ui');
@@ -41,12 +45,24 @@ const bus = new Bus();
 const stage = createStage({ canvas, clock });
 const audio = createAudio({ ctx: audioCtx, clock, bus });
 const ui = createUI({ root: uiRoot, bus, clock });
-const fx = createFX({ stage, clock });
+const fx = createFX({ stage, clock, bus });
+
+/**
+ * `window.__BBB__` (the harness/test API: autoplay, telemetry, goto, the
+ * audio tap) exists in dev and in `vite build --mode harness` builds only.
+ * Vite inlines these as literals, so a production bundle drops the whole
+ * block rather than shipping a remote control for the game.
+ */
+const TEST_API = Boolean(import.meta.env.DEV || import.meta.env.MODE === 'harness');
 
 /** @type {import('./shell/registry.js').SceneModule|null} */
 let current = null;
 let currentCtx = null;
+/** Last scene that threw in load()/start(), for the test API. */
+let lastError = null;
 let pendingScene = null;
+/** Set by `__BBB__.setSeed`; applies to every activation after it. */
+let seedOverride = null;
 let hitstopUntil = 0;
 /** When the current hitstop began, so we only ever subtract time once. */
 let frozenFrom = 0;
@@ -65,9 +81,37 @@ let botPrevBeat = null;
 
 let botPressTotal = 0;
 
+function botPress(action, t) {
+  const ev = { action, time: t, down: true, source: 'bot', repeat: false };
+  if (current) {
+    try { current.input?.(currentCtx, [ev]); } catch (e) { console.error(e); }
+  }
+  bot.presses++;
+  botPressTotal++;
+}
+
 function pumpBot(beat) {
   if (!bot) return;
   if (clock.now() > bot.until) { bot = null; botPrevBeat = null; return; }
+
+  // Chart mode: press only the scene's actual notes (see `testChart`), the
+  // way a person plays — one press per note instead of one per grid step.
+  if (bot.chart) {
+    const now = clock.now();
+    while (bot.cursor < bot.chart.length) {
+      const n = bot.chart[bot.cursor];
+      // A note may be keyed by beat instead of by time. Finale Fever ramps
+      // tempo under the chart, so an audio time computed at autoplay start
+      // drifts by the last bar; re-deriving it here is exactly zero off.
+      const t = n.time !== undefined ? n.time : clock.timeAt(n.beat);
+      if (t > now) break;
+      bot.cursor++;
+      if (bot.rng() < bot.missRate) continue;
+      botPress(n.action || 'a', t + (bot.rng() * 2 - 1) * bot.jitter);
+    }
+    return;
+  }
+
   if (botPrevBeat === null) { botPrevBeat = beat; return; }
 
   // Every subdivision boundary crossed since the last frame gets a press.
@@ -86,14 +130,7 @@ function pumpBot(beat) {
     // construction — which reads as a broken game and is not. Extra presses
     // are harmless: the judge swallows a press that no note claims rather
     // than burning one, so covering all lanes measures the chart honestly.
-    for (const action of bot.actions) {
-      const ev = { action, time: t, down: true, source: 'bot', repeat: false };
-      if (current) {
-        try { current.input?.(currentCtx, [ev]); } catch (e) { console.error(e); }
-      }
-      bot.presses++;
-      botPressTotal++;
-    }
+    for (const action of bot.actions) botPress(action, t);
   }
   botPrevBeat = beat;
 }
@@ -127,15 +164,46 @@ const ctxBase = {
 
 // --------------------------------------------------------------- scene swap
 
-async function activate(id, opts = {}) {
+/** Drop every beat listener the outgoing scene registered through `ctx.onBeat`. */
+function releaseSceneSubs() {
+  const subs = currentCtx?.subs;
+  if (!subs) return;
+  for (const off of subs) {
+    try { off?.(); } catch (e) { console.error('release subscription', e); }
+  }
+  subs.length = 0;
+}
+
+/**
+ * Scene swaps are serialised. A swap has two awaits in it, so two calls
+ * landing inside one await window used to run two swaps concurrently against
+ * the same stage, `current` and `currentCtx`. Reachable from the harness,
+ * which can call goto() faster than a scene loads.
+ */
+let activation = Promise.resolve();
+
+function activate(id, opts = {}) {
+  activation = activation.catch(() => {}).then(() => activateNow(id, opts));
+  return activation;
+}
+
+async function activateNow(id, opts = {}) {
   if (current) {
     try { current.dispose?.(currentCtx); } catch (e) { console.error('dispose', e); }
+    // No scene until the next one has loaded: the loop kept calling the
+    // disposed one's update/input through the await, and when the next scene
+    // is the same module (play → play on restart) that reached its half-built state.
+    current = null;
     stage.detach();
     ui.clear();
     fx.reset();
     clock.stop();
     clock.clearSchedule();
   }
+
+  // Always, even when the scene never started: load() can subscribe and then
+  // throw, and `current` is still null on that path.
+  releaseSceneSubs();
 
   const mod = await getScene(id);
   if (!mod) { console.error('unknown scene', id); return; }
@@ -144,12 +212,25 @@ async function activate(id, opts = {}) {
   const camera = new THREE.PerspectiveCamera(50, stage.size.w / stage.size.h, 0.1, 200);
   camera.position.set(0, 2.2, 8);
 
+  // Subscriptions taken out through `ctx.onBeat` are recorded here and
+  // released on the next scene swap. The clock outlives every scene, so a
+  // discarded unsubscribe keeps firing inside whatever loads next — it cost
+  // us a stacking kick voice on the title screen and count SFX bleeding into
+  // the following minigame before this ledger existed.
+  const sceneSubs = [];
+
   currentCtx = Object.assign(Object.create(ctxBase), {
     scene, camera, opts,
-    rng: makeRng(opts.seed ?? 0x5eed),
+    rng: makeRng(opts.seed ?? seedOverride ?? 0x5eed),
+    subs: sceneSubs,
+    onBeat(fn) {
+      const off = clock.onBeat(fn);
+      sceneSubs.push(off);
+      return off;
+    },
   });
 
-  stage.attach(scene, camera);
+  stage.attach(scene, camera, id);
 
   // A scene that throws in load() must not take the application down with it.
   // Before this, one game reading a null field during load left `ready`
@@ -158,15 +239,17 @@ async function activate(id, opts = {}) {
   // should be a broken scene, not a broken product.
   try {
     await mod.load?.(currentCtx);
+    // `attach` already carries the id; load() has now declared the scene's
+    // env preset and ground, which warm() reads while it builds and compiles.
+    await stage.warm();
     current = mod;
     mod.start?.(currentCtx);
     bus.emit('scene:active', id);
-    window.__BBB__.scene = id;
   } catch (e) {
     console.error('scene failed to start:', id, e);
     current = null;
-    window.__BBB__.scene = null;
-    window.__BBB__.lastError = { scene: id, message: String(e && e.message || e) };
+    stage.sceneId = null;
+    lastError = { scene: id, message: String(e && e.message || e) };
     bus.emit('scene:error', id, e);
     // Fall back to the title screen so the player is never stranded — unless
     // the title is what failed, in which case stop rather than loop forever.
@@ -180,6 +263,10 @@ let last = performance.now();
 
 function frame(nowMs) {
   requestAnimationFrame(frame);
+  // `nowMs` is the frame's rAF timestamp, which can be well before this
+  // callback actually runs when the GPU is backed up: measure our own work
+  // from here, or that wait is misreported as game-code time.
+  const workStart = performance.now();
 
   const nowS = nowMs / 1000;
   const rawDt = (nowMs - last) / 1000;
@@ -221,8 +308,14 @@ function frame(nowMs) {
   // game; this number still does.
   const cpuEnd = performance.now();
   stage.render(dt, nowS);
+  const renderEnd = performance.now();
 
-  telemetry.push(nowMs, cpuEnd - nowMs);
+  telemetry.push(nowMs, cpuEnd - workStart, renderEnd - cpuEnd);
+  // A tab-away (or any multi-second stall) delivers one enormous frame. That
+  // is not evidence about this machine's speed, and feeding it to the governor
+  // once dropped Auto a level permanently — the step is remembered per device
+  // and its ceiling never climbs back.
+  if (rawDt < 0.5) governFrame(rawDt * 1000);
   perf.update(nowMs);
 
   if (pendingScene) {
@@ -234,20 +327,51 @@ function frame(nowMs) {
 
 // -------------------------------------------------------------- telemetry
 
+/** A frame counts as "long" past this, and is logged with where its time went. */
+const LONG_FRAME_MS = 2 * (1000 / 60);
+const TELEMETRY_FRAMES = 1800;
+
 const telemetry = {
-  frames: [],
-  cpu: [],
+  frames: new Ring(TELEMETRY_FRAMES),
+  cpu: new Ring(TELEMETRY_FRAMES),
+  /** Where each frame interval went: our update, our render submission, and
+   *  everything else (GPU catch-up, compositor, other main-thread work). */
+  update: new Ring(TELEMETRY_FRAMES),
+  render: new Ring(TELEMETRY_FRAMES),
+  other: new Ring(TELEMETRY_FRAMES),
+  longFrames: [],
   judgements: [],
   _lastMs: performance.now(),
-  push(nowMs, cpuMs) {
+  _prevUpdate: 0,
+  _prevRender: 0,
+  /** Called at the end of a frame. The interval since the previous frame's
+   *  start covers the PREVIOUS frame's work, so that is what it is split by. */
+  push(nowMs, updateMs, renderMs) {
     const d = nowMs - this._lastMs;
     this._lastMs = nowMs;
+    const other = Math.max(0, d - this._prevUpdate - this._prevRender);
     this.frames.push(d);
-    this.cpu.push(cpuMs);
-    if (this.frames.length > 1800) { this.frames.shift(); this.cpu.shift(); }
+    this.cpu.push(updateMs);
+    this.update.push(this._prevUpdate);
+    this.render.push(this._prevRender);
+    this.other.push(other);
+    if (d > LONG_FRAME_MS) {
+      this.longFrames.push({
+        atMs: Math.round(nowMs), frameMs: d, updateMs: this._prevUpdate, renderMs: this._prevRender,
+        otherMs: other, scene: stage.sceneId,
+      });
+      if (this.longFrames.length > 60) this.longFrames.shift();
+    }
+    this._prevUpdate = updateMs;
+    this._prevRender = renderMs;
   },
-  _stats(arr) {
-    const f = arr.slice().sort((a, b) => a - b);
+  reset() {
+    for (const r of [this.frames, this.cpu, this.update, this.render, this.other]) r.clear();
+    this.longFrames.length = 0;
+    this.judgements.length = 0;
+  },
+  _stats(ring) {
+    const f = ring.toArray().sort((a, b) => a - b);
     const pct = (p) => (f.length ? f[Math.min(f.length - 1, Math.floor(f.length * p))] : 0);
     const mean = f.length ? f.reduce((a, b) => a + b, 0) / f.length : 0;
     return { mean, p50: pct(0.5), p95: pct(0.95), p99: pct(0.99), max: f[f.length - 1] || 0 };
@@ -261,6 +385,12 @@ const telemetry = {
       frameMs,
       /** Our JS per frame. THIS is the perf number that survives a software GPU. */
       cpuMs: this._stats(this.cpu),
+      split: {
+        updateMs: this._stats(this.update),
+        renderMs: this._stats(this.render),
+        otherMs: this._stats(this.other),
+      },
+      longFrames: this.longFrames.slice(),
       render: {
         // From the stage, captured before post's fullscreen quads overwrite
         // renderer.info — otherwise every scene reports "1 draw call".
@@ -272,7 +402,7 @@ const telemetry = {
         textures: info.memory.textures,
       },
       judgements: this.judgements.slice(-400),
-      scene: window.__BBB__?.scene,
+      scene: stage.sceneId,
       outputLatencyMs: clock.outputLatency * 1000,
     };
   },
@@ -288,6 +418,91 @@ bus.on('judge', (j) => telemetry.judgements.push({
 // player hitting real lag/audio-dropout/scoring-drift on real hardware can
 // turn it on, reproduce the problem, and report back what it actually reads.
 // Toggle with the ` (backquote) key, or start visible with ?perf=1.
+
+// --------------------------------------------------------------- graphics
+//
+// The Graphics option (Auto / High / Medium / Low) as a (render scale, tier)
+// level — policy in render/quality.js. Auto starts from what the GPU and
+// screen suggest; an Iris Xe at 200% scaling rendered 2560x1440 on the high
+// tier at ~42fps before this existed.
+
+const graphics = { setting: 'auto', auto: true, scale: 1, tier: 'high', reason: 'start', governor: null, floorStrikes: 0 };
+
+/** Auto's settled level per device (renderer + pixel ratio). A setting, not
+ *  progress: kept out of the profile's records so a progress reset keeps it. */
+const LEVELS_KEY = 'graphicsLevels';
+
+const deviceRatio = () => Math.min(window.devicePixelRatio || 1, 2);
+const deviceKey = () => `${rendererName()}|${deviceRatio()}`;
+
+function rememberedLevel() {
+  const all = Save.get(LEVELS_KEY, null);
+  return (all && all[deviceKey()]) || null;
+}
+
+function rememberLevel(level) {
+  const all = Save.get(LEVELS_KEY, null) || {};
+  all[deviceKey()] = { scale: level.scale, tier: level.tier };
+  Save.set(LEVELS_KEY, all);
+}
+
+/** What the governor needs to know about this frame. */
+function framePhase() {
+  if (!current) return 'loading';
+  const kind = SCENES.find((s) => s.id === stage.sceneId)?.kind;
+  if (stage.sceneId === 'play' || kind === 'game') return clock.running ? 'playing' : 'paused';
+  return 'between';
+}
+
+function governFrame(frameMs) {
+  const gov = graphics.governor;
+  if (!gov) return;
+  const d = gov.sample(frameMs, framePhase());
+  if (!d) return;
+  graphics.reason = d.reason;
+  if (d.atFloorOverBudget) {
+    if (++graphics.floorStrikes >= 2 && !Save.get(PERF_HINT_KEY, null)) Save.set(PERF_HINT_KEY, 'pending');
+    return;
+  }
+  applyLevel(d);
+  rememberLevel(d);
+}
+
+function rendererName() {
+  try {
+    const gl = stage.renderer.getContext();
+    const ext = gl.getExtension('WEBGL_debug_renderer_info');
+    return String(ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
+  } catch { return ''; }
+}
+
+function applyLevel(level) {
+  stage.setQuality(level.tier);
+  stage.setRenderScale(level.scale);
+  graphics.scale = stage.size.dpr;
+  graphics.tier = stage.quality;
+}
+
+function applyGraphics(setting) {
+  const level = levelForSetting(setting, {
+    renderer: rendererName(),
+    deviceRatio: deviceRatio(),
+    remembered: rememberedLevel(),
+  });
+  graphics.setting = setting;
+  graphics.auto = level.auto;
+  graphics.reason = level.auto ? 'start' : 'fixed setting';
+  applyLevel(level);
+  const ladder = ladderFor(deviceRatio());
+  const startIndex = Math.max(0, ladder.findIndex((l) => l.scale === level.scale && l.tier === level.tier));
+  graphics.governor = level.auto ? createGovernor({ ladder, startIndex }) : null;
+}
+bus.on('graphics:setting', (s) => applyGraphics(s));
+
+const lastLong = (list) => {
+  const f = list[list.length - 1];
+  return `${f.frameMs.toFixed(0)}ms = upd ${f.updateMs.toFixed(0)} + rnd ${f.renderMs.toFixed(0)} + other ${f.otherMs.toFixed(0)}`;
+};
 
 const perf = (() => {
   let el = null;
@@ -322,7 +537,14 @@ const perf = (() => {
       lastPaint = nowMs;
       const s = telemetry.snapshot();
       ensure().textContent =
-        `fps ${s.fps.toFixed(0)}  cpu ${s.cpuMs.mean.toFixed(1)}ms (p95 ${s.cpuMs.p95.toFixed(1)})\n`
+        `fps ${s.fps.toFixed(0)}  frame p95 ${s.frameMs.p95.toFixed(1)}ms\n`
+        + `update ${s.split.updateMs.mean.toFixed(1)} (p95 ${s.split.updateMs.p95.toFixed(1)})  `
+        + `render ${s.split.renderMs.mean.toFixed(1)} (p95 ${s.split.renderMs.p95.toFixed(1)})  `
+        + `other ${s.split.otherMs.mean.toFixed(1)} (p95 ${s.split.otherMs.p95.toFixed(1)})\n`
+        + (s.longFrames.length
+          ? `long frames ${s.longFrames.length}, last ${lastLong(s.longFrames)}\n`
+          : 'long frames 0\n')
+        + `render x${graphics.scale} ${graphics.tier} (${graphics.auto ? 'auto' : graphics.setting}: ${graphics.reason})\n`
         + `draws ${s.render.drawCalls}  tris ${s.render.triangles}\n`
         + `audio ${audioCtx.state}  latency ${s.outputLatencyMs.toFixed(0)}ms\n`
         + `stalls ${stallCount} (worst ${worstStallMs.toFixed(0)}ms)  scene ${s.scene || '-'}`;
@@ -362,31 +584,71 @@ if (window.visualViewport) {
   window.visualViewport.addEventListener('resize', onViewport, { passive: true });
 }
 
-// Autoplay policy: the context starts suspended until a real gesture.
-async function unlock() {
+// Autoplay policy: the context starts suspended until a real gesture. This
+// used to run (and re-read output latency) on every keypress for the whole
+// session; now it does its work once and the latency is refreshed on a slow
+// timer instead (see refreshOutputLatency's slew).
+const UNLOCK_EVENTS = ['pointerdown', 'keydown', 'touchstart'];
+async function unlock(e) {
+  if (e?.repeat) return;
   if (audioCtx.state !== 'running') {
     try { await audioCtx.resume(); } catch { /* ignore */ }
   }
+  if (audioCtx.state !== 'running') return;
+  for (const ev of UNLOCK_EVENTS) window.removeEventListener(ev, unlock);
   clock.refreshOutputLatency();
   bus.emit('audio:unlocked');
 }
-for (const ev of ['pointerdown', 'keydown', 'touchstart']) {
+for (const ev of UNLOCK_EVENTS) {
   window.addEventListener(ev, unlock, { passive: true });
 }
+audioCtx.addEventListener?.('statechange', () => {
+  if (audioCtx.state === 'running') { clock.refreshOutputLatency(); return; }
+  // The OS can suspend the context later (e.g. iOS interruptions): re-arm.
+  for (const ev of UNLOCK_EVENTS) window.addEventListener(ev, unlock, { passive: true });
+});
+setInterval(() => { if (audioCtx.state === 'running') clock.refreshOutputLatency(); }, 1000);
 
 // ------------------------------------------------------------------ test API
 
-let resolveReady;
-window.__BBB__ = {
+let resolveReady = () => {};
+if (TEST_API) window.__BBB__ = {
   ready: new Promise((r) => { resolveReady = r; }),
-  scene: null,
+  get scene() { return stage.sceneId; },
+  get lastError() { return lastError; },
   scenes: SCENES.map((s) => s.id),
   version: '0.1.0',
   clock, input, bus,
+  /** The mix graph (`ctx`, `master`, buses) — the harness taps `master`. */
+  audio,
+  /** Renderer, look, lights — for debugging render cost from the harness. */
+  stage,
   telemetry: () => telemetry.snapshot(),
-  resetTelemetry: () => { telemetry.frames.length = 0; telemetry.judgements.length = 0; },
+  /** Raw consecutive frame durations (ms), oldest first — for budget verdicts. */
+  frameTimes: () => telemetry.frames.toArray(),
+  /** What the stage is actually drawing at: buffer scale and quality tier. */
+  renderState: () => ({
+    renderScale: stage.size.dpr, tier: stage.quality,
+    graphics: graphics.auto ? 'auto' : graphics.setting, reason: graphics.reason,
+  }),
+  /** Apply a Graphics setting exactly as the Options screen does. */
+  setGraphics: (setting) => applyGraphics(setting),
+  resetTelemetry: () => telemetry.reset(),
   goto: (id, opts) => activate(id, opts || {}),
-  setSeed: (n) => { ctxBase.rng = makeRng(n); },
+  /** Shell bookkeeping (session/profile) — lets a script stage a party mid-way. */
+  shellState: () => import('./shell/state.js'),
+  /**
+   * Reseed the run. This used to assign `ctxBase.rng` only — and every
+   * activation gives the scene context an OWN `rng` property that shadows the
+   * prototype, so it reached nothing at all. It now reseeds the running scene
+   * and every activation after it, which is what "the harness replays runs"
+   * needs in order to be true.
+   */
+  setSeed: (n) => {
+    seedOverride = n;
+    ctxBase.rng = makeRng(n);
+    if (currentCtx) currentCtx.rng = makeRng(n);
+  },
   /**
    * Render quality. The harness forces 'low' by default: it renders through
    * SwiftShader, where the post chain costs hundreds of ms per frame and the
@@ -394,7 +656,10 @@ window.__BBB__ = {
    * note reads as a miss. That is a measurement artifact, not a game defect —
    * dropping post restores a real frame rate so timing can actually be judged.
    */
-  setQuality: (tier) => stage.setQuality?.(tier),
+  // Manual overrides pin the level: the Auto governor stops moving it.
+  setQuality: (tier) => { graphics.governor = null; graphics.auto = false; return stage.setQuality?.(tier); },
+  /** Buffer pixels per CSS pixel; null = the device's own ratio. */
+  setRenderScale: (s) => { graphics.governor = null; graphics.auto = false; return stage.setRenderScale(s); },
   /**
    * Play the game automatically for `seconds`. Frame-rate independent by
    * construction — see pumpBot.
@@ -417,7 +682,18 @@ window.__BBB__ = {
       until: clock.now() + (o.seconds ?? 15),
       rng: makeRng(o.seed ?? 0xb07),
       presses: 0,
+      // `chart: true` uses the scene's own note list when it offers one.
+      chart: null,
+      cursor: 0,
     };
+    // (a host scene like the shell's `play` forwards testChart and returns
+    // null when the game it hosts has none: fall back to division presses)
+    const list = o.chart && typeof current?.testChart === 'function' ? current.testChart(currentCtx) : null;
+    if (Array.isArray(list)) {
+      const now = clock.now();
+      const at = (n) => (n.time !== undefined ? n.time : clock.timeAt(n.beat));
+      bot.chart = list.filter((n) => at(n) > now).sort((a, b) => at(a) - at(b));
+    }
     botPrevBeat = null;
     botPressTotal = 0;
     return true;
@@ -441,9 +717,26 @@ window.__BBB__ = {
 // --------------------------------------------------------------------- boot
 
 (async function boot() {
+  // Earliest possible point to start the 8 Blender-body fetches - real
+  // navigation always passes through here regardless of which scene the
+  // URL requests (a `?scene=` deep link included), so this covers cases
+  // shell/chars.js's own pumpBusts()-triggered preload can't: a game
+  // reached without ever passing through the title screen.
+  preloadBlenderBodies();
   resize();
+  applyGraphics(profile.options.graphics || 'auto');
+  // ?quality= pins a tier for testing ('auto' = the Graphics Auto policy).
   const q = new URLSearchParams(location.search).get('quality');
-  if (q) stage.setQuality?.(q);
+  if (q === 'auto') applyGraphics('auto');
+  else if (q) {
+    stage.setQuality(q);
+    Object.assign(graphics, { tier: stage.quality, auto: false, setting: q, reason: '?quality', governor: null });
+  }
+  const scale = new URLSearchParams(location.search).get('scale');
+  if (scale) {
+    stage.setRenderScale(Number(scale));
+    Object.assign(graphics, { scale: stage.size.dpr, auto: false, reason: '?scale', governor: null });
+  }
   await audio.init();
   const startScene = new URLSearchParams(location.search).get('scene') || 'title';
   try {

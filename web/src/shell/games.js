@@ -12,6 +12,8 @@
 
 import { GAMES } from './registry.js';
 import { PAL, num } from './theme.js';
+import { cardImage } from './cards.js';
+import { beatPhase } from '../core/util.js';
 
 const META = {
   'swing-kings': {
@@ -65,7 +67,7 @@ export const gameById = (id) => CATALOG.find((g) => g.id === id) || CATALOG[0];
  * makes Canvas2D throw IndexSizeError — taking the scene's whole update loop
  * down with it. Every beat-phase value in this file goes through here.
  */
-const frac1 = (x) => x - Math.floor(x);
+const frac1 = beatPhase;
 
 export function drawPreview(id, g, w, h, beat, t) {
   // Every preview derives its radii from `h`. A card that is measured before
@@ -77,6 +79,22 @@ export function drawPreview(id, g, w, h, beat, t) {
   const col = '#' + meta.color.toString(16).padStart(6, '0');
   const bf = frac1(beat);
   const pulse = Math.exp(-bf * 5);
+
+  // A real frame of the game, when one is bundled: cover-fit, breathing a
+  // little on the beat, with the game's colour glowing along the bottom.
+  const img = cardImage(id);
+  if (img) {
+    const z = 1.03 + pulse * 0.025;
+    const s = Math.max(w / img.naturalWidth, h / img.naturalHeight) * z;
+    const dw = img.naturalWidth * s, dh = img.naturalHeight * s;
+    g.drawImage(img, (w - dw) / 2, (h - dh) / 2, dw, dh);
+    const fade = g.createLinearGradient(0, h * 0.62, 0, h);
+    fade.addColorStop(0, 'rgba(10,8,32,0)');
+    fade.addColorStop(1, rgba(col, 0.28 + pulse * 0.2));
+    g.fillStyle = fade;
+    g.fillRect(0, h * 0.62, w, h * 0.38);
+    return;
+  }
 
   g.clearRect(0, 0, w, h);
   const grd = g.createLinearGradient(0, 0, 0, h);

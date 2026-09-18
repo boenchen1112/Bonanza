@@ -19,21 +19,30 @@ Then **Read every screenshot**. Reading the JSON is not review; the JSON
 cannot tell you whether the thing looks good. Also read `console.log` —
 anything in it that is not `(clean)` is a defect you must report.
 
+For the Audio dimension you cannot listen, but you are not blind:
+`summary.audio` is the captured mix checked against the game's beat grid.
+`pass: false`, `silent: true`, `clipped: true`, or `|biasMs| > 15` are audio
+defects to report. A `pass` proves level and sync only — say so rather than
+scoring the music's taste you could not hear.
+
 Read the source too, but only after you have looked at the frames. Source
 tells you *why* something is wrong; it must not be how you decide *whether*.
 
 ## Known harness artifacts — do NOT report these as game defects
 
-The harness renders through SwiftShader (software GPU) at roughly 2-3fps at
-720p. Three things follow, and all three have already been chased down once:
+The harness renders on the real GPU by default (headless, no window) and
+shots are paced in audio time. First check `summary.json`: `gpu` names the
+adapter and `softwareRendered` must be `false`. If it is `true` (someone
+passed `--swiftshader`, or the machine has no GPU), the run is a 2-3fps
+software render — re-run on a GPU before judging anything visual. Then:
 
-1. **`fps` and `frameMs` are meaningless.** Judge performance on `cpuMs`
-   (our JS per frame, budget < 4ms) and `render.drawCalls` (budget < 120).
-2. **Timed effects pile up on screen.** Callouts, particles and popups age in
-   real seconds, so at 2fps three of them are alive where at 60fps there
-   would be one. If you see stacked or overlapping callouts, re-run with
-   `--width 480 --height 270` (about 5x the frame rate) before reporting it.
-   If it resolves there, it is the harness, not the game.
+1. **Performance:** `fps`/`frameMs` are meaningful on the GPU path, but judge
+   against the budgets that transfer to other hardware: `cpuMs` (our JS per
+   frame, < 4ms) and `render.drawCalls` (< 120).
+2. **Stacked effects are real on the GPU path.** The old "callouts pile up
+   because the harness runs at 2fps" excuse only applies to a software render
+   (`softwareRendered: true`). At 60fps, overlapping callouts or a wall of
+   trails is what a player sees — report it.
 3. **Never report input timing from wall-clock delivery.** Autoplay presses
    are emitted inside the frame loop with the audio time they were aimed at,
    so `meanAbsErrMs` is a true measure of the judge. It should read ~0 under
@@ -79,7 +88,18 @@ SEND BACK: <the one specific change that closes it>
 ```
 
 PASS only if you would genuinely rather play ours than the Nintendo original
-on the dimensions that matter. "Impressive for what it is" is a FAIL. "Nearly
+on the dimensions that matter.
+
+**Portfolio-polish pass (2026-09 onward) — the bar for PASS is different.**
+When the brief you were handed names the portfolio pass, you still do the
+blind A/B above and still score all seven dimensions, but PASS means: *this
+is a polished, cohesive, finished-looking student game — something a games /
+interactive-media admissions reviewer would call a strong "B" portfolio
+piece* (clear read, consistent art direction, satisfying feedback, no
+visible bugs or placeholder art, audio in sync). It does not have to beat
+Nintendo. It does have to look finished: anything that reads as
+unfinished, glitchy or programmer-art is still a FAIL, and "impressive for
+what it is" is still a FAIL. "Impressive for what it is" is a FAIL. "Nearly
 there" is a FAIL. Being generous here does not help anyone: it just ships
 something mediocre with your name on the approval.
 
