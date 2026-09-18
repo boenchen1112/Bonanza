@@ -13,7 +13,7 @@ import { PAL, num, el, hex, mountRoot, panel, sfx, createWipe, fmtScore, RANK_CO
 import { clamp01 } from '../core/util.js';
 import { createBackdrop } from './backdrop.js';
 import { CATALOG } from './games.js';
-import { charById, charMesh, charBeat, disposeChar } from './chars.js';
+import { charById, charMesh, charBeat, disposeChar, isBlenderReady } from './chars.js';
 import { profile, session } from './state.js';
 import { goView, exitRoute } from './nav.js';
 
@@ -65,13 +65,17 @@ export default {
     // rather than an empty stage beside the scorecard.
     const humanChar = session.players.find((p) => !p.isCpu)?.char || 'bopp';
     if (humanChar) {
-      const m = charMesh(charById(humanChar), {});
-      m.position.set(-4.5, -1.1, 0);   // left of the scorecard panel, clear of it
-      m.scale.setScalar(1.3);
-      ctx.scene.add(m);
-      S.cast = m;
-      const verdict = RANK_VERDICT[result.rank] || 'good';
-      m.userData.charApi?.react?.(verdict);
+      S.heroChar = humanChar;
+      S.heroVerdict = RANK_VERDICT[result.rank] || 'good';
+      S.placeHero = (m) => {
+        m.position.set(-4.5, -1.1, 0);   // left of the scorecard panel, clear of it
+        m.scale.setScalar(1.3);
+        ctx.scene.add(m);
+        S.cast = m;
+        S.heroIsBlender = !!m.userData.isBlenderBody;
+        m.userData.charApi?.react?.(S.heroVerdict);
+      };
+      S.placeHero(charMesh(charById(humanChar), {}));
     }
 
     ctx.camera.position.set(0, 1.1, 8.6);
@@ -161,6 +165,13 @@ export default {
   start(ctx) { sfx(ctx, 'ui'); },
 
   update(ctx, dt, beat) {
+    // Upgrade the podium figure once its Blender body lands (roster.js pattern).
+    if (S && S.cast && !S.heroIsBlender && isBlenderReady(S.heroChar)) {
+      const old = S.cast;
+      S.placeHero(charMesh(charById(S.heroChar), {}));
+      ctx.scene.remove(old);
+      disposeChar(old);
+    }
     if (!S) return;
     S.t += dt;
     S.back.update(dt, beat, S.t);

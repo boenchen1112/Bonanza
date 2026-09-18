@@ -25,7 +25,7 @@
 
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { makeCast, makeCrowd, CLIPS, makePose, sampleClip } from '../../chars/index.js';
+import { makeCast, makeCrowd, CLIPS, makePose, sampleClip, headRadius } from '../../chars/index.js';
 import { damp, clamp01, easeOutCubic, backOut } from '../../core/util.js';
 
 export const LAYOUT = {
@@ -487,25 +487,37 @@ export function createWorld(ctx) {
   // Batting helmet instead of the build's headband: the headband sat over
   // the eyes in the stance and slid to the neck in the whiff pratfall.
   if (batter.char.userData.isBlenderBody) {
-    // No .joints/.build on a skinned mesh, and its crest is baked into the
-    // mesh itself rather than a separate hideable object - so there is
-    // nothing to hide here, only the helmet to add. Head size is a
-    // heuristic (world bounding height * a human head-to-height ratio,
-    // divided back out of the character's own scale so the offsets below
-    // land correctly once attach() re-parents them under that scale) since
-    // there is no build.head.w/h to read directly - a first pass, worth a
-    // look once rendered rather than assumed correct from the numbers.
-    const box = new THREE.Box3().setFromObject(batter.char);
-    const hw = ((box.max.y - box.min.y) / (batter.char.scale.y || 1)) * 0.09;
+    // A designed body carries its own head anchors: headCentre -> headSide is
+    // the head shell's radius, and the face anchor says which way it looks, so
+    // the helmet fits any head in the cast instead of a height heuristic.
+    const ch = batter.char;
+    ch.updateMatrixWorld(true);
+    const centre = ch.getJoint('headCentre') || ch.getJoint('head');
+    const cW = centre.getWorldPosition(new THREE.Vector3());
+    const r = headRadius(ch);
+    const faceNode = ch.getJoint('face');
+    const fwd = faceNode
+      ? faceNode.getWorldPosition(new THREE.Vector3()).sub(cW).setY(0).normalize()
+      : new THREE.Vector3(0, 0, 1).applyQuaternion(ch.getWorldQuaternion(new THREE.Quaternion())).setY(0).normalize();
     const helmetMat = new THREE.MeshStandardMaterial({ color: hero?.palette?.trim ?? 0x1f2f6b, roughness: 0.35 });
-    const dome = new THREE.Mesh(new THREE.SphereGeometry(hw * 1.15, 18, 10, 0, Math.PI * 2, 0, Math.PI * 0.5), helmetMat);
-    dome.position.y = hw * 0.85;
-    const brim = new THREE.Mesh(new THREE.CylinderGeometry(hw * 0.82, hw * 0.82, hw * 0.06, 18, 1, false, -Math.PI / 2, Math.PI), helmetMat);
-    brim.position.set(0, hw * 0.5, hw * 0.65);
-    const flap = new THREE.Mesh(new THREE.SphereGeometry(hw * 0.38, 10, 8), helmetMat);
-    flap.scale.set(0.5, 1, 1);
-    flap.position.set(-hw * 1.05, hw * 0.2, 0);
-    for (const m of [dome, brim, flap]) { m.castShadow = true; batter.char.attach('head', m); }
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(r * 1.1, 18, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), helmetMat);
+    const brim = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.8, r * 0.8, r * 0.09, 18, 1, false, -Math.PI / 2, Math.PI), helmetMat);
+    const flap = new THREE.Mesh(new THREE.SphereGeometry(r * 0.36, 10, 8), helmetMat);
+    flap.scale.set(0.45, 1, 1);
+    const helmet = new THREE.Group();
+    helmet.add(dome, brim, flap);
+    ch.attach('headCentre', helmet);
+    helmet.updateWorldMatrix(true, false);
+    const place = (mesh, world) => mesh.position.copy(helmet.worldToLocal(world));
+    const up = new THREE.Vector3(0, 1, 0);
+    place(dome, cW.clone().addScaledVector(up, r * 0.34));
+    place(brim, cW.clone().addScaledVector(up, r * 0.3).addScaledVector(fwd, r * 0.92));
+    place(flap, cW.clone().addScaledVector(up, r * 0.1).addScaledVector(fwd, -r * 0.1)
+      .addScaledVector(new THREE.Vector3().crossVectors(up, fwd), r * 1.0));
+    // The brim and flap were authored around world axes; cancel the bone's
+    // own rotation so they keep pointing where they were placed.
+    const q = helmet.getWorldQuaternion(new THREE.Quaternion()).invert();
+    for (const m of [dome, brim, flap]) { m.castShadow = true; m.quaternion.copy(q); }
   } else {
     const j = batter.char.joints;
     const hb = batter.char.build.head;

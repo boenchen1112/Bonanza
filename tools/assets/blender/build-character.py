@@ -222,6 +222,8 @@ def build_block(b, arm, head_ext, torso_ext, face):
     top = cz + H / 2
     b.anchors['face_anchor'] = (0, front, cz)
     b.anchors['head_top'] = (0, hy, top)
+    b.anchors['head_centre'] = (0, hy, cz)
+    b.anchors['head_side'] = (W / 2, hy, cz)
     for s in (-1, 1):
         d = mathutils.Vector((s * 0.55, 0, 1)).normalized()
         base = mathutils.Vector((s * 0.22, hy, top - 0.04))
@@ -388,9 +390,13 @@ def round_torso(b, m, Wm=1.25, Hm=0.85, Dm=1.35, zc=0.45):
     return W, D, H, z
 
 
-def anchors(b, surface, cz, top, m):
+def anchors(b, surface, cz, top, m, W):
     b.anchors['face_anchor'] = (0, surface(0, cz), cz)
     b.anchors['head_top'] = (0, m['hy'], top)
+    # Head centre and one side: the game measures head radius from these and
+    # scales crowns, helmets and anything else it hangs on a head.
+    b.anchors['head_centre'] = (0, m['hy'], cz)
+    b.anchors['head_side'] = (W / 2, m['hy'], cz)
 
 
 # -------------------------------------------------------- characters
@@ -401,7 +407,7 @@ def build_round(b, arm, head_ext, torso_ext, face):
     W, D, H, cz, surf = ellipsoid_head(b, m, 3.1, 2.8, 3.0)
     k = face_parts(b, surf, cz, W, H, face)
     top = cz + H / 2
-    anchors(b, surf, cz, top, m)
+    anchors(b, surf, cz, top, m, W)
     antenna(b, m, top, k)
     TW, TD, TH, tz = round_torso(b, m)
     band_z = tz - TH * 0.08
@@ -420,7 +426,7 @@ def build_spike(b, arm, head_ext, torso_ext, face):
     surf = lambda x, z: front
     k = face_parts(b, surf, cz, W, H, face)
     top = cz + H / 2
-    anchors(b, surf, cz, top, m)
+    anchors(b, surf, cz, top, m, W)
     h = 0.26 * k
     bolt = [(0, 0), (h * 0.18, h * 0.5), (h * 0.02, h * 0.5), (h * 0.22, h), (-h * 0.2, h * 0.38), (-h * 0.02, h * 0.38), (-h * 0.14, 0)]
     b.part('bolt_crest', prism(bolt, 0.05 * k), 'accent', HEAD, (0.02 * k, m['hy'], top - 0.06 * k), rot=(0, -0.2, 0))
@@ -446,7 +452,7 @@ def build_beak(b, arm, head_ext, torso_ext, face):
     W, D, H, cz, surf = ellipsoid_head(b, m, 3.0, 2.8, 2.9)
     k = face_parts(b, surf, cz, W, H, face)
     top = cz + H / 2
-    anchors(b, surf, cz, top, m)
+    anchors(b, surf, cz, top, m, W)
     plume(b, m, top, k)
     TW, TD, TH, tz = round_torso(b, m)
     neck_z = m['neck'] - 0.02 * k
@@ -465,7 +471,7 @@ def build_tall(b, arm, head_ext, torso_ext, face):
     surf = lambda x, z: front
     k = face_parts(b, surf, cz, W, H * 0.8, face)
     top = cz + H / 2
-    anchors(b, surf, cz, top, m)
+    anchors(b, surf, cz, top, m, W)
     b.part('cap_dome', sphere(0.5, 24, 12), 'accent', HEAD, (0, m['hy'], top - H * 0.12), scale=(W * 1.04, D * 1.04, H * 0.34))
     b.part('cap_brim', rounded_box((W * 0.78, D * 0.55, 0.035 * k), 0.015 * k, 2), 'accent', HEAD, (0, m['hy'] - D * 0.5, top - H * 0.2), rot=(-0.08, 0, 0))
     TW, TD, TH = m['tw'] * 1.2, m['td'] * 1.25, m['tspan'] * 0.86
@@ -480,7 +486,7 @@ def build_tiny(b, arm, head_ext, torso_ext, face):
     W, D, H, cz, surf = ellipsoid_head(b, m, 3.8, 3.3, 3.6, drop=0.08)
     k = face_parts(b, surf, cz, W, H, face)
     top = cz + H / 2
-    anchors(b, surf, cz, top, m)
+    anchors(b, surf, cz, top, m, W)
     for side in (-1, 1):
         antenna(b, m, top, k, x=side * W * 0.18, tilt=side * 0.38, name=f'antenna_{side}')
     TW, TD, TH, tz = round_torso(b, m, Wm=1.2, Hm=0.8)
@@ -498,7 +504,7 @@ def build_blob(b, arm, head_ext, torso_ext, face):
     W, D, H, cz, surf = ellipsoid_head(b, m, 3.4, 2.9, 2.6, drop=0.3)
     k = face_parts(b, surf, cz, W, H, face)
     top = cz + H / 2
-    anchors(b, surf, cz, top, m)
+    anchors(b, surf, cz, top, m, W)
     fd = mathutils.Vector((0, 0.35, 1)).normalized()
     b.part('fin', cone(0.15 * k, 0.0, 0.26 * k, 3), 'accent', HEAD, mathutils.Vector((0, m['hy'] + D * 0.18, top - 0.02 * k)) + fd * 0.1 * k, rot=aim(fd), scale=(0.25, 1, 1))
     TW, TD, TH, tz = round_torso(b, m, Wm=1.4, Hm=0.95, Dm=1.45, zc=0.42)
@@ -519,7 +525,7 @@ def build_star(b, arm, head_ext, torso_ext, face):
     surf = lambda x, z: front
     k = face_parts(b, surf, cz, W * 0.82, H * 0.8, face)
     top = cz + H / 2
-    anchors(b, surf, cz, top, m)
+    anchors(b, surf, cz, top, m, W)
     plume(b, m, top - H * 0.04, k, tip_star=True)
     TW, TD, TH, tz = round_torso(b, m, Wm=1.2, Hm=0.8)
     b.part('star_cape', prism(star_points(6, 0.5, 0.3), 1.0), 'accent', 'mixamorigSpine2',

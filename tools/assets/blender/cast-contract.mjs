@@ -17,7 +17,7 @@ export const CONTRACT = {
   maxTriangles: 20000,
   headBone: 'mixamorigHead',
   /** Empties the game attaches to (getJoint('face'/'headTop')), under the head bone. */
-  headAnchors: ['face_anchor', 'head_top'],
+  headAnchors: ['face_anchor', 'head_top', 'head_centre', 'head_side'],
 };
 
 /** Split a GLB buffer into its JSON document and binary chunk. */

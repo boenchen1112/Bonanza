@@ -8,10 +8,10 @@
  */
 
 import * as THREE from 'three';
-import { makeCast, BUILD_IDS, preloadBlenderBodies, isBlenderReady } from '../chars/index.js';
+import { makeCast, BUILD_IDS, preloadBlenderBodies, isBlenderReady, headRadius } from '../chars/index.js';
 import { CAST, BUILD_BY_SHAPE, colourRoles } from './castData.js';
 
-export { isBlenderReady };
+export { isBlenderReady, headRadius };
 
 /** @typedef {import('./castData.js').CastDef} CharDef */
 
@@ -212,18 +212,20 @@ export function addCrown(char) {
   }
   g.rotation.x = -0.12;
   if (char.userData.isBlenderBody) {
-    // A skinned body has no build.head to size from, and its head bone sits
-    // under a ~0.01 world scale, so size and offset are worked out in world
-    // units from the figure's height and divided back into bone space.
+    // A skinned body has no build.head to size from: measure the head shell
+    // from its own anchors (headCentre -> headSide is the head's radius) and
+    // sit the crown on headTop. Everything is worked out in world units and
+    // converted back through the anchor, whose own scale is the skeleton's.
     char.updateMatrixWorld(true);
-    const box = new THREE.Box3().setFromObject(char);
-    const tall = box.max.y - box.min.y;
-    const bone = char.getJoint('head');
-    const s = bone.getWorldScale(new THREE.Vector3());
-    bone.add(g);
-    const k = tall * 0.11;
-    g.scale.set(k / s.x, k / s.y, k / s.z);
-    g.position.set(0, (tall * 0.14) / s.y, 0);
+    const r = headRadius(char);
+    const top = char.getJoint('headTop') || char.getJoint('head');
+    const size = r * 1.25;
+    const s = top.getWorldScale(new THREE.Vector3());
+    const wanted = top.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(0, size * 0.18, 0));
+    top.add(g);
+    g.scale.set(size / s.x, size / s.y, size / s.z);
+    top.updateWorldMatrix(true, false);
+    g.position.copy(top.worldToLocal(wanted));
   } else {
     const hw = char.build.head.w;
     g.scale.setScalar(hw * 0.62);

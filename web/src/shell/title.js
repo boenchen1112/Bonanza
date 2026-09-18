@@ -21,7 +21,7 @@ import {
   startShellTransport,
 } from './theme.js';
 import { createBackdrop } from './backdrop.js';
-import { CHARS, charMesh, charBeat, disposeChar, pumpBusts } from './chars.js';
+import { CHARS, charMesh, charBeat, disposeChar, pumpBusts, isBlenderReady } from './chars.js';
 import { CATALOG, drawPreview } from './games.js';
 import { preloadCards } from './cards.js';
 import { profile, PERF_HINT_KEY } from './state.js';
@@ -77,13 +77,20 @@ export default {
     S.deck = deck;
 
     const castIds = ['bopp', 'zizz', 'tuff', 'fizz'];
-    castIds.forEach((id, i) => {
-      const def = CHARS.find((c) => c.id === id) || CHARS[i];
-      const m = charMesh(def, {});
+    S.castIds = castIds;
+    S.castIsBlender = [];
+    const placeCastMember = (i, m) => {
       // Right of centre: the menu owns the left half of the frame.
       m.position.set(2.9 + (i - (castIds.length - 1) / 2) * 1.45, 0.5, -0.4 + (i % 2) * 0.5);
       m.scale.setScalar(0.92);
       stage.add(m);
+    };
+    S.placeCastMember = placeCastMember;
+    castIds.forEach((id, i) => {
+      const def = CHARS.find((c) => c.id === id) || CHARS[i];
+      const m = charMesh(def, {});
+      S.castIsBlender[i] = !!m.userData.isBlenderBody;
+      placeCastMember(i, m);
       S.cast.push(m);
     });
 
@@ -217,6 +224,21 @@ export default {
   },
 
   update(ctx, dt, beat) {
+    // A cast member built before its Blender body finished loading is stuck
+    // on the toy rig until something rebuilds it (roster.js does the same).
+    if (S && S.castIds) {
+      for (let i = 0; i < S.castIds.length; i++) {
+        if (S.cast[i] && !S.castIsBlender[i] && isBlenderReady(S.castIds[i])) {
+          const def = CHARS.find((c) => c.id === S.castIds[i]) || CHARS[i];
+          const m = charMesh(def, {});
+          S.castIsBlender[i] = !!m.userData.isBlenderBody;
+          S.placeCastMember(i, m);
+          S.stage.remove(S.cast[i]);
+          disposeChar(S.cast[i]);
+          S.cast[i] = m;
+        }
+      }
+    }
     if (!S) return;
     S.t += dt;
     S.idle += dt;

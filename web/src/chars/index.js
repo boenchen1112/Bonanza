@@ -61,6 +61,23 @@ export {
   makeCrowd,
 };
 
+/**
+ * The head shell's radius in world units, measured from a designed body's own
+ * anchors (`headCentre` -> `headSide`) — what a caller scales a hat, helmet or
+ * crown from. Bodies without anchors (the toy rig, older builds) fall back to a
+ * fraction of the figure's height.
+ */
+export function headRadius(char) {
+  const centre = char.getJoint?.('headCentre');
+  const side = char.getJoint?.('headSide');
+  if (centre && side) {
+    return centre.getWorldPosition(new THREE.Vector3())
+      .distanceTo(side.getWorldPosition(new THREE.Vector3()));
+  }
+  const box = new THREE.Box3().setFromObject(char);
+  return (box.max.y - box.min.y) * 0.09;
+}
+
 /** Blender-body pipeline: call once, early (shell/chars.js's warm-up
  * already does), so bodies are cached by the time a real cast is built.
  * Triggers the lazy module load (see ensureBlenderMods above); safe to
@@ -127,7 +144,7 @@ function makeMember({ charId, pal, build, charSeed, animSeed, detail, scale, nam
       // Designed bodies (build-character.py) carry real anchors on the head
       // bone: 'face' is the centre of the face, 'headTop' the top of the head
       // shell. Older bodies fall back to the head bone for both.
-      const ANCHORS = { face: 'face_anchor', headTop: 'head_top' };
+      const ANCHORS = { face: 'face_anchor', headTop: 'head_top', headCentre: 'head_centre', headSide: 'head_side' };
       scene.getJoint = (jointName) => {
         const anchor = ANCHORS[jointName] && scene.getObjectByName(ANCHORS[jointName]);
         if (anchor) return anchor;
