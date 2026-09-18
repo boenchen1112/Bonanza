@@ -218,9 +218,10 @@ export default {
     // menu tempo. Each starts a few beats further into the routine, so it is
     // a line of dancers, not four clones — and every step still lands on a
     // beat because the offsets are whole beats.
-    S.cast.forEach((m, i) => m.userData.charApi?.play('dance', {
+    S.dance = (m, i) => m.userData.charApi?.play('dance', {
       beatLock: true, bpm: 124, beat0: -i * 3, face: 'groove', beat: 0.25, blend: 0.3,
-    }));
+    });
+    S.cast.forEach((m, i) => S.dance(m, i));
   },
 
   update(ctx, dt, beat) {
@@ -233,6 +234,7 @@ export default {
           const m = charMesh(def, {});
           S.castIsBlender[i] = !!m.userData.isBlenderBody;
           S.placeCastMember(i, m);
+          S.dance?.(m, i);          // or the new body stands still beside the dancers
           S.stage.remove(S.cast[i]);
           disposeChar(S.cast[i]);
           S.cast[i] = m;

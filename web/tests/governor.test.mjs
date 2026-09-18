@@ -64,6 +64,18 @@ test('a round start full of load hitches, or a very short round, is not evidence
   assert.deepEqual(short, [], 'a 3-second round decides nothing');
 });
 
+test('a tab-away frame is ignored, not treated as overload', () => {
+  const gov = createGovernor({ ladder: LADDER, startIndex: 0 });
+  const out = [];
+  for (let i = 0; i < 600; i++) {
+    const d = gov.sample(i === 300 ? 9000 : 12, 'playing');   // 9 seconds away
+    if (d) out.push(d);
+  }
+  out.push(...feed(gov, 16.7, 0.5, 'between'));
+  assert.deepEqual(out, [], 'one enormous frame decides nothing');
+  assert.equal(gov.index, 0);
+});
+
 test('isolated spikes never trigger a step', () => {
   const gov = createGovernor({ ladder: LADDER, startIndex: 0 });
   const out = [];

@@ -531,6 +531,9 @@ export function textImage(text, st = STYLES.display) {
 
   const out = {
     key,
+    /** Set by a caller that keeps this image forever (the HUD's per-character
+     *  cells): eviction must not revoke a URL still on screen. */
+    pinned: false,
     /** Object URL once encoded, null until then — see `ready`. */
     url: null,
     /** Resolves with the URL. The PNG encode runs off the main thread
@@ -558,7 +561,7 @@ export function textImage(text, st = STYLES.display) {
     let n = Math.floor(CACHE_MAX / 4);
     for (const [k, v] of imgCache) {
       imgCache.delete(k);
-      v.ready.then((u) => { if (u.startsWith('blob:')) setTimeout(() => URL.revokeObjectURL(u), 10000); });
+      if (!v.pinned) v.ready.then((u) => { if (u.startsWith('blob:')) setTimeout(() => URL.revokeObjectURL(u), 10000); });
       if (--n <= 0) break;
     }
   }

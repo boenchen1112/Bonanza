@@ -17,7 +17,7 @@ const args = process.argv.slice(2);
 const outIdx = args.indexOf('--out');
 const ROOT = path.resolve(import.meta.dirname, '../../..');
 const OUT = path.resolve(ROOT, outIdx >= 0 ? args[outIdx + 1] : 'runs/contact-sheet');
-const files = args.filter((a, i) => a !== '--out' && i !== outIdx + 1);
+const files = args.filter((a, i) => a !== '--out' && !(outIdx >= 0 && i === outIdx + 1));
 const WEB = path.join(ROOT, 'web');
 mkdirSync(OUT, { recursive: true });
 

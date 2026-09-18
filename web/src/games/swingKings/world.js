@@ -506,7 +506,8 @@ export function createWorld(ctx) {
     flap.scale.set(0.45, 1, 1);
     const helmet = new THREE.Group();
     helmet.add(dome, brim, flap);
-    ch.attach('headCentre', helmet);
+    // Older bodies have no head anchors: fall back to the head bone.
+    if (!ch.attach('headCentre', helmet)) ch.attach('head', helmet);
     helmet.updateWorldMatrix(true, false);
     const place = (mesh, world) => mesh.position.copy(helmet.worldToLocal(world));
     const up = new THREE.Vector3(0, 1, 0);

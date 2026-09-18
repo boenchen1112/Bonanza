@@ -311,7 +311,11 @@ function frame(nowMs) {
   const renderEnd = performance.now();
 
   telemetry.push(nowMs, cpuEnd - workStart, renderEnd - cpuEnd);
-  governFrame(rawDt * 1000);
+  // A tab-away (or any multi-second stall) delivers one enormous frame. That
+  // is not evidence about this machine's speed, and feeding it to the governor
+  // once dropped Auto a level permanently — the step is remembered per device
+  // and its ceiling never climbs back.
+  if (rawDt < 0.5) governFrame(rawDt * 1000);
   perf.update(nowMs);
 
   if (pendingScene) {

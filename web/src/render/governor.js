@@ -29,6 +29,10 @@ const MIN_ROUND_MS = 20000;       // play needed before headroom counts
 const MIN_OVERLOAD_MS = 8000;     // play needed before overload counts
 const ROUND_WARMUP_MS = 2000;     // a scene's first frames compile shaders; ignored
 const HEADROOM_ROUNDS = 2;
+/** A frame longer than this is a tab-away, a breakpoint or an OS hiccup, not
+ *  evidence about this machine's speed. One of them used to be enough to drop
+ *  Auto a level for good (the move is remembered per device). */
+const IGNORE_FRAME_MS = 500;
 
 function p95(samples) {
   if (!samples.length) return 0;
@@ -110,7 +114,7 @@ export function createGovernor({ ladder, startIndex = 0, enabled = true, budgetM
      * @returns {null|{index:number, scale:number, tier:string, reason:string, atFloorOverBudget?:boolean}}
      */
     sample(frameMs, nextPhase) {
-      if (!enabled) return null;
+      if (!enabled || frameMs > IGNORE_FRAME_MS) return null;
       const prev = phase;
       phase = nextPhase;
       let out = null;

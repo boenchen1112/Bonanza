@@ -52,7 +52,13 @@ export function createUI({ root, bus, clock }) {
   /** Point an element at a text image; a first-time string's image is still
    *  encoding off-thread, so it lands a frame or two later. */
   function setImage(node, img) {
-    if (img.url) { node.style.backgroundImage = `url(${img.url})`; return; }
+    if (img.url) {
+      // Clear any earlier pending encode, or when it lands it paints its own
+      // (older) text back over this one.
+      delete node.dataset.pending;
+      node.style.backgroundImage = `url(${img.url})`;
+      return;
+    }
     node.dataset.pending = img.key;
     img.ready.then((url) => {
       if (node.dataset.pending !== img.key) return;   // repainted with other text meanwhile
@@ -72,7 +78,11 @@ export function createUI({ root, bus, clock }) {
   function cellImage(ch, st) {
     const key = `${st.capPx}|${st.color}|${ch}`;
     let img = glyphCells.get(key);
-    if (!img) { img = textImage(ch, st); glyphCells.set(key, img); }
+    if (!img) {
+      img = textImage(ch, st);
+      img.pinned = true;   // kept forever here, so font.js must not revoke it
+      glyphCells.set(key, img);
+    }
     return img;
   }
   function repaint(holder, text, opts) {
