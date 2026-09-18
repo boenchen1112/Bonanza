@@ -1,6 +1,6 @@
 # Beat Bash Bonanza — handoff
 
-**Updated 2026-09-11 (portfolio-polish pass).** Branch `bbb-portfolio-polish`,
+**Updated 2026-09-18 (performance + designed cast).** Branch `bbb-portfolio-polish`,
 draft PR [#22](https://github.com/boenchen1112/Bonanza/pull/22) into
 `Mario-Party` (never `master`). The pass is specified in
 `docs/BBB_Portfolio_Polish_Spec.md` and tracked ticket by ticket in
@@ -31,9 +31,11 @@ verbatim.
 |---|---|
 | Builds | yes, clean (production build strips the `__BBB__` test API; the harness builds `--mode harness`) |
 | Runs | yes — every registered scene loads console-clean on the real GPU (`tools/harness/sweep.mjs`) |
-| Tests | 92/92 green (`npm --prefix web test`) + `swingKings/verify.mjs` (now on the real GPU, incl. bat-meets-ball contact checks) and `swingKings/smoke-conduct.mjs` ALL PASS |
+| Tests | 164/164 green (`npm --prefix web test`) + `swingKings/verify.mjs` (now on the real GPU, incl. bat-meets-ball contact checks) and `swingKings/smoke-conduct.mjs` ALL PASS |
 | Critic rounds completed | Swing Kings: 4 FAIL rounds, fixes landed for each, round 5 running. Shell: round 1 FAIL, fixes landed, round 2 running. See the tickets file (13, 19) |
 | Minigames | five, all playable; Swing Kings is the polished hero, the other four had a baseline pass |
+| Cast | all eight rebuilt to the approved design sheet (faces, shape-matched shells, five colour roles, outline), 6 draw calls each |
+| Performance | Graphics Auto holds 60fps on the DPR-2 Iris Xe laptop; see §3b |
 
 The earlier waves' builders were cut short by a spend limit and no critic
 ever ran; the portfolio-polish pass is the first time the builder/critic
@@ -134,15 +136,53 @@ trusting a number. Consequences:
 Scenes reachable: `title roster freeplay party options play results` (+ `chars-demo`) and the five
 game ids. Anything not in `web/src/shell/registry.js` is invisible to review.
 
+## 3b. Performance and the cast (2026-09-18)
+
+Spec: issue [#32](https://github.com/boenchen1112/Bonanza/issues/32); the
+nine tickets it was broken into are drafted in `.scratch/perf-and-cast/`
+(not yet published as issues).
+
+**Measure at the player's pixel ratio.** The dev laptop (Iris Xe, 2560x1440
+at 200% scaling) renders four times the pixels the old harness default did,
+which is why lag fixes passed here and not there. `inspect.mjs --dpr 2
+--budget` measures a screenshot-free window with vsync and the frame-rate
+limit off (at display rate, headless Chromium's own pacing puts p95 near
+18.7ms whatever the game does) and reports PASS/FAIL against p95 <= 16.7ms
+plus at most one frame over 50ms a minute.
+
+**Graphics setting.** Options has Auto (default) / High / Medium / Low.
+`render/quality.js` holds the (render scale, tier) ladder and start-level
+policy; `render/governor.js` moves Auto between rounds — one severe step
+mid-round at most, never into or out of the low tier (that recompiles every
+lit shader, ~1.2s), never back into a level that failed a round, and it
+remembers the level per device. On the Iris Xe it settles at
+(1.5, medium): Swing Kings p95 10.9ms, Finale Fever 11.8ms, party hub with
+four characters 8.7ms.
+
+**The cast.** All eight are built by
+`tools/assets/blender/build-character.mjs` to the approved sheet
+(`docs/design/cast-sheet.html`): one skinned mesh, five role materials,
+head shell with a real face, face morph targets, 6 draw calls each.
+`cast-contract.mjs` checks a built file and runs inside `npm test`;
+`contact-sheet.mjs` renders the review sheet.
+
 ## 4. Next actions, in order
 
 See `docs/BBB_Portfolio_Polish_Tickets.md` for the live list. Beyond it:
 
-1. **Critic rounds for the other four games** (they only had a baseline
+1. **Publish the nine perf/cast tickets** in `.scratch/perf-and-cast/` as
+   GitHub issues (blocked on permission when they were drafted).
+2. **Mid-round shader compiles.** With the count-in text stalls fixed, one
+   or two ~330ms frames per Swing Kings round remain: runtime-created
+   effect materials compiling on first use, which `stage.warm()` never saw
+   because they do not exist at load. Overlay now attributes them
+   (update / render / other).
+3. **Critic rounds for the other four games** (they only had a baseline
    pass). Same brief, same loop.
-2. **A person listens** to every track (`runs/*/audio.wav` from any harness
+4. **A person listens** to every track (`runs/*/audio.wav` from any harness
    run) and plays the webcam mode once.
-3. Calibration, accessibility.
+5. Accessibility. (Timing calibration now exists: Options > TIMING OFFSET
+   reaches every game's judge, +/-300ms.)
 
 ### Verified, so stop worrying about it
 
@@ -152,6 +192,25 @@ attributable to timing, **0.00ms mean absolute error**. The chart stays
 locked to the transport across every `setBpm`.
 
 ## 5. Traps already paid for — do not re-introduce
+
+**Canvas text is a GPU readback.** A canvas big enough for Chrome to
+accelerate (a banner-sized string) costs 60-235ms to read back with
+`toDataURL`, on the frame it happens — every count-in beat of a fresh
+session. `ui/font.js` paints with `willReadFrequently` and encodes with
+`toBlob`. Displaying a copy of the canvas instead is worse: a new
+GPU-backed canvas per popup measured 300-450ms.
+
+**`#include` must start its line** in a three.js shader chunk. The house
+`materials.outline()` never compiled because it did not.
+
+**Never scale an absolute beat count by a rate that drifts.**
+`frac(beat * rate)` sweeps through whole cycles when `rate` moves and
+`beat` is large — it made the crowd buzz. Blend two fixed-rate layers
+instead.
+
+**An impulse multiplies, never sets.** `react()` used to write an absolute
+root scale, so a character a scene had sized popped to unit size on every
+verdict.
 
 - **`x % 1` for beat phase.** JS modulo keeps the dividend's sign and the
   transport runs *negative* beats through the lead-in. Use `beatPhase(x)`
