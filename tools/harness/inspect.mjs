@@ -265,9 +265,18 @@ const PORT = Number(argv.port || 5321 + (process.pid % 900));
     logs.push(`[${m.type()}] ${m.text()}`);
   });
   page.on('pageerror', (e) => logs.push(`[pageerror] ${e.message}\n${e.stack || ''}`));
+  // Same-origin aborts that the browser retries (or that race a screenshot /
+  // teardown) are noise: what matters is whether the file ever arrived. They
+  // are held here and only reported if no successful response for that URL
+  // turns up during the run.
+  const served = new Set();
+  const aborted = new Map();
+  page.on('response', (r) => { if (r.status() < 400) served.add(r.url()); });
   page.on('requestfailed', (r) => {
     if (!r.url().startsWith(`http://127.0.0.1:${PORT}/`)) return; // reported as [external-fetch]
-    logs.push(`[requestfailed] ${r.url()} ${r.failure()?.errorText}`);
+    const line = `[requestfailed] ${r.url()} ${r.failure()?.errorText}`;
+    if (r.failure()?.errorText === 'net::ERR_ABORTED') aborted.set(r.url(), line);
+    else logs.push(line);
   });
   // ADR 0003: the game fetches only its own bundled files. Anything bound for
   // another origin is aborted (so the run behaves as it would offline) and
@@ -386,6 +395,8 @@ const PORT = Number(argv.port || 5321 + (process.pid % 900));
     scene: window.__BBB__.scene,
     title: document.title,
   }));
+
+  for (const [url, line] of aborted) if (!served.has(url)) logs.push(line);
 
   await writeFile(path.join(OUT, 'telemetry.json'), JSON.stringify(telemetry, null, 2));
   await writeFile(path.join(OUT, 'console.log'), logs.join('\n') || '(clean)');
