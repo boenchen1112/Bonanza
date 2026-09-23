@@ -50,7 +50,7 @@ import { roundResult } from '../../core/result.js';
 import { countIn } from '../../core/round.js';
 import { FEEL, feelForCombo } from '../../core/feel.js';
 import { clamp01, damp, lerp, smoothstep } from '../../core/util.js';
-import { createWorld, LAYOUT } from './world.js';
+import { createWorld, loadSet, LAYOUT } from './world.js';
 import { createTrace } from './trace.js';
 import { CLIPS, waitForBlenderBody } from '../../chars/index.js';
 import { Save } from '../../core/util.js';
@@ -138,10 +138,16 @@ export default {
     // playthrough (the cast isn't rebuilt mid-round). main.js's caller
     // already awaits load(), so this costs nothing when the body is
     // already warm (the common case - it's been loading since app boot).
+    // This game builds its own env in createWorld(). The stage renders while
+    // load() awaits below, and a scene with no env by then gets the default
+    // 'arena' set built for it — a whole second set (~19 draw calls) under
+    // ours for the rest of the round. Opt out before the first await.
+    ctx.scene.userData.env = false;
+    const setLoad = loadSet();   // the authored skyline/set edge, in parallel
     const heroChar = ctx.players?.[0]?.char;
     if (heroChar) await waitForBlenderBody(heroChar);
 
-    this.w = createWorld(ctx);
+    this.w = createWorld(ctx, { set: await setLoad });
     // Where pitches cross the plate; starts at the calibrated sweet spot and
     // adapts to the live bat after each hit (flushContact).
     this.contactPoint = LAYOUT.contact.slice();

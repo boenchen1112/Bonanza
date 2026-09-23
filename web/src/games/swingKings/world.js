@@ -28,6 +28,31 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { makeCast, makeCrowd, CLIPS, makePose, sampleClip, headRadius } from '../../chars/index.js';
 import { damp, clamp01, easeOutCubic, backOut } from '../../core/util.js';
 
+/**
+ * The authored set dressing (tools/assets/blender/build-sk-set.py; provenance
+ * in assets/env/README.md): the skyline beyond the arches and the set edge
+ * around the stands. Awaited in load() before createWorld(), so its programs
+ * are compiled by stage.warm() with the rest of the scene. Resolves null if
+ * the file fails to load — createWorld then keeps the shared box skyline.
+ *
+ * Imported dynamically, like chars/index.js does for blenderBodies.js: a
+ * static import of assets/index.js (and its `.glb?url` imports) would put
+ * Vite-only specifiers into the module graph node's test runner loads
+ * (tests/swingkings.test.mjs imports this game's index.js).
+ */
+export async function loadSet() {
+  try {
+    const [{ loadGLB }, { default: url }] = await Promise.all([
+      import('../../assets/index.js'),
+      import('../../assets/env/sk-skyline.glb?url'),
+    ]);
+    return await loadGLB(url);
+  } catch (e) {
+    console.warn('swing-kings: authored set failed to load, using the box skyline', e);
+    return null;
+  }
+}
+
 export const LAYOUT = {
   plate: [2.55, 0.02, 0.25],
   contact: [2.3, 1.25, 0.25],
@@ -44,7 +69,8 @@ function protect(obj) {
   return obj;
 }
 
-export function createWorld(ctx) {
+/** @param {{set?: object|null}} [o] `set`: the gltf from loadSet() */
+export function createWorld(ctx, { set = null } = {}) {
   /** Textures + sprite materials: freed by hand, everything else by traversal. */
   const textures = [];
   const spriteMats = [];
@@ -60,7 +86,8 @@ export function createWorld(ctx) {
     per: {
       // A ballpark, not a stage: no confetti, no concentric rings.
       ground: { confetti: 0, rings: false },
-      backdrop: { arches: 4, radius: 24, spacing: 7.5, z: -30, skyline: 30, skylineZ: -74 },
+      // The shared box skyline is off when the authored one loaded (below).
+      backdrop: { arches: 4, radius: 24, spacing: 7.5, z: -30, skyline: set ? 0 : 30, skylineZ: -74 },
       spotlights: {},
       // Fewer, smaller and up in the sky: full-size floaters hung in front
       // of the stands as big crystals between the camera and the crowd.
@@ -114,6 +141,40 @@ export function createWorld(ctx) {
   roof.rotation.y = Math.PI / 2 - (Math.PI - ARC / 2);
   roof.position.set(0, 7.4, -3);
   root.add(roof);
+
+  // --- authored set: skyline + set edge (build-sk-set.py), one draw call
+  // each. Both were authored in this scene's world coordinates, so they go in
+  // at the origin. Geometry is cloned: loadGLB caches the parsed gltf for the
+  // session, and dispose() below frees every geometry under root.
+  // Skyline vertex colour is a grey VALUE; its hue is the palette's band
+  // pushed toward the fog each frame (update), like the box skyline it
+  // replaces, so it follows the day -> night palette on its own. Unfogged so
+  // the toon bands and the sun-side rim still read at ~80 units (fogFar 78
+  // would flatten it back to one colour). Set-edge vertex colour is the real
+  // stadium colour, lit and fogged like the stands next to it.
+  let skylineMat = null;
+  if (set) {
+    const mats = ctx.stage.look.materials;
+    skylineMat = mats.toon({
+      color: 0xffffff, vertexColors: true, flat: true, bands: 2, rim: 0.9, pulse: 0.04,
+      fog: false, name: 'skSkyline',
+    });
+    const pal0 = ctx.stage.palette;
+    if (pal0) skylineMat.color.copy(pal0.col.band).lerp(pal0.col.fog, 0.45);
+    const edgeMat = mats.toon({
+      color: 0xffffff, vertexColors: true, flat: true, bands: 3, rim: 0.5, pulse: 0.06,
+      name: 'skSetEdge',
+    });
+    set.scene.updateMatrixWorld(true);
+    set.scene.traverse((o) => {
+      if (!o.isMesh) return;
+      const m = new THREE.Mesh(o.geometry.clone(), o.name === 'skyline' ? skylineMat : edgeMat);
+      m.name = 'swing:' + o.name;
+      m.applyMatrix4(o.matrixWorld);
+      m.userData.keepMaterial = true;
+      root.add(m);
+    });
+  }
 
   // --- crowd: 350-odd spectators, one draw call, and it reacts -------------
   const crowd = makeCrowd({
@@ -675,6 +736,10 @@ export function createWorld(ctx) {
   }
 
   function update(dt, beat) {
+    // skyline: in the fog, one shade above it (same recipe as the box skyline)
+    const pal = ctx.stage.palette;
+    if (skylineMat && pal) skylineMat.color.copy(pal.col.band).lerp(pal.col.fog, 0.45);
+
     // machine
     wheelSpinT = damp(wheelSpinT, 0, 1.6, dt);
     wheelSpin += dt * (2 + wheelSpinT);
