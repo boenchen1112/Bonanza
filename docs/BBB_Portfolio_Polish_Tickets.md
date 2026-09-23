@@ -216,3 +216,19 @@ Status key: `[ ]` open · `[~]` in progress · `[x]` done · `[-]` cut (with rea
 - Display: a compact top-scores strip on the results card (fits the existing reveal timeline
   around `STAMP_AT`/`PARTY_AT`) — exact placement needs the same design pass results.js already
   went through in tickets 18-19, not a blind insert.
+
+## [~] 27 — Swing Kings: authored skyline + set edge (round-6 known gap, not accepted as final)
+**Blocked by:** none (Swing Kings only — `world.js:63` already passes its own backdrop config,
+so `render/env/backdrop.js`'s shared defaults for every other scene stay untouched)
+- Gap this closes (critic round 6, `docs/BBB_Portfolio_Polish_Tickets.md` ticket 19): "the set
+  edge beyond the stands and the skyline are blockout" — logged as a design gap when the loop
+  was deliberately capped at round 7, not accepted as finished.
+- Scope: a Blender-authored skyline silhouette + set-edge piece for Swing Kings' backdrop only.
+  `render/env/backdrop.js`'s uniform-box skyline stays as the shared default for every scene that
+  doesn't opt out of it.
+- Owned files: `tools/assets/blender/build-sk-set.py` (new), `web/src/assets/env/` (new, +
+  provenance README matching `chars/README.md`'s table), `web/src/games/swingKings/world.js`
+  (pass `skyline: 0` to `makeBackdrop`, add the authored piece).
+- Gates: `render.drawCalls` < 120 (baseline before this ticket: 102, `runs/envprops-smoke`),
+  budget CPU on the 2019-iGPU floor, `consoleClean`, `swingKings/verify.mjs` ALL PASS.
+- [x] Baseline recorded: `runs/envprops-smoke` — drawCalls 102, gpu ANGLE D3D11 (not software).
