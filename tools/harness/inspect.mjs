@@ -63,7 +63,14 @@ function parseArgs(a) {
 async function ensureBuild() {
   if (argv['no-build']) return;
   await new Promise((res, rej) => {
-    const p = spawn('npx', ['vite', 'build', '--outDir', DIST], { cwd: WEB, stdio: 'pipe' });
+    // Mock the leaderboard client by default: a real Cloudflare Worker call
+    // has latency/availability the harness can't attribute to the game,
+    // which breaks the "same seed -> same numbers" guarantee every other
+    // measurement here relies on. Pass --live-network to deliberately test
+    // against the real Worker instead (not for critic runs).
+    const env = { ...process.env };
+    if (!argv['live-network']) env.VITE_MOCK_NETWORK = '1';
+    const p = spawn('npx', ['vite', 'build', '--outDir', DIST], { cwd: WEB, stdio: 'pipe', env });
     let err = '';
     p.stderr.on('data', (d) => { err += d; });
     p.stdout.on('data', (d) => { err += d; });

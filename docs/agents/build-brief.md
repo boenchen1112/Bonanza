@@ -20,12 +20,16 @@ model, and who owns which files. Then read `web/src/core/clock.js`,
    one-for-one minigame designs — including AI-generated ones. A mockup or
    Meshy model prompted from "like Mario Party's X" is still one-for-one; the
    reference guides direction, the output must not be recognizable as it.
-4. **No runtime fetches, ever.** Geometry/texture/audio/font work is either
-   generated in code, or authored externally and embedded per
-   `docs/agents/asset-pipeline.md` — base64-inlined via
-   `tools/embed-asset.mjs`, never a `.glb`/`.png`/`.mp3` referenced by URL.
-   The build must run offline from `file://`, zero network, both ways.
-5. **Verify against the running game, not against your own reasoning.** Use
+4. **Assets load fine by plain URL now — the game deploys to a real hosted
+   URL, not `file://`.** `tools/embed-asset.mjs` still exists for the rare
+   case you want an asset inlined, but it's optional, not the rule.
+5. **The only network call in this codebase is the leaderboard client**
+   (`web/src/net/`), and it only fires from `load()`/`result()`/shell
+   screens, never `update()`/`input()`. No other piece talks to a server,
+   an API, or an AI service at runtime — that's a dev-time tool, not a
+   shipped feature. If your piece isn't the leaderboard, you have no reason
+   to write a `fetch()` at all.
+6. **Verify against the running game, not against your own reasoning.** Use
    the harness (below) and *look at the screenshots you produced*. If you did
    not open the images, you did not verify anything.
 

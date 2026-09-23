@@ -58,11 +58,19 @@ state (what's built vs. stubbed vs. never verified).
   `performance.now()` or a raw rAF timestamp.
 - **Determinism.** `makeRng(seed)` from `core/util.js`, never `Math.random()`,
   anywhere that affects gameplay — the harness replays runs.
-- **No runtime network fetches.** Geometry, textures, music, SFX are either
-  generated in code, or authored externally (Blender/Meshy/an image model)
-  and base64-embedded into the bundle via `tools/embed-asset.mjs` — never a
-  separate file referenced by URL, since `file://` builds can't `fetch()`
-  one. See `docs/agents/asset-pipeline.md` for the full workflow.
+- **Deploys to a real hosted URL (GitHub Pages), not `file://`.** Assets
+  can be plain files loaded by URL now; `tools/embed-asset.mjs` (base64
+  into the bundle) is optional, for when you want an asset inlined rather
+  than fetched. See `docs/agents/asset-pipeline.md`.
+- **The only network call in the whole game is the leaderboard client**
+  (`web/src/net/`), talking to one Cloudflare Worker + D1 endpoint (source
+  in `worker/`, conventions in `docs/agents/backend-brief.md`). It only
+  fires from `load()`/`result()`/shell screens, never `update()`/`input()`,
+  and the game is fully playable with it unreachable — no other server, API,
+  or AI-generation call exists at runtime (AI tools are dev-time only, used
+  to author assets per `docs/agents/asset-pipeline.md`, never shipped).
+  The harness builds against a mock client (`web/src/net/
+  mockLeaderboardClient.js`) so critic runs stay deterministic.
 - **Every minigame implements the same interface** (`load/start/update/
   input/result/dispose`, documented in full in `web/ARCHITECTURE.md`) so the
   shell, pause menu, results screen, and harness can drive them generically.
@@ -207,8 +215,13 @@ be functional, not stubbed.
   `tools/golden/` feed the Unity port's golden-trace parity tests
 - `assets-src/` — raw Blender/Meshy/image-model source files for Beat Bash
   Bonanza assets (`.blend`, Meshy exports, reference mockups), kept for
-  provenance; never imported by game code directly — only the
-  `tools/embed-asset.mjs` output under `web/src/render/assets/embedded/` is
+  provenance; never imported by game code directly — only a plain copy
+  under `web/public/assets/`, or the `tools/embed-asset.mjs` output under
+  `web/src/render/assets/embedded/`, is
+- `worker/` — the Cloudflare Worker backing Beat Bash Bonanza's leaderboard
+  (D1-backed `/score` + `/scores`); see `docs/agents/backend-brief.md`.
+  This is the only server-side code either product has; nothing else in
+  the repo talks to it or needs it
 - `UnitySwinger/` — the Unity project; `Assets/Scripts/Logic/` is the
   canonical, UnityEngine-free ported Swinger logic (keep in sync with
   `src/`'s logic modules); `Assets/Scripts/Presentation/` and
@@ -221,7 +234,9 @@ be functional, not stubbed.
   issues in `boenchen1112/Swinger`), `domain.md` (Swinger's `CONTEXT.md` +
   `docs/adr/`), `build-brief.md`/`critic-brief.md` (Beat Bash Bonanza
   builder/critic workflow), `asset-pipeline.md` (Beat Bash Bonanza
-  externally-authored asset workflow: Blender/Meshy → embed → verify)
+  externally-authored asset workflow: Blender/Meshy → place/embed → verify),
+  `backend-brief.md` (Beat Bash Bonanza's Cloudflare Worker/D1 leaderboard:
+  schema, CORS, secrets, deploy)
 - `docs/design/minigames.md` — Beat Bash Bonanza minigame design docs
 - `docs/HANDOFF.md` — Beat Bash Bonanza current status and next actions
 - `reviews/` — playtest notes, design reviews

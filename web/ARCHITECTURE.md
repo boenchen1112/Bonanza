@@ -22,30 +22,39 @@ borrow from it.
    converts at the boundary; `Input` already does this for you.
 2. **Never `lerp(a, b, 0.1)` in an update loop.** Use `damp(a, b, lambda, dt)`
    from `core/util.js`, or the feel changes with frame rate.
-3. **No runtime network fetches, ever — imported assets are allowed if
-   embedded.** Geometry, textures, music and SFX may be generated in code,
-   *or* authored externally (Blender, Meshy, an image model) and embedded
-   into the bundle at build time. "Embedded" has exactly one meaning here:
-   base64-inlined into the JS via `tools/embed-asset.mjs`, decoded at
-   runtime with `render/assets/loadModel.js`. It never means a separate
-   `.glb`/`.png`/`.mp3` file referenced by relative URL — Chrome blocks
-   `fetch()`/XHR from a `file://` page to another `file://` resource, so a
-   URL reference works under `npm run dev` and silently breaks the offline
-   build. The actual constraint is and remains: the game runs from `file://`
-   after a build, offline, with zero network — "generated in code" was one
-   way to satisfy that, not the goal itself. See
-   `docs/agents/asset-pipeline.md` for the authoring workflow and the
-   draw-call/triangle budget imported meshes must fit before they land.
-4. **Every minigame implements the same interface** (below). No exceptions,
+3. **The game deploys to a real hosted URL (GitHub Pages) — it no longer
+   has to survive `file://`.** Asset fetches by plain URL are fine now;
+   `GLTFLoader.load(url)` works normally. Embedding via
+   `tools/embed-asset.mjs` (see `docs/agents/asset-pipeline.md`) still
+   exists and is still fine to use, but it is no longer mandatory — use it
+   only when you specifically want an asset inlined (e.g. to guarantee it
+   survives a flaky connection), not by default.
+4. **The only sanctioned server-talking code is the leaderboard client**
+   (`web/src/net/`), and it talks to exactly one Cloudflare Worker
+   endpoint. No other runtime network call exists in this game — no live
+   AI-generation calls, no multiplayer, no arbitrary third-party fetches.
+   If a piece needs the leaderboard, it imports from `web/src/net/`; it
+   never rolls its own `fetch()` to some other service.
+5. **Every network call is confined to `load()`, `result()`, or a shell
+   screen — never `update()`/`input()`.** A `fetch()` has latency the audio
+   clock does not; putting one in the timing-critical loop breaks the exact
+   thing rule 1 protects. Fire it, don't block on it inside a scored round.
+6. **The game is fully playable with the Cloudflare Worker unreachable.**
+   The leaderboard panel degrades to "unavailable" or cached data; nothing
+   else about a minigame depends on the network at all. See
+   `docs/agents/backend-brief.md` for the Worker/D1 side of this and
+   `web/src/net/mockLeaderboardClient.js` for how the harness verifies both
+   pieces stay decoupled.
+7. **Every minigame implements the same interface** (below). No exceptions,
    because the shell, the pause menu, the results screen and the automated
    critic harness all drive them generically.
-5. **Own your directory.** Do not edit files outside the ones assigned to
+8. **Own your directory.** Do not edit files outside the ones assigned to
    you. If you need something from another module, it goes through the
    documented interface; if the interface is missing something, say so in
    your report rather than reaching across.
-6. **60fps is the floor, not the target.** Budget: <8ms CPU per frame on a
+9. **60fps is the floor, not the target.** Budget: <8ms CPU per frame on a
    2019 laptop iGPU. No per-frame allocation in hot paths. Pool everything.
-7. **Determinism.** Use `makeRng(seed)` from `core/util.js`, never
+10. **Determinism.** Use `makeRng(seed)` from `core/util.js`, never
    `Math.random()`, anywhere that affects gameplay. The harness replays runs.
 
 ## Module map and ownership
