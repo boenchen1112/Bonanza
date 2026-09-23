@@ -217,7 +217,7 @@ Status key: `[ ]` open · `[~]` in progress · `[x]` done · `[-]` cut (with rea
   around `STAMP_AT`/`PARTY_AT`) — exact placement needs the same design pass results.js already
   went through in tickets 18-19, not a blind insert.
 
-## [~] 27 — Swing Kings: authored skyline + set edge (round-6 known gap, not accepted as final)
+## [x] 27 — Swing Kings: authored skyline + set edge (round-6 known gap, not accepted as final)
 **Blocked by:** none (Swing Kings only — `world.js:63` already passes its own backdrop config,
 so `render/env/backdrop.js`'s shared defaults for every other scene stay untouched)
 - Gap this closes (critic round 6, `docs/BBB_Portfolio_Polish_Tickets.md` ticket 19): "the set
@@ -232,3 +232,27 @@ so `render/env/backdrop.js`'s shared defaults for every other scene stay untouch
 - Gates: `render.drawCalls` < 120 (baseline before this ticket: 102, `runs/envprops-smoke`),
   budget CPU on the 2019-iGPU floor, `consoleClean`, `swingKings/verify.mjs` ALL PASS.
 - [x] Baseline recorded: `runs/envprops-smoke` — drawCalls 102, gpu ANGLE D3D11 (not software).
+- [x] **Round 1 PASS** (fresh critic, `runs/sk27-critic` day + `runs/sk27-critic-night`, blind to
+  the builder's report): "the skyline reads as a real city now... not blockout any more"; night
+  re-tint lands clean between frames; set edge, parapet, outfield wall and tunnel mouth all read
+  finished; nothing floats or clips; no HUD collisions. drawCalls 101 day / 99 night (was 102,
+  net cost ~0 draw calls, +7k triangles), consoleClean, real GPU, `verify.mjs` ALL PASS, 165/165
+  unit tests. Nit (not a send-back): the near stand-end block reads as stacked boxes from the
+  main camera; its tunnel/lintel detail only shows in wide shots — optional follow-up, not required
+  at the "B" bar. Closed at round 1 (spec's DoD needs ≥1 PASS round; got it on the first).
+- **Found by the same critic run, NOT this ticket's regression — logged here, own ticket needed:**
+  Drumline Dash now measures 125 draw calls (over the 120 budget; ticket 20 recorded 90–118).
+  Nothing outside `swingKings/` imports the new asset/loader. Console clean, ~55fps. See ticket 28.
+- **Also found, pre-existing:** night-run audio check `pass: false` (49.8% onsets on-grid, same
+  borderline figure ticket 12 already recorded machine-wide at 51%) — not caused by this ticket.
+
+## [ ] 28 — Drumline Dash: draw-call regression over budget (125 > 120)
+**Blocked by:** none
+- Found incidentally by ticket 27's critic pass (`runs/sk27-critic-drumline`,
+  `runs/sk27-critic-drumline12`), not caused by it — nothing outside `swingKings/` imports
+  ticket 27's new asset or loader (checked: two unrelated code comments only).
+- Ticket 20 recorded 90–118 draw calls for Drumline Dash; now measuring 125 in both an 8s and a
+  12s run. Console stays clean, ~55fps — this is a budget regression, not a crash/visual bug.
+- Not investigated yet: which commit between ticket 20 and now introduced the extra draw calls
+  (candidates: the cast rebuild / render-governor perf pass that landed after the original
+  baseline-pass tickets, both touched shared `chars/`/`render/` code every game draws through).
