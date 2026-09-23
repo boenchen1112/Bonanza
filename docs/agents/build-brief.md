@@ -17,9 +17,14 @@ model, and who owns which files. Then read `web/src/core/clock.js`,
    not `checkout`. The integrator commits. Concurrent git operations in a
    shared tree corrupt each other.
 3. **Original work only.** No Nintendo characters, assets, music, names, or
-   one-for-one minigame designs. Study the craft; copy none of the content.
-4. **No external fetches, ever.** All geometry, texture, audio and font work
-   is generated in code. The build must run offline from a static server.
+   one-for-one minigame designs — including AI-generated ones. A mockup or
+   Meshy model prompted from "like Mario Party's X" is still one-for-one; the
+   reference guides direction, the output must not be recognizable as it.
+4. **No runtime fetches, ever.** Geometry/texture/audio/font work is either
+   generated in code, or authored externally and embedded per
+   `docs/agents/asset-pipeline.md` — base64-inlined via
+   `tools/embed-asset.mjs`, never a `.glb`/`.png`/`.mp3` referenced by URL.
+   The build must run offline from `file://`, zero network, both ways.
 5. **Verify against the running game, not against your own reasoning.** Use
    the harness (below) and *look at the screenshots you produced*. If you did
    not open the images, you did not verify anything.
@@ -38,6 +43,10 @@ Then **Read the PNGs**. `summary.json` must show `consoleErrors: 0`.
 Ignore `fps`/`frameMs` — the harness renders through SwiftShader, so those
 numbers say nothing about real hardware. Judge performance on `cpuMs`
 (our JS per frame; budget < 4ms) and `render.drawCalls` (budget < 120).
+**These budgets did not move for imported assets** — an embedded Blender/
+Meshy model has to fit inside them, same as procedural geometry. If it
+doesn't, decimate/merge/atlas it in Blender before embedding; don't ask to
+raise the ceiling.
 
 ## What "Nintendo first-party" means concretely
 

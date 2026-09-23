@@ -58,8 +58,11 @@ state (what's built vs. stubbed vs. never verified).
   `performance.now()` or a raw rAF timestamp.
 - **Determinism.** `makeRng(seed)` from `core/util.js`, never `Math.random()`,
   anywhere that affects gameplay — the harness replays runs.
-- **No external asset fetches.** Geometry, textures, music, SFX are all
-  generated in code or embedded; the build must run from `file://` offline.
+- **No runtime network fetches.** Geometry, textures, music, SFX are either
+  generated in code, or authored externally (Blender/Meshy/an image model)
+  and base64-embedded into the bundle via `tools/embed-asset.mjs` — never a
+  separate file referenced by URL, since `file://` builds can't `fetch()`
+  one. See `docs/agents/asset-pipeline.md` for the full workflow.
 - **Every minigame implements the same interface** (`load/start/update/
   input/result/dispose`, documented in full in `web/ARCHITECTURE.md`) so the
   shell, pause menu, results screen, and harness can drive them generically.
@@ -198,8 +201,14 @@ be functional, not stubbed.
 - `tests/` — frozen Python validation suite backing the Swinger logic
   modules above
 - `tools/` — `tools/harness/` is the Beat Bash Bonanza critic harness
-  (`inspect.mjs`, `serve.mjs`); `tools/generate_golden_traces.py` and
+  (`inspect.mjs`, `serve.mjs`); `tools/embed-asset.mjs` base64-embeds an
+  externally-authored binary asset into a JS module (see
+  `docs/agents/asset-pipeline.md`); `tools/generate_golden_traces.py` and
   `tools/golden/` feed the Unity port's golden-trace parity tests
+- `assets-src/` — raw Blender/Meshy/image-model source files for Beat Bash
+  Bonanza assets (`.blend`, Meshy exports, reference mockups), kept for
+  provenance; never imported by game code directly — only the
+  `tools/embed-asset.mjs` output under `web/src/render/assets/embedded/` is
 - `UnitySwinger/` — the Unity project; `Assets/Scripts/Logic/` is the
   canonical, UnityEngine-free ported Swinger logic (keep in sync with
   `src/`'s logic modules); `Assets/Scripts/Presentation/` and
@@ -211,7 +220,8 @@ be functional, not stubbed.
 - `docs/agents/` — agent-facing process docs: `issue-tracker.md` (GitHub
   issues in `boenchen1112/Swinger`), `domain.md` (Swinger's `CONTEXT.md` +
   `docs/adr/`), `build-brief.md`/`critic-brief.md` (Beat Bash Bonanza
-  builder/critic workflow)
+  builder/critic workflow), `asset-pipeline.md` (Beat Bash Bonanza
+  externally-authored asset workflow: Blender/Meshy → embed → verify)
 - `docs/design/minigames.md` — Beat Bash Bonanza minigame design docs
 - `docs/HANDOFF.md` — Beat Bash Bonanza current status and next actions
 - `reviews/` — playtest notes, design reviews

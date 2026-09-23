@@ -39,7 +39,12 @@ The harness renders through SwiftShader (software GPU) at roughly 2-3fps at
    so `meanAbsErrMs` is a true measure of the judge. It should read ~0 under
    `--play perfect`; anything else IS a real defect.
 
-4. **More bot coverage is not better coverage.** `--actions` presses every
+4. **An embedded model is not exempt from the perf budget.** If a piece uses
+   an imported Blender/Meshy asset (check `src/render/assets/` imports), it
+   still has to clear `cpuMs < 4ms` and `drawCalls < 120` — report it as a
+   real defect if it doesn't, the same as you would for procedural geometry
+   that's too heavy.
+5. **More bot coverage is not better coverage.** `--actions` presses every
    listed action and `--division 4` presses every sixteenth. Over-pressing
    makes accuracy look WORSE, not better: a press one subdivision early is
    still inside the claim window, so it claims the note before the on-time

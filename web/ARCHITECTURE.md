@@ -22,9 +22,20 @@ borrow from it.
    converts at the boundary; `Input` already does this for you.
 2. **Never `lerp(a, b, 0.1)` in an update loop.** Use `damp(a, b, lambda, dt)`
    from `core/util.js`, or the feel changes with frame rate.
-3. **No external asset fetches.** Everything — geometry, textures, music,
-   SFX — is generated in code or embedded. The game must run from `file://`
-   after a build, offline, with zero network.
+3. **No runtime network fetches, ever — imported assets are allowed if
+   embedded.** Geometry, textures, music and SFX may be generated in code,
+   *or* authored externally (Blender, Meshy, an image model) and embedded
+   into the bundle at build time. "Embedded" has exactly one meaning here:
+   base64-inlined into the JS via `tools/embed-asset.mjs`, decoded at
+   runtime with `render/assets/loadModel.js`. It never means a separate
+   `.glb`/`.png`/`.mp3` file referenced by relative URL — Chrome blocks
+   `fetch()`/XHR from a `file://` page to another `file://` resource, so a
+   URL reference works under `npm run dev` and silently breaks the offline
+   build. The actual constraint is and remains: the game runs from `file://`
+   after a build, offline, with zero network — "generated in code" was one
+   way to satisfy that, not the goal itself. See
+   `docs/agents/asset-pipeline.md` for the authoring workflow and the
+   draw-call/triangle budget imported meshes must fit before they land.
 4. **Every minigame implements the same interface** (below). No exceptions,
    because the shell, the pause menu, the results screen and the automated
    critic harness all drive them generically.
