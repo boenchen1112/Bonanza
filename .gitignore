@@ -38,3 +38,9 @@ web/dist/
 node_modules/
 runs/
 web/dist*
+
+# local leaderboard config + Cloudflare Worker dev state -- never commit
+# the deployed Worker URL/secrets or wrangler's local cache
+web/.env.local
+worker/.wrangler/
+worker/node_modules/

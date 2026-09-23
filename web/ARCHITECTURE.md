@@ -30,6 +30,9 @@ borrow from it.
    run offline from any static server. (`file://` is not a target: module
    scripts are CORS-blocked there and it never worked.) Free sources only —
    CC0 or Mixamo — with a provenance README beside every asset.
+   **One sanctioned exception** (ADR 0005): the cross-player leaderboard,
+   through `web/src/net/index.js` only, called from `load()`/`result()`
+   never `update()`/`input()`, fails soft, mocked in the harness build.
 4. **Every minigame implements the same interface** (below). No exceptions,
    because the shell, the pause menu, the results screen and the automated
    critic harness all drive them generically.

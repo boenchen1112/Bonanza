@@ -180,3 +180,39 @@ Status key: `[ ]` open · `[~]` in progress · `[x]` done · `[-]` cut (with rea
 ## [x] 24 — Hand-back status report in the draft PR
 **Blocked by:** 13, 15, 19 (deliberately **not** 20–23)
 - [x] PR #22 body rewritten as the hand-back: every ticket done/partial/cut, both critic loops' final scores and known gaps, and the human checklist (listen to the captured WAVs, real-webcam test, confirm the toy-rig + retargeted-mocap direction)
+
+---
+
+## [x] 25 — Cross-player leaderboard backend (Cloudflare Worker + D1), ADR 0005
+**Blocked by:** none — orthogonal to the visual pass
+- [x] Scoped overnight, 2026-09-24: no multiplayer (latency), no runtime AI (dev-time-only,
+  per `docs/agents/asset-pipeline.md`), Worker exists solely so players see each other's scores;
+  everything else must keep working with it unreachable.
+- [x] `worker/` (Worker: `GET /scores`, `POST /score`, D1 schema, CORS via `ALLOWED_ORIGIN`),
+  real D1 database created and schema applied (`database_id` in `worker/wrangler.toml` is real,
+  not a placeholder). `ALLOWED_ORIGIN` is still `"*"` — needs the real GitHub Pages origin once
+  Pages is live (morning list).
+- [x] `web/src/net/` (`leaderboardClient.js`, canned `mockLeaderboardClient.js`, `index.js`
+  switch on `VITE_MOCK_NETWORK`). `tools/harness/inspect.mjs` now builds with
+  `VITE_MOCK_NETWORK=1` unless `--live-network` is passed — smoke-tested clean
+  (`runs/envprops-smoke`: `consoleClean: true`, no `[external-fetch]`).
+- [x] `docs/adr/0005-leaderboard-is-the-one-sanctioned-network-call.md` — the one exception to
+  ADR 0003, confined to `load()`/`result()`, fails soft. `web/ARCHITECTURE.md` rule 3 cross-refs
+  it. `docs/agents/backend-brief.md` documents the Worker/client conventions.
+- Not done, deliberately: nothing in `web/src/` calls `submitScore`/`fetchTopScores` yet — see 26.
+- Verified deployed and reachable from a browser is still open: `wrangler deploy` succeeded but
+  the `*.workers.dev` URL had not resolved yet as of this writing (subdomain/DNS propagation);
+  morning list.
+
+## [ ] 26 — Wire the leaderboard into results.js
+**Blocked by:** 25
+- Call `submitScore`/`fetchTopScores` (`web/src/net/index.js`) from `results.js`'s `load()`,
+  next to the existing `profile.submit()` call — the one other place a round already becomes a
+  permanent record (ADR 0005 confines network calls to `load()`/`result()`).
+- Needs a player-name decision first (none exists today — party lineup names like "BOPP" are
+  local seat labels, not identities to put on a shared leaderboard): where a name is entered,
+  how it persists, and what shows against CPU/party rounds where "the player" isn't well-defined.
+  That's a UI/UX call, not one to guess overnight — flagged for Laya / the user.
+- Display: a compact top-scores strip on the results card (fits the existing reveal timeline
+  around `STAMP_AT`/`PARTY_AT`) — exact placement needs the same design pass results.js already
+  went through in tickets 18-19, not a blind insert.

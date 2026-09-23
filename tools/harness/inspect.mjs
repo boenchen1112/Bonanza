@@ -108,8 +108,11 @@ async function ensureBuild() {
     // Run vite's own entry with this node rather than `npx`, which on Windows
     // is a .cmd shim that spawn() cannot launch without a shell.
     const vite = path.join(path.dirname(webRequire.resolve('vite/package.json')), 'bin', 'vite.js');
+    // Mock the leaderboard client (ADR 0005) unless --live-network is passed,
+    // so critic runs stay deterministic and never depend on the real Worker.
+    const env = { ...process.env, VITE_MOCK_NETWORK: argv['live-network'] ? '' : '1' };
     const p = spawn(process.execPath, [vite, 'build', '--mode', 'harness', '--outDir', DIST],
-      { cwd: WEB, stdio: 'pipe' });
+      { cwd: WEB, stdio: 'pipe', env });
     let err = '';
     p.stderr.on('data', (d) => { err += d; });
     p.stdout.on('data', (d) => { err += d; });
