@@ -4,7 +4,19 @@
  * boots every minigame through the shell's `play` host (the path Free Play
  * and a party take), so the picked character and the named CPU rivals should
  * be on screen. Shoots each game ~3s in and reports the worst frame of the
- * scene swap (the entry hitch).
+ * scene swap (the entry hitch), plus a sampled draw-call range and an
+ * env-root count over the following few seconds.
+ *
+ * The env-root/draw-call sampling matters specifically because this is the
+ * *real* Free Play -> Play route, not a direct scene launch: `inspect.mjs`'s
+ * critic gate only ever launches a scene directly, which never exercises the
+ * async load()-vs-render() window a real nav does. Two real bugs (a
+ * duplicate default env, and a lineup crest draw-call cost that only shows
+ * up with a full party) went unnoticed through 28+ tickets' worth of
+ * direct-launch gating before this route caught them. A single draw-call
+ * *snapshot* isn't enough either -- a scene's peak can hide on an unlucky
+ * frame (see ticket 28's history) -- so this samples over ~2s and reports
+ * min/p50/max, not one number.
  *
  *   node tools/harness/lineup-probe.mjs --dist dist-lineup --out runs/lineup --build
  *   node tools/harness/lineup-probe.mjs --hero tuff --rivals zizz,mimo,nibb
@@ -87,9 +99,36 @@ for (const game of GAMES) {
   const s = await page.evaluate(() => window.__BBB__.telemetry());
   const f = `${String(n++).padStart(2, '0')}-${game}.png`;
   await page.screenshot({ path: path.join(OUT, f) });
-  const row = { game, shot: f, loadMs: Math.round(loadMs), frameMaxLoad: Math.round(during.frameMs?.max || 0), framesLoad: during.frameCount, frameMaxAfter: Math.round(s.frameMs.max), cpuMax: Math.round(s.cpuMs.max), frames: s.frameCount };
+
+  // Sampled over ~2s (not one snapshot -- a peak can hide on an unlucky
+  // frame) and env-root count (>1 means a stale env never got torn down --
+  // see ticket 29).
+  const draws = await page.evaluate((secs) => new Promise((resolve) => {
+    const st = window.__BBB__.stage;
+    const v = [];
+    const t0 = performance.now();
+    const tick = () => {
+      v.push(st.stats.drawCalls);
+      if (performance.now() - t0 < secs * 1000) requestAnimationFrame(tick); else resolve(v);
+    };
+    requestAnimationFrame(tick);
+  }), 2);
+  const sortedDraws = draws.slice().sort((a, b) => a - b);
+  const envRoots = await page.evaluate(() => {
+    const st = window.__BBB__.stage;
+    const roots = [];
+    st.scene.traverse((o) => { if (o.name === 'env:root') roots.push(o.children.map((c) => c.name || c.type).join('+')); });
+    return roots;
+  });
+
+  const row = {
+    game, shot: f, loadMs: Math.round(loadMs), frameMaxLoad: Math.round(during.frameMs?.max || 0), framesLoad: during.frameCount, frameMaxAfter: Math.round(s.frameMs.max), cpuMax: Math.round(s.cpuMs.max), frames: s.frameCount,
+    draws: { min: sortedDraws[0], p50: sortedDraws[sortedDraws.length >> 1], max: sortedDraws[sortedDraws.length - 1] },
+    envRoots: envRoots.length, envs: envRoots,
+  };
   report.push(row);
   console.log(JSON.stringify(row));
+  if (envRoots.length > 1) console.log(`  WARNING: ${envRoots.length} env:root nodes (expected 1) -- ${game}`);
 }
 
 // --pause: pause the last game through the real menu (Escape, then confirm

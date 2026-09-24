@@ -354,6 +354,28 @@ since it's on the actual path players use to reach any minigame, not a direct sc
   the same crest cost regardless of composition, so this should hold, but there's little headroom
   left in Drumline Dash's budget for anything added later without another merge pass.
 
+## [x] 31 — Promote the Free Play → Play draw-call/env-root check into a tracked tool
+**Blocked by:** none
+- Tickets 29 and 30 were both found by a scratch, gitignored probe (`runs/t29-probe/`,
+  `runs/t30-probe/`) that boots through the real `goto('freeplay')` → `goto('play', {from:
+  'freeplay'})` route instead of `inspect.mjs`'s direct scene launch. Every prior critic round's
+  draw-call/env gating used the direct launch, which never exercises the async `load()`-vs-render()
+  window a real nav takes — that's why both bugs went unnoticed for 28+ tickets. Without promoting
+  this into something tracked, the next visual ticket's critic measures the wrong path again.
+- `tools/harness/lineup-probe.mjs` already existed, already tracked, and already boots through
+  this exact route (`--race` was already using it to verify ticket 29's party-placings fix) — it
+  just wasn't reporting draw calls or env-root count, only load-hitch timing. Extended it instead
+  of writing a new duplicate script: each game's report row now includes a ~2s-sampled draw-call
+  `min/p50/max` (sampled, not a single snapshot — ticket 28's history is exactly a peak hiding on
+  an unlucky frame) and an `envRoots` count with a console warning if it's ever >1.
+- Verified: ran it against the ticket-30 build (`--dist dist-t30 --hero tuff --rivals
+  zizz,mimo,nibb --games drumline-dash,swing-kings`) — reports `envRoots: 1` for both and draw
+  ranges matching the numbers already independently confirmed for ticket 30
+  (drumline-dash 104–113, swing-kings 79–84).
+- Scratch probes (`runs/t28-probe/`, `runs/t29-probe/`, `runs/t30-probe/`, gitignored) are now
+  superseded for this specific check but left in place — they still hold the ticket-30-specific
+  close-up/crest-motion checks that aren't general enough to promote.
+
 ## Morning list (2026-09-24 overnight session — items needing a human, not re-derivable from code)
 - **The Laya moderation daemon** (`C:\Users\user\.claude\laya-moderation\daemon.py`, PID 27404 as
   of tonight) grew to ~24.5 GB private memory mid-session, drove free system RAM down to ~2.7 GB,
