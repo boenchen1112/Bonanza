@@ -376,6 +376,21 @@ since it's on the actual path players use to reach any minigame, not a direct sc
   superseded for this specific check but left in place — they still hold the ticket-30-specific
   close-up/crest-motion checks that aren't general enough to promote.
 
+## [~] 32 — Faceless crowd (known gap, tickets 13 + 19)
+**Blocked by:** none
+- Named as a known gap in both Swing Kings' round-6/7 hand-back (ticket 13) and the shell's
+  hand-back (ticket 19) — the audience in `render/env/crowd.js` is 132 instanced blobs
+  (`SphereGeometry` scaled into a teardrop, one `InstancedMesh`, one draw call for the whole
+  audience) with zero facial detail, unlike every named cast character. Picking this one from the
+  known-gaps list (the same pattern ticket 27 used for the skyline/set-edge gap) since it's
+  cross-cutting (every scene with a crowd), purely visual, and matches the overnight mandate
+  ("redesign the whole visual of Bonanza").
+- In progress: builder dispatched to give the crowd simple eyes (and only eyes — no mouth/nose,
+  matching how small and distant these instances read) via vertex colours baked into the shared
+  geometry, so it stays one draw call and doesn't fight the existing per-instance colour tint
+  (`setColorAt`). Must not regress the toon shading or the beat-bounce readability the crowd exists
+  for (see the file's own header comment: "the cheapest legibility win in the project").
+
 ## Morning list (2026-09-24 overnight session — items needing a human, not re-derivable from code)
 - **The Laya moderation daemon** (`C:\Users\user\.claude\laya-moderation\daemon.py`, PID 27404 as
   of tonight) grew to ~24.5 GB private memory mid-session, drove free system RAM down to ~2.7 GB,
