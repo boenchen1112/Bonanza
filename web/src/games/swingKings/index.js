@@ -265,7 +265,10 @@ export default {
     ctx.audio.music.play('swing-kings');
     // No subtitle: the instruction lives in the HUD bar for the whole teach
     // section, and a 1.5s line of small text over the grass was unreadable.
-    ctx.ui.banner('SWING KINGS', { life: this.mode === 'tap' ? 1.5 : 2.2, color: '#ffe58a' });
+    // Default white, not the old beige (#ffe58a) -- every other game's title
+    // banner (DRUMLINE DASH, BOUNCE BRIGADE, FINALE FEVER, ...) already uses
+    // the default, and beige read poorly over the crowd behind it (known gap).
+    ctx.ui.banner('SWING KINGS', { life: this.mode === 'tap' ? 1.5 : 2.2 });
     this.hud = createHud(ctx, this.inputHintHtml());
     this.hintHidden = false;
     this.startGestureSource(ctx);

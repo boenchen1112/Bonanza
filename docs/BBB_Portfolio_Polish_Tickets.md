@@ -118,7 +118,7 @@ Status key: `[ ]` open · `[~]` in progress · `[x]` done · `[-]` cut (with rea
 - [x] Round 5 FAIL, close (ours won Escalation; Timing 8, Readability 7). Send-back: grand-slam ring cut flat by the field. Fixed: overlay ring pool; badges off the pitch arc; homers land in the stands in frame; bat dropped for the curtain call; gold pips; bunt/foul split; misses stop at the net; NEW INNING; contact fires within half a frame
 - [x] Round 6 FAIL, narrowly (Timing 8, Impact 7, Escalation 7; ours won 3 of 7). Send-back: the HOME RUN!/GRAND SLAM! badge rose under the OUTS pill. Also: NEW INNING beside a lit lamp, LIKE THIS! overlapping the "3", see-through badge plates, lumpy finale/combo rings. All fixed in 6009ff1 (badges clamp below the HUD band in screen space). Left as known gaps (design, not bugs): the pitch arcs through the crowd band, the strike heap hides the face, the set edge beyond the stands and the skyline are blockout, the night switch reads as a grade, hits look alike
 - [x] Round 7 FAIL (Impact 8, Escalation 8, Timing 8 even; the R6 badge fix held). Send-back: in the two-a-bar section the incoming pitch lost its beat dots — resolving pitch N cleared the dots pitch N+1 had just laid. Fixed in f304bf9 (dots owned by their pitch), with homers moved centre-right so they no longer cross the incoming lob, and the results score now equal to the HUD score. Verified on runs/r9-sk-late, verify.mjs ALL PASS
-- **Known gaps at hand-back** (not re-reviewed): ~~flat wedge at the left edge of the set and blockout skyline~~ (fixed, ticket 27); the title card's beige text over the crowd; home-run badges repeat (only the distance varies); the pitch arcs through the busy crowd band; the strike heap hides the face; the night switch reads as a colour grade; the pitching machine's face never changes; ~~faceless crowd~~ (fixed, commit `2b35e27`, predates this session)
+- **Known gaps at hand-back** (not re-reviewed): ~~flat wedge at the left edge of the set and blockout skyline~~ (fixed, ticket 27); ~~the title card's beige text over the crowd~~ (fixed, ticket 33); home-run badges repeat (only the distance varies); the pitch arcs through the busy crowd band; the strike heap hides the face; the night switch reads as a colour grade; the pitching machine's face never changes; ~~faceless crowd~~ (fixed, commit `2b35e27`, predates this session)
 
 ## [x] 14 — Swing Kings gesture mode: mouse/pointer-drag source (+ ADR 0004)
 **Blocked by:** 01
@@ -439,6 +439,31 @@ since it's on the actual path players use to reach any minigame, not a direct sc
   stylised choice at this distance/scale, not a visible bug, and the ticket explicitly ruled out
   touching `update()`'s rotation to fix it.
 
+## [x] 33 — Swing Kings title card: beige text over the crowd (known gap, ticket 13)
+**Blocked by:** none
+- Named as a known gap in Swing Kings' round-6/7 hand-back: the opening "SWING KINGS" title-card
+  banner is hard to read over the crowd behind it.
+- `web/src/games/swingKings/index.js:268` was the only title-card banner in the whole codebase
+  passing an explicit `color: '#ffe58a'` (a warm beige) — every other game's title banner
+  (`DRUMLINE DASH`, `BOUNCE BRIGADE`, `FINALE FEVER`, Chomp Chorus's own name) calls `ui.banner()`
+  with no `color`, which defaults to white (`ui/index.js:136`). Beige is close in luminance to the
+  crowd's warm stadium-light tones behind it (`render/env/crowd.js`), which is exactly the kind of
+  case the outline/shadow the glyph renderer already applies (`ui/font.js`) isn't enough for on its
+  own — the same failure mode already fixed once for the in-world "HOME RUN!" badge
+  (`swingKings/world.js:1089`) by giving it an opaque backing plate instead of relying on outline
+  alone.
+- Fix: drop the explicit beige, let the title-card banner fall back to the shared default white,
+  matching every other game. Scoped to just that one call (not `NO CAMERA` or `GAME!`, which also
+  passed the same beige but aren't the title card and weren't named in the known gap).
+- Verified: a direct scene launch (`?scene=swing-kings`) never shows the banner in a screenshot —
+  it fires during `start()`, before the harness's own `ready` flag resolves, so a screenshot taken
+  after `ready` always misses it (the same direct-launch-vs-real-route gap ticket 29/30/31 already
+  found elsewhere). Went through the real Free Play → Play route instead
+  (`goto('freeplay')` → `goto('play', {game:'swing-kings', from:'freeplay'})`, 150ms after) and
+  screenshotted the card live: "SWING KINGS" now reads in solid white with a clean dark outline
+  over the busy multicoloured crowd, clearly legible — the old beige would have sat close to the
+  crowd's warm stadium-light tones right behind it. `npm test` still 165/165 after the change.
+
 ## Morning list (2026-09-24 overnight session — items needing a human, not re-derivable from code)
 - **The Laya moderation daemon** (`C:\Users\user\.claude\laya-moderation\daemon.py`, PID 27404 as
   of tonight) grew to ~24.5 GB private memory mid-session, drove free system RAM down to ~2.7 GB,
@@ -463,7 +488,8 @@ since it's on the actual path players use to reach any minigame, not a direct sc
 - Ticket 26 (wiring the leaderboard into `results.js`) stays open — needs a player-name UX
   decision (party lineup names like "BOPP" are local seat labels, not shareable identities) that's
   a real product call, not something to guess overnight.
-- Drumline Dash has only ~2 draw calls of headroom left under the 120 ceiling (ticket 30) — anything
-  else added to that scene will likely need another merge pass first.
+- Drumline Dash has only ~1 draw call of headroom left under the 120 ceiling across the lineups
+  checked (ticket 30, re-confirmed under ticket 31's fixed gate) — anything else added to that
+  scene will likely need another merge pass first.
 - `docs/HANDOFF.md` §2's critic-round-count section is stale (says rounds are "running" when the
   tickets file shows those loops were deliberately closed) — a five-minute fix whenever it fits.
