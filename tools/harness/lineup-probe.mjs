@@ -15,11 +15,15 @@
  * up with a full party) went unnoticed through 28+ tickets' worth of
  * direct-launch gating before this route caught them. A single draw-call
  * *snapshot* isn't enough either -- a scene's peak can hide on an unlucky
- * frame (see ticket 28's history) -- so this samples over ~2s and reports
- * min/p50/max, not one number.
+ * frame (see ticket 28's history) -- so this drives REAL autoplay (chart:
+ * true, not idle) for --drawsecs (default 10s, exactly the busy verdict/combo
+ * frames that push a scene over budget) and reports min/p50/max, not one
+ * snapshot. Exits non-zero if any game's max exceeds --budget (default 120)
+ * or shows more than one env:root.
  *
  *   node tools/harness/lineup-probe.mjs --dist dist-lineup --out runs/lineup --build
  *   node tools/harness/lineup-probe.mjs --hero tuff --rivals zizz,mimo,nibb
+ *   node tools/harness/lineup-probe.mjs --games drumline-dash --drawsecs 80  # a full round
  */
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
@@ -38,6 +42,13 @@ const OUT = path.resolve(ROOT, String(argv.out || 'runs/lineup-probe'));
 const HERO = String(argv.hero || 'tuff');
 const RIVALS = String(argv.rivals || 'zizz,mimo,nibb').split(',');
 const GAMES = String(argv.games || 'swing-kings,drumline-dash,bounce-brigade,finale-fever,chomp-chorus').split(',');
+// Ticket 28's lesson: a scene's draw-call peak hides on an unlucky frame if
+// you don't sample long enough, and busy VERDICT/combo-effect frames are
+// exactly the ones that push a scene over budget. 10s of real autoplay
+// (chart: true drives the actual chart, not just idle) is the default; bump
+// with --drawsecs for a fuller round if you need to catch a rarer peak.
+const DRAWSECS = Number(argv.drawsecs || 10);
+const BUDGET = Number(argv.budget || 120);
 await mkdir(OUT, { recursive: true });
 
 if (argv.build) {
@@ -82,6 +93,7 @@ await page.evaluate(async ({ hero, rivals }) => {
 
 const report = [];
 let n = 0;
+let failed = false;
 for (const game of GAMES) {
   await page.evaluate(() => window.__BBB__.goto('freeplay'));
   await wait(1500);
@@ -100,9 +112,14 @@ for (const game of GAMES) {
   const f = `${String(n++).padStart(2, '0')}-${game}.png`;
   await page.screenshot({ path: path.join(OUT, f) });
 
-  // Sampled over ~2s (not one snapshot -- a peak can hide on an unlucky
-  // frame) and env-root count (>1 means a stale env never got torn down --
-  // see ticket 29).
+  // Sampled over DRAWSECS of REAL autoplay (chart: true drives the actual
+  // chart -- verdict/combo effects are exactly the busy frames that push a
+  // scene over budget, and they never happen while the game just idles in
+  // its lead-in). Not one snapshot either -- ticket 28's peak hid on an
+  // unlucky frame. env-root count >1 means a stale env never got torn down
+  // (ticket 29). stopAutoplay() before the next game's goto('freeplay') --
+  // otherwise it presses through that game's own results card too.
+  await page.evaluate(() => window.__BBB__.autoplay({ mode: 'auto', chart: true, seconds: 120 }));
   const draws = await page.evaluate((secs) => new Promise((resolve) => {
     const st = window.__BBB__.stage;
     const v = [];
@@ -112,7 +129,8 @@ for (const game of GAMES) {
       if (performance.now() - t0 < secs * 1000) requestAnimationFrame(tick); else resolve(v);
     };
     requestAnimationFrame(tick);
-  }), 2);
+  }), DRAWSECS);
+  await page.evaluate(() => window.__BBB__.stopAutoplay());
   const sortedDraws = draws.slice().sort((a, b) => a - b);
   const envRoots = await page.evaluate(() => {
     const st = window.__BBB__.stage;
@@ -128,7 +146,8 @@ for (const game of GAMES) {
   };
   report.push(row);
   console.log(JSON.stringify(row));
-  if (envRoots.length > 1) console.log(`  WARNING: ${envRoots.length} env:root nodes (expected 1) -- ${game}`);
+  if (envRoots.length > 1) { console.log(`  WARNING: ${envRoots.length} env:root nodes (expected 1) -- ${game}`); failed = true; }
+  if (sortedDraws[sortedDraws.length - 1] > BUDGET) { console.log(`  WARNING: ${sortedDraws[sortedDraws.length - 1]} draws > ${BUDGET} budget -- ${game}`); failed = true; }
 }
 
 // --pause: pause the last game through the real menu (Escape, then confirm
@@ -173,3 +192,4 @@ await writeFile(path.join(OUT, 'lineup.json'), JSON.stringify({ hero: HERO, riva
 if (logs.length) console.log(logs.slice(0, 20).join('\n'));
 await browser.close();
 server.kill();
+if (failed) { console.log(`FAIL: budget or env-root check failed above (budget ${BUDGET})`); process.exitCode = 1; }
