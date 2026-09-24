@@ -21,6 +21,13 @@
  * snapshot. Exits non-zero if any game's max exceeds --budget (default 120)
  * or shows more than one env:root.
  *
+ * Caveat: the env-root check runs right after the draw-call sample, so at a
+ * --drawsecs longer than the game's own round it can end up inspecting the
+ * results scene instead of the game's (harmless for the env:root *count*,
+ * but the `envs` list won't describe the game you asked about). Use the
+ * short default for env-root correctness; bump --drawsecs only when you
+ * need a fuller-round draw-call peak.
+ *
  *   node tools/harness/lineup-probe.mjs --dist dist-lineup --out runs/lineup --build
  *   node tools/harness/lineup-probe.mjs --hero tuff --rivals zizz,mimo,nibb
  *   node tools/harness/lineup-probe.mjs --games drumline-dash --drawsecs 80  # a full round

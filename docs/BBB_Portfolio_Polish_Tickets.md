@@ -342,7 +342,7 @@ since it's on the actual path players use to reach any minigame, not a direct sc
   `batchCrests`) checked via the same Free Play → Play probe and confirmed via its own
   `crestCheck`: `visibleCrests: 1`, a real, un-batched, un-hidden `addCrest` mesh actually
   rendering — genuine evidence the merge didn't break that path. **The title/roster/Finale Fever
-  screenshots do NOT verify `addCrest`'s wider blast radius, despite the earlier claim above**:
+  screenshots do NOT verify `addCrest`'s wider blast radius, despite what this entry originally claimed**:
   re-checked directly and title + roster render Blender bodies for every character shown
   (`userData.isBlenderBody: true` for bopp/zizz/tuff/fizz on title, bopp on roster) — Blender
   bodies skip `addCrest` entirely (crest baked in at Blender build time), so those screenshots
@@ -361,9 +361,13 @@ since it's on the actual path players use to reach any minigame, not a direct sc
   files.
 - Note, corrected after ticket 31 fixed a gate bug (see 31): 118 was measured over only a 10s
   window. Re-run over a full ~80s round (default lineup) after ticket 31's fix reads **119/120** —
-  worse than first measured, essentially no margin left. Still under budget, so this ticket stays
-  closed, but there is now only 1 draw call of headroom over a real full round, not 2, and nothing
-  else should be added to Drumline Dash's scene without another merge pass first.
+  worse than first measured, essentially no margin left. Re-checked across two more lineups on the
+  same fixed gate to make sure one lineup wasn't a fluke: GLUB as hero with bopp/zizz/tuff as
+  rivals (GLUB carries the one double-sided crest, the riskiest case) reads **117/120**; a third
+  mix (mimo hero, nibb/fizz/glub rivals) also reads **117/120**. All three lineups stay under
+  budget, with a peak seen so far of 119. This ticket stays closed, but there is at most 1 draw
+  call of headroom over a real full round, and nothing else should be added to Drumline Dash's
+  scene without another merge pass first.
 
 ## [x] 31 — Promote the Free Play → Play draw-call/env-root check into a tracked tool
 **Blocked by:** none
@@ -383,6 +387,23 @@ since it's on the actual path players use to reach any minigame, not a direct sc
   zizz,mimo,nibb --games drumline-dash,swing-kings`) — reports `envRoots: 1` for both and draw
   ranges matching the numbers already independently confirmed for ticket 30
   (drumline-dash 104–113, swing-kings 79–84).
+- **Bug found and fixed after closing (see ticket 30's corrected note)**: the draw-call sampling
+  above never actually drove gameplay — no `autoplay()` call meant it sampled idle/lead-in frames
+  only, missing the busy VERDICT/combo frames that push a scene toward budget. Silently under-read
+  Drumline Dash's peak by ~5 (113 vs. the real 118+). Fixed in `6049d99`: samples now run under
+  real `autoplay({chart: true})` for `--drawsecs` (default 10s) and stop it after. Also added
+  `--budget` and a non-zero exit code on any violation so this gates instead of relying on someone
+  reading warnings. Caveat: the env-root check runs right after the draw sample, so at a
+  `--drawsecs` longer than a round it can end up inspecting the results scene instead of the
+  game's — use the short default for env-root correctness, a longer value only for the draw-call
+  budget.
+- Re-verified with the fix on all 5 games (fresh HEAD build, `dist-verify-full`): short pass
+  (`--drawsecs 10`, correct env-root timing) — all 5 report `envRoots: 1`, max draws
+  swing-kings 86, drumline-dash 118, bounce-brigade 45, finale-fever 89, chomp-chorus 116, all
+  under the 120 budget, exit 0. Long pass (`--drawsecs 80`, full-round draw-call peak) — max draws
+  swing-kings 90, drumline-dash 118, bounce-brigade 46, finale-fever 89, chomp-chorus 117, still
+  all under budget, exit 0. Nothing here was over budget before the fix either — the fix mattered
+  for Drumline Dash's margin specifically, not for catching a hidden failure in the other 4.
 - Scratch probes (`runs/t28-probe/`, `runs/t29-probe/`, `runs/t30-probe/`, gitignored) are now
   superseded for this specific check but left in place — they still hold the ticket-30-specific
   close-up/crest-motion checks that aren't general enough to promote.
