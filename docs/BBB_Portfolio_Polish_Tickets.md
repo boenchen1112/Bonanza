@@ -246,13 +246,51 @@ so `render/env/backdrop.js`'s shared defaults for every other scene stay untouch
 - **Also found, pre-existing:** night-run audio check `pass: false` (49.8% onsets on-grid, same
   borderline figure ticket 12 already recorded machine-wide at 51%) — not caused by this ticket.
 
-## [ ] 28 — Drumline Dash: draw-call regression over budget (125 > 120)
+## [x] 28 — Drumline Dash: draw-call regression over budget (125 > 120)
 **Blocked by:** none
 - Found incidentally by ticket 27's critic pass (`runs/sk27-critic-drumline`,
   `runs/sk27-critic-drumline12`), not caused by it — nothing outside `swingKings/` imports
   ticket 27's new asset or loader (checked: two unrelated code comments only).
-- Ticket 20 recorded 90–118 draw calls for Drumline Dash; now measuring 125 in both an 8s and a
-  12s run. Console stays clean, ~55fps — this is a budget regression, not a crash/visual bug.
-- Not investigated yet: which commit between ticket 20 and now introduced the extra draw calls
-  (candidates: the cast rebuild / render-governor perf pass that landed after the original
-  baseline-pass tickets, both touched shared `chars/`/`render/` code every game draws through).
+- Ticket 20 recorded 90–118 draw calls for Drumline Dash; now measuring 125–127 in repeat runs.
+  Console stays clean, ~55fps — this is a budget regression, not a crash/visual bug.
+- [x] **Cause found: no code regression, a measurement gap.** A build of 6c22caf (Drumline's
+  original baseline pass) gives the same draw-call histogram as this branch's HEAD — ticket 20's
+  118 was a lucky frame. The scene's real full-round peak was always 131–133 on a busy verdict
+  frame: `ParticlePool`'s transparent `DoubleSide` material drew twice per live family (no
+  `forceSinglePass`, up to 9 extra draws), risers cost one draw per tier, the track cost one per
+  stripe family + one per yard line, the finish gate cost ~30 draws for separate pieces, five
+  rigs cost one draw each for their contact-blob shadow.
+- [x] **Fixed by merging, nothing removed:** `render/fx/pool.js` (`forceSinglePass`, shared),
+  `render/env/crowd.js` (risers merged to one geometry, shared), `chars/rig.js`
+  (`batchBlobShadows()`, new, opt-in — only Drumline calls it, nothing else changes),
+  `games/drumlineDash/props.js` (track + finish gate merged), `index.js` (wires it in).
+- [x] Verified: harness snapshot 127 → 109; full-round peak (every frame, ~75s, auto/perfect/
+  sloppy) 131–133 → 117. Regression check on the shared changes: Swing Kings 92–111 → 92–104,
+  Bounce Brigade 36–54 → 34–44, Finale Fever 78–98 → 76–88, all clean. Chomp Chorus (109–127,
+  already over budget before this ticket, unrelated) is now 107–117 — fixed as a side effect.
+  165/165 unit tests, `swingKings/verify.mjs` ALL PASS.
+- **Found by the same fix pass, NOT fixed here — see ticket 29:** the harness gate measures a
+  direct scene launch; the real player path (Free Play → Play) still measures Drumline Dash at
+  144–150 draw calls even after this fix, and likely affects every game launched that way, not
+  just Drumline. Also found, unrelated: Drumline's party-round placings are silently dropped.
+
+## [ ] 29 — Free Play → Play launches a second environment; Drumline's party placings drop
+**Blocked by:** none — found incidentally by ticket 28, more player-facing than either 27 or 28
+since it's on the actual path players use to reach any minigame, not a direct scene launch
+- **Double env build:** `shell/play.js:77` awaits `getScene(gameId)` while the frame loop keeps
+  calling `stage.render()`, which calls `ensureDefaultEnv()` (`render/stage.js:515`) — with no
+  env registered yet, that builds a default `'arena'` env (`stage.js:421`). The game's own
+  `load()` then builds its real env (e.g. Drumline's `'field'`), so both render at once. A direct
+  scene launch (what the harness/critic have been using for every ticket 01–28 gate) only ever
+  builds one env, so this has never been caught. Estimated cost: ~16 draws, on every game.
+- Character crests add roughly 9 shadow-pass draws + a similar number in the main pass on top of
+  that (measured via Free Play → Play with lineups bopp/kwark/fizz/mimo: 150 after ticket 28's
+  fix, 168 before; default lineup tuff/zizz/mimo/nibb: 144). Removing just the duplicate env
+  estimates to ~134 — still over 120, so both causes need fixing, not just one.
+- **Separately: Drumline's party-round placings are silently dropped.** `drumlineDash/index.js:686`
+  numbers places from 1 and `:714` passes them on; `core/result.js:75` requires 0-based places
+  and drops the field with a console warning ("places must start at 0") instead of erroring —
+  happens on every party round with Drumline in the lineup, in both the pre- and post-ticket-28
+  build. Unrelated to the draw-call issue; needs its own fix, bundled into this ticket since both
+  were found the same pass.
+- Not started. Scratch probes from the discovery pass: `runs/t28-probe/` (gitignored).
