@@ -493,3 +493,13 @@ since it's on the actual path players use to reach any minigame, not a direct sc
   scene will likely need another merge pass first.
 - `docs/HANDOFF.md` §2's critic-round-count section is stale (says rounds are "running" when the
   tickets file shows those loops were deliberately closed) — a five-minute fix whenever it fits.
+- Ticket 19's "Drumline taglines differ across attract/carousel/intro" gap: looked at it and
+  deliberately held off. Each game shows three *different* lines by design (`shell/games.js`'s
+  `hook` for the title attract reel, its `blurb` for the freeplay/party cards, and the in-game
+  banner's own `sub` at round start) — for Drumline Dash they're "Hit every lane as the line sweeps
+  past.", "Four lanes. Two sticks. No mercy.", and "Hear it. Hit it back." respectively. Whether
+  that's the flagged inconsistency or just three copy slots doing three different jobs is a
+  copywriting call, not something to guess at overnight — worth a quick answer from whoever wrote
+  down the gap. Incidental finding while in there: every game module also carries its own unused
+  `blurb` field (`drumlineDash/index.js:121` etc.) that nothing reads — the shell always uses its
+  own `shell/games.js` table instead. Dead code, harmless, not touched (out of scope for this gap).
