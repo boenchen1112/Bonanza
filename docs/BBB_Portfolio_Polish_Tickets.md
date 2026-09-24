@@ -329,11 +329,52 @@ since it's on the actual path players use to reach any minigame, not a direct sc
   (`--scene drumline-dash --play auto`) — 113 draw calls, real GPU (Iris Xe/D3D11), console clean.
   Free Play → Play, default lineup (tuff/zizz/mimo/nibb): 117–128 → 107–118. Free Play → Play,
   crest-heavy lineup (glub/kwark/fizz/bopp): 106–117 — confirms the batch cost doesn't scale with
-  crest piece count, which was the whole point. Close-up screenshots of all 4 racers' heads
-  confirm crests sit correctly and move with the rig (no displacement, no flipped normals, no
-  missing pieces). Swing Kings and Bounce Brigade checked via the same Free Play → Play probe —
-  no warnings, no regression; Bounce Brigade's one un-batched crest (that game doesn't call
-  `batchCrests`) still renders normally.
+  crest piece count, which was the whole point. Close-up screenshots of all 4 racers' heads in
+  BOTH lineups (including GLUB's `fin` — the one double-sided crest, the riskiest part of the
+  batch) confirm crests sit correctly, no displacement, no flipped normals, no missing pieces.
+  "Moves with the rig" isn't just claimed from a still frame: sampled the batch bone vs. the
+  original (hidden) crest's `matrixWorld` three times over ~900ms of live autoplay on ZIZZ's
+  springy bobble-mounted bolt — `maxErr` stayed exactly 0 throughout, which it could only do if
+  the bone is actually tracking the animated joint, not frozen at construction time. Swing Kings
+  and Bounce Brigade checked via the same Free Play → Play probe — no warnings, no regression;
+  Bounce Brigade's one un-batched crest (that game doesn't call `batchCrests`) still renders
+  normally. `addCrest`'s blast radius is wider than Drumline Dash — every shell screen that calls
+  `charMesh` (title, roster, options, party, freeplay, results) runs through it too — so also
+  screenshotted the title screen, roster select, and Finale Fever directly: all crest types
+  (antenna, horns, cap) render correctly there as well. Menu portraits (`drawPortrait`) are a
+  separate 2D canvas path (`chars.js`'s own `crest()` function, line ~515) and never touch
+  `addCrest`, so they were never at risk. Checked the new merged cache keys (`horn:${b.id}`,
+  `cap:${b.id}`, `plume:${b.id}`) for a load-order race with async Blender-body loading: `addCrest`
+  is only ever called when `!obj.userData.isBlenderBody` (Blender bodies skip it entirely, crest
+  already baked in at build time), and `b` is the toy rig's static build-shape table, unrelated to
+  and unaffected by Blender loading state — same keying discipline the pre-existing `ant:${b.id}`
+  key already relied on, so no new risk. `git show`'d the `drumlineDash/index.js` diff after the
+  fact to confirm it was reviewed, not just the other three files.
 - Note: 118 is only 2 under the 120 ceiling on the worst frame seen. Every lineup measured lands at
   the same crest cost regardless of composition, so this should hold, but there's little headroom
   left in Drumline Dash's budget for anything added later without another merge pass.
+
+## Morning list (2026-09-24 overnight session — items needing a human, not re-derivable from code)
+- **The Laya moderation daemon** (`C:\Users\user\.claude\laya-moderation\daemon.py`, PID 27404 as
+  of tonight) grew to ~24.5 GB private memory mid-session, drove free system RAM down to ~2.7 GB,
+  and caused real tool failures (Bash/node fork-OOM, a full session crash+restart) until it
+  apparently released memory on its own. Claude Code's own permission classifier denied every
+  attempt this session to inspect or kill it (twice, under two different reasons), so it was never
+  touched — worth checking on and possibly restarting it manually before running anything else
+  memory-heavy (Blender, concurrent Opus builders + Chromium) tonight's way again.
+- **The repo has moved**: pushes to `origin` (`github.com/boenchen1112/Swinger.git`) succeeded
+  tonight via GitHub's redirect, but the canonical remote is now `github.com/boenchen1112/Bonanza`.
+  Nobody ran `git remote set-url` (out of scope for an autonomous session). `CLAUDE.md` and
+  `docs/agents/issue-tracker.md` still name `boenchen1112/Swinger` — worth updating once the move
+  is confirmed intentional and settled.
+- `ALLOWED_ORIGIN` in `worker/wrangler.toml` is still the `"*"` placeholder (ticket 25); needs the
+  real GitHub Pages origin once Pages is live.
+- `*.workers.dev` reachability was never reconfirmed from a browser after the original
+  OOM-interrupted check (ticket 25).
+- Ticket 26 (wiring the leaderboard into `results.js`) stays open — needs a player-name UX
+  decision (party lineup names like "BOPP" are local seat labels, not shareable identities) that's
+  a real product call, not something to guess overnight.
+- Drumline Dash has only ~2 draw calls of headroom left under the 120 ceiling (ticket 30) — anything
+  else added to that scene will likely need another merge pass first.
+- `docs/HANDOFF.md` §2's critic-round-count section is stale (says rounds are "running" when the
+  tickets file shows those loops were deliberately closed) — a five-minute fix whenever it fits.
