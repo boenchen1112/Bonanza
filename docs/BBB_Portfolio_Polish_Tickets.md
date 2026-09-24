@@ -274,23 +274,50 @@ so `render/env/backdrop.js`'s shared defaults for every other scene stay untouch
   144–150 draw calls even after this fix, and likely affects every game launched that way, not
   just Drumline. Also found, unrelated: Drumline's party-round placings are silently dropped.
 
-## [ ] 29 — Free Play → Play launches a second environment; Drumline's party placings drop
+## [x] 29 — Free Play → Play launches a second environment; Drumline's party placings drop
 **Blocked by:** none — found incidentally by ticket 28, more player-facing than either 27 or 28
 since it's on the actual path players use to reach any minigame, not a direct scene launch
-- **Double env build:** `shell/play.js:77` awaits `getScene(gameId)` while the frame loop keeps
-  calling `stage.render()`, which calls `ensureDefaultEnv()` (`render/stage.js:515`) — with no
-  env registered yet, that builds a default `'arena'` env (`stage.js:421`). The game's own
-  `load()` then builds its real env (e.g. Drumline's `'field'`), so both render at once. A direct
-  scene launch (what the harness/critic have been using for every ticket 01–28 gate) only ever
-  builds one env, so this has never been caught. Estimated cost: ~16 draws, on every game.
-- Character crests add roughly 9 shadow-pass draws + a similar number in the main pass on top of
-  that (measured via Free Play → Play with lineups bopp/kwark/fizz/mimo: 150 after ticket 28's
-  fix, 168 before; default lineup tuff/zizz/mimo/nibb: 144). Removing just the duplicate env
-  estimates to ~134 — still over 120, so both causes need fixing, not just one.
-- **Separately: Drumline's party-round placings are silently dropped.** `drumlineDash/index.js:686`
-  numbers places from 1 and `:714` passes them on; `core/result.js:75` requires 0-based places
-  and drops the field with a console warning ("places must start at 0") instead of erroring —
-  happens on every party round with Drumline in the lineup, in both the pre- and post-ticket-28
-  build. Unrelated to the draw-call issue; needs its own fix, bundled into this ticket since both
-  were found the same pass.
-- Not started. Scratch probes from the discovery pass: `runs/t28-probe/` (gitignored).
+- [x] **Double env build, fixed at the source.** Cause: `render/stage.js`'s per-frame `render()`
+  called `ensureDefaultEnv()` on every frame — a leftover from before `warm()` existed.
+  `main.js`'s `activateNow` already awaits `stage.warm()`, which calls `ensureDefaultEnv()` once
+  after `load()` has said what the scene wants; the per-frame call only ever mattered on frames
+  drawn *during* an async `load()` (e.g. `play.js` awaiting the chosen game's module), where it
+  built a default `'arena'` under the game's own real set and nothing ever tore the extra one
+  down. Fix: removed the per-frame call; `warm()`'s single call covers every real case. Verified
+  with a probe that drives the actual Free Play → Play route (not a direct scene launch) for all
+  5 minigames: env roots 2 → 1 every time; draw calls (that path) Drumline 133–144 → 117–128,
+  Chomp Chorus 124–133 → 108–117, Swing Kings 94–102 → 78–86, Finale Fever 96–106 → 80–90, Bounce
+  Brigade 53–63 → 38–47. Direct scene launches (every ticket 01–28 gate) measure unchanged.
+- [x] **Drumline's dropped party placings, fixed.** `drumlineDash/index.js` numbered places from
+  1 but `core/result.js`'s `checkField` requires 0-based places, silently dropping the field
+  (console warning, party simulates the round) on every Drumline party round. Fixed at the one
+  call site building `field` for `result.js` (`r.place - 1`); the 1-based `r.place` is untouched
+  everywhere it's actually displayed (banner, HUD, standings). Verified as a real party round via
+  the same probe: `sim:false`, real race order, no console warning. 165/165 unit tests.
+- **Still open, own ticket (30):** Drumline via Free Play → Play still measures 117–128 (median
+  122, still over 120) even after the env fix — the remaining ~11 draws are character-crest
+  meshes (shadow pass + main pass) on the lineup's toy rigs, outside `render/stage.js`'s and
+  `drumlineDash/`'s scope.
+- **Noted, not a regression from this ticket:** `swingKings/verify.mjs`'s "ball on the bat" check
+  was flaky under this machine's load during this session (borderline contact-gap timing failed
+  on both the pre- and post-fix build, roughly half the runs) — Swing Kings already sets
+  `ctx.scene.userData.env = false`, so the removed call was a no-op there either way. 5/5 clean
+  re-runs with no other agents running at the same time point at system-load jitter rather than a
+  real regression, but flagging since ticket 27 was closed on a critic PASS using this same check.
+  Worth a quiet re-run before fully trusting ticket 27's PASS if anyone doubts it later.
+- Scratch probes from the discovery + fix passes: `runs/t28-probe/`, `runs/t29-probe/` (gitignored).
+
+## [ ] 30 — Drumline via Free Play → Play still ~10 draw calls over budget (character crests)
+**Blocked by:** none
+- After ticket 29's env fix, Drumline Dash measured through the real Free Play → Play path is
+  117–128 (median 122), still over the 120 ceiling half the time. Ticket 28 already got the
+  direct-launch number comfortably under budget (109); this is specifically the crest cost that
+  only shows up with a full lineup of characters, which a direct scene launch doesn't build.
+- Cause (measured via a per-mesh draw breakdown, not yet fixed): character crest meshes cost one
+  draw in the main pass + one in the shadow pass per crest, e.g. TUFF's horns (2+2), ZIZZ's
+  bobble (1+1) — scales with lineup size, worse with a 4-character party lineup than any single
+  hero character a direct launch tests with.
+- Likely fix shape (not attempted): merge each character's crest into their body mesh at build
+  time (`chars/rig.js`/`blenderBodies.js`), or batch crests across a lineup the same way ticket
+  28's `batchBlobShadows()` batched contact shadows — whichever is the smaller change once someone
+  reads `shell/chars.js`'s `addCrest` and the current per-character mesh setup.
