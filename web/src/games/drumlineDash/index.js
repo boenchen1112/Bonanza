@@ -54,7 +54,7 @@ import { NoteJudge, rankFor, SCORE } from '../../core/judge.js';
 import { roundResult } from '../../core/result.js';
 import { FEEL, feelForCombo, hitstopFor } from '../../core/feel.js';
 import { damp, clamp, clamp01, makeRng, easeOutCubic, beatPhase } from '../../core/util.js';
-import { makeCharacter, makeAnimator } from '../../chars/index.js';
+import { makeCharacter, makeAnimator, batchBlobShadows } from '../../chars/index.js';
 import { buildChart, chartEndBeat, chartDurationBars, maxPoints, ADVANCE_WEIGHT, LEAD_BEATS, OUTRO_BEATS } from './chart.js';
 import { makeTrack, makeRack, makeBeams, makeFinish, makeSnare, makeMajorGear, makeMace } from './props.js';
 
@@ -237,6 +237,11 @@ export default {
     S.mace.mesh.rotation.x = -0.22;
     S.major.attach('handR', S.mace.mesh);
 
+    // All five contact blobs in one draw (was one each): five rigs plus the
+    // effects of a busy verdict put this scene over the 120-draw budget.
+    S.blobs = batchBlobShadows([...S.racers.map((r) => r.char), S.major]);
+    S.root.add(S.blobs.mesh);
+
     // --- fx / judge --------------------------------------------------------
     ctx.fx.attach(ctx.scene);
     ctx.fx.setAutoVerdict(false);   // we compose our own; never two callouts
@@ -390,6 +395,7 @@ export default {
       r.char.rotation.y = MARCH_YAW - clamp(r.x, -5, 5) * 0.018;
     }
     S.majorAnim.update(dt, beat);
+    S.blobs.update();
 
     // ---- the field moves --------------------------------------------------
     S.speed = damp(S.speed, S.speedTarget, 2.2, dt);
@@ -477,6 +483,7 @@ export default {
     S.unsubBeat?.();
     ctx.clock.clearSchedule();
 
+    S.blobs?.dispose();
     for (const r of S.racers) r.char.dispose();
     S.major?.dispose();
 

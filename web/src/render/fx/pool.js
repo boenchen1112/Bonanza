@@ -81,9 +81,15 @@ export class ParticlePool {
     this.rng = rng;
 
     const geo = bakeUv(new THREE.PlaneGeometry(1, 1), uvRect);
+    // forceSinglePass: three draws a transparent DoubleSide material twice
+    // (back faces, then front) to order the two sides of one closed mesh. A
+    // flat quad has no second side to order and depthWrite is off, so that
+    // second pass bought nothing but a draw call per live family — up to 9 a
+    // frame in a busy verdict, enough to take Drumline Dash past 120 draws.
+    // Both faces still render (confetti flips edge-on), in one draw.
     const mat = new THREE.MeshBasicMaterial({
       map: texture, transparent: true, depthWrite: false, depthTest,
-      blending, side: THREE.DoubleSide, toneMapped: false,
+      blending, side: THREE.DoubleSide, toneMapped: false, forceSinglePass: true,
     });
     patchInstanceRGBA(mat);
 

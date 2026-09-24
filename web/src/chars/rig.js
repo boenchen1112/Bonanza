@@ -744,3 +744,76 @@ export function makeCharacter({
 export function drawCallsFor(detail = 'full') {
   return detail === 'lite' ? 15 : 20;
 }
+
+/**
+ * One draw for the contact blobs of several characters, instead of one each.
+ *
+ * Each rig's own blob is hidden and keeps being animated as before (anim.js
+ * still scales it and sets its opacity from the jump height); `update()`
+ * copies that into an instance per character. Call it once per frame after
+ * the animators and any position changes. The returned mesh must be added
+ * to the scene by the caller; any parent transform is accounted for.
+ * A five-character scene saves 4 draw calls.
+ *
+ * @param {THREE.Object3D[]} chars  toy-rig characters (others are skipped)
+ */
+export function batchBlobShadows(chars) {
+  const list = chars.filter((c) => c?.joints?.shadow);
+  const n = list.length;
+  const geo = new THREE.PlaneGeometry(1, 1);
+  const alpha = new THREE.InstancedBufferAttribute(new Float32Array(n), 1);
+  alpha.setUsage(THREE.DynamicDrawUsage);
+  geo.setAttribute('iAlpha', alpha);
+  // Same look as the per-rig blob material, plus a per-instance opacity.
+  const material = new THREE.MeshBasicMaterial({
+    map: getShadowTexture(), transparent: true, depthWrite: false,
+    opacity: 1, color: 0x000000, toneMapped: false,
+  });
+  material.onBeforeCompile = (sh) => {
+    sh.vertexShader = 'attribute float iAlpha;\nvarying float vIAlpha;\n'
+      + sh.vertexShader.replace('void main() {', 'void main() {\n  vIAlpha = iAlpha;');
+    sh.fragmentShader = 'varying float vIAlpha;\n'
+      + sh.fragmentShader.replace('#include <color_fragment>', '#include <color_fragment>\n  diffuseColor.a *= vIAlpha;');
+  };
+  material.customProgramCacheKey = () => 'bbb-blob-alpha';
+
+  const mesh = new THREE.InstancedMesh(geo, material, Math.max(1, n));
+  mesh.count = n;
+  mesh.name = 'blobShadows';
+  mesh.frustumCulled = false;
+  mesh.renderOrder = -1;
+  mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  for (const c of list) c.joints.shadow.visible = false;
+
+  const inv = new THREE.Matrix4();
+  const m4 = new THREE.Matrix4();
+
+  function update() {
+    if (mesh.parent) {
+      mesh.parent.updateWorldMatrix(true, false);
+      inv.copy(mesh.parent.matrixWorld).invert();
+    } else {
+      inv.identity();
+    }
+    for (let i = 0; i < n; i++) {
+      const c = list[i];
+      const blob = c.joints.shadow;
+      blob.updateWorldMatrix(true, false);
+      mesh.setMatrixAt(i, m4.multiplyMatrices(inv, blob.matrixWorld));
+      alpha.array[i] = c.visible && c.parent ? blob.material.opacity : 0;
+    }
+    mesh.instanceMatrix.needsUpdate = true;
+    alpha.needsUpdate = true;
+  }
+
+  function dispose() {
+    mesh.removeFromParent();
+    for (const c of list) c.joints.shadow.visible = true;
+    geo.dispose();
+    material.dispose();
+    mesh.dispose();
+  }
+
+  update();
+  return { mesh, update, dispose, material };
+}

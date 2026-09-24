@@ -12,6 +12,7 @@
  */
 
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { damp, easeOutCubic, clamp01 } from '../../core/util.js';
 
 export function makeCrowd({ look, rng }, {
@@ -24,16 +25,20 @@ export function makeCrowd({ look, rng }, {
 
   // --- risers ---------------------------------------------------------------
   const riserMat = mats.toon({ color: 0xffffff, bands: 2, rim: 0.55, pulse: 0.05, side: THREE.DoubleSide, name: 'envRiser' });
-  const risers = [];
+  // One material and static, so every tier is baked into one geometry: one
+  // draw for all the risers (it was one per tier).
+  const tierGeos = [];
   for (let t = 0; t < tiers; t++) {
     const r = radius + t * 2.2;
     const h = 1.5 + t * 1.5;
     const g = new THREE.CylinderGeometry(r, r, h, 56, 1, true, -arc / 2 - Math.PI / 2, arc);
-    const m = new THREE.Mesh(g, riserMat);
-    m.position.y = y + h / 2 - 0.4 + t * 0.9;
-    group.add(m);
-    risers.push(m);
+    g.translate(0, y + h / 2 - 0.4 + t * 0.9, 0);
+    tierGeos.push(g);
   }
+  const riserGeo = tierGeos.length > 1 ? mergeGeometries(tierGeos, false) : tierGeos[0];
+  if (riserGeo !== tierGeos[0]) for (const g of tierGeos) g.dispose();
+  const risers = new THREE.Mesh(riserGeo, riserMat);
+  group.add(risers);
 
   // --- the crowd ------------------------------------------------------------
   const geo = new THREE.SphereGeometry(0.42, 8, 6);
@@ -111,7 +116,7 @@ export function makeCrowd({ look, rng }, {
 
   function dispose() {
     geo.dispose();
-    for (const r of risers) r.geometry.dispose();
+    riserGeo.dispose();
   }
 
   return { group, update, pulse, cheer: bigCheer, dispose };

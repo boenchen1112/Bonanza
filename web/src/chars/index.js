@@ -24,7 +24,7 @@
 
 import * as THREE from 'three';
 import {
-  makeCharacter, paletteFor, paletteById, buildFor, drawCallsFor,
+  makeCharacter, paletteFor, paletteById, buildFor, drawCallsFor, batchBlobShadows,
   PALETTES, BUILDS, BUILD_IDS, disposeSharedResources,
 } from './rig.js';
 import { CharacterAnimator, makeAnimator, STATES, STATE_DEF, VERDICT_POSE, idle, windup, strike, makePose, sampleClip } from './anim.js';
@@ -54,7 +54,7 @@ function ensureBlenderMods() {
 export {
   /** Baked mocap clips (durations, `contact` frames) for `anim.play()`. */
   CLIPS, CLIP_FACE,
-  makeCharacter, paletteFor, paletteById, buildFor, drawCallsFor,
+  makeCharacter, paletteFor, paletteById, buildFor, drawCallsFor, batchBlobShadows,
   PALETTES, BUILDS, BUILD_IDS, disposeSharedResources,
   CharacterAnimator, makeAnimator, STATES, STATE_DEF, VERDICT_POSE,
   idle, windup, strike, makePose, sampleClip,

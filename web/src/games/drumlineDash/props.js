@@ -19,7 +19,7 @@
  *   FINISH   the gate, invisible for seventy seconds, arriving exactly as the
  *            finale resolves.
  *
- * Draw-call budget for this whole file: 8. Each maker disposes its own
+ * Draw-call budget for the set (track, rack, beams, finish): 6. Each maker disposes its own
  * geometry and materials; the game only has to call `dispose()`.
  */
 
@@ -58,42 +58,45 @@ export function makeTrack({ mats, lanes, laneWidth = 1.45, span = 30 }) {
   const group = new THREE.Group();
   group.name = 'dd:track';
 
-  // --- lane stripes ---------------------------------------------------------
-  const stripeGeo = new THREE.PlaneGeometry(span, laneWidth);
-  stripeGeo.rotateX(-Math.PI / 2);
-  const stripeMat = mats.glow({
-    color: 0xffffff, transparent: true, opacity: 0.18, depthWrite: false, pulse: 0.1,
-  });
-  const stripes = new THREE.InstancedMesh(stripeGeo, stripeMat, lanes.length);
-  stripes.frustumCulled = false;
-  stripes.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(lanes.length * 3), 3);
-  stripes.renderOrder = 1;
-  group.add(stripes);
-
-  const laneGlow = new Float32Array(lanes.length);
-  for (let i = 0; i < lanes.length; i++) {
-    _p.set(0, 0.02 + i * 0.001, lanes[i]);
-    _s.set(1, 1, 1);
-    stripes.setMatrixAt(i, _m4.compose(_p, _q.identity(), _s));
-  }
-  stripes.instanceMatrix.needsUpdate = true;
-
-  // --- yard lines -----------------------------------------------------------
+  // Lane stripes and yard lines are one instanced draw: a unit ground quad
+  // sized per instance, with the two families' opacities (0.18 / 0.5) carried
+  // per instance. Stripes come first in the instance order, so the lines
+  // still land on top of them, as they did as two draws.
+  const L = lanes.length;
   const LINES = 11;
   const GAP = span / LINES;
-  const lineGeo = new THREE.PlaneGeometry(0.17, laneWidth * lanes.length + 2.4);
-  lineGeo.rotateX(-Math.PI / 2);
-  const lineMat = mats.glow({
-    color: 0xffffff, transparent: true, opacity: 0.5, depthWrite: false, pulse: 0.35,
-  });
-  const lines = new THREE.InstancedMesh(lineGeo, lineMat, LINES);
-  lines.frustumCulled = false;
-  lines.renderOrder = 2;
-  group.add(lines);
+  const geo = new THREE.PlaneGeometry(1, 1);
+  geo.rotateX(-Math.PI / 2);
+  const alpha = new THREE.InstancedBufferAttribute(new Float32Array(L + LINES), 1);
+  geo.setAttribute('iAlpha', alpha);
+  const mat = patchInstanceAlpha(mats.glow({
+    color: 0xffffff, transparent: true, opacity: 1, depthWrite: false,
+  }), 'dd-track-alpha');
+  const mesh = new THREE.InstancedMesh(geo, mat, L + LINES);
+  mesh.frustumCulled = false;
+  mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array((L + LINES) * 3), 3);
+  mesh.renderOrder = 1;
+  group.add(mesh);
 
+  // --- lane stripes: instances 0..L-1 ---------------------------------------
+  const laneGlow = new Float32Array(L);
+  for (let i = 0; i < L; i++) {
+    _p.set(0, 0.02 + i * 0.001, lanes[i]);
+    _s.set(span, 1, laneWidth);
+    mesh.setMatrixAt(i, _m4.compose(_p, _q.identity(), _s));
+    alpha.setX(i, 0.18);
+  }
+
+  // --- yard lines: instances L..L+LINES-1 -----------------------------------
+  const lineW = 0.17;
+  const lineD = laneWidth * L + 2.4;
   const lineX = new Float32Array(LINES);
-  const midZ = (lanes[0] + lanes[lanes.length - 1]) / 2;
-  for (let i = 0; i < LINES; i++) lineX[i] = -span / 2 + i * GAP;
+  const midZ = (lanes[0] + lanes[L - 1]) / 2;
+  for (let i = 0; i < LINES; i++) {
+    lineX[i] = -span / 2 + i * GAP;
+    alpha.setX(L + i, 0.5);
+    mesh.instanceColor.setXYZ(L + i, 1, 1, 1);
+  }
 
   let scroll = 0;
 
@@ -104,35 +107,47 @@ export function makeTrack({ mats, lanes, laneWidth = 1.45, span = 30 }) {
       x = ((x + span / 2) % span + span) % span - span / 2;
       // Lines swell on the beat: the field itself keeps time in the periphery.
       _p.set(x, 0.03, midZ);
-      _s.set(1 + beatPulse * 0.55, 1, 1);
-      lines.setMatrixAt(i, _m4.compose(_p, _q.identity(), _s));
+      _s.set(lineW * (1 + beatPulse * 0.55), 1, lineD);
+      mesh.setMatrixAt(L + i, _m4.compose(_p, _q.identity(), _s));
     }
-    lines.instanceMatrix.needsUpdate = true;
-    for (let i = 0; i < lanes.length; i++) laneGlow[i] = damp(laneGlow[i], 0, 4.5, dt);
+    mesh.instanceMatrix.needsUpdate = true;
+    for (let i = 0; i < L; i++) laneGlow[i] = damp(laneGlow[i], 0, 4.5, dt);
   }
 
   /** Brighten one lane — whose turn it is, said on the ground itself. */
   function setLaneColors(colors, hot) {
-    for (let i = 0; i < lanes.length; i++) {
+    for (let i = 0; i < L; i++) {
       const k = 0.32 + laneGlow[i] * 1.5 + (i === hot ? 0.85 : 0);
       _c.setHex(colors[i]).multiplyScalar(k);
-      stripes.instanceColor.setXYZ(i, _c.r, _c.g, _c.b);
+      mesh.instanceColor.setXYZ(i, _c.r, _c.g, _c.b);
     }
-    stripes.instanceColor.needsUpdate = true;
+    mesh.instanceColor.needsUpdate = true;
   }
 
   function flashLane(i, amount = 1) {
-    if (i >= 0 && i < lanes.length) laneGlow[i] = Math.max(laneGlow[i], amount);
+    if (i >= 0 && i < L) laneGlow[i] = Math.max(laneGlow[i], amount);
   }
 
   function dispose() {
     group.removeFromParent();
-    stripeGeo.dispose(); lineGeo.dispose();
-    stripeMat.dispose(); lineMat.dispose();
-    stripes.dispose(); lines.dispose();
+    geo.dispose();
+    mat.dispose();
+    mesh.dispose();
   }
 
-  return { group, update, setLaneColors, flashLane, dispose, materials: [stripeMat, lineMat] };
+  return { group, update, setLaneColors, flashLane, dispose, materials: [mat] };
+}
+
+/** Per-instance opacity (`iAlpha`, a float per instance) on a basic material. */
+function patchInstanceAlpha(mat, key) {
+  mat.onBeforeCompile = (sh) => {
+    sh.vertexShader = 'attribute float iAlpha;\nvarying float vIAlpha;\n'
+      + sh.vertexShader.replace('void main() {', 'void main() {\n  vIAlpha = iAlpha;');
+    sh.fragmentShader = 'varying float vIAlpha;\n'
+      + sh.fragmentShader.replace('#include <color_fragment>', '#include <color_fragment>\n  diffuseColor.a *= vIAlpha;');
+  };
+  mat.customProgramCacheKey = () => key;
+  return mat;
 }
 
 // ------------------------------------------------------------------ the rack
@@ -291,9 +306,12 @@ export function makeBeams({ height = 8.6, radius = 2.5, count = 2 }) {
   const geo = new THREE.ConeGeometry(radius, height, 20, 1, true);
   geo.translate(0, height / 2, 0);
   const tex = beamTexture();
+  // forceSinglePass: additive and depthWrite-off, so drawing the back faces in
+  // their own pass first (three's default for transparent DoubleSide) changes
+  // nothing on screen and cost a second draw every frame.
   const mat = new THREE.MeshBasicMaterial({
     map: tex, transparent: true, depthWrite: false, side: THREE.DoubleSide,
-    blending: THREE.AdditiveBlending, fog: false, toneMapped: false,
+    blending: THREE.AdditiveBlending, fog: false, toneMapped: false, forceSinglePass: true,
   });
   const mesh = new THREE.InstancedMesh(geo, mat, count);
   mesh.frustumCulled = false;
@@ -337,40 +355,48 @@ export function makeBeams({ height = 8.6, radius = 2.5, count = 2 }) {
 
 /** The gate. Off-screen for seventy seconds, then it arrives, and that is it. */
 export function makeFinish({ mats, width = 11.5, height = 5.4 }) {
+  // Posts, crossbar and checker tape are one static mesh, coloured per
+  // vertex: one draw (it was two, and the gate arrives in the busiest seconds
+  // of the round).
+  const tinted = (g, hex) => {
+    const c = _c.set(hex);   // linear, as a material colour would be
+    const n = g.getAttribute('position').count;
+    const a = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) { a[i * 3] = c.r; a[i * 3 + 1] = c.g; a[i * 3 + 2] = c.b; }
+    g.setAttribute('color', new THREE.BufferAttribute(a, 3));
+    return g;
+  };
   const parts = [];
   for (const sx of [-1, 1]) {
     const p = new THREE.CylinderGeometry(0.22, 0.30, height, 10);
     p.translate(0, height / 2, sx * width / 2);
-    parts.push(p);
+    parts.push(tinted(p, 0xffe9a8));
   }
   const bar = new THREE.BoxGeometry(0.5, 0.95, width);
   bar.translate(0, height - 0.48, 0);
-  parts.push(bar);
-  const geo = merge(parts);
-  const mat = mats.glow({ color: 0xffe9a8, pulse: 0.7 });
-  const mesh = new THREE.Mesh(geo, mat);
+  parts.push(tinted(bar, 0xffe9a8));
 
-  // Checker tape on the crossbar, one instanced draw.
+  // Checker tape on the crossbar.
   const TILES = 26;
-  const tileGeo = new THREE.PlaneGeometry(0.66, 0.44);
-  const tileMat = mats.glow({ color: 0xffffff, side: THREE.DoubleSide, pulse: 0.4 });
-  const tiles = new THREE.InstancedMesh(tileGeo, tileMat, TILES);
-  tiles.frustumCulled = false;
-  tiles.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(TILES * 3), 3);
   for (let i = 0; i < TILES; i++) {
     const z = -width / 2 + 0.32 + (i / (TILES - 1)) * (width - 0.64);
-    _p.set(0.3, height - 0.95 - (i % 2) * 0.46, z);
-    _s.set(1, 1, 1);
-    tiles.setMatrixAt(i, _m4.compose(_p, _q.identity(), _s));
+    const t = new THREE.PlaneGeometry(0.66, 0.44);
+    t.translate(0.3, height - 0.95 - (i % 2) * 0.46, z);
     const k = i % 2 ? 0.05 : 1.0;
-    tiles.instanceColor.setXYZ(i, k, k, k);
+    const n = t.getAttribute('position').count;
+    t.setAttribute('color', new THREE.BufferAttribute(new Float32Array(n * 3).fill(k), 3));
+    parts.push(t);
   }
-  tiles.instanceMatrix.needsUpdate = true;
-  tiles.instanceColor.needsUpdate = true;
+  const geo = merge(parts);
+  // DoubleSide for the tape (seen from behind as the gate passes); the posts
+  // and bar are closed and opaque, so their back faces never show.
+  const mat = mats.glow({ color: 0xffffff, side: THREE.DoubleSide });
+  mat.vertexColors = true;
+  const mesh = new THREE.Mesh(geo, mat);
 
   const group = new THREE.Group();
   group.name = 'dd:finish';
-  group.add(mesh, tiles);
+  group.add(mesh);
   group.position.x = 220;
   group.visible = false;
 
@@ -379,10 +405,9 @@ export function makeFinish({ mats, width = 11.5, height = 5.4 }) {
   function dispose() {
     group.removeFromParent();
     geo.dispose(); mat.dispose();
-    tileGeo.dispose(); tileMat.dispose(); tiles.dispose();
   }
 
-  return { group, show, dispose, materials: [mat, tileMat] };
+  return { group, show, dispose, materials: [mat] };
 }
 
 // --------------------------------------------------------------- attachments
