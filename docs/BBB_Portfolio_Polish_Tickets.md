@@ -118,7 +118,7 @@ Status key: `[ ]` open · `[~]` in progress · `[x]` done · `[-]` cut (with rea
 - [x] Round 5 FAIL, close (ours won Escalation; Timing 8, Readability 7). Send-back: grand-slam ring cut flat by the field. Fixed: overlay ring pool; badges off the pitch arc; homers land in the stands in frame; bat dropped for the curtain call; gold pips; bunt/foul split; misses stop at the net; NEW INNING; contact fires within half a frame
 - [x] Round 6 FAIL, narrowly (Timing 8, Impact 7, Escalation 7; ours won 3 of 7). Send-back: the HOME RUN!/GRAND SLAM! badge rose under the OUTS pill. Also: NEW INNING beside a lit lamp, LIKE THIS! overlapping the "3", see-through badge plates, lumpy finale/combo rings. All fixed in 6009ff1 (badges clamp below the HUD band in screen space). Left as known gaps (design, not bugs): the pitch arcs through the crowd band, the strike heap hides the face, the set edge beyond the stands and the skyline are blockout, the night switch reads as a grade, hits look alike
 - [x] Round 7 FAIL (Impact 8, Escalation 8, Timing 8 even; the R6 badge fix held). Send-back: in the two-a-bar section the incoming pitch lost its beat dots — resolving pitch N cleared the dots pitch N+1 had just laid. Fixed in f304bf9 (dots owned by their pitch), with homers moved centre-right so they no longer cross the incoming lob, and the results score now equal to the HUD score. Verified on runs/r9-sk-late, verify.mjs ALL PASS
-- **Known gaps at hand-back** (not re-reviewed): flat wedge at the left edge of the set and blockout skyline; the title card's beige text over the crowd; home-run badges repeat (only the distance varies); the pitch arcs through the busy crowd band; the strike heap hides the face; the night switch reads as a colour grade; the pitching machine's face never changes; faceless crowd
+- **Known gaps at hand-back** (not re-reviewed): ~~flat wedge at the left edge of the set and blockout skyline~~ (fixed, ticket 27); the title card's beige text over the crowd; home-run badges repeat (only the distance varies); the pitch arcs through the busy crowd band; the strike heap hides the face; the night switch reads as a colour grade; the pitching machine's face never changes; ~~faceless crowd~~ (fixed, commit `2b35e27`, predates this session)
 
 ## [x] 14 — Swing Kings gesture mode: mouse/pointer-drag source (+ ADR 0004)
 **Blocked by:** 01
@@ -151,7 +151,7 @@ Status key: `[ ]` open · `[~]` in progress · `[x]` done · `[-]` cut (with rea
 ## [x] 19 — Critic loop: shell to PASS — *closed at round 3 without a PASS (see loop decision below)*
 **Blocked by:** 05, 08, 18
 - [x] Round 1 FAIL (MP 7/7; gap: menu music died on every transition). Fixed: player re-anchors on transport restart (player.test.mjs); party has CPUs, points, standings hub, podium + winner, finale last; results/party card transforms; options reset in-row + keeps settings; roster stamp/legend/hints/see-through; freeplay side cards; menu ping + confetti at the item; portraits rendered from the 3D rig; dance no longer flips face-down (YXZ hips, re-baked, wrap-aware blends)
-- [ ] Open from round 1: title cpu p95 ~13ms (steady state; not DOM, env, chars or post — suspect per-beat work), attract reel is still stills, crowd faceless (art note)
+- [ ] Open from round 1: title cpu p95 ~13ms (steady state; not DOM, env, chars or post — suspect per-beat work), attract reel is still stills, ~~crowd faceless (art note)~~ (fixed, ticket 32)
 - [x] Round 2 FAIL (ours won Timing). Send-back: the lineup never exists in play (picked character, rival CPUs), CPU standings are rolls, ties shown as ranks. Also: results accuracy contradicts stats (Drumline), READY! clips slot text, 2nd human cursor on a taken character, no results input lockout, no party->game wipe, load hitches, fonts
 - [x] Round 2 fixes (6009ff1): ctx.players carries the lineup into every game (hero palette/build/crest; Drumline's rival lanes are the roster CPUs and the party scores that race's real places); competition ranking with shared places and co-champions; one human seat; results accuracy = hit quality; scene warm-up before the clock starts + title card over the swap
 - [x] Round 3 FAIL (ours won Timing; the lineup pass-through was seen working). Send-back: results → standings don't pay off (static card, same sting for D as B, rivals never shown), plus carousel placeholder thumbnails, truncated seat plates, unexplained tie places. Fixed in f304bf9: results reveal in order (count-up, staggered stats, rank stamp with a per-rank sting, every player's round placing), carousel repaints on decode, READY! on the portrait, wins shown on points ties, Drumline races only the lineup, centred game title card, title stats plate/plural
@@ -331,28 +331,39 @@ since it's on the actual path players use to reach any minigame, not a direct sc
   crest-heavy lineup (glub/kwark/fizz/bopp): 106–117 — confirms the batch cost doesn't scale with
   crest piece count, which was the whole point. Close-up screenshots of all 4 racers' heads in
   BOTH lineups (including GLUB's `fin` — the one double-sided crest, the riskiest part of the
-  batch) confirm crests sit correctly, no displacement, no flipped normals, no missing pieces.
-  "Moves with the rig" isn't just claimed from a still frame: sampled the batch bone vs. the
-  original (hidden) crest's `matrixWorld` three times over ~900ms of live autoplay on ZIZZ's
-  springy bobble-mounted bolt — `maxErr` stayed exactly 0 throughout, which it could only do if
-  the bone is actually tracking the animated joint, not frozen at construction time. Swing Kings
-  and Bounce Brigade checked via the same Free Play → Play probe — no warnings, no regression;
-  Bounce Brigade's one un-batched crest (that game doesn't call `batchCrests`) still renders
-  normally. `addCrest`'s blast radius is wider than Drumline Dash — every shell screen that calls
-  `charMesh` (title, roster, options, party, freeplay, results) runs through it too — so also
-  screenshotted the title screen, roster select, and Finale Fever directly: all crest types
-  (antenna, horns, cap) render correctly there as well. Menu portraits (`drawPortrait`) are a
-  separate 2D canvas path (`chars.js`'s own `crest()` function, line ~515) and never touch
-  `addCrest`, so they were never at risk. Checked the new merged cache keys (`horn:${b.id}`,
-  `cap:${b.id}`, `plume:${b.id}`) for a load-order race with async Blender-body loading: `addCrest`
-  is only ever called when `!obj.userData.isBlenderBody` (Blender bodies skip it entirely, crest
-  already baked in at build time), and `b` is the toy rig's static build-shape table, unrelated to
-  and unaffected by Blender loading state — same keying discipline the pre-existing `ant:${b.id}`
-  key already relied on, so no new risk. `git show`'d the `drumlineDash/index.js` diff after the
-  fact to confirm it was reviewed, not just the other three files.
-- Note: 118 is only 2 under the 120 ceiling on the worst frame seen. Every lineup measured lands at
-  the same crest cost regardless of composition, so this should hold, but there's little headroom
-  left in Drumline Dash's budget for anything added later without another merge pass.
+  batch), taken mid-autoplay so the rig is actively animating, confirm crests sit correctly with
+  no displacement, no flipped normals, no missing pieces — this is the real evidence for "moves
+  with the rig", not the bone/crest `matrixWorld` diff also run at the time. **That diff check is
+  circular and was wrongly cited as proof here**: the batch bone is parented to the same object the
+  original crest is (`e.crest.parent.add(bone)`) with a local transform copied from it once at
+  construction, so `bone.matrixWorld` is *structurally* identical to `crest.matrixWorld` no matter
+  how the joint animates or whether the `SkinnedMesh` renders correctly off those bones — it can
+  never read nonzero, so it proves nothing about motion. Bounce Brigade (that game doesn't call
+  `batchCrests`) checked via the same Free Play → Play probe and confirmed via its own
+  `crestCheck`: `visibleCrests: 1`, a real, un-batched, un-hidden `addCrest` mesh actually
+  rendering — genuine evidence the merge didn't break that path. **The title/roster/Finale Fever
+  screenshots do NOT verify `addCrest`'s wider blast radius, despite the earlier claim above**:
+  re-checked directly and title + roster render Blender bodies for every character shown
+  (`userData.isBlenderBody: true` for bopp/zizz/tuff/fizz on title, bopp on roster) — Blender
+  bodies skip `addCrest` entirely (crest baked in at Blender build time), so those screenshots
+  were never exercising this ticket's change. Finale Fever's scene showed no `userData.crest`
+  meshes at all at the point checked — inconclusive, not confirmed either way. The real,
+  confirmed-toy-rig coverage for this ticket is Drumline Dash (both lineups, via `batchCrests`,
+  `crestCheck` found real hidden crests + bones every time) and Bounce Brigade (one real, visible,
+  un-batched crest). Menu portraits (`drawPortrait`) are a separate 2D canvas path (`chars.js`'s
+  own `crest()` function, line ~515) and never touch `addCrest`, so they were never at risk.
+  Checked the new merged cache keys (`horn:${b.id}`, `cap:${b.id}`, `plume:${b.id}`) for a
+  load-order race with async Blender-body loading: `addCrest` is only ever called when
+  `!obj.userData.isBlenderBody`, and `b` is the toy rig's static build-shape table, unaffected by
+  Blender loading state — same keying discipline the pre-existing `ant:${b.id}` key already relied
+  on, so no new risk (this part holds regardless of the screenshot mix-up above). `git show`'d the
+  `drumlineDash/index.js` diff after the fact to confirm it was reviewed, not just the other three
+  files.
+- Note, corrected after ticket 31 fixed a gate bug (see 31): 118 was measured over only a 10s
+  window. Re-run over a full ~80s round (default lineup) after ticket 31's fix reads **119/120** —
+  worse than first measured, essentially no margin left. Still under budget, so this ticket stays
+  closed, but there is now only 1 draw call of headroom over a real full round, not 2, and nothing
+  else should be added to Drumline Dash's scene without another merge pass first.
 
 ## [x] 31 — Promote the Free Play → Play draw-call/env-root check into a tracked tool
 **Blocked by:** none
@@ -410,10 +421,14 @@ since it's on the actual path players use to reach any minigame, not a direct sc
 ## Morning list (2026-09-24 overnight session — items needing a human, not re-derivable from code)
 - **The Laya moderation daemon** (`C:\Users\user\.claude\laya-moderation\daemon.py`, PID 27404 as
   of tonight) grew to ~24.5 GB private memory mid-session, drove free system RAM down to ~2.7 GB,
-  and caused real tool failures (Bash/node fork-OOM, a full session crash+restart) until it
-  apparently released memory on its own. Claude Code's own permission classifier denied every
-  attempt this session to inspect or kill it (twice, under two different reasons), so it was never
-  touched — worth checking on and possibly restarting it manually before running anything else
+  and caused real tool failures (Bash/node fork-OOM, a full session crash+restart). Claude Code's
+  own permission classifier denied every attempt this session to inspect or kill it (twice, under
+  two different reasons), so it was never touched directly. After the crash, a permitted `tasklist`
+  check showed only ~1.96 GB *working set* for that PID — a different metric than the ~24.5 GB
+  *private/committed* figure that actually spiked, which was never re-measured (the classifier
+  denied the memory-detail check needed to get it), so **this is not confirmed resolved** — treat
+  the working-set number as reassuring but not proof the private-memory growth stopped or reversed.
+  Worth checking on directly and possibly restarting it manually before running anything else
   memory-heavy (Blender, concurrent Opus builders + Chromium) tonight's way again.
 - **The repo has moved**: pushes to `origin` (`github.com/boenchen1112/Swinger.git`) succeeded
   tonight via GitHub's redirect, but the canonical remote is now `github.com/boenchen1112/Bonanza`.
