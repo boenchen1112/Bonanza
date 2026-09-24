@@ -307,17 +307,33 @@ since it's on the actual path players use to reach any minigame, not a direct sc
   Worth a quiet re-run before fully trusting ticket 27's PASS if anyone doubts it later.
 - Scratch probes from the discovery + fix passes: `runs/t28-probe/`, `runs/t29-probe/` (gitignored).
 
-## [ ] 30 — Drumline via Free Play → Play still ~10 draw calls over budget (character crests)
+## [x] 30 — Drumline via Free Play → Play still ~10 draw calls over budget (character crests)
 **Blocked by:** none
-- After ticket 29's env fix, Drumline Dash measured through the real Free Play → Play path is
+- After ticket 29's env fix, Drumline Dash measured through the real Free Play → Play path was
   117–128 (median 122), still over the 120 ceiling half the time. Ticket 28 already got the
-  direct-launch number comfortably under budget (109); this is specifically the crest cost that
+  direct-launch number comfortably under budget (109); this was specifically the crest cost that
   only shows up with a full lineup of characters, which a direct scene launch doesn't build.
-- Cause (measured via a per-mesh draw breakdown, not yet fixed): character crest meshes cost one
-  draw in the main pass + one in the shadow pass per crest, e.g. TUFF's horns (2+2), ZIZZ's
-  bobble (1+1) — scales with lineup size, worse with a 4-character party lineup than any single
-  hero character a direct launch tests with.
-- Likely fix shape (not attempted): merge each character's crest into their body mesh at build
-  time (`chars/rig.js`/`blenderBodies.js`), or batch crests across a lineup the same way ticket
-  28's `batchBlobShadows()` batched contact shadows — whichever is the smaller change once someone
-  reads `shell/chars.js`'s `addCrest` and the current per-character mesh setup.
+- Cause: each crest piece (TUFF's horns 2 pieces, ZIZZ's bolt 1, MIMO's cap 2, NIBB's antenna 1)
+  was its own `Mesh` with its own shadow draw — one draw in the main pass + one in the shadow pass
+  per piece, scaling with lineup size.
+- Fix: `shell/chars.js`'s `addCrest` now bakes each crest's pieces into one cached geometry
+  (`mergeGeometries`), so a crest is one `Mesh` (tagged `userData.crest`) regardless of piece
+  count. `chars/rig.js` gained `batchCrests(chars)`, opt-in like ticket 28's `batchBlobShadows` —
+  combines a whole lineup's crests into one `SkinnedMesh` (one bone per crest, riding the same
+  joint the original crest sat on; colour baked to vertex colours; a back-facing copy for the one
+  double-sided crest, `fin`), so the batch draws once in the main pass + once in the shadow pass no
+  matter how many characters or crest pieces are in the lineup. Original crest meshes are hidden,
+  not removed — `dispose()` restores them. `drumlineDash/index.js` wires it in alongside the
+  existing blob-shadow batch.
+- Verified (independently, not just builder-reported): `npm test` 165/165. Direct harness launch
+  (`--scene drumline-dash --play auto`) — 113 draw calls, real GPU (Iris Xe/D3D11), console clean.
+  Free Play → Play, default lineup (tuff/zizz/mimo/nibb): 117–128 → 107–118. Free Play → Play,
+  crest-heavy lineup (glub/kwark/fizz/bopp): 106–117 — confirms the batch cost doesn't scale with
+  crest piece count, which was the whole point. Close-up screenshots of all 4 racers' heads
+  confirm crests sit correctly and move with the rig (no displacement, no flipped normals, no
+  missing pieces). Swing Kings and Bounce Brigade checked via the same Free Play → Play probe —
+  no warnings, no regression; Bounce Brigade's one un-batched crest (that game doesn't call
+  `batchCrests`) still renders normally.
+- Note: 118 is only 2 under the 120 ceiling on the worst frame seen. Every lineup measured lands at
+  the same crest cost regardless of composition, so this should hold, but there's little headroom
+  left in Drumline Dash's budget for anything added later without another merge pass.
