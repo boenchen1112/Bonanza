@@ -376,7 +376,7 @@ since it's on the actual path players use to reach any minigame, not a direct sc
   superseded for this specific check but left in place — they still hold the ticket-30-specific
   close-up/crest-motion checks that aren't general enough to promote.
 
-## [~] 32 — Faceless crowd (known gap, tickets 13 + 19)
+## [x] 32 — Faceless crowd (known gap, tickets 13 + 19)
 **Blocked by:** none
 - Named as a known gap in both Swing Kings' round-6/7 hand-back (ticket 13) and the shell's
   hand-back (ticket 19) — the audience in `render/env/crowd.js` is 132 instanced blobs
@@ -385,11 +385,27 @@ since it's on the actual path players use to reach any minigame, not a direct sc
   known-gaps list (the same pattern ticket 27 used for the skyline/set-edge gap) since it's
   cross-cutting (every scene with a crowd), purely visual, and matches the overnight mandate
   ("redesign the whole visual of Bonanza").
-- In progress: builder dispatched to give the crowd simple eyes (and only eyes — no mouth/nose,
-  matching how small and distant these instances read) via vertex colours baked into the shared
-  geometry, so it stays one draw call and doesn't fight the existing per-instance colour tint
-  (`setColorAt`). Must not regress the toon shading or the beat-bounce readability the crowd exists
-  for (see the file's own header comment: "the cheapest legibility win in the project").
+- **Ticket 13's copy of this gap turned out to already be stale**: Swing Kings uses its own,
+  separate `chars/crowd.js`, which got eyes in an earlier commit (2b35e27, 2026-09-17) — after
+  ticket 13's hand-back note was written but before tonight. Only `render/env/crowd.js` (ticket
+  19's copy — the shared arena crowd used by Finale Fever, Drumline Dash, Chomp Chorus, Bounce
+  Brigade, and the shell screens on the default set: freeplay, options, roster) still lacked eyes.
+- Fix: `crowdFigureGeometry()` merges the body sphere with two small flattened eye lenses into one
+  geometry, so the crowd stays one `InstancedMesh`/one draw call. Vertex colours (white body,
+  near-black eyes) multiply with the existing per-instance tint (`setColorAt`) automatically —
+  `toon()` (`render/look/materials.js`) already supports `vertexColors`, no shader patch needed.
+  Each eye's vertices are reassigned the body's surface normal at that point so the eye shades
+  like a decal (the toon terminator doesn't cut through it, no rim-light artifact). `update()`'s
+  bounce/hop/lean logic untouched.
+- Verified independently: `npm test` 165/165. `lineup-probe.mjs` (extended in ticket 31) through
+  the real Free Play → Play route, before vs. a fresh after-build — draw-call ranges identical
+  (drumline-dash 107–113, bounce-brigade 36–40, finale-fever 80–84, chomp-chorus 108–112), single
+  env root throughout. Screenshots across all four games plus the shell options screen show
+  clearly legible eyes at normal resolution and at the user's real DPR-2 display scaling, with no
+  toon-shading banding artifacts. Instances never yaw (pre-existing, unchanged), so every face
+  looks toward the same side of the set rather than at the seat's own sightline — reads as a
+  stylised choice at this distance/scale, not a visible bug, and the ticket explicitly ruled out
+  touching `update()`'s rotation to fix it.
 
 ## Morning list (2026-09-24 overnight session — items needing a human, not re-derivable from code)
 - **The Laya moderation daemon** (`C:\Users\user\.claude\laya-moderation\daemon.py`, PID 27404 as
