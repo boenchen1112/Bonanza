@@ -2,7 +2,8 @@
  * Crowd stands.  [render agent owns this dir]
  *
  * Tiered risers behind the arena plus an instanced crowd that bounces on the
- * beat. Two draws for the whole audience.
+ * beat. Two draws for the whole audience — the crowd's eyes are baked into the
+ * same instanced geometry (see crowdFigureGeometry), not a second draw.
  *
  * The crowd is the cheapest legibility win in the project. It is a metronome
  * the player can see without looking at it: rows bounce on the beat with a
@@ -41,9 +42,10 @@ export function makeCrowd({ look, rng }, {
   group.add(risers);
 
   // --- the crowd ------------------------------------------------------------
-  const geo = new THREE.SphereGeometry(0.42, 8, 6);
-  geo.scale(1, 1.25, 1);
-  const mat = mats.toon({ color: 0xffffff, bands: 2, rim: 1.6, pulse: 0.2, name: 'envCrowd' });
+  const geo = crowdFigureGeometry();
+  // vertexColors: the baked eye colour multiplies with the per-instance tint
+  // (three.js folds `instanceColor` into `vColor`), so no shader patch needed.
+  const mat = mats.toon({ color: 0xffffff, bands: 2, rim: 1.6, pulse: 0.2, vertexColors: true, name: 'envCrowd' });
   const mesh = new THREE.InstancedMesh(geo, mat, count);
   mesh.frustumCulled = false;
   group.add(mesh);
@@ -120,4 +122,58 @@ export function makeCrowd({ look, rng }, {
   }
 
   return { group, update, pulse, cheer: bigCheer, dispose };
+}
+
+// Eye colour, linear. Must stay dark after the per-instance tint multiplies it
+// (up to ~1.9x on a Finale cheer) and after sRGB encoding lifts it.
+const EYE = 0.03;
+
+/**
+ * One spectator: the teardrop blob plus two dark eye dots, baked into ONE
+ * geometry so the whole audience is still one instanced draw. A per-vertex
+ * `color` (white on the body, near-black on the eyes) multiplies with the
+ * per-instance tint, so the body colour varies per person as before while the
+ * eyes stay dark on every body. The blob's 8x6 sphere is far too coarse to
+ * paint dots into its vertices, hence two tiny flattened lenses sitting on
+ * the surface instead.
+ *
+ * Eyes face local +Z. Instances never yaw, so every face looks out of the
+ * stands toward the camera side of the set.
+ */
+function crowdFigureGeometry() {
+  const A = 0.42;            // body radius (x, z)
+  const B = 0.42 * 1.25;     // body half-height (teardrop stretch)
+  const body = new THREE.SphereGeometry(A, 8, 6);
+  body.scale(1, 1.25, 1);
+  const parts = [paint(body, 1)];
+
+  const ex = 0.14, ey = 0.17;
+  const ez = A * Math.sqrt(1 - (ex / A) ** 2 - (ey / B) ** 2);
+  const zAxis = new THREE.Vector3(0, 0, 1);
+  for (const sx of [-1, 1]) {
+    // Ellipsoid normal at the anchor. Every eye vertex gets THIS normal, so the
+    // dot shades like a decal on the body: the toon terminator never cuts
+    // through it, and its tiny rim edges don't catch the 1.6x backlight.
+    const n = new THREE.Vector3(sx * ex / (A * A), ey / (B * B), ez / (A * A)).normalize();
+    const eye = new THREE.SphereGeometry(0.075, 6, 4);
+    eye.scale(1, 1.15, 0.45);
+    eye.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(zAxis, n));
+    eye.translate(sx * ex, ey, ez);
+    const nrm = eye.attributes.normal;
+    for (let i = 0; i < nrm.count; i++) nrm.setXYZ(i, n.x, n.y, n.z);
+    parts.push(paint(eye, EYE));
+  }
+
+  const merged = mergeGeometries(parts, false);
+  for (const g of parts) g.dispose();
+  return merged;
+}
+
+/** Flat grey vertex colour across a whole part (merged parts must all carry
+ *  the same attributes). */
+function paint(g, v) {
+  const n = g.attributes.position.count;
+  const arr = new Float32Array(n * 3).fill(v);
+  g.setAttribute('color', new THREE.BufferAttribute(arr, 3));
+  return g;
 }
