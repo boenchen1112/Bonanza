@@ -512,7 +512,12 @@ export function createStage({ canvas, clock }) {
     renderer.info.reset();
 
     autoPalette();
-    ensureDefaultEnv();
+    // No ensureDefaultEnv() here. warm() builds the default set once load()
+    // has declared what the scene wants (activate awaits it before start()).
+    // Called per frame, it fired on frames drawn DURING an async load() —
+    // play.js awaiting the game module — and built an 'arena' under the
+    // game's own set that then rendered all round (~16 draws, every game via
+    // Free Play; ticket 29).
     trackBeat(dt);
 
     // --- world --------------------------------------------------------------

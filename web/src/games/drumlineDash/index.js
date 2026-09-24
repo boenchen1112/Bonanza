@@ -711,7 +711,10 @@ function finishRound(ctx, S) {
     accuracy: hit01,
     rank: rankFor(hit01, S.tot.miss),
     // The race was run against the lineup: the party takes these places as-is.
-    field: S.racers.map((r) => ({ id: r.playerId ?? null, place: r.place })),
+    // `field` places are 0-based (core/result.js checkField); r.place is the
+    // 1-based number the banner and HUD print. Passing it raw dropped the
+    // field and every party Drumline round was simulated instead (ticket 29).
+    field: S.racers.map((r) => ({ id: r.playerId ?? null, place: r.place - 1 })),
     stats: {
       ...S.tot,
       notes,
