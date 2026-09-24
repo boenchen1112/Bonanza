@@ -8,6 +8,7 @@
  */
 
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { makeCast, BUILD_IDS, preloadBlenderBodies, isBlenderReady, headRadius } from '../chars/index.js';
 import { CAST, BUILD_BY_SHAPE, colourRoles } from './castData.js';
 
@@ -126,21 +127,29 @@ function addCrest(char, def) {
   if (j.gear && j.gear.parent === j.head) j.gear.visible = false;
   const keepBall = def.crest === 'antenna';
   if (j.bobbleMesh && !keepBall) j.bobbleMesh.visible = false;
-  const add = (parent, geo, mat, x, y, z, rx = 0, ry = 0, rz = 0) => {
+  // Every crest is ONE mesh: its pieces (two horns, three plume feathers, a
+  // cap's dome and brim) share a material, so they are baked into one cached
+  // geometry per crest+build instead of costing a draw each, in the main pass
+  // and again in the shadow pass (ticket 30). It is tagged `userData.crest`
+  // so a lineup-wide batch (chars/rig.js `batchCrests`) can find it.
+  const add = (parent, geo, mat) => {
     const m = new THREE.Mesh(geo, mat);
-    m.position.set(x, y, z);
-    m.rotation.set(rx, ry, rz);
     m.castShadow = true;
+    m.name = 'crest';
+    m.userData.crest = true;
     parent.add(m);
     return m;
   };
+  // One piece of a crest: geometry placed by (x,y,z), Euler (rx,ry,rz), scale s.
+  const piece = (g, x, y, z, rx = 0, ry = 0, rz = 0, s = 1) => g.applyMatrix4(_m4.compose(
+    _v3.set(x, y, z), _q.setFromEuler(_e.set(rx, ry, rz)), _s3.setScalar(s)));
   // The bobble joint sits `bobbleY` above the head centre; offsets below are
   // in its frame, so y = headTop - bobbleY is the scalp.
   const scalp = headTop - b.bobbleY;
   switch (def.crest) {
     case 'antenna': {
       const L = Math.max(0.04, -scalp);
-      add(j.bobble, cgeo(`ant:${b.id}`, () => new THREE.CylinderGeometry(0.016, 0.02, L, 6)), dark, 0, -L / 2, 0);
+      add(j.bobble, cgeo(`ant:${b.id}`, () => piece(new THREE.CylinderGeometry(0.016, 0.02, L, 6), 0, -L / 2, 0)), dark);
       break;
     }
     case 'bolt': {
@@ -151,42 +160,57 @@ function addCrest(char, def) {
         s.lineTo(h * 0.22, h); s.lineTo(-h * 0.2, h * 0.38); s.lineTo(-h * 0.02, h * 0.38); s.lineTo(-h * 0.14, 0);
         const e = new THREE.ExtrudeGeometry(s, { depth: 0.05, bevelEnabled: false });
         e.translate(0, 0, -0.025);
-        return e;
+        return piece(e, 0, scalp - 0.02, 0);
       });
-      add(j.bobble, g, acc, 0, scalp - 0.02, 0);
+      add(j.bobble, g, acc);
       break;
     }
     case 'plume': {
-      const g = cgeo(`plume:${b.id}`, () => new THREE.SphereGeometry(hw * 0.13, 10, 8).scale(0.55, 2.4, 0.55));
-      for (const [ang, s] of [[-0.45, 0.85], [0, 1], [0.45, 0.85]]) {
-        const m = add(j.bobble, g, acc, Math.sin(ang) * hw * 0.12, scalp + hw * 0.24 * s, -hw * 0.05, -0.35, 0, ang);
-        m.scale.setScalar(s);
-      }
+      const g = cgeo(`plume:${b.id}`, () => mergeCrest([[-0.45, 0.85], [0, 1], [0.45, 0.85]].map(([ang, s]) => piece(
+        new THREE.SphereGeometry(hw * 0.13, 10, 8).scale(0.55, 2.4, 0.55),
+        Math.sin(ang) * hw * 0.12, scalp + hw * 0.24 * s, -hw * 0.05, -0.35, 0, ang, s))));
+      add(j.bobble, g, acc);
       break;
     }
     case 'horns': {
-      const g = cgeo(`horn:${b.id}`, () => new THREE.ConeGeometry(hw * 0.1, hw * 0.34, 10));
-      for (const s of [-1, 1]) add(j.head, g, crestMat(0xfff1d6), s * hw * 0.34, headTop + hw * 0.08, 0, 0, 0, -s * 0.55);
+      const g = cgeo(`horn:${b.id}`, () => mergeCrest([-1, 1].map((s) => piece(
+        new THREE.ConeGeometry(hw * 0.1, hw * 0.34, 10), s * hw * 0.34, headTop + hw * 0.08, 0, 0, 0, -s * 0.55))));
+      add(j.head, g, crestMat(0xfff1d6));
       break;
     }
     case 'cap': {
-      const dome = cgeo(`capd:${b.id}`, () => new THREE.SphereGeometry(hw * 0.52, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2));
-      const brim = cgeo(`capb:${b.id}`, () => new THREE.CylinderGeometry(hw * 0.42, hw * 0.42, 0.025, 18, 1, false, -Math.PI / 2, Math.PI));
-      add(j.head, dome, acc, 0, headTop - hw * 0.18, 0);
-      add(j.head, brim, acc, 0, headTop - hw * 0.16, hw * 0.28);
+      const g = cgeo(`cap:${b.id}`, () => mergeCrest([
+        piece(new THREE.SphereGeometry(hw * 0.52, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), 0, headTop - hw * 0.18, 0),
+        piece(new THREE.CylinderGeometry(hw * 0.42, hw * 0.42, 0.025, 18, 1, false, -Math.PI / 2, Math.PI), 0, headTop - hw * 0.16, hw * 0.28),
+      ]));
+      add(j.head, g, acc);
       break;
     }
     case 'fin': {
       const g = cgeo(`fin:${b.id}`, () => {
         const c = new THREE.CircleGeometry(hw * 0.36, 16, 0, Math.PI);
         c.rotateY(Math.PI / 2);
-        return c;
+        return piece(c, 0, scalp - 0.01, 0);
       });
-      add(j.bobble, g, crestMat(def.accent, THREE.DoubleSide), 0, scalp - 0.01, 0);
+      add(j.bobble, g, crestMat(def.accent, THREE.DoubleSide));
       break;
     }
     default: break;
   }
+}
+
+const _m4 = new THREE.Matrix4();
+const _v3 = new THREE.Vector3();
+const _s3 = new THREE.Vector3();
+const _q = new THREE.Quaternion();
+const _e = new THREE.Euler();
+
+/** Merge a crest's pieces (all indexed primitives with the same attributes). */
+function mergeCrest(parts) {
+  const merged = mergeGeometries(parts, false);
+  if (!merged) throw new Error('crest pieces did not merge');   // never silently lose a crest
+  for (const p of parts) p.dispose();
+  return merged;
 }
 
 /**

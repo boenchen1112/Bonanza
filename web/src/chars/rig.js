@@ -817,3 +817,119 @@ export function batchBlobShadows(chars) {
   update();
   return { mesh, update, dispose, material };
 }
+
+/**
+ * One draw (plus one shadow draw) for the crests of a whole lineup, instead of
+ * one each — a four-character party lineup was paying ~8 draws for them.
+ *
+ * Crests differ in shape and colour per character and ride different joints
+ * (the springy `bobble`, or the head), so this is a rigid SkinnedMesh rather
+ * than an InstancedMesh: every crest's geometry goes into one buffer, bound
+ * with weight 1 to its own Bone, and each Bone sits exactly where the crest
+ * mesh sat, on the same joint. The rig's animation moves the bones like it
+ * moved the crests, with no per-frame work of ours; the renderer's own
+ * skeleton update uploads the matrices. Colour moves to vertex colours
+ * (linear, straight from each crest material), and a two-sided crest (the
+ * fin) gets a back-facing copy so the whole batch can stay FrontSide.
+ *
+ * The original crest meshes (tagged `userData.crest`, see shell/chars.js
+ * `addCrest`) are hidden, not removed; `dispose()` restores them. Call after
+ * every `dress()`; call `update()` once per frame only if a character can be
+ * hidden (it hides that character's crests). Opt-in — nothing else changes.
+ *
+ * @param {THREE.Object3D[]} chars  toy-rig characters (others are skipped)
+ * @returns {{mesh: THREE.SkinnedMesh|null, update: () => void, dispose: () => void}}
+ */
+export function batchCrests(chars) {
+  const entries = [];
+  for (const c of chars) {
+    if (!c?.joints) continue;
+    c.traverse((o) => { if (o.isMesh && o.userData.crest && o.visible) entries.push({ c, crest: o }); });
+  }
+  if (!entries.length) return { mesh: null, update() {}, dispose() {} };
+
+  const parts = [];
+  const bones = [];
+  entries.forEach((e, i) => {
+    const src = e.crest.geometry.index ? e.crest.geometry.toNonIndexed() : e.crest.geometry.clone();
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', src.getAttribute('position'));
+    g.setAttribute('normal', src.getAttribute('normal'));
+    const n = g.getAttribute('position').count;
+    const col = new Float32Array(n * 3);
+    const { r, g: gg, b } = e.crest.material.color;   // already linear
+    for (let k = 0; k < n; k++) { col[k * 3] = r; col[k * 3 + 1] = gg; col[k * 3 + 2] = b; }
+    g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    const idx = new Uint16Array(n * 4);
+    const wt = new Float32Array(n * 4);
+    for (let k = 0; k < n; k++) { idx[k * 4] = i; wt[k * 4] = 1; }
+    g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(idx, 4));
+    g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(wt, 4));
+    parts.push(g);
+    if (e.crest.material.side === THREE.DoubleSide) parts.push(backFaces(g));
+    src.dispose();
+
+    const bone = new THREE.Bone();
+    bone.name = 'crestBone';
+    bone.position.copy(e.crest.position);
+    bone.quaternion.copy(e.crest.quaternion);
+    bone.scale.copy(e.crest.scale);
+    e.crest.parent.add(bone);
+    bones.push(bone);
+    e.bone = bone;
+    e.shown = true;
+    e.crest.visible = false;
+  });
+
+  const geo = mergeGeometries(parts, false);
+  for (const p of parts) p.dispose();
+  if (!geo) throw new Error('batchCrests: crest geometries did not merge');
+  // Identity inverses and bind matrix: each vertex lands at bone.matrixWorld
+  // * its crest-local position, wherever the batch mesh itself is parented.
+  const skeleton = new THREE.Skeleton(bones, bones.map(() => new THREE.Matrix4()));
+  const material = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.4 });
+  const mesh = new THREE.SkinnedMesh(geo, material);
+  mesh.bind(skeleton, new THREE.Matrix4());
+  mesh.name = 'crestBatch';
+  mesh.frustumCulled = false;
+  mesh.castShadow = entries.some((e) => e.crest.castShadow);
+
+  function update() {
+    for (const e of entries) {
+      const show = e.c.visible && !!e.c.parent;
+      if (show === e.shown) continue;
+      e.shown = show;
+      if (show) e.bone.scale.copy(e.crest.scale); else e.bone.scale.setScalar(0);
+    }
+  }
+
+  function dispose() {
+    mesh.removeFromParent();
+    for (const e of entries) { e.bone.removeFromParent(); e.crest.visible = true; }
+    skeleton.dispose();
+    geo.dispose();
+    mesh.material.dispose();   // may be the house dress pass's replacement
+  }
+
+  return { mesh, update, dispose };
+}
+
+/** A copy of a non-indexed triangle soup facing the other way. */
+function backFaces(g) {
+  const out = new THREE.BufferGeometry();
+  for (const name of ['position', 'normal', 'color']) {
+    const a = g.getAttribute(name);
+    const arr = new Float32Array(a.array.length);
+    for (let t = 0; t < a.count; t += 3) {
+      // swap vertices 1 and 2 of each triangle to flip the winding
+      for (const [d, s] of [[t, t], [t + 1, t + 2], [t + 2, t + 1]]) {
+        for (let c = 0; c < 3; c++) arr[d * 3 + c] = a.array[s * 3 + c] * (name === 'normal' ? -1 : 1);
+      }
+    }
+    out.setAttribute(name, new THREE.BufferAttribute(arr, 3));
+  }
+  // one bone per crest: the skin attributes are constant, so share them
+  out.setAttribute('skinIndex', g.getAttribute('skinIndex'));
+  out.setAttribute('skinWeight', g.getAttribute('skinWeight'));
+  return out;
+}

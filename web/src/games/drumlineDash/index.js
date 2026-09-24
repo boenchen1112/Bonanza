@@ -54,7 +54,7 @@ import { NoteJudge, rankFor, SCORE } from '../../core/judge.js';
 import { roundResult } from '../../core/result.js';
 import { FEEL, feelForCombo, hitstopFor } from '../../core/feel.js';
 import { damp, clamp, clamp01, makeRng, easeOutCubic, beatPhase } from '../../core/util.js';
-import { makeCharacter, makeAnimator, batchBlobShadows } from '../../chars/index.js';
+import { makeCharacter, makeAnimator, batchBlobShadows, batchCrests } from '../../chars/index.js';
 import { buildChart, chartEndBeat, chartDurationBars, maxPoints, ADVANCE_WEIGHT, LEAD_BEATS, OUTRO_BEATS } from './chart.js';
 import { makeTrack, makeRack, makeBeams, makeFinish, makeSnare, makeMajorGear, makeMace } from './props.js';
 
@@ -241,6 +241,10 @@ export default {
     // effects of a busy verdict put this scene over the 120-draw budget.
     S.blobs = batchBlobShadows([...S.racers.map((r) => r.char), S.major]);
     S.root.add(S.blobs.mesh);
+    // Every lineup crest in one draw (+1 shadow), after every dress() above:
+    // a four-character party lineup paid 1 main + 1 shadow draw per crest.
+    S.crests = batchCrests(S.racers.map((r) => r.char));
+    if (S.crests.mesh) S.root.add(S.crests.mesh);
 
     // --- fx / judge --------------------------------------------------------
     ctx.fx.attach(ctx.scene);
@@ -396,6 +400,7 @@ export default {
     }
     S.majorAnim.update(dt, beat);
     S.blobs.update();
+    S.crests.update();
 
     // ---- the field moves --------------------------------------------------
     S.speed = damp(S.speed, S.speedTarget, 2.2, dt);
@@ -484,6 +489,7 @@ export default {
     ctx.clock.clearSchedule();
 
     S.blobs?.dispose();
+    S.crests?.dispose();
     for (const r of S.racers) r.char.dispose();
     S.major?.dispose();
 
