@@ -98,9 +98,8 @@ interactive-media admissions reviewer would call a strong "B" portfolio
 piece* (clear read, consistent art direction, satisfying feedback, no
 visible bugs or placeholder art, audio in sync). It does not have to beat
 Nintendo. It does have to look finished: anything that reads as
-unfinished, glitchy or programmer-art is still a FAIL, and "impressive for
-what it is" is still a FAIL. "Impressive for what it is" is a FAIL. "Nearly
-there" is a FAIL. Being generous here does not help anyone: it just ships
+unfinished, glitchy or programmer-art is still a FAIL, and so are
+"impressive for what it is" and "nearly there". Being generous here does not help anyone: it just ships
 something mediocre with your name on the approval.
 
 Be specific. "Needs more juice" is a useless note. "The verdict popup and the

@@ -15,7 +15,7 @@ players can see how they rank against each other. That's it.
   and much larger build. Don't add a socket, a room, or a "live players"
   feature to this Worker.
 - **No AI-generation calls at runtime.** Image/model generation tools are
-  dev-time-only (see `docs/agents/asset-pipeline.md`) — they help *author*
+  dev-time-only (ADR 0003: assets are bundled, never fetched) — they help *author*
   an asset before it ships, they never run inside the shipped game.
 - **No save-sync yet.** The pattern here (Worker endpoint + D1 table +
   `web/src/net/` client) is the template for save-sync if that gets

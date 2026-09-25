@@ -18,8 +18,11 @@ model, and who owns which files. Then read `web/src/core/clock.js`,
    shared tree corrupt each other.
 3. **Original work only.** No Nintendo characters, assets, music, names, or
    one-for-one minigame designs. Study the craft; copy none of the content.
-4. **No external fetches, ever.** All geometry, texture, audio and font work
-   is generated in code. The build must run offline from a static server.
+4. **No fetches outside the build** (ADR 0003). Authored assets (`.glb`,
+   textures, fonts, wasm) may be bundled through `web/src/assets/index.js`
+   from free sources, with a provenance README; nothing is requested from
+   another origin. The one sanctioned network call is the leaderboard
+   (ADR 0005). The build must run offline from a static server.
 5. **Verify against the running game, not against your own reasoning.** Use
    the harness (below) and *look at the screenshots you produced*. If you did
    not open the images, you did not verify anything.
@@ -63,5 +66,4 @@ Cash these out in your piece; do not just nod at them.
 
 End with: what you built, what the harness measured, what you *saw* in the
 screenshots, and the single weakest thing about your piece that you did not
-get to. Be honest about the last one — a separate critic is going to find it
-anyway, and pretending it isn't there just costs a round.
+get to. Be honest about the last one: it is where the next round starts.

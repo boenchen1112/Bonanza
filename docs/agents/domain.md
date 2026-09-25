@@ -18,9 +18,10 @@ Single-context repo (this repo):
 /
 ├── CONTEXT.md
 ├── docs/adr/
-│   ├── 0001-event-sourced-orders.md
-│   └── 0002-postgres-for-write-model.md
-└── src/
+│   ├── 0001-baton-brawl-scores-timing-not-shape.md
+│   ├── …
+│   └── 0005-leaderboard-is-the-one-sanctioned-network-call.md
+└── web/
 ```
 
 ## Use the glossary's vocabulary
@@ -33,4 +34,4 @@ If the concept you need isn't in the glossary yet, that's a signal — either yo
 
 If your output contradicts an existing ADR, surface it explicitly rather than silently overriding:
 
-> _Contradicts ADR-0007 (event-sourced orders) — but worth reopening because…_
+> _Contradicts ADR-0003 (no fetches outside the build) — but worth reopening because…_

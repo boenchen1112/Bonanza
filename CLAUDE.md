@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Two products in this repo
 
-This branch (`Mario-Party`) holds two independently-developed products that
+This repo holds two independently-developed products that
 share a repo but not a codebase:
 
 1. **Swinger — All-Star Swingers**: a single conducting-rhythm baseball
@@ -27,7 +27,7 @@ need to touch the other.
 npm --prefix web run dev       # vite dev server, http://127.0.0.1:5178
 npm --prefix web run build     # production build -> web/dist
 npm --prefix web run preview   # preview the build, http://127.0.0.1:5179
-npm --prefix web test          # node --test "tests/**/*.test.mjs" (currently clock.test.mjs, judge.test.mjs)
+npm --prefix web test          # node --test "tests/**/*.test.mjs"
 ```
 
 Run a single test file directly: `node --test web/tests/clock.test.mjs`.
@@ -75,23 +75,21 @@ state (what's built vs. stubbed vs. never verified).
   A game not registered in `web/src/shell/registry.js` is invisible to the
   harness/critic.
 - **Directory ownership** (`web/src/`):
-  - `main.js`, `core/` (`clock.js`, `input.js`, `judge.js`, `util.js`) —
-    integrator-only; this is the shared timing/input/judging core, the
-    strongest and only test-pinned part of the codebase.
+  - `main.js`, `core/` (`clock.js`, `input.js`, `judge.js`, `util.js`,
+    `feel.js`) — integrator-only; the shared timing/input/judging core.
   - `audio/` — synth engine, music player (lookahead scheduling), theory
     helpers, seven original tracks as data. Muted in the harness — least
     verified area in the project.
   - `render/` — renderer, camera, lighting/post (`look/`, `env/`), pooled
     VFX (`fx/`).
-  - `ui/` — HUD, popups, menus. Currently half-wired: `font.js`/`styles.js`
-    exist but `ui/index.js` hasn't been rewritten to use them yet.
+  - `ui/` — HUD, popups, menus (`index.js` builds on `font.js`/`styles.js`).
   - `chars/` — procedural character rig, beat-driven animation, instanced
     crowd. Reviewable standalone via the `chars-demo` scene.
   - `games/<id>/` — one directory per minigame (`swingKings`,
     `chompChorus`, `drumlineDash`, `finaleFever`, `bounceBrigade`).
   - `shell/` — title, roster, freeplay, select, results, pause, nav, save
     state.
-- `src/core/feel.js` (referenced from `web/src/`) holds cross-game feel
+- `web/src/core/feel.js` holds cross-game feel
   constants (countdown length, hitstop, shake magnitudes, popup lifetimes) —
   change them there, not per-game.
 - **Input is taps-first.** Every game plays on taps and the harness drives
@@ -104,7 +102,8 @@ state (what's built vs. stubbed vs. never verified).
   `docs/agents/critic-brief.md` define the builder/critic agent workflow
   this codebase is developed under (one builder per module, then a separate
   critic with fresh context that inspects the running game via the harness
-  and never reads the builder's summary). `docs/HANDOFF.md` §5 lists traps
+  and never reads the builder's summary); `docs/agents/backend-brief.md`
+  covers the leaderboard Worker. `docs/HANDOFF.md` §5 lists traps
   already paid for — read before re-deriving them (e.g. use
   `x - Math.floor(x)` for beat phase, never `x % 1`, since the transport
   runs negative beats through the lead-in).
@@ -189,8 +188,8 @@ Only the parts a directory listing will not tell you:
   backing the Unity port’s parity tests
 - `docs/agents/` — agent-facing process docs: `issue-tracker.md` (GitHub
   issues in `boenchen1112/Swinger`), `domain.md` (`CONTEXT.md` +
-  `docs/adr/`), `build-brief.md`/`critic-brief.md` (Beat Bash Bonanza
-  builder/critic workflow)
+  `docs/adr/`), `build-brief.md`/`critic-brief.md`/`backend-brief.md`
+  (Beat Bash Bonanza builder/critic/backend workflow)
 - `docs/design/minigames.md` — Beat Bash Bonanza minigame design docs
 - `docs/HANDOFF.md` — Beat Bash Bonanza current status and next actions
 - `progress/` — Beat Bash Bonanza live progress page
