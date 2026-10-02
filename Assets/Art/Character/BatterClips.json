@@ -1,0 +1,46 @@
+{
+  "note": "Batter clips, hand-keyed pose-to-pose in Tools/blender/anim.py. Import as Generic (tail, ears, bat and Root squash/stretch are not Humanoid). Frames are at 24 fps.",
+  "fps": 24,
+  "bpm": 124.0,
+  "idleSpeedAtBpm": 1.0333,
+  "clips": {
+    "Coil": {
+      "frames": 14,
+      "fps": 24,
+      "loop": false,
+      "holdFrom": 9,
+      "seconds": 0.5833
+    },
+    "HomeRun": {
+      "frames": 48,
+      "fps": 24,
+      "loop": false,
+      "loopFrom": 28,
+      "loopTo": 36,
+      "seconds": 2.0
+    },
+    "Idle": {
+      "frames": 24,
+      "fps": 24,
+      "loop": true,
+      "beats": 2,
+      "seconds": 1.0
+    },
+    "Swing": {
+      "frames": 22,
+      "fps": 24,
+      "loop": false,
+      "contact": 3,
+      "seconds": 0.9167,
+      "contactSeconds": 0.125
+    },
+    "Whiff": {
+      "frames": 40,
+      "fps": 24,
+      "loop": false,
+      "contact": 3,
+      "seconds": 1.6667,
+      "contactSeconds": 0.125
+    }
+  }
+}
