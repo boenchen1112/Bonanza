@@ -46,26 +46,7 @@ for s, t in (("L", GRIP_L), ("R", GRIP_R)):
     # grip bone = where the hand should lie: wrist on one side of the handle, fingers across it,
     # knuckle line (hand X) along the bat
     new("Grip." + s, p - bz * WRIST_OFF, p + bz * (0.09 - WRIST_OFF), "BatCtrl", roll_z=bx.cross(bz))
-# the chain dangling from the right wrist gets its own bone so it can hang instead of sticking out
-new("Chain.R", (-0.47, -0.19, 0.68), (-0.48, -0.22, 0.43), "LowerArm.R", deform=True, roll_z=Vector((0, -1, 0)))
 bpy.ops.object.mode_set(mode="OBJECT")
-def seg(p, a, b):
-    ab = b - a; t = max(0.0, min(1.0, (p - a).dot(ab) / ab.length_squared)); return (a + ab * t - p).length
-B = arm.data.bones; vg = body.vertex_groups
-chain = [(B[n].head_local, B[n].tail_local) for n in ("UpperArm.R", "LowerArm.R", "Hand.R")]
-idx = {vg[n].index: vg[n] for n in ("UpperArm.R", "LowerArm.R", "Hand.R")}
-cg = vg.new(name="Chain.R"); moved = 0
-for v in body.data.vertices:
-    if v.co.z > 0.70: continue
-    lw = [(g.group, g.weight) for g in v.groups if g.group in idx and g.weight > 0]
-    if not lw: continue
-    d = min(seg(v.co, a, b) for a, b in chain)
-    f = min(1.0, max(0.0, (d - 0.14) / 0.05))
-    if f <= 0: continue
-    for gi, w in lw:
-        idx[gi].add([v.index], w * (1 - f), "REPLACE"); cg.add([v.index], w * f, "ADD")
-    moved += 1
-print("CHAIN verts", moved)
 
 # bat mesh: revolved profile along the Bat bone, 14 sides
 prof = [(0.0, 0.0), (0.0, 0.026), (0.012, 0.030), (0.022, 0.018), (0.26, 0.017), (0.32, 0.020),

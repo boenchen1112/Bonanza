@@ -124,6 +124,7 @@ InitTestScene*.unity*
 
 # Raw image-to-3D downloads (47 MB+); rebuild inputs, kept locally, see Tools/blender/README.md
 /Art/meshy/
+/Art/tripo/
 
 # Private working notes, kept on disk only
 /notes/

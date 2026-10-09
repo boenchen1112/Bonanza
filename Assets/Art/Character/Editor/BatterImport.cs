@@ -3,8 +3,8 @@ using UnityEditor;
 using UnityEngine;
 
 // Import settings for the batter exported by Tools/blender/export_fbx.py.
-// Generic rig: the clips key Root squash/stretch, tail, ears, the wrist chain and the bat,
-// which a Humanoid avatar would drop. Keyframe reduction is off so the snappy
+// Generic rig: the clips key Root squash/stretch, tail, ears and the bat, which a Humanoid
+// avatar would drop. Keyframe reduction is off so the snappy
 // pose-to-pose timing (3-frame swing to contact) is kept exactly.
 public class BatterImport : AssetPostprocessor
 {

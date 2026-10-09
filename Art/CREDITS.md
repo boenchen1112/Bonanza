@@ -2,10 +2,10 @@
 
 ## Batter character (Tasogare, human form)
 
-- Mesh and base textures generated with **Meshy** (https://www.meshy.ai), image-to-3D,
-  from our own character art. Meshy free-plan output is licensed
-  **CC BY 4.0** (https://creativecommons.org/licenses/by/4.0/); attribution: "3D model
-  generated with Meshy (meshy.ai)".
-- Changes: decimated from 659,064 to 40,000 faces, textures re-baked to 4K on new UVs,
-  rigged, weight-fixed and animated in Blender (scripts in `Tools/blender/`).
-- The raw Meshy download (`Art/meshy/Tasogare.glb`) is kept locally, not in git.
+- Mesh, base-colour texture and starting skeleton generated with **Tripo**
+  (https://www.tripo3d.ai), image-to-3D with its auto-rigger, from our own character art.
+  Attribution: "3D model generated with Tripo (tripo3d.ai)".
+- Changes: welded, turned and scaled to the game's conventions, rest pose changed to an
+  A-pose with closed hands, finger bones folded into the hands, tail and ear bones added,
+  bat added, animated in Blender (scripts in `Tools/blender/`).
+- The raw Tripo download (`Art/tripo/Batter.glb`) is kept locally, not in git.

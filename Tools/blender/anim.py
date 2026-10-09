@@ -17,6 +17,9 @@ bpy.ops.object.mode_set(mode="POSE")
 for b in pb: b.rotation_mode = "XYZ"
 for n in ("FootCtrl.L", "FootCtrl.R", "BatCtrl"): pb[n].rotation_mode = "QUATERNION"
 ARM_REACH = {s: bones["UpperArm." + s].length + bones["LowerArm." + s].length for s in "LR"}
+# Bat positions below were keyed on a body whose shoulders sat here; they follow the shoulders
+# of whatever body is loaded.
+SHOULDERS = (bones["UpperArm.L"].head_local + bones["UpperArm.R"].head_local) / 2 - Vector((-0.084, -0.077, 1.018))
 
 def R(n): return bones[n].matrix_local.to_3x3()
 def loc_of(n, v): return R(n).inverted() @ Vector(v)
@@ -55,7 +58,7 @@ def apply(p):
     if p["bat"]:
         h_local, dvec = p["bat"]
         C = pb["Chest"].matrix @ bones["Chest"].matrix_local.inverted()
-        H = C @ Vector(h_local); d = (C.to_3x3() @ Vector(dvec)).normalized() if p.get("batChest") else Vector(dvec).normalized()
+        H = C @ (Vector(h_local) + SHOULDERS); d = (C.to_3x3() @ Vector(dvec)).normalized() if p.get("batChest") else Vector(dvec).normalized()
         sm = (pb["UpperArm.L"].head + pb["UpperArm.R"].head) / 2
         v = sm - H; bz = -(v - d * v.dot(d)).normalized()
         knob = H - d * 0.075
@@ -65,11 +68,6 @@ def apply(p):
         for s in "LR":
             if s == "L" and p["ikL"] < 1: continue
             clav(s)
-    # the wrist chain hangs straight down whatever the arm does
-    cb = pb["Chain.R"]; M = cb.matrix.copy(); sc_ = M.to_scale()
-    y = Vector((0, 0, -1)); z = Vector((0, -1, 0)); x = y.cross(z)
-    N = Matrix((x * sc_.x, y * sc_.y, z * sc_.z)).transposed().to_4x4(); N.translation = M.translation
-    cb.matrix = N; bpy.context.view_layer.update()
     worst = 0
     for s in "LR":
         if s == "L" and p["ikL"] < 1: continue
@@ -127,7 +125,7 @@ STANCE = mk(BASE,
     hips=(0, 0.01, -0.07),
     foot={"L": ((0.10, -0.02, 0), (0, 0, 18)), "R": ((-0.10, 0.03, 0), (0, 0, -22))},
     ep={"R": (-0.20, 0.0, 0.22), "L": (0.05, 0, -0.25)},
-    bat=((-0.14, -0.36, 0.8), (-0.35, 0.30, 0.89)))
+    bat=((-0.19, -0.48, 0.88), (-0.35, 0.30, 0.89)))
 
 def bob(p, down, sw):
     """Idle beat: down = squash on the beat, up = stretch between. sw = +/-1 swish side."""
@@ -139,14 +137,28 @@ def bob(p, down, sw):
     return mk(p, r, scale=(0.98, 1.03, 0.98), hips=(0, 0.01, -0.055),
               bat=((-0.14, -0.36, 0.82), (-0.28, 0.26, 0.92)))
 
+def calm(f):
+    """Idle, 4 beats in 48 frames: a small settle on each beat (1.5% squash, 1.2 cm), a slow
+    weight sway over the bar, head and tail trailing the sway so the body never pumps as one."""
+    ph = 2 * math.pi * f / 48; sw = math.sin(ph); down = f % 12 == 0
+    lag = lambda k: math.sin(ph - k)
+    r = {"Spine": (6, -8, -2 * sw), "Chest": (8, -12, -1 * sw),
+         "Head": (-6 + (1.5 if down else -1), 38, 4 + 3 * lag(0.8)),
+         "Tail1": (7 * lag(1.2), 0, -15), "Tail2": (6 * lag(1.8), 0, -10), "Tail3": (5 * lag(2.4), 0, -12),
+         "Ear.L": (-8 + (3 if down else 0), 0, 2 * lag(1.0)), "Ear.R": (-8 + (3 if down else 0), 0, 2 * lag(1.0))}
+    h, d = STANCE["bat"]
+    return mk(STANCE, r, scale=(1.012, 0.985, 1.012) if down else (0.997, 1.006, 0.997),
+              hips=(0.012 * sw, 0.01, -0.082 if down else -0.07),
+              bat=((h[0], h[1], h[2] - (0.008 if down else -0.004)), (d[0] + 0.03 * sw, d[1], d[2])))
+
 COIL = mk(STANCE,
     rot={"Hips": (0, -46, -6), "Spine": (4, -16, -4), "Chest": (6, -30, -4), "Neck": (0, 22, 0), "Head": (-4, 70, 6),
          "Tail1": (0, 0, -30), "Tail2": (0, 0, -20), "Tail3": (0, 0, -20), "Ear.L": (-28, 0, 0), "Ear.R": (-28, 0, 0)},
     hips=(-0.06, 0.02, -0.06), scale=(0.98, 1.04, 0.98),
     foot={"L": ((0.05, -0.06, 0.15), (25, 0, 30))},
     bat=((-0.20, -0.33, 0.86), (-0.62, 0.62, 0.48)))
-DIP = mk(STANCE, scale=(1.07, 0.9, 1.07), hips=(0, 0.01, -0.11), rot={"Ear.L": (8, 0, 0), "Ear.R": (8, 0, 0)},
-         bat=((-0.14, -0.36, 0.75), (-0.42, 0.34, 0.84)))
+DIP = mk(STANCE, scale=(1.04, 0.94, 1.04), hips=(0, 0.01, -0.10), rot={"Ear.L": (8, 0, 0), "Ear.R": (8, 0, 0)},
+         bat=((-0.19, -0.48, 0.83), (-0.42, 0.34, 0.84)))
 STRIDE = mk(COIL, rot={"Hips": (0, -26, 0), "Chest": (6, -26, -2)},
             foot={"L": ((0.22, -0.03, 0.0), (0, 0, 20))}, hips=(0.02, 0.02, -0.08), scale=(1.03, 0.96, 1.03))
 CONTACT = mk(STANCE,
@@ -216,12 +228,50 @@ HR_PUMP = mk(HR_UP, rot={**FIST_CHEST, "Spine": (10, 0, 0), "Head": (-4, 0, 0), 
                          "Tail1": (25, 0, 20), "Tail2": (20, 0, 15)},
              scale=(1.05, 0.93, 1.05), hips=(0, 0, -0.09), bat=((-0.28, -0.14, 1.10), (-0.58, 0.0, 0.81)))
 
+
+# ---------------------------------------------------------------- FIT=<pose,...>: search hand/elbow placement
+if os.environ.get("FIT"):
+    from mathutils.bvhtree import BVHTree
+    body = bpy.data.objects["Batter"]; gn = [g.name for g in body.vertex_groups]
+    def _c(n):
+        if n.startswith(("UpperArm", "LowerArm", "Hand", "Chain")): return "arm"
+        if n.startswith(("Hips", "Spine", "Chest", "Shoulder", "Neck", "Head", "Ear")): return "body"
+        return None
+    vc = [(_c(gn[max(v.groups, key=lambda g: g.weight).group]) if v.groups else None) for v in body.data.vertices]
+    VA = [i for i, c in enumerate(vc) if c == "arm"]
+    FB = [tuple(poly.vertices) for poly in body.data.polygons if all(vc[i] == "body" for i in poly.vertices)]
+    def _buried():
+        dg = bpy.context.evaluated_depsgraph_get(); ev = body.evaluated_get(dg); m = ev.to_mesh()
+        co = [v.co.copy() for v in m.vertices]; ev.to_mesh_clear()
+        T = BVHTree.FromPolygons(co, FB); out = set()
+        for i in VA:
+            loc, n, fi, d = T.find_nearest(co[i])
+            if loc is not None and d < 0.06 and (co[i] - loc).dot(n) < -0.002: out.add(i)
+        return out
+    arm.animation_data_create(); arm.animation_data.action = None
+    for b_ in pb: b_.location = (0, 0, 0); b_.rotation_euler = (0, 0, 0); b_.rotation_quaternion = (1, 0, 0, 0); b_.scale = (1, 1, 1)
+    REST_B = _buried(); print("FIT rest buried", len(REST_B))
+    def overlap(): return len(_buried() - REST_B)
+    arm.animation_data_create(); arm.animation_data.action = None
+    for name in os.environ["FIT"].split(","):
+        p0 = globals()[name]; (h, d) = p0["bat"]; best = None
+        for dx in [float(v) for v in os.environ.get("FX", "-0.04,0,0.04").split(",")]:
+            for dy in [float(v) for v in os.environ.get("FY", "-0.15,-0.11,-0.07,-0.03,0").split(",")]:
+                for dz in [float(v) for v in os.environ.get("FZ", "-0.08,-0.04,0,0.04").split(",")]:
+                    for ex in [float(v) for v in os.environ.get("FE", "0,0.15,0.3").split(",")]:
+                        q = mk(p0, bat=((h[0] + dx, h[1] + dy, h[2] + dz), d),
+                              ep={s: (p0["ep"][s][0] + (ex if s == "L" else -ex), p0["ep"][s][1], p0["ep"][s][2]) for s in "LR"})
+                        reach = apply(q); o = overlap()
+                        cost = o + max(0, reach - 0.97) * 5000 + (abs(dx) + abs(dy) + abs(dz)) * 100
+                        if best is None or cost < best[0]: best = (cost, o, reach, dx, dy, dz, ex)
+        apply(p0); o0 = overlap()
+        print(f"FIT {name} was {o0} -> {best[1]} reach {best[2]:.2f} dH=({best[3]},{best[4]},{best[5]}) elbowOut={best[6]}")
+    sys.exit(0)
+
 CLIPS = {
     # name: (frames, loop, [(frame, pose, interp)], markers)
-    "Idle": (24, True, [(0, bob(STANCE, True, 1), None), (6, bob(STANCE, False, 0), None),
-                        (12, bob(STANCE, True, -1), None), (18, bob(STANCE, False, 0), None),
-                        (24, bob(STANCE, True, 1), None)], {"beats": 2}),
-    "Coil": (14, False, [(0, bob(STANCE, True, 1), None), (3, DIP, None), (9, COIL, None),
+    "Idle": (48, True, [(f, calm(f), None) for f in range(0, 49, 6)], {"beats": 4}),
+    "Coil": (14, False, [(0, calm(0), None), (3, DIP, None), (9, COIL, None),
                          (14, mk(COIL, hips=(-0.06, 0.02, -0.07)), None)], {"holdFrom": 9}),
     "Swing": (22, False, [(0, mk(COIL, hips=(-0.06, 0.02, -0.07)), "LINEAR"), (1, STRIDE, "LINEAR"), (3, CONTACT, None),
                           (6, FOLLOW, None), (9, OVER, None), (14, SETTLE, None), (22, FINISH, None)], {"contact": 3}),
@@ -232,6 +282,14 @@ CLIPS = {
                             (19, HR_LAND, None), (23, HR_UP, None), (28, HR_PUMP, None), (32, HR_UP, None),
                             (36, HR_PUMP, None), (40, HR_UP, None), (48, HR_UP, None)], {"loopFrom": 28, "loopTo": 36}),
 }
+
+# TEST="POSE|dx,dy,dz;..." keys each variant on its own frame of a "Test" clip (for clipstrip)
+if os.environ.get("TEST"):
+    ks = []
+    for i, item in enumerate(os.environ["TEST"].split(";")):
+        nm, off = item.split("|"); p0 = eval(nm); dx, dy, dz = map(float, off.split(","))
+        (h, d) = p0["bat"]; ks.append((i, mk(p0, bat=((h[0] + dx, h[1] + dy, h[2] + dz), d)), "CONSTANT"))
+    CLIPS = {"Test": (len(ks) - 1, False, ks, {})}
 
 meta = {}
 for name, (n, loop, keys, marks) in CLIPS.items():

@@ -20,11 +20,11 @@
       "seconds": 2.0
     },
     "Idle": {
-      "frames": 24,
+      "frames": 48,
       "fps": 24,
       "loop": true,
-      "beats": 2,
-      "seconds": 1.0
+      "beats": 4,
+      "seconds": 2.0
     },
     "Swing": {
       "frames": 22,
