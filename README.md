@@ -1,86 +1,56 @@
 # Rhythm Game
 
-A party rhythm game for the browser, built in Unity. Five minigames, played
+A party rhythm game that runs in any browser, no install. Five minigames, played
 alone or as a party against CPU players:
 
 | Id | Game | Play |
 | --- | --- | --- |
-| `swing-kings` | Swing Kings | Time the swing to the pitch. |
+| `swing-kings` | Swing Kings | Time the swing to the pitch. Tap, hold and release, or conduct with your hand on the webcam. |
 | `chomp-chorus` | Chomp Chorus | Sing your lane in a four-voice row. |
 | `drumline-dash` | Drumline Dash | Answer the drum call and race the field. |
 | `bounce-brigade` | Bounce Brigade | Bounce from platform to platform on the beat. |
 | `finale-fever` | Finale Fever | Call-and-answer finale with a rising tempo. |
 
-All timing runs on the audio clock (`AudioSettings.dspTime`), never on frame
-time, and every game plays on taps alone.
+Built with Three.js and Vite. All timing runs on the audio clock, and every
+game plays on taps alone. Swing Kings also has an optional hand-tracking mode
+(MediaPipe) that uses the webcam on your device and sends nothing anywhere.
 
-## Requirements
+## Run it
 
-- Unity **6000.6.2f1** (Unity 6.6) with WebGL Build Support. The project uses URP.
-- Node.js 20 or later, for the browser checks and the golden data.
-- Blender 4.2 LTS, only to rebuild the character.
+Node.js 20 or later.
 
-## Open and play
+```powershell
+npm --prefix web install
+npm run dev              # http://127.0.0.1:5178
+npm --prefix web test    # unit tests
+npm --prefix web run build
+```
 
-Open the project folder in Unity Hub. The only scene is
-`Assets/Scenes/SwingKings.unity`, and it starts on the title screen.
-The main button is Space, Enter, J, a click or a tap. Some games also use the
-arrow keys (or WASD). Esc or P pauses. Gamepads work too.
+Main button: Space, Enter, J, a click or a tap. Esc or P pauses.
+
+## Checks
+
+A harness boots the built game in headless Chromium, plays it, and writes
+screenshots and timing telemetry:
+
+```powershell
+node tools/harness/inspect.mjs --scene swing-kings --dist dist-check --out runs/check --seconds 12 --shots 4 --play auto
+```
 
 ## Layout
 
 ```
-Assets/Game/Core/      Rules for every game and the party mode. Pure C#, no UnityEngine.
-Assets/Game/Runtime/   GameHost (clock, input, count-in, pause, results), one
-                       Minigame subclass per game, and the menu screens.
-Assets/Tests/EditMode/ Rule tests. Golden/ holds chart dumps the C# must match.
-Assets/Art/Character/  The batter: FBX with clips, textures, import settings.
-Art/blender/           Blender sources of the batter.
-Tools/blender/         Headless Blender scripts that build the batter (see its README).
-Tools/                 Browser checks and the golden-data dumper.
-Reference/web/         The original web prototype's rules, charts and music, which the
-                       C# rules are tested against.
+web/       The game: src/ (core, audio, render, chars, games, shell, ui), tests/, ARCHITECTURE.md
+tools/     harness/ (headless play and checks), assets/ (Blender and Mixamo pipelines)
+worker/    Optional leaderboard (Cloudflare Worker + D1)
+docs/      Design notes and decision records
 ```
 
-## Tests
+## Branches
 
-Rule tests (EditMode), from the command line:
-
-```powershell
-Unity.exe -batchmode -projectPath . -runTests -testPlatform EditMode -testResults Captures/editmode.xml
-```
-
-or in the Editor under Window > General > Test Runner.
-
-The rules of four games and the party mode are pinned to golden dumps of the
-web prototype. To dump them again (the result must not change):
-
-```powershell
-node Tools/golden/dump-charts.mjs
-```
-
-The prototype's own tests: `npm --prefix Reference/web test`.
-
-## WebGL build and browser check
-
-Build WebGL into `Builds/WebGL` (File > Build Profiles, or batch mode). Then,
-once:
-
-```powershell
-npm --prefix Tools install
-```
-
-Each game must reach rank S with no misses on autoplay in a real browser:
-
-```powershell
-node Tools/webgl-check.mjs Builds/WebGL Captures/swing-kings.png "?autoplay&game=swing-kings" "[RESULT]" 200
-```
-
-It prints `game=<id> rank=S ... miss=0` and `errors: none`. Check that the
-`game=` value matches; an unknown id falls back to `swing-kings`. A full party:
-`LIVE=1 node Tools/webgl-check.mjs Builds/WebGL Captures/party.png "?autoplay&party=2" "[PARTY-DONE]" 900`
-(about 6 minutes). Pause and resume: `node Tools/pause-check.mjs Builds/WebGL Captures/pause swing-kings`.
+- `main`: this browser version, playable.
+- `dev`: the Unity rebuild, still in development.
 
 ## Credits
 
-See `Art/CREDITS.md`. The batter's mesh was generated with Meshy (CC BY 4.0).
+See `CREDITS.md`.

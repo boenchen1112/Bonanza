@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Beat Bash Bonanza</title>
+    <style>
+      html, body { margin: 0; padding: 0; height: 100%; background: #07060f; overflow: hidden; }
+      body { font-family: system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+      #stage { position: fixed; inset: 0; display: block; }
+      #ui { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+      canvas { display: block; }
+    </style>
+  </head>
+  <body>
+    <canvas id="stage"></canvas>
+    <div id="ui"></div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

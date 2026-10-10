@@ -1,0 +1,15 @@
+name = "bonanza-leaderboard"
+main = "src/index.js"
+compatibility_date = "2026-01-01"
+
+# Create with: wrangler d1 create bonanza-leaderboard
+# Then paste the database_id it prints below, and apply worker/schema.sql.
+[[d1_databases]]
+binding = "DB"
+database_name = "bonanza-leaderboard"
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+
+[vars]
+# The GitHub Pages origin that's allowed to call this Worker. Update once
+# the repo is public and Pages is live; "*" works meanwhile but is wide open.
+ALLOWED_ORIGIN = "*"
