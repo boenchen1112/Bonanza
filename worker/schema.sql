@@ -1,4 +1,4 @@
--- Beat Bash Bonanza leaderboard schema (Cloudflare D1).
+-- Bonanza leaderboard schema (Cloudflare D1).
 -- Apply with: wrangler d1 execute bonanza-leaderboard --file=worker/schema.sql
 
 CREATE TABLE IF NOT EXISTS scores (

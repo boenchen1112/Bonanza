@@ -1,4 +1,4 @@
-# Beat Bash Bonanza — architecture contract
+# Bonanza — architecture contract
 
 **Read this before writing a line.** Many agents work on this codebase in
 parallel. The contracts below are what keep that from turning into mush.

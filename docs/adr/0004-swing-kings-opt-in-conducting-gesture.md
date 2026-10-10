@@ -1,6 +1,6 @@
 # Swing Kings gets an opt-in conducting gesture; taps stay the default and the harness path
 
-`docs/HANDOFF.md` §6 made Beat Bash Bonanza taps-only so every game stays drivable by the standard harness bot, and ADR 0002 made Baton Brawl the one scoped exception. The portfolio-polish pass (`docs/BBB_Portfolio_Polish_Spec.md` §5) needs the conducting thread — Joy-Con analysis → this — visible in the hero game, so Swing Kings gets hold-and-release back as a *second* input mode.
+`docs/HANDOFF.md` §6 made Bonanza taps-only so every game stays drivable by the standard harness bot, and ADR 0002 made Baton Brawl the one scoped exception. The portfolio-polish pass (`docs/BBB_Portfolio_Polish_Spec.md` §5) needs the conducting thread — Joy-Con analysis → this — visible in the hero game, so Swing Kings gets hold-and-release back as a *second* input mode.
 
 ## Decision
 

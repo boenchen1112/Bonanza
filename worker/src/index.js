@@ -1,5 +1,5 @@
 /**
- * Beat Bash Bonanza leaderboard — Cloudflare Worker.
+ * Bonanza leaderboard — Cloudflare Worker.
  *
  * Two endpoints, both talking to the D1 database bound as `env.DB`
  * (see worker/schema.sql and worker/wrangler.toml):

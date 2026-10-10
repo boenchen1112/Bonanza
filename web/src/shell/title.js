@@ -27,7 +27,6 @@ import { preloadCards } from './cards.js';
 import { profile, PERF_HINT_KEY } from './state.js';
 import { goView, titleMenuRoute } from './nav.js';
 
-const LOGO_TOP = 'BEAT BASH';
 const LOGO_BOT = 'BONANZA';
 const IDLE_TO_ATTRACT = 8.5;
 const ATTRACT_HOLD = 3.2;
@@ -104,7 +103,6 @@ export default {
     const logo = el('div', 'sh-logo');
     logo.style.fontSize = 'clamp(34px, 8.4vw, 108px)';
     S.logo = logo;
-    logo.appendChild(logoLine(LOGO_TOP, false, S.letters));
     logo.appendChild(logoLine(LOGO_BOT, true, S.letters));
     const tag = el('div', 'sh-logo__tag', 'FIVE GAMES · ONE BEAT');
     tag.style.fontSize = 'clamp(9px,1.35vw,17px)';

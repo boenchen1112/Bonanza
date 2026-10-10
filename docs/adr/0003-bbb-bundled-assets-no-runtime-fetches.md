@@ -1,4 +1,4 @@
-# Beat Bash Bonanza may bundle authored assets; the rule is "no fetches outside the build"
+# Bonanza may bundle authored assets; the rule is "no fetches outside the build"
 
 `web/ARCHITECTURE.md` rule 3 said everything — geometry, textures, music, SFX — must be generated in code or embedded, and that the build must run from `file://` offline. That rule is the largest single cause of the series looking like a prototype: every character and prop is `BoxGeometry`/`CapsuleGeometry` primitives on a segmented joint rig, with no skinned meshes, no authored animation, and no textures. The portfolio-polish pass (`docs/BBB_Portfolio_Polish_Spec.md`) needs real skinned characters and a prop kit.
 
