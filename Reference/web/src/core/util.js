@@ -122,15 +122,15 @@ export class Bus {
 export const Save = {
   get(key, fallback = null) {
     try {
-      const raw = localStorage.getItem('bbb:' + key);
+      const raw = localStorage.getItem('bnz:' + key);
       return raw === null ? fallback : JSON.parse(raw);
     } catch { return fallback; }
   },
   set(key, value) {
-    try { localStorage.setItem('bbb:' + key, JSON.stringify(value)); return true; }
+    try { localStorage.setItem('bnz:' + key, JSON.stringify(value)); return true; }
     catch { return false; }
   },
   del(key) {
-    try { localStorage.removeItem('bbb:' + key); } catch { /* ignore */ }
+    try { localStorage.removeItem('bnz:' + key); } catch { /* ignore */ }
   },
 };

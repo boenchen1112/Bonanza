@@ -1,7 +1,7 @@
 // Bounce Brigade in grey boxes: the platforms are the tune. A piano roll you
 // run across — x is time, height is pitch, colour is pitch class, width is
 // note length. Tap as you land; on a ramp, tap as you meet it and again as
-// you leave it to clear the chasm. Rules live in RhythmGame.Core (BounceRound);
+// you leave it to clear the chasm. Rules live in Bonanza.Core (BounceRound);
 // this is stage, bouncer, camera, sound and HUD only. Web source:
 // games/bounceBrigade/index.js.
 //
@@ -12,10 +12,10 @@
 // Coordinates: the web build's (x, y, z) is (x, y, -z) here.
 
 using System.Collections.Generic;
-using RhythmGame.Core;
+using Bonanza.Core;
 using UnityEngine;
 
-namespace RhythmGame
+namespace Bonanza
 {
     public sealed class BounceBrigadeGame : Minigame
     {

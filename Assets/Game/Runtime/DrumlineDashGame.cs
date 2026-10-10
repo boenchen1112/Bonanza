@@ -1,5 +1,5 @@
 // Drumline Dash in grey boxes: four marchers in lanes, a drum major on a podium
-// with a five-drum rack. Rules live in RhythmGame.Core (DrumlineRound); this is
+// with a five-drum rack. Rules live in Bonanza.Core (DrumlineRound); this is
 // stage, camera, sound and HUD only. Web source: games/drumlineDash/index.js.
 //
 // The ear leads. The major's call is tuned toms panned right; your answer is a
@@ -13,10 +13,10 @@
 // Coordinates: the web build's (x, y, z) is (x, y, -z) here.
 
 using System.Collections.Generic;
-using RhythmGame.Core;
+using Bonanza.Core;
 using UnityEngine;
 
-namespace RhythmGame
+namespace Bonanza
 {
     public sealed class DrumlineDashGame : Minigame
     {

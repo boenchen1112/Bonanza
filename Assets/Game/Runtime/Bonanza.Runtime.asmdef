@@ -1,7 +1,10 @@
 {
-    "name": "RhythmGame.Core",
-    "rootNamespace": "RhythmGame.Core",
-    "references": [],
+    "name": "Bonanza.Runtime",
+    "rootNamespace": "Bonanza",
+    "references": [
+        "Bonanza.Core",
+        "Unity.InputSystem"
+    ],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
@@ -10,5 +13,5 @@
     "autoReferenced": true,
     "defineConstraints": [],
     "versionDefines": [],
-    "noEngineReferences": true
+    "noEngineReferences": false
 }

@@ -15,10 +15,10 @@
 // transform, and Mat() copies are released in OnDestroy.
 
 using System.Collections.Generic;
-using RhythmGame.Core;
+using Bonanza.Core;
 using UnityEngine;
 
-namespace RhythmGame
+namespace Bonanza
 {
     public abstract class Minigame : MonoBehaviour
     {

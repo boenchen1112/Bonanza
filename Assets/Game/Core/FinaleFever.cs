@@ -16,7 +16,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace RhythmGame.Core
+namespace Bonanza.Core
 {
     /// Beat <-> time for a tempo that is a smooth function of the beat.
     /// Lead-in (beat <= 0) runs at Bpm0; after that dt/dbeat = 60 / BpmAt(beat).

@@ -1,5 +1,5 @@
 // Swing Kings, playable in grey boxes. The "attach a controller" step of the
-// pipeline: a placeholder stage wired to SwingRound (RhythmGame.Core). No rule
+// pipeline: a placeholder stage wired to SwingRound (Bonanza.Core). No rule
 // logic lives here, and no visual decisions — every mesh below is a primitive
 // standing in for art that comes later.
 //
@@ -10,10 +10,10 @@
 // index.js sample()/connect()), with three.js z flipped to Unity's.
 
 using System.Collections.Generic;
-using RhythmGame.Core;
+using Bonanza.Core;
 using UnityEngine;
 
-namespace RhythmGame
+namespace Bonanza
 {
     public sealed class SwingKingsGame : Minigame
     {

@@ -5,9 +5,9 @@
 
 using System.Linq;
 using NUnit.Framework;
-using RhythmGame.Core;
+using Bonanza.Core;
 
-namespace RhythmGame.Core.Tests
+namespace Bonanza.Core.Tests
 {
     public class SwingRulesTests
     {

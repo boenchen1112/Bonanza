@@ -5,7 +5,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace RhythmGame
+namespace Bonanza
 {
     public sealed class Callouts
     {

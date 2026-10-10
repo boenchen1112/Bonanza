@@ -6,7 +6,7 @@ using System.Globalization;
 using System.IO;
 using UnityEngine;
 
-namespace RhythmGame.Core.Tests
+namespace Bonanza.Core.Tests
 {
     public sealed class GoldenRow
     {

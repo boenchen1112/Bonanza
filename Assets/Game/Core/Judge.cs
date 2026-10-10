@@ -10,7 +10,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace RhythmGame.Core
+namespace Bonanza.Core
 {
     public enum Verdict { Miss = 0, Good = 1, Great = 2, Perfect = 3 }
 

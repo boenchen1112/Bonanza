@@ -13,7 +13,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace RhythmGame.Core
+namespace Bonanza.Core
 {
     public enum TierId { Bunt, Liner, Homer, Slam }
 

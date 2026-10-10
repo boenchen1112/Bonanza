@@ -6,7 +6,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace RhythmGame
+namespace Bonanza
 {
     public enum Wave { Sine, Square, Triangle, Noise }
 

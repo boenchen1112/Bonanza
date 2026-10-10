@@ -1,6 +1,6 @@
 // Finale Fever in grey boxes: the maestro on a podium throws orbs along a
 // lifted arc into your strike zone; you answer his phrase one bar later while
-// the tempo climbs 150 -> 187.5. Rules live in RhythmGame.Core (FeverRound);
+// the tempo climbs 150 -> 187.5. Rules live in Bonanza.Core (FeverRound);
 // this is stage, orbs, camera, sound and HUD only. Web source:
 // games/finaleFever/index.js + set.js.
 //
@@ -11,10 +11,10 @@
 // Coordinates: the web build's (x, y, z) is (x, y, -z) here.
 
 using System.Collections.Generic;
-using RhythmGame.Core;
+using Bonanza.Core;
 using UnityEngine;
 
-namespace RhythmGame
+namespace Bonanza
 {
     public sealed class FinaleFeverGame : Minigame
     {

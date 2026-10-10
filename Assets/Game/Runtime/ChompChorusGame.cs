@@ -1,5 +1,5 @@
 // Chomp Chorus in grey boxes: four singers on pedestals, one of them yours.
-// Rules live in RhythmGame.Core (ChompRound); this is stage, telegraph, sound
+// Rules live in Bonanza.Core (ChompRound); this is stage, telegraph, sound
 // and HUD only. Web source: games/chompChorus/index.js + props.js.
 //
 // The twist is AUDIBLE: every bar each live voice sustains its own chord tone,
@@ -11,10 +11,10 @@
 // the head grows. The human's lane has a white ring and the label "YOU".
 
 using System.Collections.Generic;
-using RhythmGame.Core;
+using Bonanza.Core;
 using UnityEngine;
 
-namespace RhythmGame
+namespace Bonanza
 {
     public sealed class ChompChorusGame : Minigame
     {

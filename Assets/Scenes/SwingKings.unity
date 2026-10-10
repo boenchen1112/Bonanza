@@ -275,7 +275,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: ea443770486216f429471c9a5429044b, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: RhythmGame.Runtime::RhythmGame.AudioClock
+  m_EditorClassIdentifier: Bonanza.Runtime::Bonanza.AudioClock
 --- !u!4 &639810848
 Transform:
   m_ObjectHideFlags: 0
@@ -302,7 +302,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: dc34e1482655c534094c091127b76e40, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: RhythmGame.Runtime::RhythmGame.GameHost
+  m_EditorClassIdentifier: Bonanza.Runtime::Bonanza.GameHost
   greybox: {fileID: 2100000, guid: 2cb1a540a8d77984e93628cece6a31ce, type: 2}
 --- !u!1 &1475441120
 GameObject:

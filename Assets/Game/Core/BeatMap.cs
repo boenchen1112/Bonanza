@@ -2,7 +2,7 @@
 // Every time value in this game is AUDIO time in seconds; the Unity-side
 // clock supplies "now" and this converts it to beats.
 
-namespace RhythmGame.Core
+namespace Bonanza.Core
 {
     public sealed class BeatMap
     {

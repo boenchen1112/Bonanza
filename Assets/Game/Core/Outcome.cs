@@ -11,7 +11,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace RhythmGame.Core
+namespace Bonanza.Core
 {
     public struct FieldRow
     {

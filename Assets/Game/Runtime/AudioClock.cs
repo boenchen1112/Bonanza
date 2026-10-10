@@ -15,7 +15,7 @@
 using UnityEngine;
 using UnityEngine.InputSystem.LowLevel;
 
-namespace RhythmGame
+namespace Bonanza
 {
     public sealed class AudioClock : MonoBehaviour
     {

@@ -4,7 +4,7 @@
 
 using UnityEngine;
 
-namespace RhythmGame
+namespace Bonanza
 {
     public static class Hud
     {

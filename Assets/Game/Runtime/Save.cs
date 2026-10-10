@@ -3,10 +3,10 @@
 // stats, and settings. PlayerPrefs maps to IndexedDB in a WebGL build and never
 // throws, so a private window just starts fresh.
 
-using RhythmGame.Core;
+using Bonanza.Core;
 using UnityEngine;
 
-namespace RhythmGame
+namespace Bonanza
 {
     public static class Save
     {

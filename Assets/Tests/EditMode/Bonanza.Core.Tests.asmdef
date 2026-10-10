@@ -1,8 +1,8 @@
 {
-    "name": "RhythmGame.Core.Tests",
-    "rootNamespace": "RhythmGame.Core.Tests",
+    "name": "Bonanza.Core.Tests",
+    "rootNamespace": "Bonanza.Core.Tests",
     "references": [
-        "RhythmGame.Core",
+        "Bonanza.Core",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],

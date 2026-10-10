@@ -1,7 +1,7 @@
 ﻿using NUnit.Framework;
-using RhythmGame.Core;
+using Bonanza.Core;
 
-namespace RhythmGame.Core.Tests
+namespace Bonanza.Core.Tests
 {
     public class RngTests
     {

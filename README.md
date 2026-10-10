@@ -1,4 +1,4 @@
-# Rhythm Game
+# Bonanza
 
 A party rhythm game for the browser, built in Unity. Five minigames, played
 alone or as a party against CPU players:

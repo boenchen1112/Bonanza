@@ -1,7 +1,7 @@
 // The count-in, ported from web/src/core/round.js countIn(). What is shared is
 // the DRIVING (which word this beat says); the look stays each game's own.
 
-namespace RhythmGame.Core
+namespace Bonanza.Core
 {
     public static class CountIn
     {

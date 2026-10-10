@@ -2,7 +2,7 @@
 // Never System.Random or UnityEngine.Random in anything that affects gameplay:
 // autoplay replays a run and the numbers must come out the same.
 
-namespace RhythmGame.Core
+namespace Bonanza.Core
 {
     public sealed class Rng
     {

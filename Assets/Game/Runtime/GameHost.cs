@@ -7,8 +7,8 @@
 // destroys when the round ends (see Minigame.cs for the contract).
 //
 // Autoplay (for verification): `?autoplay` in the WebGL URL, `-autoplay` on
-// the command line, or RHYTHM_AUTOPLAY=1 in the Editor process. Which game:
-// `?game=<id>` / `-game <id>` / RHYTHM_GAME (default swing-kings). Autoplay
+// the command line, or BONANZA_AUTOPLAY=1 in the Editor process. Which game:
+// `?game=<id>` / `-game <id>` / BONANZA_GAME (default swing-kings). Autoplay
 // presses every TestChart() entry through the same Press() path and logs
 // "[RESULT] game=<id> ..." at the end. `?autoplay&party` plays a whole party
 // with the default roster, logging "[PARTY] ..." per round and
@@ -17,11 +17,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using RhythmGame.Core;
+using Bonanza.Core;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-namespace RhythmGame
+namespace Bonanza
 {
     [RequireComponent(typeof(AudioClock))]
     public sealed class GameHost : MonoBehaviour
@@ -176,17 +176,17 @@ namespace RhythmGame
             var args = Environment.GetCommandLineArgs();
             string url = Application.absoluteURL ?? "";
             Autoplay = url.Contains("autoplay") || Array.IndexOf(args, "-autoplay") >= 0
-                       || Environment.GetEnvironmentVariable("RHYTHM_AUTOPLAY") == "1";
+                       || Environment.GetEnvironmentVariable("BONANZA_AUTOPLAY") == "1";
             _autoGame = QueryParam(url, "game");
             int gi = Array.IndexOf(args, "-game");
             if (_autoGame == null && gi >= 0 && gi + 1 < args.Length) _autoGame = args[gi + 1];
-            if (_autoGame == null) _autoGame = Environment.GetEnvironmentVariable("RHYTHM_GAME");
+            if (_autoGame == null) _autoGame = Environment.GetEnvironmentVariable("BONANZA_GAME");
             if (_autoGame == null || Find(_autoGame) == null) _autoGame = Autoplay || _autoGame != null ? "swing-kings" : null;
             // `?autoplay&party`: the bot plays a whole party with the default roster.
             string partyArg = QueryParam(url, "party");
             if (int.TryParse(partyArg, out int ps) && ps >= 0) _partySeed = ps;
             _autoParty = partyArg != null || Array.IndexOf(args, "-party") >= 0
-                         || Environment.GetEnvironmentVariable("RHYTHM_PARTY") == "1";
+                         || Environment.GetEnvironmentVariable("BONANZA_PARTY") == "1";
             AudioListener.volume = Save.Volume;
 
             Bind("a", "<Keyboard>/space", "<Keyboard>/enter", "<Keyboard>/j", "<Gamepad>/buttonSouth");
@@ -619,7 +619,7 @@ namespace RhythmGame
             {
                 case Mode.Gate:
                     Hud.Dim(0.85f);
-                    Hud.Center(0.3f, "RHYTHM GAME", Hud.Big, Hud.Gold, 120);
+                    Hud.Center(0.3f, "BONANZA", Hud.Big, Hud.Gold, 120);
                     Hud.Center(0.55f, "CLICK / TAP / SPACE TO START", Hud.Mid, Color.white);
                     break;
 
@@ -642,7 +642,7 @@ namespace RhythmGame
 
                 case Mode.Title:
                     Hud.Dim(0.85f);
-                    Hud.Center(0.14f, "RHYTHM GAME", Hud.Big, Hud.Gold, 120);
+                    Hud.Center(0.14f, "BONANZA", Hud.Big, Hud.Gold, 120);
                     for (int i = 0; i < TitleItems.Length; i++)
                         if (MenuRow(i, 0.4f, TitleItems[i], null, i == _titleIndex, s)) TitleChoice(i);
                     var st = Save.Stats;

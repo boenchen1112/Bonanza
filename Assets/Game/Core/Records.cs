@@ -4,7 +4,7 @@
 
 using System;
 
-namespace RhythmGame.Core
+namespace Bonanza.Core
 {
     public struct GameRecord
     {

@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using NUnit.Framework;
 
-namespace RhythmGame.Core.Tests
+namespace Bonanza.Core.Tests
 {
     public class ChompChorusTests
     {
