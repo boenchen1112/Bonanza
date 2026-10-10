@@ -270,7 +270,7 @@ export function createStage({ canvas, clock }) {
   /**
    * Id of the scene that finished loading (set by main.js). Palette and
    * default-environment inference key on it. This used to be read off the
-   * `window.__BBB__` test API, which production builds don't ship.
+   * `window.__BNZ__` test API, which production builds don't ship.
    */
   let sceneId = null;
 

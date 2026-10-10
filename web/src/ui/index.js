@@ -22,7 +22,7 @@ const toColor = (c) => (typeof c === 'number' ? '#' + (c >>> 0).toString(16).pad
 export function createUI({ root, bus, clock }) {
   root.innerHTML = '';
   const layer = document.createElement('div');
-  layer.className = 'bbb-layer';
+  layer.className = 'bnz-layer';
   root.appendChild(layer);
 
   injectStyles();
@@ -37,12 +37,12 @@ export function createUI({ root, bus, clock }) {
     return d;
   }
 
-  /** A `.bbb-t` node showing `text` rasterised in the BASH face. Sizes off the
+  /** A `.bnz-t` node showing `text` rasterised in the BASH face. Sizes off the
    *  `--cap` custom property inherited from its parent — callers size via CSS. */
   function glyph(text, { styleName = 'display', color = '#fff', extraClass = '' } = {}) {
     const img = textImage(String(text), fontStyle(styleName, { color: toColor(color) }));
     const d = document.createElement('div');
-    d.className = extraClass ? `bbb-t ${extraClass}` : 'bbb-t';
+    d.className = extraClass ? `bnz-t ${extraClass}` : 'bnz-t';
     setImage(d, img);
     d.style.setProperty('--ratio', String(img.ratio));
     d.style.setProperty('--ar', String(img.aspect));
@@ -90,12 +90,12 @@ export function createUI({ root, bus, clock }) {
     if (holder.dataset.text === s) return;
     holder.dataset.text = s;
     const st = fontStyle(opts.styleName || 'hud', { color: toColor(opts.color || '#fff') });
-    if (!holder.classList.contains('bbb-num')) {
-      holder.classList.remove('bbb-t');
-      holder.classList.add('bbb-num');
+    if (!holder.classList.contains('bnz-num')) {
+      holder.classList.remove('bnz-t');
+      holder.classList.add('bnz-num');
     }
     const chars = [...s];
-    while (holder.children.length < chars.length) holder.appendChild(el('bbb-t'));
+    while (holder.children.length < chars.length) holder.appendChild(el('bnz-t'));
     for (let i = 0; i < holder.children.length; i++) {
       const c = /** @type {HTMLElement} */ (holder.children[i]);
       if (i >= chars.length) { c.style.display = 'none'; continue; }
@@ -121,7 +121,7 @@ export function createUI({ root, bus, clock }) {
 
   /** Verdict popup at a screen position (0..1 normalised). */
   function popup(text, { x = 0.5, y = 0.42, color = '#fff', scale = 1, life = FEEL.popupLife, kind = 'verdict' } = {}) {
-    const d = el('bbb-pop bbb-pop--' + kind);
+    const d = el('bnz-pop bnz-pop--' + kind);
     d.style.left = x * 100 + '%';
     d.style.top = y * 100 + '%';
     d.style.color = toColor(color);
@@ -134,9 +134,9 @@ export function createUI({ root, bus, clock }) {
 
   /** Big centred banner (round title, "GO!", "FINISH!"). */
   function banner(text, { sub = '', life = 1.6, color = '#fff' } = {}) {
-    const d = el('bbb-banner');
-    d.appendChild(glyph(text, { styleName: 'title', color, extraClass: 'bbb-banner__main' }));
-    if (sub) d.appendChild(el('bbb-banner__sub', sub));
+    const d = el('bnz-banner');
+    d.appendChild(glyph(text, { styleName: 'title', color, extraClass: 'bnz-banner__main' }));
+    if (sub) d.appendChild(el('bnz-banner__sub', sub));
     layer.appendChild(d);
     live.push({ el: d, life: 0, maxLife: life, kind: 'banner', x: 0.5, y: 0.5 });
     return d;
@@ -190,19 +190,19 @@ export function createUI({ root, bus, clock }) {
     _lastCombo: 0,
     mount() {
       if (this._root) return this._root;
-      const d = el('bbb-hud');
+      const d = el('bnz-hud');
       d.innerHTML = `
-        <div class="bbb-hud__score">
-          <div class="bbb-lab">SCORE</div>
-          <div class="bbb-t bbb-odo" data-score></div>
-          <div class="bbb-combo-wrap"><div class="bbb-combo" data-combo-wrap>
-            <div class="bbb-t bbb-combo__n" data-combo></div>
-            <div class="bbb-combo__lab">COMBO</div>
+        <div class="bnz-hud__score">
+          <div class="bnz-lab">SCORE</div>
+          <div class="bnz-t bnz-odo" data-score></div>
+          <div class="bnz-combo-wrap"><div class="bnz-combo" data-combo-wrap>
+            <div class="bnz-t bnz-combo__n" data-combo></div>
+            <div class="bnz-combo__lab">COMBO</div>
           </div></div>
         </div>
-        <div class="bbb-hud__acc">
-          <div class="bbb-lab">ACCURACY</div>
-          <div class="bbb-acc__row"><div class="bbb-t bbb-acc__n" data-acc></div></div>
+        <div class="bnz-hud__acc">
+          <div class="bnz-lab">ACCURACY</div>
+          <div class="bnz-acc__row"><div class="bnz-t bnz-acc__n" data-acc></div></div>
         </div>`;
       layer.appendChild(d);
       this._root = d;

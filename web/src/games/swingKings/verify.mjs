@@ -6,7 +6,7 @@
  * perform the gesture this game is built around: it taps, and a tap is a
  * BUNT by design. That means `inspect.mjs` cannot prove the power axis works
  * at all. This drives the real gesture at exact audio times through
- * `window.__BBB__.swing` (installed by the game itself in load()) and asserts
+ * `window.__BNZ__.swing` (installed by the game itself in load()) and asserts
  * the two ends of the design:
  *
  *   a long clean windup, released on the beat  ->  HOME RUN (hold power)
@@ -50,7 +50,7 @@ function serve(dir, port) {
 
 function build() {
   return new Promise((res, rej) => {
-    // --mode harness keeps window.__BBB__ in the bundle (production strips it);
+    // --mode harness keeps window.__BNZ__ in the bundle (production strips it);
     // vite's JS entry via node, since npx is a .cmd shim spawn() can't run on Windows.
     const p = spawn(process.execPath, [path.join(WEB, 'node_modules/vite/bin/vite.js'), 'build', '--mode', 'harness', '--outDir', DIST],
       { cwd: WEB, stdio: 'pipe' });
@@ -87,10 +87,10 @@ function check(name, ok, detail) {
 
   await page.goto(`http://127.0.0.1:${PORT}/index.html?scene=swing-kings&quality=low`, { waitUntil: 'load' });
   await page.keyboard.press('KeyQ');
-  await page.waitForFunction('window.__BBB__ && window.__BBB__.ready');
-  await page.evaluate(() => window.__BBB__.ready);
-  await page.evaluate(() => window.__BBB__.goto('swing-kings'));
-  await page.waitForFunction('window.__BBB__.swing', null, { timeout: 15000 });
+  await page.waitForFunction('window.__BNZ__ && window.__BNZ__.ready');
+  await page.evaluate(() => window.__BNZ__.ready);
+  await page.evaluate(() => window.__BNZ__.goto('swing-kings'));
+  await page.waitForFunction('window.__BNZ__.swing', null, { timeout: 15000 });
 
   check('debug hook installed', true);
 
@@ -100,7 +100,7 @@ function check(name, ok, detail) {
    * result — the same reason the shared harness drives its bot this way.
    */
   const plan = await page.evaluate(async () => {
-    const B = window.__BBB__;
+    const B = window.__BNZ__;
     const wait = (beat) => new Promise((res) => {
       const tick = () => (B.clock.beat >= beat ? res() : requestAnimationFrame(tick));
       tick();

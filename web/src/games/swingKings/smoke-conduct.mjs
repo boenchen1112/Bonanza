@@ -57,13 +57,13 @@ async function openGame(mode) {
   page.on('console', (m) => { if (!/kaspersky-labs.com/i.test(m.location()?.url || '')) logs.push(`[${m.type()}] ${m.text()}`); });
   page.on('pageerror', (e) => logs.push(`[pageerror] ${e.message}`));
   await ctx.route('**/*', (r) => (r.request().url().startsWith(`http://127.0.0.1:${PORT}/`) ? r.continue() : r.abort()));
-  await page.addInitScript((m) => localStorage.setItem('bbb:options', JSON.stringify({ swingInput: m })), mode);
+  await page.addInitScript((m) => localStorage.setItem('bnz:options', JSON.stringify({ swingInput: m })), mode);
   await page.goto(`http://127.0.0.1:${PORT}/index.html?scene=title`);
   await page.mouse.click(640, 360);
-  await page.waitForFunction('window.__BBB__ && window.__BBB__.ready');
-  await page.evaluate(() => window.__BBB__.ready);
-  await page.evaluate(() => window.__BBB__.goto('swing-kings'));
-  await page.waitForFunction('window.__BBB__.swing', null, { timeout: 15000 });
+  await page.waitForFunction('window.__BNZ__ && window.__BNZ__.ready');
+  await page.evaluate(() => window.__BNZ__.ready);
+  await page.evaluate(() => window.__BNZ__.goto('swing-kings'));
+  await page.waitForFunction('window.__BNZ__.swing', null, { timeout: 15000 });
   return { ctx, page, logs };
 }
 
@@ -81,7 +81,7 @@ const stroke = (page, y0, y1, n, ms) => page.evaluate(async ({ y0, y1, n, ms }) 
   }
 }, { y0, y1, n, ms });
 
-const waitBeat = (page, b) => page.waitForFunction((x) => window.__BBB__.clock.beat >= x, b, { polling: 'raf', timeout: 30000 });
+const waitBeat = (page, b) => page.waitForFunction((x) => window.__BNZ__.clock.beat >= x, b, { polling: 'raf', timeout: 30000 });
 
 // ------------------------------------------------------------------ mouse
 {
@@ -99,7 +99,7 @@ const waitBeat = (page, b) => page.waitForFunction((x) => window.__BBB__.clock.b
     await page.mouse.up();
   }
   await waitBeat(page, 10);
-  const swings = await page.evaluate(() => window.__BBB__.swing.stats().swings);
+  const swings = await page.evaluate(() => window.__BNZ__.swing.stats().swings);
   const hits = swings.filter((s) => s.verdict !== 'miss' && s.hold > 0.5);
   check('mouse: downstroke ictus swings the bat (3 conducted hits with a real windup)', hits.length >= 3,
     JSON.stringify(swings.map((s) => ({ beat: s.beat, v: s.verdict, err: s.errMs, hold: s.hold, tier: s.tier }))));

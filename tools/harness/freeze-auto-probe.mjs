@@ -53,18 +53,18 @@ await cdp.send('Profiler.setSamplingInterval', { interval: 200 });
 
 await page.goto(`http://127.0.0.1:${PORT}/index.html?scene=${SCENE}&quality=high`, { waitUntil: 'load' });
 await page.keyboard.press('KeyQ');
-await page.waitForFunction('window.__BBB__ && window.__BBB__.ready', null, { timeout: 30000 });
-await page.evaluate(() => window.__BBB__.ready);
+await page.waitForFunction('window.__BNZ__ && window.__BNZ__.ready', null, { timeout: 30000 });
+await page.evaluate(() => window.__BNZ__.ready);
 
 await page.evaluate(() => {
   window.__FP__ = { frames: [], scenes: [] };
   let last = performance.now();
-  let lastScene = window.__BBB__.scene;
+  let lastScene = window.__BNZ__.scene;
   window.__FP__.scenes.push([0, lastScene]);
   const tick = (t) => {
     window.__FP__.frames.push([t, t - last]);
     last = t;
-    const sc = window.__BBB__.scene;
+    const sc = window.__BNZ__.scene;
     if (sc !== lastScene) { lastScene = sc; window.__FP__.scenes.push([t, sc]); }
     requestAnimationFrame(tick);
   };
@@ -73,7 +73,7 @@ await page.evaluate(() => {
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 await cdp.send('Profiler.start');
-await page.evaluate((s) => window.__BBB__.autoplay({ mode: 'auto', seconds: s }), SECONDS);
+await page.evaluate((s) => window.__BNZ__.autoplay({ mode: 'auto', seconds: s }), SECONDS);
 await wait(SECONDS * 1000 + 300);
 const { profile } = await cdp.send('Profiler.stop');
 const log = await page.evaluate(() => window.__FP__);

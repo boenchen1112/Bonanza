@@ -194,8 +194,8 @@ function patchRim(mat, rimHex, strength) {
       .replace(
         '#include <opaque_fragment>',
         [
-          'float bbbRim = 1.0 - clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0);',
-          'outgoingLight += uRimColor * pow(bbbRim, 2.6) * uRimStr;',
+          'float bnzRim = 1.0 - clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0);',
+          'outgoingLight += uRimColor * pow(bnzRim, 2.6) * uRimStr;',
           '#include <opaque_fragment>',
         ].join('\n')
       );
@@ -775,7 +775,7 @@ export function batchBlobShadows(chars) {
     sh.fragmentShader = 'varying float vIAlpha;\n'
       + sh.fragmentShader.replace('#include <color_fragment>', '#include <color_fragment>\n  diffuseColor.a *= vIAlpha;');
   };
-  material.customProgramCacheKey = () => 'bbb-blob-alpha';
+  material.customProgramCacheKey = () => 'bnz-blob-alpha';
 
   const mesh = new THREE.InstancedMesh(geo, material, Math.max(1, n));
   mesh.count = n;

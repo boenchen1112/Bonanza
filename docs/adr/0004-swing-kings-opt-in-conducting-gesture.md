@@ -14,7 +14,7 @@
 ## Consequences
 
 - The gesture modes are **exempt from the standard harness** for the same reason as ADR 0002: a webcam can't be driven headless, and the harness bot only emits key-downs. Instead:
-  - `web/src/games/swingKings/verify.mjs` drives hold/release through the `__BBB__.swing` hooks (hold-power ladder + tap timing power);
+  - `web/src/games/swingKings/verify.mjs` drives hold/release through the `__BNZ__.swing` hooks (hold-power ladder + tap timing power);
   - `web/src/games/swingKings/smoke-conduct.mjs` drives a real conducted mouse stroke (the ictus, not the button-up, must release the swing) and boots camera mode on Chromium's fake device (the bundled pipeline must load offline with a clean console);
   - a person with a webcam does the real camera check.
 - Tap mode remains fully harness-verified; `--play` runs are unaffected by the mode because the default is tap.

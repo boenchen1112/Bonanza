@@ -48,7 +48,7 @@ const ui = createUI({ root: uiRoot, bus, clock });
 const fx = createFX({ stage, clock, bus });
 
 /**
- * `window.__BBB__` (the harness/test API: autoplay, telemetry, goto, the
+ * `window.__BNZ__` (the harness/test API: autoplay, telemetry, goto, the
  * audio tap) exists in dev and in `vite build --mode harness` builds only.
  * Vite inlines these as literals, so a production bundle drops the whole
  * block rather than shipping a remote control for the game.
@@ -61,7 +61,7 @@ let currentCtx = null;
 /** Last scene that threw in load()/start(), for the test API. */
 let lastError = null;
 let pendingScene = null;
-/** Set by `__BBB__.setSeed`; applies to every activation after it. */
+/** Set by `__BNZ__.setSeed`; applies to every activation after it. */
 let seedOverride = null;
 let hitstopUntil = 0;
 /** When the current hitstop began, so we only ever subtract time once. */
@@ -612,7 +612,7 @@ setInterval(() => { if (audioCtx.state === 'running') clock.refreshOutputLatency
 // ------------------------------------------------------------------ test API
 
 let resolveReady = () => {};
-if (TEST_API) window.__BBB__ = {
+if (TEST_API) window.__BNZ__ = {
   ready: new Promise((r) => { resolveReady = r; }),
   get scene() { return stage.sceneId; },
   get lastError() { return lastError; },

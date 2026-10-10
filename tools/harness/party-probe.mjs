@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Party-hub probe: stages a party through `__BBB__.shellState()` instead of
+ * Party-hub probe: stages a party through `__BNZ__.shellState()` instead of
  * playing four minigames, then shoots the hub mid-party, the results card,
  * and the final podium. Build first with inspect.mjs (any scene) or pass
  * --build.
@@ -45,12 +45,12 @@ page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') 
 page.on('pageerror', (e) => logs.push(`[pageerror] ${e.message}`));
 await page.goto(`http://127.0.0.1:${PORT}/index.html?scene=title&quality=high`, { waitUntil: 'load' });
 await page.keyboard.press('KeyQ');
-await page.waitForFunction('window.__BBB__ && window.__BBB__.ready', null, { timeout: 20000 });
-await page.evaluate(() => window.__BBB__.ready);
+await page.waitForFunction('window.__BNZ__ && window.__BNZ__.ready', null, { timeout: 20000 });
+await page.evaluate(() => window.__BNZ__.ready);
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 let n = 0;
 async function shot(label) {
-  await page.evaluate(() => window.__BBB__.screenshotReady?.());
+  await page.evaluate(() => window.__BNZ__.screenshotReady?.());
   const f = `${String(n++).padStart(2, '0')}-${label}.png`;
   await page.screenshot({ path: path.join(OUT, f) });
   console.log(f);
@@ -58,7 +58,7 @@ async function shot(label) {
 
 const GAMES = ['swing-kings', 'drumline-dash', 'chomp-chorus', 'finale-fever'];
 await page.evaluate(async (games) => {
-  const { session } = await window.__BBB__.shellState();
+  const { session } = await window.__BNZ__.shellState();
   session.setPlayers([
     { name: 'P1', char: 'bopp', isCpu: false, cpuSkill: 0 },
     { name: 'ZIZZ', char: 'zizz', isCpu: true, cpuSkill: 0.86 },
@@ -68,35 +68,35 @@ await page.evaluate(async (games) => {
   session.startParty(games, games.length, 4242);
 }, GAMES);
 
-await page.evaluate(() => window.__BBB__.goto('party'));
+await page.evaluate(() => window.__BNZ__.goto('party'));
 await wait(1600); await shot('hub-round1');
 
 // Round 1 through the real results screen (party mode records the round).
-await page.evaluate(() => window.__BBB__.goto('results', { game: 'swing-kings', party: true,
+await page.evaluate(() => window.__BNZ__.goto('results', { game: 'swing-kings', party: true,
   result: { score: 38000, accuracy: 0.97, rank: 'A', stats: { perfect: 30, great: 6, good: 2, miss: 1, maxCombo: 22 } } }));
 await wait(1200); await shot('results-r1-reveal');
 await wait(1600); await shot('results-r1');
-await page.evaluate(() => window.__BBB__.goto('party'));
+await page.evaluate(() => window.__BNZ__.goto('party'));
 await wait(600); await shot('hub-round2-rising');
 await wait(1400); await shot('hub-round2');
 
 await page.evaluate(async () => {
-  const { session } = await window.__BBB__.shellState();
+  const { session } = await window.__BNZ__.shellState();
   session.recordPartyRound('drumline-dash', { score: 21000, accuracy: 0.81, rank: 'B' });
   session.recordPartyRound('chomp-chorus', { score: 30000, accuracy: 0.9, rank: 'B' });
 });
-await page.evaluate(() => window.__BBB__.goto('party'));
+await page.evaluate(() => window.__BNZ__.goto('party'));
 await wait(2000); await shot('hub-final-round');
 
 await page.evaluate(async () => {
-  const { session } = await window.__BBB__.shellState();
+  const { session } = await window.__BNZ__.shellState();
   session.recordPartyRound('finale-fever', { score: 52000, accuracy: 0.95, rank: 'A' });
 });
-await page.evaluate(() => window.__BBB__.goto('party'));
+await page.evaluate(() => window.__BNZ__.goto('party'));
 await wait(900); await shot('podium-in');
 await wait(1600); await shot('podium');
 const party = await page.evaluate(async () => {
-  const { session } = await window.__BBB__.shellState();
+  const { session } = await window.__BNZ__.shellState();
   return { winner: session.party?.winner, standings: session.standings().map((p) => [p.name, p.points, p.wins]) };
 });
 console.log(JSON.stringify(party));

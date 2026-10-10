@@ -38,8 +38,8 @@ page.on('pageerror', (e) => console.log('[pageerror]', e.message));
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 await page.goto(`http://127.0.0.1:${PORT}/index.html?scene=chars-demo&quality=high`, { waitUntil: 'load' });
 await page.keyboard.press('KeyQ');
-await page.waitForFunction('window.__BBB__ && window.__BBB__.ready', null, { timeout: 20000 });
-await page.evaluate(() => window.__BBB__.ready);
+await page.waitForFunction('window.__BNZ__ && window.__BNZ__.ready', null, { timeout: 20000 });
+await page.evaluate(() => window.__BNZ__.ready);
 await wait(500);
 
 // setStep() gets overridden by the next natural beat-boundary check inside

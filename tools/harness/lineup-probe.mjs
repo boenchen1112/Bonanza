@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Lineup probe: stages a session lineup through `__BBB__.shellState()` and
+ * Lineup probe: stages a session lineup through `__BNZ__.shellState()` and
  * boots every minigame through the shell's `play` host (the path Free Play
  * and a party take), so the picked character and the named CPU rivals should
  * be on screen. Shoots each game ~3s in and reports the worst frame of the
@@ -84,12 +84,12 @@ page.on('console', async (m) => {
 page.on('pageerror', (e) => logs.push(`[pageerror] ${e.message}\n${e.stack}`));
 await page.goto(`http://127.0.0.1:${PORT}/index.html?scene=title&quality=high`, { waitUntil: 'load' });
 await page.keyboard.press('KeyQ');
-await page.waitForFunction('window.__BBB__ && window.__BBB__.ready', null, { timeout: 20000 });
-await page.evaluate(() => window.__BBB__.ready);
+await page.waitForFunction('window.__BNZ__ && window.__BNZ__.ready', null, { timeout: 20000 });
+await page.evaluate(() => window.__BNZ__.ready);
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
 await page.evaluate(async ({ hero, rivals }) => {
-  const { session } = await window.__BBB__.shellState();
+  const { session } = await window.__BNZ__.shellState();
   const skills = [0.86, 0.63, 0.4];
   session.setPlayers([
     { name: 'P1', char: hero, isCpu: false, cpuSkill: 0 },
@@ -102,20 +102,20 @@ const report = [];
 let n = 0;
 let failed = false;
 for (const game of GAMES) {
-  await page.evaluate(() => window.__BBB__.goto('freeplay'));
+  await page.evaluate(() => window.__BNZ__.goto('freeplay'));
   await wait(1500);
-  await page.evaluate(() => window.__BBB__.resetTelemetry());
+  await page.evaluate(() => window.__BNZ__.resetTelemetry());
   // goto() resolves once load() + start() ran, so its duration is the load;
   // the worst frame after it is the first-render cost (shader compiles).
   const loadMs = await page.evaluate(async (g) => {
     const t0 = performance.now();
-    await window.__BBB__.goto('play', { game: g, from: 'freeplay' });
+    await window.__BNZ__.goto('play', { game: g, from: 'freeplay' });
     return performance.now() - t0;
   }, game);
-  const during = await page.evaluate(() => window.__BBB__.telemetry());
-  await page.evaluate(() => window.__BBB__.resetTelemetry());
+  const during = await page.evaluate(() => window.__BNZ__.telemetry());
+  await page.evaluate(() => window.__BNZ__.resetTelemetry());
   await wait(3200);
-  const s = await page.evaluate(() => window.__BBB__.telemetry());
+  const s = await page.evaluate(() => window.__BNZ__.telemetry());
   const f = `${String(n++).padStart(2, '0')}-${game}.png`;
   await page.screenshot({ path: path.join(OUT, f) });
 
@@ -126,9 +126,9 @@ for (const game of GAMES) {
   // unlucky frame. env-root count >1 means a stale env never got torn down
   // (ticket 29). stopAutoplay() before the next game's goto('freeplay') --
   // otherwise it presses through that game's own results card too.
-  await page.evaluate(() => window.__BBB__.autoplay({ mode: 'auto', chart: true, seconds: 120 }));
+  await page.evaluate(() => window.__BNZ__.autoplay({ mode: 'auto', chart: true, seconds: 120 }));
   const draws = await page.evaluate((secs) => new Promise((resolve) => {
-    const st = window.__BBB__.stage;
+    const st = window.__BNZ__.stage;
     const v = [];
     const t0 = performance.now();
     const tick = () => {
@@ -137,10 +137,10 @@ for (const game of GAMES) {
     };
     requestAnimationFrame(tick);
   }), DRAWSECS);
-  await page.evaluate(() => window.__BBB__.stopAutoplay());
+  await page.evaluate(() => window.__BNZ__.stopAutoplay());
   const sortedDraws = draws.slice().sort((a, b) => a - b);
   const envRoots = await page.evaluate(() => {
-    const st = window.__BBB__.stage;
+    const st = window.__BNZ__.stage;
     const roots = [];
     st.scene.traverse((o) => { if (o.name === 'env:root') roots.push(o.children.map((c) => c.name || c.type).join('+')); });
     return roots;
@@ -161,7 +161,7 @@ for (const game of GAMES) {
 // on RESUME) and report whether its music track is playing again after.
 if (argv.pause) {
   const musicOn = () => page.evaluate(() => {
-    const m = window.__BBB__.audio?.music;
+    const m = window.__BNZ__.audio?.music;
     return m ? `${m.playing ? 'playing' : 'stopped'}:${m.track?.id ?? '-'}` : 'no music facade';
   });
   const before = await musicOn();
@@ -178,18 +178,18 @@ if (argv.pause) {
 let race = null;
 if (argv.race) {
   await page.evaluate(async () => {
-    const { session } = await window.__BBB__.shellState();
+    const { session } = await window.__BNZ__.shellState();
     session.startParty(['drumline-dash', 'finale-fever'], 2, 77);
   });
-  await page.evaluate(() => window.__BBB__.goto('play', { game: 'drumline-dash', from: 'party' }));
-  await page.evaluate(() => window.__BBB__.autoplay({ mode: 'auto', chart: true, seconds: 400 }));
+  await page.evaluate(() => window.__BNZ__.goto('play', { game: 'drumline-dash', from: 'party' }));
+  await page.evaluate(() => window.__BNZ__.autoplay({ mode: 'auto', chart: true, seconds: 400 }));
   const t0 = Date.now();
-  while (Date.now() - t0 < 240000 && (await page.evaluate(() => window.__BBB__.scene)) !== 'results') await wait(250);
-  await page.evaluate(() => window.__BBB__.stopAutoplay());   // or it presses through the card
+  while (Date.now() - t0 < 240000 && (await page.evaluate(() => window.__BNZ__.scene)) !== 'results') await wait(250);
+  await page.evaluate(() => window.__BNZ__.stopAutoplay());   // or it presses through the card
   await wait(1200);
   await page.screenshot({ path: path.join(OUT, `${String(n++).padStart(2, '0')}-race-results.png`) });
   race = await page.evaluate(async () => {
-    const { session } = await window.__BBB__.shellState();
+    const { session } = await window.__BNZ__.shellState();
     return { round: session.party?.scores?.[0], players: session.players.map((p) => [p.name, p.points]) };
   });
   console.log('race', JSON.stringify(race));

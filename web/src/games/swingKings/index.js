@@ -180,9 +180,9 @@ export default {
     // Debug/verification hook. The shared harness bot can only emit key-DOWN
     // events, so it can never perform a hold-and-release; this lets a script
     // drive the real gesture at exact audio times, in any mode. See verify.mjs.
-    if (typeof window !== 'undefined' && window.__BBB__) {
+    if (typeof window !== 'undefined' && window.__BNZ__) {
       const self = this;
-      window.__BBB__.swing = {
+      window.__BNZ__.swing = {
         hold: (atBeat) => self.beginWindup(ctx, ctx.clock.timeAt(atBeat)),
         release: (atBeat) => self.releaseSwing(ctx, ctx.clock.timeAt(atBeat)),
         /** Conduct-mode state, for smoke-conduct.mjs. */
@@ -1032,7 +1032,7 @@ export default {
 
   dispose(ctx) {
     if (this._offBeat) { this._offBeat(); this._offBeat = null; }
-    if (typeof window !== 'undefined' && window.__BBB__) delete window.__BBB__.swing;
+    if (typeof window !== 'undefined' && window.__BNZ__) delete window.__BNZ__.swing;
     if (this._onPointerMove) { window.removeEventListener('pointermove', this._onPointerMove); this._onPointerMove = null; }
     if (this.camera) { this.camera.stop(); this.camera = null; }
     this._camToken = null;

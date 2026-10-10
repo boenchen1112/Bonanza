@@ -62,8 +62,8 @@ await cdp.send('Profiler.setSamplingInterval', { interval: 200 });   // microsec
 
 await page.goto(`http://127.0.0.1:${PORT}/index.html?scene=title&quality=high`, { waitUntil: 'load' });
 await page.keyboard.press('KeyQ');
-await page.waitForFunction('window.__BBB__ && window.__BBB__.ready', null, { timeout: 30000 });
-await page.evaluate(() => window.__BBB__.ready);
+await page.waitForFunction('window.__BNZ__ && window.__BNZ__.ready', null, { timeout: 30000 });
+await page.evaluate(() => window.__BNZ__.ready);
 
 // In-page frame + long-task log. performance.now() is right HERE: this is
 // measuring the browser's frame pacing, not judging gameplay.
@@ -109,7 +109,7 @@ for (let i = 0; i < SCENES.length; i++) {
   await cdp.send('Profiler.start');
   const swapMs = await page.evaluate(async ({ scene, o }) => {
     const s = performance.now();
-    await window.__BBB__.goto(scene, o || {});
+    await window.__BNZ__.goto(scene, o || {});
     return performance.now() - s;
   }, { scene, o: opts[scene] });
   await wait(1500);
@@ -117,14 +117,14 @@ for (let i = 0; i < SCENES.length; i++) {
   // Steady state: a second profile once the swap has settled, and the
   // renderer's resource counts — a scene that gets slower on every revisit
   // shows up here, not in the swap.
-  await page.evaluate(() => window.__BBB__.resetTelemetry());
-  const progBefore = await page.evaluate(() => window.__BBB__.stage.renderer.info.programs?.length ?? -1);
+  await page.evaluate(() => window.__BNZ__.resetTelemetry());
+  const progBefore = await page.evaluate(() => window.__BNZ__.stage.renderer.info.programs?.length ?? -1);
   await cdp.send('Profiler.start');
   await wait(2000);
   const { profile: steadyProfile } = await cdp.send('Profiler.stop');
-  const progAfter = await page.evaluate(() => window.__BBB__.stage.renderer.info.programs?.length ?? -1);
+  const progAfter = await page.evaluate(() => window.__BNZ__.stage.renderer.info.programs?.length ?? -1);
   await wait(Math.max(0, DWELL * 1000 - 3500));
-  const tele = await page.evaluate(() => window.__BBB__.telemetry());
+  const tele = await page.evaluate(() => window.__BNZ__.telemetry());
   const t1 = await page.evaluate(() => performance.now());
 
   const log = await page.evaluate(() => window.__FP__);

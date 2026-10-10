@@ -407,10 +407,10 @@ export function createAudio({ ctx, clock, bus, offline = false }) {
   };
 
   // Dev/test reach-in so the harness can drive an offline render without the
-  // integrator having to thread audio through `window.__BBB__`.
+  // integrator having to thread audio through `window.__BNZ__`.
   // Dev/harness builds only (see TEST_API in main.js).
   const testApi = import.meta.env && (import.meta.env.DEV || import.meta.env.MODE === 'harness');
-  if (testApi && !offline && typeof window !== 'undefined') window.__BBB_AUDIO__ = facade;
+  if (testApi && !offline && typeof window !== 'undefined') window.__BNZ_AUDIO__ = facade;
 
   return facade;
 }

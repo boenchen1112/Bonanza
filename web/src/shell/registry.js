@@ -1,7 +1,7 @@
 /**
  * Scene registry.  [INTEGRATOR-owned]
  *
- * Every scene and minigame MUST be listed here. `window.__BBB__.goto(id)`
+ * Every scene and minigame MUST be listed here. `window.__BNZ__.goto(id)`
  * routes through it, which is how the automated critic reaches your work —
  * an unregistered scene is, as far as review is concerned, not built.
  *
@@ -12,7 +12,7 @@ export const SCENES = [
   { id: 'title', kind: 'shell', load: () => import('./title.js') },
   { id: 'results', kind: 'shell', load: () => import('./results.js') },
 
-  // Every shell view has its own entry (deep links and __BBB__.goto() work).
+  // Every shell view has its own entry (deep links and __BNZ__.goto() work).
   // Game choice happens in `freeplay`; the old placeholder `select` scene was
   // never routed to by the flow and has been removed.
   { id: 'roster', kind: 'shell', load: () => import('./roster.js') },

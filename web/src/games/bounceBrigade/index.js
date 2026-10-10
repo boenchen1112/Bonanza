@@ -610,7 +610,7 @@ export default {
     // Press/release counters, read by the game itself. The `window.__BOUNCE__`
     // surface that used to sit here — chart(), press(), state(), reset() —
     // served a `bounceBrigade/verify.mjs` that is not in the repo, alongside
-    // `__BBB__.press`, which does the same job through the documented seam.
+    // `__BNZ__.press`, which does the same job through the documented seam.
     telemetry = { chargeRuns: [], minAirY: {}, pressed: 0, released: 0 };
   },
 

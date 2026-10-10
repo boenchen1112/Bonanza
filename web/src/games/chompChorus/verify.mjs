@@ -92,16 +92,16 @@ function serve(dir, port) {
     { waitUntil: 'load', timeout: 30000 });
   await page.mouse.move(W / 2, H / 2);
   await page.keyboard.press('KeyQ');
-  await page.waitForFunction('window.__BBB__ && window.__BBB__.ready', null, { timeout: 20000 });
-  await page.evaluate(() => window.__BBB__.ready);
-  await page.evaluate((q) => window.__BBB__.setQuality?.(q), QUALITY);
-  await page.evaluate(() => window.__BBB__.goto('chomp-chorus'));
+  await page.waitForFunction('window.__BNZ__ && window.__BNZ__.ready', null, { timeout: 20000 });
+  await page.evaluate(() => window.__BNZ__.ready);
+  await page.evaluate((q) => window.__BNZ__.setQuality?.(q), QUALITY);
+  await page.evaluate(() => window.__BNZ__.goto('chomp-chorus'));
   await page.waitForTimeout(600);
-  await page.evaluate(() => window.__BBB__.resetTelemetry());
+  await page.evaluate(() => window.__BNZ__.resetTelemetry());
 
   // ---- the driver --------------------------------------------------------
   await page.evaluate(({ notes, lookahead, jitter, miss }) => {
-    const B = window.__BBB__;
+    const B = window.__BNZ__;
     const log = [];
     window.__CC_LOG__ = log;
     B.bus.on('judge', (j) => log.push({ verdict: j.verdict, errMs: j.errMs, beat: j.beat, lane: j.lane }));
@@ -144,7 +144,7 @@ function serve(dir, port) {
 
   const judged = await page.evaluate(() => window.__CC_LOG__.slice());
   const presses = await page.evaluate(() => window.__CC_PRESSES__());
-  const telemetry = await page.evaluate(() => window.__BBB__.telemetry());
+  const telemetry = await page.evaluate(() => window.__BNZ__.telemetry());
   const result = await page.evaluate(() => {
     // result() is only reachable through the module the shell holds; poke the
     // registry copy directly so the score/rank/lane stats are observable.

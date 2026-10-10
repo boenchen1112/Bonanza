@@ -39,29 +39,29 @@ page.on('pageerror', (e) => console.log('[pageerror]', e.message));
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 await page.goto(`http://127.0.0.1:${PORT}/index.html?scene=title&quality=high`, { waitUntil: 'load' });
 await page.keyboard.press('KeyQ');
-await page.waitForFunction('window.__BBB__ && window.__BBB__.ready', null, { timeout: 30000 });
-await page.evaluate(() => window.__BBB__.ready);
+await page.waitForFunction('window.__BNZ__ && window.__BNZ__.ready', null, { timeout: 30000 });
+await page.evaluate(() => window.__BNZ__.ready);
 
 // --- 1. Bloom on white heads/limbs: swing-kings mid-play, several shots ---
-await page.evaluate(() => window.__BBB__.goto('swing-kings'));
+await page.evaluate(() => window.__BNZ__.goto('swing-kings'));
 await wait(2500);
 await page.screenshot({ path: path.join(OUT, '01-swingkings-a.png') });
-await page.evaluate(() => window.__BBB__.autoplay({ mode: 'auto', chart: true, seconds: 10 }));
+await page.evaluate(() => window.__BNZ__.autoplay({ mode: 'auto', chart: true, seconds: 10 }));
 await wait(3000);
 await page.screenshot({ path: path.join(OUT, '01-swingkings-b.png') });
 await wait(3000);
 await page.screenshot({ path: path.join(OUT, '01-swingkings-c.png') });
-await page.evaluate(() => window.__BBB__.stopAutoplay());
+await page.evaluate(() => window.__BNZ__.stopAutoplay());
 
 // --- 2. Roster lock-in: stage a lineup, watch P1 lock a character ---
-await page.evaluate(() => window.__BBB__.goto('title'));
+await page.evaluate(() => window.__BNZ__.goto('title'));
 await wait(500);
 await page.evaluate(async () => {
-  const { session } = await window.__BBB__.shellState();
+  const { session } = await window.__BNZ__.shellState();
   session.setPlayers([{ name: 'P1', char: 'tuff', isCpu: false, cpuSkill: 0 }]);
   session.mode = 'free';
 });
-await page.evaluate(() => window.__BBB__.goto('roster', { mode: 'free' }));
+await page.evaluate(() => window.__BNZ__.goto('roster', { mode: 'free' }));
 await wait(1200);
 await page.screenshot({ path: path.join(OUT, '02-roster-grid.png') });
 // Move to TUFF's card and lock in. Cursor order matches CHARS array; press
@@ -79,10 +79,10 @@ await page.screenshot({ path: path.join(OUT, '05-roster-after.png') });
 
 // --- 3. Results screen empty lower frame ---
 await page.evaluate(async () => {
-  const { session } = await window.__BBB__.shellState();
+  const { session } = await window.__BNZ__.shellState();
   session.setPlayers([{ name: 'P1', char: 'tuff', isCpu: false, cpuSkill: 0 }]);
 });
-await page.evaluate(() => window.__BBB__.goto('results', {
+await page.evaluate(() => window.__BNZ__.goto('results', {
   game: 'swing-kings',
   result: { score: 42000, accuracy: 0.81, rank: 'A', stats: { perfect: 20, great: 9, good: 4, miss: 3, maxCombo: 17 } },
 }));

@@ -103,7 +103,7 @@ function parseArgs(a) {
 async function ensureBuild() {
   if (argv['no-build']) return;
   await new Promise((res, rej) => {
-    // `--mode harness` keeps the window.__BBB__ test API in the bundle; a
+    // `--mode harness` keeps the window.__BNZ__ test API in the bundle; a
     // plain production build strips it.
     // Run vite's own entry with this node rather than `npx`, which on Windows
     // is a .cmd shim that spawn() cannot launch without a shell.
@@ -167,7 +167,7 @@ function launchOptions() {
 // captured audio and the beat grid share one clock with nothing to guess.
 // --mute-audio silences the speakers, not the graph: capture still works.
 const RECORDER_SRC = `
-class BBBRec extends AudioWorkletProcessor {
+class BNZRec extends AudioWorkletProcessor {
   constructor() { super(); this.t0 = null; this.on = true; this.port.onmessage = () => { this.on = false; }; }
   process(inputs) {
     if (!this.on) return false;
@@ -179,15 +179,15 @@ class BBBRec extends AudioWorkletProcessor {
     return true;
   }
 }
-registerProcessor('bbb-rec', BBBRec);`;
+registerProcessor('bnz-rec', BNZRec);`;
 
 async function startAudioCapture(page) {
   return page.evaluate(async (src) => {
-    const a = window.__BBB__?.audio;
+    const a = window.__BNZ__?.audio;
     if (!a?.ctx?.audioWorklet) return false;
     const url = URL.createObjectURL(new Blob([src], { type: 'text/javascript' }));
     await a.ctx.audioWorklet.addModule(url);
-    const node = new AudioWorkletNode(a.ctx, 'bbb-rec', { numberOfInputs: 1, numberOfOutputs: 1, channelCount: 2, channelCountMode: 'explicit' });
+    const node = new AudioWorkletNode(a.ctx, 'bnz-rec', { numberOfInputs: 1, numberOfOutputs: 1, channelCount: 2, channelCountMode: 'explicit' });
     const rec = { node, t0: null, sr: a.ctx.sampleRate, L: [], R: [] };
     node.port.onmessage = (e) => {
       if (e.data.t0 !== undefined) { rec.t0 = e.data.t0; rec.sr = e.data.sr; return; }
@@ -199,7 +199,7 @@ async function startAudioCapture(page) {
     const sink = a.ctx.createGain();
     sink.gain.value = 0;
     node.connect(sink).connect(a.ctx.destination);
-    window.__BBB_REC__ = rec;
+    window.__BNZ_REC__ = rec;
     return true;
   }, RECORDER_SRC);
 }
@@ -207,10 +207,10 @@ async function startAudioCapture(page) {
 /** Stop, then pull PCM (as base64 Int16) plus the beat grid the game used. */
 async function stopAudioCapture(page) {
   return page.evaluate(() => {
-    const rec = window.__BBB_REC__;
+    const rec = window.__BNZ_REC__;
     if (!rec || rec.t0 === null) return null;
     rec.node.port.postMessage('stop');
-    try { window.__BBB__.audio.master.disconnect(rec.node); } catch { /* already gone */ }
+    try { window.__BNZ__.audio.master.disconnect(rec.node); } catch { /* already gone */ }
     const n = rec.L.reduce((s, b) => s + b.length, 0);
     const pack = (bufs) => {
       const out = new Int16Array(n);
@@ -221,7 +221,7 @@ async function stopAudioCapture(page) {
       for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
       return btoa(s);
     };
-    const c = window.__BBB__.clock;
+    const c = window.__BNZ__.clock;
     const t1 = rec.t0 + n / rec.sr;
     const beats = [];
     if (c.running !== false) {
@@ -299,8 +299,8 @@ const PORT = Number(argv.port || 5321 + (process.pid % 900));
   await page.mouse.move(W / 2, H / 2);
   await page.keyboard.press('KeyQ');
 
-  await page.waitForFunction('window.__BBB__ && window.__BBB__.ready', null, { timeout: 20000 });
-  await page.evaluate(() => window.__BBB__.ready);
+  await page.waitForFunction('window.__BNZ__ && window.__BNZ__.ready', null, { timeout: 20000 });
+  await page.evaluate(() => window.__BNZ__.ready);
 
   // What is actually drawing the frames. Read from the game's own canvas
   // context so it can never disagree with what the stage renders through.
@@ -318,14 +318,14 @@ const PORT = Number(argv.port || 5321 + (process.pid % 900));
   const softwareRendered = SOFTWARE || /swiftshader|llvmpipe|software/i.test(gpu);
 
   // 'auto' is the game's Graphics Auto policy (scale + tier), not a tier.
-  if (QUALITY === 'auto') await page.evaluate(() => window.__BBB__.setGraphics('auto'));
-  else await page.evaluate((q) => window.__BBB__.setQuality?.(q), QUALITY);
-  if (argv.scale) await page.evaluate((s) => window.__BBB__.setRenderScale?.(s), Number(argv.scale));
-  await page.evaluate((s) => window.__BBB__.goto(s), SCENE);
+  if (QUALITY === 'auto') await page.evaluate(() => window.__BNZ__.setGraphics('auto'));
+  else await page.evaluate((q) => window.__BNZ__.setQuality?.(q), QUALITY);
+  if (argv.scale) await page.evaluate((s) => window.__BNZ__.setRenderScale?.(s), Number(argv.scale));
+  await page.evaluate((s) => window.__BNZ__.goto(s), SCENE);
   // Let the freshly loaded scene draw a couple of settled frames before the
   // clock-based capture starts.
-  await page.evaluate(() => window.__BBB__.screenshotReady());
-  await page.evaluate(() => window.__BBB__.resetTelemetry());
+  await page.evaluate(() => window.__BNZ__.screenshotReady());
+  await page.evaluate(() => window.__BNZ__.resetTelemetry());
   const capturing = !argv['no-audio'] && await startAudioCapture(page).catch((e) => {
     logs.push(`[harness] audio capture unavailable: ${e.message}`);
     return false;
@@ -339,16 +339,16 @@ const PORT = Number(argv.port || 5321 + (process.pid % 900));
   // capture can fall behind its audio-time slots — a PNG takes ~0.3s — and a
   // bot that quit on schedule would leave the tail full of false misses.
   if (PLAY !== 'none') {
-    await page.evaluate(({ mode, secs, actions, division, chart }) => window.__BBB__.autoplay({ mode, seconds: secs, actions, division, chart }),
+    await page.evaluate(({ mode, secs, actions, division, chart }) => window.__BNZ__.autoplay({ mode, seconds: secs, actions, division, chart }),
       { mode: PLAY, secs: 600, actions: ACTIONS, division: DIVISION, chart: CHART });
   }
 
   // ---- frame budget (no screenshots in this window) ----------------------
   let budget = null;
   if (BUDGET_S > 0) {
-    await page.evaluate(() => window.__BBB__.resetTelemetry());
+    await page.evaluate(() => window.__BNZ__.resetTelemetry());
     await page.waitForTimeout(BUDGET_S * 1000);
-    const frames = await page.evaluate(() => window.__BBB__.frameTimes?.() ?? []);
+    const frames = await page.evaluate(() => window.__BNZ__.frameTimes?.() ?? []);
     budget = budgetVerdict(frames);
   }
 
@@ -360,19 +360,19 @@ const PORT = Number(argv.port || 5321 + (process.pid % 900));
   // --hide-ui: clean frames of the 3D scene only (card thumbnails, stills).
   if (argv['hide-ui']) await page.addStyleTag({ content: '#ui{display:none!important}' });
 
-  const t0 = SKIP + await page.evaluate(() => window.__BBB__.clock.now());
+  const t0 = SKIP + await page.evaluate(() => window.__BNZ__.clock.now());
   const interval = SECONDS / SHOTS;
   for (let i = 0; i < SHOTS; i++) {
     const target = t0 + interval * (i + 1);
-    await page.waitForFunction((t) => window.__BBB__.clock.now() >= t, target,
+    await page.waitForFunction((t) => window.__BNZ__.clock.now() >= t, target,
       { polling: 'raf', timeout: (interval + SKIP + 15) * 1000 });
-    await page.evaluate(() => window.__BBB__.screenshotReady());
+    await page.evaluate(() => window.__BNZ__.screenshotReady());
     const f = path.join(OUT, `shot-${String(i).padStart(3, '0')}.png`);
     await page.screenshot({ path: f });
     shots.push(f);
   }
 
-  await page.evaluate(() => window.__BBB__.stopAutoplay?.());
+  await page.evaluate(() => window.__BNZ__.stopAutoplay?.());
 
   // ---- audio: WAV + automatic check -------------------------------------
   let audio = null;
@@ -389,13 +389,13 @@ const PORT = Number(argv.port || 5321 + (process.pid % 900));
     };
   }
 
-  const botPresses = await page.evaluate(() => window.__BBB__.botPresses?.() ?? 0);
-  const renderState = await page.evaluate(() => window.__BBB__.renderState?.() ?? null);
-  const telemetry = await page.evaluate(() => window.__BBB__.telemetry());
+  const botPresses = await page.evaluate(() => window.__BNZ__.botPresses?.() ?? 0);
+  const renderState = await page.evaluate(() => window.__BNZ__.renderState?.() ?? null);
+  const telemetry = await page.evaluate(() => window.__BNZ__.telemetry());
   const domProbe = await page.evaluate(() => ({
     uiNodes: document.getElementById('ui')?.querySelectorAll('*').length ?? 0,
     canvasSize: (() => { const c = document.getElementById('stage'); return c ? [c.width, c.height] : null; })(),
-    scene: window.__BBB__.scene,
+    scene: window.__BNZ__.scene,
     title: document.title,
   }));
 

@@ -1,4 +1,4 @@
-# Rhythm Game
+# Bonanza
 
 A party rhythm game that runs in any browser, no install. Five minigames, played
 alone or as a party against CPU players:

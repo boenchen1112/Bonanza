@@ -719,7 +719,7 @@ export function createFX({ stage, clock, bus = null }) {
 
   function tryBridge() {
     // The bus is injected by main.js; it used to be fished off the
-    // `window.__BBB__` test API, which production builds don't ship.
+    // `window.__BNZ__` test API, which production builds don't ship.
     if (bridged || !bus || !bus.on) return;
     bridged = true;
     bus.on('judge', (j) => {

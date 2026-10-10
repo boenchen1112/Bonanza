@@ -59,7 +59,7 @@ export function patchInstanceRGBA(mat) {
         '#include <color_fragment>\n  diffuseColor.rgb *= vCD.rgb;\n  diffuseColor.a *= vCD.a;'
       );
   };
-  mat.customProgramCacheKey = () => 'bbb-fx-rgba';
+  mat.customProgramCacheKey = () => 'bnz-fx-rgba';
   return mat;
 }
 

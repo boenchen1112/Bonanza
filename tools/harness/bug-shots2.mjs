@@ -37,14 +37,14 @@ page.on('pageerror', (e) => console.log('[pageerror]', e.message));
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 await page.goto(`http://127.0.0.1:${PORT}/index.html?scene=title&quality=high`, { waitUntil: 'load' });
 await page.keyboard.press('KeyQ');
-await page.waitForFunction('window.__BBB__ && window.__BBB__.ready', null, { timeout: 30000 });
-await page.evaluate(() => window.__BBB__.ready);
+await page.waitForFunction('window.__BNZ__ && window.__BNZ__.ready', null, { timeout: 30000 });
+await page.evaluate(() => window.__BNZ__.ready);
 
 await page.evaluate(async () => {
-  const { session } = await window.__BBB__.shellState();
+  const { session } = await window.__BNZ__.shellState();
   session.startParty(['swing-kings', 'drumline-dash'], 4, 42);
 });
-await page.evaluate(() => window.__BBB__.goto('roster', { mode: 'party' }));
+await page.evaluate(() => window.__BNZ__.goto('roster', { mode: 'party' }));
 await wait(800);
 await page.screenshot({ path: path.join(OUT, '00-lineup.png') });
 // lineup stage: confirm defaults (P1 you, 2 CPU normal, 1 off) straight through
