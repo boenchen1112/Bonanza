@@ -8,6 +8,7 @@ src, odir, eng, video = args[:4]; only = set(args[4:])
 os.makedirs(odir, exist_ok=True)
 bpy.ops.wm.open_mainfile(filepath=src)
 sc = bpy.context.scene; sc.render.fps = 24
+sc.view_settings.view_transform = "Standard"   # show the texture's own colours
 arm = bpy.data.objects["BatterRig"]
 for o in sc.objects:
     if o.type == "ARMATURE": o.hide_render = True
@@ -16,10 +17,10 @@ if eng == "eevee":
     except TypeError: sc.render.engine = "BLENDER_EEVEE"
     w = sc.world or bpy.data.worlds.new("W"); sc.world = w; w.use_nodes = True
     bg = next(n for n in w.node_tree.nodes if n.type == "BACKGROUND")
-    bg.inputs[0].default_value = (0.55, 0.62, 0.7, 1); bg.inputs[1].default_value = 1.0
+    bg.inputs[0].default_value = (0.8, 0.84, 0.9, 1); bg.inputs[1].default_value = 0.75
     if not any(o.type == "LIGHT" for o in sc.objects):
         sun = bpy.data.objects.new("Sun", bpy.data.lights.new("Sun", "SUN")); sc.collection.objects.link(sun)
-        sun.data.energy = 3; sun.rotation_euler = (math.radians(50), 0, math.radians(30))
+        sun.data.energy = 1.2; sun.data.use_shadow = False; sun.rotation_euler = (math.radians(50), 0, math.radians(30))
 else:
     sc.render.engine = "BLENDER_WORKBENCH"
     sc.display.shading.light = "STUDIO"; sc.display.shading.color_type = "TEXTURE"

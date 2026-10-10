@@ -1,46 +1,49 @@
 {
-  "note": "Batter clips, hand-keyed pose-to-pose in Tools/blender/anim.py. Import as Generic (tail, ears, bat and Root squash/stretch are not Humanoid). Frames are at 24 fps.",
+  "note": "Batter clips, retargeted from Mixamo by Tools/blender/retarget.py. Import as Generic (tail, ears and bat are not Humanoid). Frames are at 24 fps.",
   "fps": 24,
   "bpm": 124.0,
   "idleSpeedAtBpm": 1.0333,
   "clips": {
     "Coil": {
-      "frames": 14,
+      "frames": 17,
       "fps": 24,
       "loop": false,
-      "holdFrom": 9,
-      "seconds": 0.5833
+      "source": "Baseball Hit.fbx",
+      "holdFrom": 17,
+      "seconds": 0.7083
     },
     "HomeRun": {
-      "frames": 48,
+      "frames": 68,
       "fps": 24,
       "loop": false,
-      "loopFrom": 28,
-      "loopTo": 36,
-      "seconds": 2.0
+      "source": "Standing Taunt Chest Thump.fbx",
+      "seconds": 2.8333
     },
     "Idle": {
-      "frames": 48,
+      "frames": 36,
       "fps": 24,
       "loop": true,
-      "beats": 4,
-      "seconds": 2.0
+      "source": "Baseball Idle.fbx",
+      "beats": 3,
+      "seconds": 1.5
     },
     "Swing": {
-      "frames": 22,
+      "frames": 23,
       "fps": 24,
       "loop": false,
-      "contact": 3,
-      "seconds": 0.9167,
-      "contactSeconds": 0.125
+      "source": "Baseball Hit.fbx",
+      "contact": 7,
+      "seconds": 0.9583,
+      "contactSeconds": 0.2917
     },
     "Whiff": {
-      "frames": 40,
+      "frames": 23,
       "fps": 24,
       "loop": false,
-      "contact": 3,
-      "seconds": 1.6667,
-      "contactSeconds": 0.125
+      "source": "Baseball Hit.fbx",
+      "contact": 7,
+      "seconds": 0.9583,
+      "contactSeconds": 0.2917
     }
   }
 }

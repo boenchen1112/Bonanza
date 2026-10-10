@@ -36,7 +36,7 @@ ModelImporter:
       takeName: BatterRig|Coil
       internalID: 7160161526007865921
       firstFrame: 0
-      lastFrame: 14
+      lastFrame: 17
       wrapMode: 0
       orientationOffsetY: 0
       level: 0
@@ -65,7 +65,7 @@ ModelImporter:
       takeName: BatterRig|HomeRun
       internalID: 4139238011356981566
       firstFrame: 0
-      lastFrame: 48
+      lastFrame: 68
       wrapMode: 0
       orientationOffsetY: 0
       level: 0
@@ -94,7 +94,7 @@ ModelImporter:
       takeName: BatterRig|Idle
       internalID: 8459588895036562783
       firstFrame: 0
-      lastFrame: 48
+      lastFrame: 36
       wrapMode: 0
       orientationOffsetY: 0
       level: 0
@@ -123,7 +123,7 @@ ModelImporter:
       takeName: BatterRig|Swing
       internalID: -4840380211900270960
       firstFrame: 0
-      lastFrame: 22
+      lastFrame: 23
       wrapMode: 0
       orientationOffsetY: 0
       level: 0
@@ -152,7 +152,7 @@ ModelImporter:
       takeName: BatterRig|Whiff
       internalID: -2732030195785476791
       firstFrame: 0
-      lastFrame: 40
+      lastFrame: 23
       wrapMode: 0
       orientationOffsetY: 0
       level: 0

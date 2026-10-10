@@ -19,18 +19,23 @@ Humanoid Compatible"), kept locally as `Art/tripo/Batter.glb`.
 3. `animrig.py <batter.blend> <batter_anim.blend>` - add the animation controls: `Root`
    (ground bone above Hips, carries squash/stretch, hops and spins), leg IK (`FootCtrl`,
    `KneePole`), arm IK onto grip bones on a `BatCtrl` bone parented to the chest, and the toy
-   bat (mesh skinned to a `Bat` bone under `Hand.R`). IK pole angles are calibrated so the
-   rest pose is unchanged.
-4. `anim.py <batter_anim.blend> <batter_anim.blend> <tmp_dir> [clip ...]` - the clips, keyed
-   pose to pose at 24 fps in a party-game style (few strong poses, fast breakdowns, holds,
-   Root squash/stretch, ears and tail following through). Clips: `Idle` (4-beat loop: a small
-   settle on each beat and a slow sway), `Coil` (dip, leg kick, load, hold from frame 9),
-   `Swing` (contact at frame 3, overshoot, settle), `Whiff` (over-spin, dizzy wobble,
-   deflate), `HomeRun` (crouch, jump with the bat up, fist pumps; 28-36 loops). Bat positions
-   follow the shoulders of the loaded body. The arms are short for the coat, so a clavicle
-   assist rolls the shoulder forward just enough for each hand to reach its grip. Poses are
-   written straight into the F-curves with no action bound while posing, so the depsgraph
-   cannot flush animated values over the pose being keyed.
+   bat (mesh skinned to a `Bat` bone under `Hand.R`). The retargeted clips mute the IK and use
+   only `Root` and `Bat`.
+4. `retarget.py <batter_anim.blend> <batter_anim.blend> "<Clip>|<mixamo.fbx>|<start>|<end>|<ref>|<meta>" ...` -
+   the clips, retargeted from Mixamo downloads (raw FBX in the gitignored `Mixamo/`, Y Bot,
+   30 fps, in place). Each bone copies the source bone's direction, so the body keeps its own
+   proportions; hips travel is scaled by leg length; the bat lies along both grips. Tail and
+   ears are not animated. Jobs in use (`$M` = `Mixamo`):
+
+   ```
+   "Idle|$M\Baseball Idle.fbx|1|46|1|loop=1,beats=3"
+   "Coil|$M\Baseball Hit.fbx|1|22|1|holdFrom=17"
+   "Swing|$M\Baseball Hit.fbx|22|51|1|contact=7"
+   "Whiff|$M\Baseball Hit.fbx|22|51|1|contact=7"
+   "HomeRun|$M\Standing Taunt Chest Thump.fbx|1|86|1|"
+   ```
+
+   `Whiff` is the same motion as `Swing` until a miss clip is downloaded.
 5. `export_fbx.py <batter_anim.blend> Assets/Art/Character/Batter.fbx
    Assets/Art/Character/BatterClips.json <baked.blend> 124` - bake every clip to FK keys
    (visual keying), drop the control bones and constraints, export mesh + 29-bone skeleton

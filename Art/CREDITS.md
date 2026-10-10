@@ -9,3 +9,9 @@
   A-pose with closed hands, finger bones folded into the hands, tail and ear bones added,
   bat added, animated in Blender (scripts in `Tools/blender/`).
 - The raw Tripo download (`Art/tripo/Batter.glb`) is kept locally, not in git.
+
+## Batter animations
+
+- Motion from **Mixamo** (https://www.mixamo.com, Adobe): Baseball Idle, Baseball Hit,
+  Standing Taunt Chest Thump, retargeted to the batter in Blender
+  (`Tools/blender/retarget.py`). The raw downloads are kept locally, not in git.

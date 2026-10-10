@@ -1,5 +1,5 @@
 # blender -b --python export_fbx.py -- <batter_anim.blend> <out.fbx> <clips.json> <baked.blend> <bpm>
-# Bakes the hand-keyed control-rig clips to plain FK keys on the deform skeleton, strips the
+# Bakes the clips to plain FK keys on the deform skeleton, strips the
 # control bones and constraints, and exports mesh + skeleton + every clip as one FBX for Unity.
 import sys, os, json, bpy
 src, fbx, side, baked, bpm = sys.argv[sys.argv.index("--") + 1:][:5]
@@ -51,8 +51,8 @@ bpy.ops.export_scene.fbx(
     bake_anim_force_startend_keying=True, bake_anim_step=1.0, bake_anim_simplify_factor=0.0)
 beat = 60.0 / bpm
 doc = {
-    "note": "Batter clips, hand-keyed pose-to-pose in Tools/blender/anim.py. Import as Generic (tail, ears, "
-            "bat and Root squash/stretch are not Humanoid). Frames are at 24 fps.",
+    "note": "Batter clips, retargeted from Mixamo by Tools/blender/retarget.py. Import as Generic (tail, ears "
+            "and bat are not Humanoid). Frames are at 24 fps.",
     "fps": 24, "bpm": bpm,
     "idleSpeedAtBpm": round((meta["Idle"]["beats"] * beat) and meta["Idle"]["seconds"] / (meta["Idle"]["beats"] * beat), 4),
     "clips": meta,
