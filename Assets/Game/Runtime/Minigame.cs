@@ -93,7 +93,10 @@ namespace Bonanza
         {
             var go = new GameObject(t.ToString(), typeof(MeshFilter), typeof(MeshRenderer));
             go.GetComponent<MeshFilter>().sharedMesh = GameHost.BuiltinMesh(t);
-            go.GetComponent<MeshRenderer>().sharedMaterial = m;
+            var mr = go.GetComponent<MeshRenderer>();
+            mr.sharedMaterial = m;
+            // On the look kit only the objects a scene marks (Cast) throw the key's real shadow; blobs cover the rest.
+            if (UseLook) mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             go.transform.SetParent(parent != null ? parent : transform, false);
             return go;
         }
@@ -113,6 +116,9 @@ namespace Bonanza
             go.transform.localScale = scale;
             return go;
         }
+
+        /// Let this object (and its children) cast the key light's real shadow, where the scene has a ShadowFocus.
+        protected static GameObject Cast(GameObject go) { LookRig.ShadowCaster(go); return go; }
 
         protected static Color Hex(uint rgb) =>
             new Color(((rgb >> 16) & 255) / 255f, ((rgb >> 8) & 255) / 255f, (rgb & 255) / 255f);

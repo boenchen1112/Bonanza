@@ -12,6 +12,7 @@ float4 _BonRimParams;   // x strength, y power, z beat pulse (0..1)
 float4 _BonFogColor;
 float4 _BonFogParams;   // x near, y far
 float4 _BonShadowColor;
+float4 _BonShadowFocus;   // xyz centre, w radius of the circle the key's real shadow covers (0 = none)
 
 // Banded lambert ramp (web materials.js makeRamp): 'steps' bands, a little
 // softness across each terminator, darkest band lifted to 0.34.

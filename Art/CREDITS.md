@@ -15,3 +15,9 @@
 - Motion from **Mixamo** (https://www.mixamo.com, Adobe): Baseball Idle, Baseball Hit,
   Standing Taunt Chest Thump, retargeted to the batter in Blender
   (`Tools/blender/retarget.py`). The raw downloads are kept locally, not in git.
+
+## Callout font
+
+- **Lilita One** (Juan Montoreano, SIL Open Font License 1.1), baked to a static TextMeshPro SDF atlas
+  (ASCII) for the Swing Kings hit badges: `Assets/Game/Fonts/LilitaOne-Regular.ttf`, licence text in
+  `Assets/Game/Fonts/OFL-LilitaOne.txt`, atlas `Assets/Game/Resources/Look/CalloutFont.asset`.

@@ -23,7 +23,11 @@ Shader "Bonanza/Toon"
             HLSLPROGRAM
             #pragma vertex vert
             #pragma fragment frag
+            // The key's real shadow (a scene opts in with LookRig.ShadowFocus); off, these compile to nothing.
+            #pragma multi_compile_fragment _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE
+            #pragma multi_compile_fragment _ _SHADOWS_SOFT
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Shadows.hlsl"
             #include "BonanzaLook.hlsl"
 
             CBUFFER_START(UnityPerMaterial)
@@ -52,10 +56,20 @@ Shader "Bonanza/Toon"
                 const float invPi = 0.31830989;
 
                 float keyR = BonRamp(dot(n, _BonKeyDir.xyz) * 0.5 + 0.5, _Bands, _Softness);
+                // Real shadow on the key only (fill and kick stay), and only inside the scene's focus circle.
+                float shadow = 1.0;
+                #if defined(_MAIN_LIGHT_SHADOWS) || defined(_MAIN_LIGHT_SHADOWS_CASCADE)
+                    if (_BonShadowFocus.w > 0.0)
+                    {
+                        float inFocus = 1.0 - smoothstep(_BonShadowFocus.w * 0.82, _BonShadowFocus.w, distance(i.positionWS.xz, _BonShadowFocus.xz));
+                        shadow = lerp(1.0, MainLightRealtimeShadow(TransformWorldToShadowCoord(i.positionWS)), inFocus);
+                    }
+                #endif
                 float kickR = BonRamp(dot(n, _BonKickDir.xyz) * 0.5 + 0.5, _Bands, _Softness);
                 float3 fill = lerp(_BonFillGround.rgb, _BonFillSky.rgb, n.y * 0.5 + 0.5);
-                float3 light = (_BonKeyColor.rgb * keyR + _BonKickColor.rgb * kickR + fill) * invPi;
-                float3 c = albedo * light;
+                float3 light = (_BonKeyColor.rgb * keyR * shadow + _BonKickColor.rgb * kickR + fill) * invPi;
+                // Inside the real shadow the fill and kick are dimmed too (a real cast shadow also blocks sky and bounce): a clear dark shape.
+                float3 c = albedo * light * lerp(0.66, 1.0, shadow);
 
                 float3 v = normalize(GetCameraPositionWS() - i.positionWS);
                 float fres = 1.0 - saturate(dot(n, v));
@@ -69,6 +83,47 @@ Shader "Bonanza/Toon"
                 c = lerp(c, _BonFogColor.rgb, BonFog(i.viewDepth));
                 return half4(c, 1);
             }
+            ENDHLSL
+        }
+
+        Pass
+        {
+            Name "ShadowCaster"
+            Tags { "LightMode" = "ShadowCaster" }
+            ZWrite On
+            ZTest LEqual
+            ColorMask 0
+            Cull Back
+            HLSLPROGRAM
+            #pragma vertex vert
+            #pragma fragment frag
+            #pragma multi_compile_vertex _ _CASTING_PUNCTUAL_LIGHT_SHADOW
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Shadows.hlsl"
+            float3 _LightDirection;
+            float3 _LightPosition;
+            struct Attributes { float4 positionOS : POSITION; float3 normalOS : NORMAL; };
+            struct Varyings { float4 positionCS : SV_POSITION; };
+            Varyings vert(Attributes i)
+            {
+                Varyings o;
+                float3 positionWS = TransformObjectToWorld(i.positionOS.xyz);
+                float3 normalWS = TransformObjectToWorldNormal(i.normalOS);
+            #if _CASTING_PUNCTUAL_LIGHT_SHADOW
+                float3 lightDirectionWS = normalize(_LightPosition - positionWS);
+            #else
+                float3 lightDirectionWS = _LightDirection;
+            #endif
+                float4 positionCS = TransformWorldToHClip(ApplyShadowBias(positionWS, normalWS, lightDirectionWS));
+            #if UNITY_REVERSED_Z
+                positionCS.z = min(positionCS.z, UNITY_NEAR_CLIP_VALUE);
+            #else
+                positionCS.z = max(positionCS.z, UNITY_NEAR_CLIP_VALUE);
+            #endif
+                o.positionCS = positionCS;
+                return o;
+            }
+            half4 frag(Varyings i) : SV_Target { return 0; }
             ENDHLSL
         }
 

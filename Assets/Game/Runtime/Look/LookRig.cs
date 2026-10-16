@@ -5,8 +5,13 @@
 // palette change re-lights every surface with no per-material work.
 //
 // Shaders and materials come from Resources/Look (never Shader.Find, which is
-// null in a WebGL player). No Light components and no shadow maps: the lights
-// are evaluated in the shader, shadows are blobs. Cheap on an integrated GPU.
+// null in a WebGL player). The lights are evaluated in the shader, shadows are
+// blobs. A scene can ask for the key's REAL shadow inside a focus circle
+// (ShadowFocus; the scene's directional Light carries it, High/Medium tiers).
+//
+// The rig also owns the camera rig (Rig), the pooled effects (Fx) and the
+// post-chain inputs (bloom, chroma, flash), driven in one LateUpdate so the
+// order is fixed: camera, then sky, globals, effects.
 
 using System.Collections.Generic;
 using UnityEngine;
@@ -30,6 +35,10 @@ namespace Bonanza.Look
         }
 
         public PaletteState Palette { get; private set; }
+        /// The camera rig: frame, shake, punch zoom, flash, chroma. Valid after Create.
+        public CameraRig Rig { get; private set; }
+        /// The pooled effects: verdict bursts, rings, trails, callouts. Valid after Create.
+        public Fx Fx { get; private set; }
         /// 0..1 beat flash. Set by the game each frame; surfaces lift and the key breathes with it.
         public float BeatPulse;
 
@@ -62,13 +71,112 @@ namespace Bonanza.Look
             skyGo.transform.localScale = Vector3.one * 100f;   // builtin sphere radius 0.5 -> dome radius 50
             _sky = skyGo.transform;
             _blobs = new BlobShadows(transform, blobMat);
+            var cam = Camera.main;
+            if (cam) Rig = new CameraRig(cam);
+            Fx = new Fx(transform, this, Rig);
+            Fx.VerdictColor = v => Palette.Live[v == Core.Verdict.Perfect ? PC.Perfect : v == Core.Verdict.Great ? PC.Great : v == Core.Verdict.Good ? PC.Good : PC.Miss];
             Push();
+        }
+
+        /// A point in front of the camera, for touching an effect once before play.
+        public Vector3 PrewarmPoint() { var c = Camera.main; return c ? c.transform.position + c.transform.forward * 6 : Vector3.zero; }
+
+        // ------------------------------------------------------------ beat, hitstop, shadow focus
+
+        int _lastBeat = int.MinValue;
+
+        /// Call once a frame with the audio beat: the camera pushes in a few millimetres on every beat.
+        public void TickBeat(double beat)
+        {
+            if (beat < 0) { _lastBeat = int.MinValue; return; }
+            int whole = (int)System.Math.Floor(beat);
+            if (whole == _lastBeat) return;
+            if (_lastBeat != int.MinValue || whole >= 0) Rig?.Beat(((whole % 4) + 4) % 4);
+            _lastBeat = whole;
+        }
+
+        /// A visual-only freeze (hitstop). Animation and FX age on VisualDt() and stand still; judging never reads it.
+        public void Hitstop(float seconds) => VisualClock.Hitstop(seconds);
+        public static float VisualDt(float dt) => VisualClock.Dt(dt);
+
+        bool _focusOn; Vector3 _focusCentre; float _focusRadius;
+        Light _key; LightShadows _keyShadows; Quaternion _keyRot; float _keyBias, _keyNormalBias, _keyStrength;
+        UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset _rp;
+        float _origDist; int _origCascades, _origRes;
+        bool _shadowActive; QualityTier _shadowTier;
+
+        /// The key light casts a real shadow, but only inside a circle of `radius` around `centre` (web setShadowFocus):
+        /// the few objects the player watches. On High and Medium; Low keeps the blob shadows only. Mark casters with
+        /// ShadowCaster(); every Toon surface receives.
+        public void ShadowFocus(Vector3 centre, float radius)
+        {
+            _focusOn = true; _focusCentre = centre; _focusRadius = radius;
+            foreach (var l in FindObjectsByType<Light>(FindObjectsSortMode.None))
+                if (l.type == LightType.Directional && l.isActiveAndEnabled) { _key = l; break; }
+            if (_key)
+            {
+                _keyShadows = _key.shadows; _keyRot = _key.transform.rotation;
+                _keyBias = _key.shadowBias; _keyNormalBias = _key.shadowNormalBias; _keyStrength = _key.shadowStrength;
+            }
+            _rp = UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline as UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset;
+        }
+
+        /// A mesh that casts the key's shadow (everything else on a look-kit stage does not).
+        public static void ShadowCaster(GameObject go, bool on = true)
+        {
+            foreach (var r in go.GetComponentsInChildren<MeshRenderer>())
+                r.shadowCastingMode = on ? UnityEngine.Rendering.ShadowCastingMode.On : UnityEngine.Rendering.ShadowCastingMode.Off;
+        }
+
+        void UpdateShadow()
+        {
+            if (!_focusOn || !_key || _rp == null || !_rp.supportsMainLightShadows) { Shader.SetGlobalVector("_BonShadowFocus", Vector4.zero); return; }
+            var tier = RenderQuality.Level.Tier;
+            bool want = tier != QualityTier.Low;
+            if (want && (!_shadowActive || tier != _shadowTier))
+            {
+                if (!_shadowActive) { _origDist = _rp.shadowDistance; _origCascades = _rp.shadowCascadeCount; _origRes = _rp.mainLightShadowmapResolution; }
+                // One cascade over camera -> far side of the focus circle: the box the shadow map is spent on.
+                float far = _cam ? Vector3.Distance(_cam.transform.position, _focusCentre) + _focusRadius + 0.5f : 20f;
+                _rp.shadowDistance = Mathf.Clamp(far, 8f, 40f);
+                _rp.shadowCascadeCount = 1;
+                _rp.mainLightShadowmapResolution = tier == QualityTier.High ? 2048 : 1024;
+                _key.shadows = tier == QualityTier.High && _rp.supportsSoftShadows ? LightShadows.Soft : LightShadows.Hard;
+                _key.shadowStrength = 1;
+                _key.shadowBias = 0.02f; _key.shadowNormalBias = 0.04f;   // a big normal bias shrinks thin casters (batter, bat, plate) out of the map
+                _shadowActive = true; _shadowTier = tier;
+            }
+            else if (!want && _shadowActive) RestoreShadow();
+            if (_shadowActive)
+            {
+                var d = Palette.Live[PD.KeyDir];
+                // The shadow map's light is the toon key swung sideways and lowered: with the stock direction the shadow
+                // falls straight behind the batter and the camera never sees it; this one lies out to the side, in view.
+                Vector3 tl = Dir(d);
+                tl = new Vector3(Mathf.Sign(tl.x == 0 ? -1 : tl.x) * Mathf.Max(Mathf.Abs(tl.x) * 1.5f, 0.7f), tl.y * 0.8f, -0.2f).normalized;
+                _key.transform.rotation = Quaternion.LookRotation(-tl);   // forward points away from the light
+                Shader.SetGlobalVector("_BonShadowFocus", new Vector4(_focusCentre.x, _focusCentre.y, _focusCentre.z, _focusRadius));
+            }
+            else Shader.SetGlobalVector("_BonShadowFocus", Vector4.zero);
+        }
+
+        void RestoreShadow()
+        {
+            if (!_shadowActive) return;
+            _shadowActive = false;
+            if (_rp != null) { _rp.shadowDistance = _origDist; _rp.shadowCascadeCount = _origCascades; _rp.mainLightShadowmapResolution = _origRes; }
+            if (_key) { _key.shadows = _keyShadows; _key.transform.rotation = _keyRot; _key.shadowBias = _keyBias; _key.shadowNormalBias = _keyNormalBias; _key.shadowStrength = _keyStrength; }
         }
 
         void OnDestroy()
         {
-            // The camera outlives the game: hand it back as found.
+            // The camera, the scene's light and the pipeline asset outlive the game: hand them back as found.
             if (_camSaved && _cam) { _cam.clearFlags = _flags; _cam.backgroundColor = _bg; }
+            Rig?.Restore();
+            Fx?.Destroy();
+            RestoreShadow();
+            Shader.SetGlobalVector("_BonShadowFocus", Vector4.zero);
+            VisualClock.Clear();
         }
 
         public void SetPalette(string name, float seconds = 0.55f) => Palette.Set(name, seconds);
@@ -92,6 +200,7 @@ namespace Bonanza.Look
         void LateUpdate()
         {
             float dt = Time.unscaledDeltaTime;
+            PostState.Frame = Time.frameCount;
             _time += dt;
             if (Palette.Update(dt))
                 foreach (var t in _tracked) if (t.M) t.M.SetColor("_BaseColor", Scaled(Palette.Live[t.Key], t.Mul));
@@ -105,9 +214,15 @@ namespace Bonanza.Look
                     _cam.clearFlags = CameraClearFlags.SolidColor; _cam.backgroundColor = Palette.Live[PC.Fog];
                 }
             }
+            // Order matters: the rig moves the camera, then the sky follows it, then the globals and effects read it.
+            float sceneDt = Time.deltaTime;   // 0 while paused, so a pause freezes the camera and every effect
+            Rig?.Update(sceneDt);
             if (_cam && _sky) _sky.position = _cam.transform.position;
             Push();
+            Fx?.Update(VisualClock.Dt(sceneDt), sceneDt, _cam);
             _blobs?.Update();
+            UpdateShadow();
+            VisualClock.Tick(dt);
         }
 
         static Vector4 V(Color gamma, float k = 1)
@@ -145,6 +260,15 @@ namespace Bonanza.Look
             Shader.SetGlobalVector("_BonSun", V(p[PC.Sun]));
             Shader.SetGlobalVector("_BonSunDir", Dir(p[PD.SunDir]));
             Shader.SetGlobalVector("_BonSkyParams", new Vector4(p[PF.SunSize], p[PF.SunStrength], _time, pulse));
+
+            // Post chain inputs: bloom from the palette (linear light, before the curve), the chroma that spikes on
+            // hits and decays, the white flash.
+            PostState.Bloom = p[PF.Bloom]; PostState.Threshold = p[PF.BloomThreshold];
+            float chroma = CameraRig.ChromaRest + (Rig != null ? Rig.ChromaSpike : 0) + pulse * 0.0006f;
+            float flash = Rig != null ? Rig.Flash * 0.85f : 0;
+            Shader.SetGlobalVector("_BonFxParams", new Vector4(p[PF.Bloom], PostState.Wide ? 1 : 0, chroma, flash));
+            var fc = Rig != null ? Rig.FlashColor.linear : Color.white;
+            Shader.SetGlobalVector("_BonFlashColor", new Vector4(fc.r, fc.g, fc.b, 1));
         }
     }
 

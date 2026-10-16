@@ -17,6 +17,7 @@ namespace Bonanza.Look
         SkyTop, SkyMid, SkyBot, Sun, Ground, GroundAlt, GroundRim, Band, BandAlt,
         Accent, Accent2, Accent3, Key, FillSky, FillGround, Rim, Fog,
         Dirt, Metal, Batter, Plate,   // stand-in props, so the day/night swap carries them
+        Perfect, Great, Good, Miss,   // verdict colours: re-tinted per palette, audited like the accents
     }
 
     public enum PF
@@ -101,7 +102,8 @@ namespace Bonanza.Look
                 .Set(PC.Fog, 0x3b2470).Set(PF.FogNear, 16).Set(PF.FogFar, 62)
                 .Set(PF.Exposure, 1.05f).Set(PF.Bloom, 0.85f).Set(PF.BloomThreshold, 0.72f)
                 .Set(PF.Saturation, 1.08f).Set(PF.Vignette, 0.42f)
-                .Set(PC.Dirt, 0xc08a5a).Set(PC.Metal, 0x73737f).Set(PC.Batter, 0x8c8c99).Set(PC.Plate, 0xffffff);
+                .Set(PC.Dirt, 0xc08a5a).Set(PC.Metal, 0x73737f).Set(PC.Batter, 0x8c8c99).Set(PC.Plate, 0xffffff)
+                .Set(PC.Perfect, Feel.Perfect).Set(PC.Great, Feel.Great).Set(PC.Good, Feel.Good).Set(PC.Miss, Feel.Miss);
 
             _all["default"] = Make(_base, p => { });
 
@@ -133,7 +135,7 @@ namespace Bonanza.Look
             // Late innings: the sun is gone and the stadium lights carry the frame.
             _all["swing-kings-night"] = Make(_base, p => p
                 .Set(PC.SkyTop, 0x040a24).Set(PC.SkyMid, 0x0f2258).Set(PC.SkyBot, 0x5b3a8c)
-                .Set(PC.Sun, 0xb8d4ff).Set(PD.SunDir, 0.35f, 0.1f, -1).Set(PF.SunStrength, 0.45f).Set(PF.SunSize, 0.18f)
+                .Set(PC.Sun, 0xb8d4ff).Set(PD.SunDir, 0.35f, -0.08f, -1).Set(PF.SunStrength, 0.14f).Set(PF.SunSize, 0.18f)
                 .Set(PC.Ground, 0x176a3a).Set(PC.GroundAlt, 0x1d7a44).Set(PC.GroundRim, 0xd8f0ff)
                 .Set(PC.Band, 0x0e2458).Set(PC.BandAlt, 0x2346a0)
                 .Set(PC.Accent, 0xffe066).Set(PC.Accent2, 0x7fe7ff).Set(PC.Accent3, 0xff5d7a)
@@ -142,8 +144,8 @@ namespace Bonanza.Look
                 .Set(PC.FillSky, 0x3f5aa6).Set(PC.FillGround, 0x0b2a1c).Set(PF.FillIntensity, 0.72f)
                 .Set(PC.Rim, 0xbfe6ff).Set(PD.RimDir, 0.6f, 0.35f, -0.75f).Set(PF.RimStrength, 1.1f)
                 .Set(PC.Fog, 0x0a1638).Set(PF.FogNear, 22).Set(PF.FogFar, 80)
-                .Set(PF.Bloom, 0.9f).Set(PF.BloomThreshold, 1.5f).Set(PF.Exposure, 1.0f)
-                .Set(PC.Dirt, 0x9c7466).Set(PC.Metal, 0x585a72).Set(PC.Batter, 0x6c7090).Set(PC.Plate, 0xdde6ff));
+                .Set(PF.Bloom, 0.9f).Set(PF.BloomThreshold, 1.5f).Set(PF.Exposure, 1.0f).Set(PF.Saturation, 1.2f)
+                .Set(PC.Metal, 0x585a72).Set(PC.Batter, 0x6c7090));   // Dirt and Plate stay as in the base: the grade alone darkens them at night
 
             // Drumline Dash: hot night parade. Magenta and ember.
             _all["drumline-dash"] = Make(_base, p => p
@@ -259,7 +261,7 @@ namespace Bonanza.Look
         static void Audit(Palette p)
         {
             var backs = new[] { p[PC.SkyMid], p[PC.SkyTop], p[PC.Ground], p[PC.Band] };
-            foreach (var k in new[] { PC.Accent, PC.Accent2, PC.Accent3, PC.GroundRim })
+            foreach (var k in new[] { PC.Accent, PC.Accent2, PC.Accent3, PC.GroundRim, PC.Perfect, PC.Great, PC.Good, PC.Miss })
             {
                 var v = p[k];
                 foreach (var bg in backs) v = EnsureContrast(v, bg);
