@@ -16,6 +16,7 @@
 
 using System.Collections.Generic;
 using Bonanza.Core;
+using Bonanza.Look;
 using UnityEngine;
 
 namespace Bonanza
@@ -32,10 +33,18 @@ namespace Bonanza
         protected bool Autoplay => Host.Autoplay;
         protected Rng Rng;
 
+        /// True once a game has moved to the shared toon look (Look/): Mat() then
+        /// returns toon materials and the game gets a LookRig (sky, lights, fog, blobs).
+        protected virtual bool UseLook => false;
+        /// The palette this game starts in (a key of Palettes).
+        protected virtual string PaletteName => Id;
+        protected LookRig Look { get; private set; }
+
         public void Bind(GameHost host, uint seed)
         {
             Host = host;
             Rng = new Rng(seed);
+            if (UseLook) Look = LookRig.Create(transform, PaletteName);
         }
 
         public abstract void Load();
@@ -54,10 +63,17 @@ namespace Bonanza
 
         readonly List<Material> _mats = new List<Material>();
 
-        /// A tinted copy of the scene's URP Lit greybox material.
-        protected Material Mat(Color c)
+        /// A tinted copy of the toon material (or the URP Lit greybox for games not yet on the look kit).
+        /// `lift` is self-lit glow, `rim` and `pulse` scale the rim light and the beat reaction.
+        protected Material Mat(Color c, float lift = 0, float rim = 1, float pulse = 0.12f, float bands = 3)
         {
-            var m = new Material(Host.Greybox);
+            Material m;
+            if (UseLook)
+            {
+                m = new Material(LookRig.Toon);
+                m.SetFloat("_Lift", lift); m.SetFloat("_Rim", rim); m.SetFloat("_Pulse", pulse); m.SetFloat("_Bands", bands);
+            }
+            else m = new Material(Host.Greybox);
             m.SetColor("_BaseColor", c);
             _mats.Add(m);
             return m;

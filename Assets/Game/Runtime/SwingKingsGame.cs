@@ -11,6 +11,7 @@
 
 using System.Collections.Generic;
 using Bonanza.Core;
+using Bonanza.Look;
 using UnityEngine;
 
 namespace Bonanza
@@ -21,6 +22,9 @@ namespace Bonanza
         public override string Title => "SWING KINGS";
         public override string Blurb => "One swing. One beat. Send it.";
         public override double SecondsPerBeat => 60 / SwingRules.Bpm;
+        protected override bool UseLook => true;
+        bool _night;
+
         public override string Controls => "SPACE / click / tap as the ball reaches the plate.\nOn the beat = HOME RUN. Three misses retire the side.";
 
         // ------------------------------------------------------------ layout
@@ -95,6 +99,14 @@ namespace Bonanza
             _round.Update(now);
             double beat = _round.BeatAt(now);
             CountIn(beatBefore, beat);
+            // Beat flash on the audio clock, and the dusk -> night swap when the fast section starts.
+            Look.BeatPulse = beat < 0 ? 0 : Mathf.Exp(-5f * Phase(beat));
+            bool night = SwingRules.SectionAt(beat) is Section.Escalate or Section.Finale;
+            if (night != _night)
+            {
+                _night = night;
+                Look.SetPalette(night ? "swing-kings-night" : "swing-kings", night ? 2.4f : 0.8f);
+            }
             ScheduleClicks();
             UpdatePitchBalls(beat);
         }
@@ -125,10 +137,26 @@ namespace Bonanza
             cam.transform.LookAt(target);
             cam.fieldOfView = 45;
 
-            Prim(PrimitiveType.Plane, new Vector3(-2, 0, 0), new Vector3(4, 1, 2), new Color(0.35f, 0.42f, 0.33f));
-            Prim(PrimitiveType.Cube, PlatePos, new Vector3(0.5f, 0.02f, 0.5f), Color.white);
-            Prim(PrimitiveType.Cube, MachinePos, new Vector3(1.2f, 1.2f, 1.0f), new Color(0.45f, 0.45f, 0.5f));
-            Prim(PrimitiveType.Capsule, BatterPos + Vector3.up * 0.9f, new Vector3(0.6f, 0.9f, 0.6f), new Color(0.55f, 0.55f, 0.6f));
+            // Palette-tracked surfaces follow the day -> night swap.
+            var groundMat = Mat(Color.white, rim: 0, pulse: 0.04f); Look.Track(groundMat, PC.Ground);
+            Prim(PrimitiveType.Plane, new Vector3(-2, 0, 0), new Vector3(14, 1, 14), groundMat);
+            var dirtMat = Mat(Color.white, rim: 0, pulse: 0.04f); Look.Track(dirtMat, PC.Dirt);
+            Prim(PrimitiveType.Cylinder, PlatePos + new Vector3(-0.2f, -0.012f, 0), new Vector3(3.2f, 0.01f, 2.4f), dirtMat);
+            Prim(PrimitiveType.Cylinder, MachinePos + new Vector3(0, -1.54f, 0), new Vector3(2.4f, 0.01f, 2.4f), dirtMat);
+            var plateMat = Mat(Color.white, rim: 0.4f); Look.Track(plateMat, PC.Plate);
+            Prim(PrimitiveType.Cube, PlatePos, new Vector3(0.5f, 0.02f, 0.5f), plateMat);
+            var wallMat = Mat(Color.white, rim: 0.3f); Look.Track(wallMat, PC.Band);
+            Prim(PrimitiveType.Cube, new Vector3(-2, 1.2f, 11), new Vector3(60, 2.4f, 0.6f), wallMat);
+            var standMat = Mat(Color.white, rim: 0.3f); Look.Track(standMat, PC.BandAlt);
+            Prim(PrimitiveType.Cube, new Vector3(-2, 3.6f, 17), new Vector3(60, 7.2f, 10), standMat);
+            var metalMat = Mat(Color.white); Look.Track(metalMat, PC.Metal);
+            var machine = Prim(PrimitiveType.Cube, MachinePos, new Vector3(1.2f, 1.2f, 1.0f), metalMat);
+            // Pads top out at y~0.02: lay the blobs just above them. Both bodies sit on their pad, so
+            // heightOffset is the body centre's height and they get full strength.
+            Look.Blob(machine.transform, 1.0f, 0.55f, groundY: 0.03f, heightOffset: MachinePos.y - 0.03f);
+            var batterMat = Mat(Color.white); Look.Track(batterMat, PC.Batter);
+            var batter = Prim(PrimitiveType.Capsule, BatterPos + Vector3.up * 0.9f, new Vector3(0.6f, 0.9f, 0.6f), batterMat);
+            Look.Blob(batter.transform, 0.85f, 0.7f, groundY: 0.03f, heightOffset: 0.87f);
 
             _batPivot = new GameObject("BatPivot").transform;
             _batPivot.SetParent(transform, false);
@@ -136,8 +164,8 @@ namespace Bonanza
             Prim(PrimitiveType.Cube, new Vector3(-0.55f, 0, 0), new Vector3(1.1f, 0.07f, 0.07f), new Color(0.8f, 0.7f, 0.5f), _batPivot);
             PoseBat(1);
 
-            _ballMat = Mat(Color.white);
-            _pipMat = Mat(new Color(0.75f, 0.92f, 1f));
+            _ballMat = Mat(Color.white, lift: 0.35f, rim: 1.2f, pulse: 0.3f);
+            _pipMat = Mat(new Color(0.75f, 0.92f, 1f), lift: 0.6f);
         }
 
         /// 0 = coiled back, 1 = follow-through done (and back to rest).
@@ -166,6 +194,7 @@ namespace Bonanza
         void Update()
         {
             float dt = Time.deltaTime;
+            if (!_playing) Look.BeatPulse = 0;
             UpdateHitBalls(dt);
             UpdateBat(dt);
             for (int i = _callouts.Count - 1; i >= 0; i--)
@@ -206,6 +235,7 @@ namespace Bonanza
             {
                 go = MeshObject(PrimitiveType.Sphere, _ballMat);
                 go.transform.localScale = Vector3.one * 0.24f;
+                Look.Blob(go.transform, 0.2f, 0.5f);
             }
             go.SetActive(true);
             return go;
