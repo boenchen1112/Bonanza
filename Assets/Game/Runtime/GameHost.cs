@@ -119,6 +119,9 @@ namespace Bonanza
         // ------------------------------------------------------------ sound
 
         AudioSource[] _voices;
+        float _sfxVol = Settings.DefaultSfx;
+
+        void OnSettingsChanged() => _sfxVol = Settings.Sfx;
         int _voiceNext;
 
         /// Play a clip at game time `t` (immediately if t is past).
@@ -127,7 +130,7 @@ namespace Bonanza
             var src = _voices[_voiceNext++ % _voices.Length];
             src.Stop();
             src.clip = clip;
-            src.volume = volume;
+            src.volume = volume * _sfxVol;
             src.pitch = pitch;
             src.panStereo = pan;
             double dsp = DspAt(t);
@@ -206,7 +209,15 @@ namespace Bonanza
             if (int.TryParse(partyArg, out int ps) && ps >= 0) _partySeed = ps;
             _autoParty = partyArg != null || Array.IndexOf(args, "-party") >= 0
                          || Environment.GetEnvironmentVariable("BONANZA_PARTY") == "1";
-            AudioListener.volume = Save.Volume;
+            Settings.Migrate();
+            AudioListener.volume = 1;   // the music and SFX levels are applied at their own sources
+            _sfxVol = Settings.Sfx;
+            Settings.Changed += OnSettingsChanged;
+            // `?quality=auto|high|medium|low` pins the Graphics setting for this run (test harness), like the web.
+            string q = QueryParam(url, "quality");
+            GraphicsSetting forced = default;
+            bool pin = q != null && Enum.TryParse(q, true, out forced);
+            RenderQuality.Apply(pin ? forced : Settings.Graphics);
 
             Bind("a", "<Keyboard>/space", "<Keyboard>/enter", "<Keyboard>/j", "<Gamepad>/buttonSouth");
             Bind("click", "<Mouse>/leftButton", "<Touchscreen>/primaryTouch/press");
@@ -231,6 +242,7 @@ namespace Bonanza
 
         void OnDestroy()
         {
+            Settings.Changed -= OnSettingsChanged;
             foreach (var a in _actions) a.Dispose();
         }
 
@@ -565,6 +577,18 @@ namespace Bonanza
             if (_mode == Mode.Title || _mode == Mode.Menu || _mode == Mode.Options || _mode == Mode.Roster || _mode == Mode.PartyHub)
                 EnsureTitleMusic();
             _music.Tick(_mode == Mode.Paused);
+            RenderQuality.Tick(Time.unscaledDeltaTime, GraphicsPhase());
+        }
+
+        FramePhase GraphicsPhase()
+        {
+            switch (_mode)
+            {
+                case Mode.Gate: return FramePhase.Loading;
+                case Mode.Playing: return _clock.Running ? FramePhase.Playing : FramePhase.Paused;
+                case Mode.Paused: return FramePhase.Paused;
+                default: return FramePhase.Between;
+            }
         }
 
         bool _gatePressed, _startRequested;
@@ -610,28 +634,58 @@ namespace Bonanza
 
         static string SlotLabel(int tier) => tier < Party.CpuTiers.Length ? "CPU " + Party.CpuTiers[tier].label : "OFF";
 
-        static readonly string[] OptionRows = { "TIMING OFFSET", "VOLUME", "RESET PROGRESS", "BACK" };
-        // Wide enough for Bluetooth output (150-300 ms the browser does not report).
-        const float OffsetMin = -300, OffsetMax = 300, OffsetStep = 5;
+        // The web options.js rows, in its order.
+        enum Opt { Music, Sfx, Offset, Reduce, Graphics, Swing, Reset, Back }
+        static readonly string[] OptionRows =
+            { "MUSIC VOLUME", "SFX VOLUME", "TIMING OFFSET", "REDUCE MOTION", "GRAPHICS", "SWING KINGS INPUT", "RESET PROGRESS", "BACK" };
 
         void AdjustOption(int row, int dir)
         {
-            if (row == 0) Save.OffsetMs = Mathf.Clamp(Save.OffsetMs + dir * OffsetStep, OffsetMin, OffsetMax);
-            else if (row == 1) AudioListener.volume = Save.Volume = Mathf.Clamp01(Mathf.Round((Save.Volume + dir * 0.05f) * 20) / 20);
+            switch ((Opt)row)
+            {
+                case Opt.Music: Settings.Music = Settings.StepPct(Settings.Music, dir); break;
+                case Opt.Sfx: Settings.Sfx = Settings.StepPct(Settings.Sfx, dir); break;
+                case Opt.Offset: Settings.OffsetMs = Settings.StepOffset(Settings.OffsetMs, dir); break;
+                case Opt.Reduce: Settings.ReduceMotion = !Settings.ReduceMotion; break;
+                case Opt.Graphics:
+                    Settings.Graphics = Settings.Cycle(Settings.Graphics, dir);
+                    RenderQuality.Apply(Settings.Graphics);   // live, so the difference shows before leaving
+                    break;
+                case Opt.Swing: Settings.SwingInputChoice = Settings.Cycle(Settings.SwingInputChoice, dir); break;
+                default: return;
+            }
+            Play(Tones.Blip(880, 0.04f, 60), 0.3f);   // the web's ui sound; also lets the SFX level be heard
         }
 
         void OptionChoice(int row)
         {
             _optIndex = row;
-            if (row == 2) _confirmReset = true;
-            else if (row == 3) _mode = Mode.Title;
+            switch ((Opt)row)
+            {
+                case Opt.Reset: _confirmReset = true; break;
+                case Opt.Back: _mode = Mode.Title; break;
+                case Opt.Reduce: case Opt.Graphics: case Opt.Swing: AdjustOption(row, 1); break;
+            }
         }
 
         string OptionValue(int row)
         {
-            if (row == 0) { float v = Save.OffsetMs; return (v > 0 ? "+" : "") + v.ToString("0") + " ms"; }
-            if (row == 1) return Mathf.RoundToInt(Save.Volume * 100) + "%";
-            if (row == 2) return _confirmReset ? "SPACE: yes   other: no" : "";
+            switch ((Opt)row)
+            {
+                case Opt.Music: return Mathf.RoundToInt(Settings.Music * 100) + "%";
+                case Opt.Sfx: return Mathf.RoundToInt(Settings.Sfx * 100) + "%";
+                case Opt.Offset: { float v = Settings.OffsetMs; return (v > 0 ? "+" : "") + v.ToString("0") + "ms"; }
+                case Opt.Reduce: return Settings.ReduceMotion ? "ON" : "OFF";
+                case Opt.Graphics: return Settings.Graphics.ToString().ToUpperInvariant();
+                case Opt.Swing:
+                    switch (Settings.SwingInputChoice)
+                    {
+                        case SwingInput.Mouse: return "MOUSE CONDUCT";
+                        case SwingInput.Camera: return Settings.CameraInputAvailable ? "CAMERA CONDUCT" : "CAMERA CONDUCT (N/A)";
+                        default: return "TAP";
+                    }
+                case Opt.Reset: return _confirmReset ? "scores, ranks, stats" : "";
+            }
             return "";
         }
 
@@ -707,14 +761,22 @@ namespace Bonanza
                     Hud.Center(0.08f, "OPTIONS", Hud.Big, Hud.Gold, 100);
                     for (int i = 0; i < OptionRows.Length; i++)
                     {
-                        string label = i == 2 && _confirmReset ? "RESET ALL PROGRESS?" : OptionRows[i];
-                        if (MenuRow(i, 0.28f, label, OptionValue(i), i == _optIndex, s))
+                        bool isReset = i == (int)Opt.Reset;
+                        string label = isReset && _confirmReset ? "RESET ALL PROGRESS?" : OptionRows[i];
+                        bool grey = i == (int)Opt.Swing && Settings.SwingInputChoice == SwingInput.Camera && !Settings.CameraInputAvailable;
+                        if (MenuRow(i, 0.21f, label, OptionValue(i), i == _optIndex, s, 50, 44, grey, 0.6f))
                         {
-                            if (_confirmReset) { if (i == 2) Save.ResetProgress(Games.Select(e => e.Id)); _confirmReset = false; }
+                            if (_confirmReset) { if (isReset) Save.ResetProgress(Games.Select(e => e.Id)); _confirmReset = false; }
                             else OptionChoice(i);
                         }
                     }
-                    Hud.Center(0.78f, "Negative offset = your presses land late.\nPress late and see GOOD more than PERFECT? Try -20 ms steps.", Hud.Small, new Color(1, 1, 1, 0.7f), 80);
+                    if (_confirmReset) Hud.Center(0.8f, "SPACE: reset     any other key: cancel", Hud.Small, new Color(1, 0.6f, 0.6f, 0.9f), 40);
+                    else if (_optIndex == (int)Opt.Graphics)
+                        Hud.Center(0.8f, $"Now drawing at {RenderQuality.Level.Scale:0.##}x, {RenderQuality.Level.Tier.ToString().ToUpperInvariant()}{(RenderQuality.Auto ? " (auto: " + RenderQuality.Reason + ")" : "")}", Hud.Small, new Color(1, 1, 1, 0.7f), 40);
+                    else if (_optIndex == (int)Opt.Swing)
+                        Hud.Center(0.8f, "Tap is the default. Mouse and camera conducting arrive later; until then taps are used.", Hud.Small, new Color(1, 1, 1, 0.7f), 40);
+                    else if (_optIndex == (int)Opt.Offset)
+                        Hud.Center(0.8f, "Negative offset = your presses land late.\nPress late and see GOOD more than PERFECT? Try -20 ms steps.", Hud.Small, new Color(1, 1, 1, 0.7f), 80);
                     Hud.Center(0.9f, "UP/DOWN choose   LEFT/RIGHT adjust   ESC back", Hud.Small, new Color(1, 1, 1, 0.7f), 40);
                     break;
 
@@ -847,13 +909,13 @@ namespace Bonanza
         }
 
         /// One selectable row: label left, value right. Row i sits at y0 + i rows. True if clicked.
-        bool MenuRow(int i, float y0, string label, string value, bool sel, float s)
+        bool MenuRow(int i, float y0, string label, string value, bool sel, float s, float pitch = 80, float height = 66, bool grey = false, float width = 0.44f)
         {
-            var r = new Rect(Screen.width * 0.28f, Screen.height * y0 + i * 80 * s, Screen.width * 0.44f, 66 * s);
+            var r = new Rect(Screen.width * (0.5f - width / 2), Screen.height * y0 + i * pitch * s, Screen.width * width, height * s);
             Hud.Box(r, sel ? new Color(1, 0.8f, 0.3f, 0.35f) : new Color(1, 1, 1, 0.08f));
             Hud.Text(new Rect(r.x + 18 * s, r.y, r.width, r.height), label, Hud.Mid, sel ? Hud.Gold : Color.white, TextAnchor.MiddleLeft);
             if (!string.IsNullOrEmpty(value))
-                Hud.Text(new Rect(r.x, r.y, r.width - 18 * s, r.height), value, Hud.Small, new Color(1, 1, 1, 0.85f), TextAnchor.MiddleRight);
+                Hud.Text(new Rect(r.x, r.y, r.width - 18 * s, r.height), value, Hud.Small, grey ? new Color(1, 1, 1, 0.4f) : new Color(1, 1, 1, 0.85f), TextAnchor.MiddleRight);
             return i >= 0 && GUI.Button(r, GUIContent.none, GUIStyle.none);
         }
 

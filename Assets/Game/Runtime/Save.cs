@@ -71,18 +71,12 @@ namespace Bonanza
         /// The human won (or shared) a party.
         public static void AddWin() { var s = Stats; s.Wins++; SetStats(s); }
 
-        /// Player timing calibration in ms, ADDED to press times (Options).
+        /// Player timing calibration in ms, ADDED to press times. Kept here for the timing
+        /// path; the Options rows live in Settings.
         public static float OffsetMs
         {
-            get => PlayerPrefs.GetFloat(Prefix + "offsetMs", 0);
-            set { PlayerPrefs.SetFloat(Prefix + "offsetMs", value); PlayerPrefs.Save(); }
-        }
-
-        /// Master volume 0..1 (Options). There is one mix until real music lands.
-        public static float Volume
-        {
-            get => PlayerPrefs.GetFloat(Prefix + "volume", 0.85f);
-            set { PlayerPrefs.SetFloat(Prefix + "volume", value); PlayerPrefs.Save(); }
+            get => Settings.OffsetMs;
+            set => Settings.OffsetMs = value;
         }
 
         /// Parties started, ever: seeds each party's shuffle and CPU rolls.

@@ -3,7 +3,8 @@
     "rootNamespace": "Bonanza",
     "references": [
         "Bonanza.Core",
-        "Unity.InputSystem"
+        "Unity.InputSystem",
+        "Unity.RenderPipelines.Universal.Runtime"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

@@ -23,8 +23,8 @@ namespace Bonanza
 {
     public sealed class MusicPlayer : MonoBehaviour
     {
-        /// Mix level of the music before the (future) music volume option.
-        public const float BaseGain = 0.5f;
+        /// Mix level at music volume 1.0. The default 75% gives 0.425: the level the music had at the old fixed 0.5 under an 0.85 master.
+        public const float BaseGain = 0.425f / Settings.DefaultMusic;
         const int Slots = 4;
         const float SwapSeconds = 0.02f;      // volume swap between levels around the bar line
         const double HardResync = 0.08;       // seconds of drift before a seek
@@ -61,7 +61,7 @@ namespace Bonanza
         readonly Deck[] _decks = new Deck[2];
         Deck _cur;
         readonly MusicIntensity _intensity = new MusicIntensity();
-        float _duck = 1, _duckTarget = 1;
+        float _duck = 1, _duckTarget = 1, _musicVol = Settings.DefaultMusic;
         readonly HashSet<string> _requested = new HashSet<string>();
 
         public bool Available => _lib != null;
@@ -266,6 +266,7 @@ namespace Bonanza
         {
             if (_lib == null || paused) return;
             float dt = Time.unscaledDeltaTime;
+            _musicVol = Settings.Music;
             if (_reportAt > 0 && Time.unscaledTime > _reportAt)
             {
                 _reportAt = -1;
@@ -339,7 +340,7 @@ namespace Bonanza
                 d.Level[i] = Mathf.MoveTowards(d.Level[i], on ? 1 : 0, swap);
                 var s = d.Src[i];
                 if (s.clip == null) continue;
-                s.volume = BaseGain * d.Gain * duck * d.Level[i];
+                s.volume = BaseGain * _musicVol * d.Gain * duck * d.Level[i];
                 float pitch = (float)ratio;
                 if (Math.Abs(s.pitch - pitch) > 1e-5f) s.pitch = pitch;
             }
