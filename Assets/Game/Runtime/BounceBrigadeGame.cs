@@ -31,7 +31,7 @@ namespace Bonanza
 
         BounceRound _round;
         readonly Callouts _say = new Callouts();
-        double _now, _lastBeat = -99, _bedUntil = -99;
+        double _now, _lastBeat = -99;
         bool _playing, _finishShown, _demoBounced;
 
         sealed class Slab { public Transform Pivot; public Material Top, Body; public Color C; public float Pop, Glow; }
@@ -43,6 +43,9 @@ namespace Bonanza
         Vector3 _camPos;
 
         // ------------------------------------------------------------ contract
+
+        public override double MusicBeatAt(double time) => _round.Map.BeatAt(time);
+        public override double MusicTimeAt(double beat) => _round.Map.TimeAt(beat);
 
         public override void Load()
         {
@@ -118,7 +121,6 @@ namespace Bonanza
                 if (b == 96) _say.Banner("SPRINT!", 1.0f, "eighths — do not stop", Gold);
             }
             _lastBeat = beat;
-            ScheduleBed(now);
             _round.Update(now);
 
             // The free demonstration bounce off the runway.
@@ -151,6 +153,7 @@ namespace Bonanza
             var m = _round.MotionAt(_round.BeatAt(_now));
             var pos = new Vector3((float)m.X, Mathf.Max((float)m.Y, (float)BounceChart.WaterY + 0.6f) + 1.4f, 0);
             bool hit = v != Verdict.Miss;
+            MusicJudged(hit);
             bool big = p.Kind == 'X' || (p.Kind == 'F' && n.Kind == "release");
             _say.Verdict(v, pos, big ? 1.5f : n.Kind == "release" ? 1.2f : 0.9f);
 
@@ -184,7 +187,6 @@ namespace Bonanza
         static AudioClip Pluck(int midi, float bright) => Tones.Blip(Tones.Midi(midi), 0.34f, bright, Wave.Triangle);
         static AudioClip Bell(int midi) => Tones.Blip(Tones.Midi(midi), 0.5f, 7, Wave.Sine);
         static AudioClip Lead(int midi) => Tones.Blip(Tones.Midi(midi), 0.9f, 2.2f, Wave.Square);
-        static AudioClip Bass(int midi) => Tones.Blip(Tones.Midi(midi), 0.3f, 9, Wave.Triangle);
         static AudioClip Kick => Tones.Blip(110, 0.26f, 14, Wave.Sine, 0.45f);
         static AudioClip Spring => Tones.Blip(2600, 0.03f, 80, Wave.Noise);
         static AudioClip ThudClip => Tones.Blip(90, 0.12f, 20, Wave.Noise, 0.6f);
@@ -221,24 +223,6 @@ namespace Bonanza
 
         void Thud(double at) => Host.PlayAt(ThudClip, at, 0.2f);
 
-        /// Stand-in for "Rubber Band Stand": a bass root on every beat from the
-        /// track's own progression, scheduled a beat ahead.
-        void ScheduleBed(double now)
-        {
-            double horizon = _round.BeatAt(now + 0.2);
-            for (double b = System.Math.Max(System.Math.Floor(_bedUntil) + 1, BounceChart.RunwayBeat); b <= horizon && b < BounceChart.EndBeat; b++)
-            {
-                _bedUntil = b;
-                if (b < -4) continue;   // two bars of count-in ticks come first
-                int root = BassRoot(b);
-                double at = System.Math.Max(_round.Map.TimeAt(b), now + 0.004);
-                Host.PlayAt(Bass(root + (Phase(b / 2) < 0.5f ? 0 : 12)), at, 0.16f);
-            }
-        }
-
-        static int BassRoot(double beat) =>
-            Harmony.BounceBrigade.ChordAtBar((int)System.Math.Floor((beat - BounceChart.RunwayBeat) / 4))[0];
-
         /// Built before the round: synthesising mid-round stalls a frame.
         void Prewarm()
         {
@@ -249,7 +233,6 @@ namespace Bonanza
                     foreach (var b in new[] { 6f, 8f, 12f }) Pluck(p.Midi, b);
                     Pluck(p.Midi + 12, 12); Bell(p.Midi + 12); Lead(p.Midi); Pluck(p.Midi + 19, 6);
                 }
-            for (int bar = 0; bar < 16; bar++) { int r = BassRoot(bar * 4 + BounceChart.RunwayBeat); Bass(r); Bass(r + 12); }
             for (int k = 0; k < 4; k++) Fanfare(k);
             _ = Kick; _ = Spring; _ = ThudClip; _ = TickClip;
         }

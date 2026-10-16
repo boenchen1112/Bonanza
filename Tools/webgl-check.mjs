@@ -44,7 +44,7 @@ page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
 page.on('console', (m) => {
   const t = m.text();
   if (m.type() === 'error') errors.push('console: ' + t);
-  if (t.includes('[RESULT]') || t.includes('[MISS]') || t.includes('[PARTY')) {
+  if (t.includes('[RESULT]') || t.includes('[MISS]') || t.includes('[PARTY') || (process.env.MUSIC && t.includes('[MUSIC]'))) {   // MUSIC=1 also keeps the music player's log
     results.push(t);
     if (process.env.LIVE) console.log(`[${((Date.now() - T0) / 1000).toFixed(0)}s]`, t);
   }

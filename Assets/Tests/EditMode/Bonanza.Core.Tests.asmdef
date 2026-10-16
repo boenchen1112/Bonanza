@@ -3,6 +3,7 @@
     "rootNamespace": "Bonanza.Core.Tests",
     "references": [
         "Bonanza.Core",
+        "Bonanza.Runtime",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],

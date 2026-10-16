@@ -50,7 +50,6 @@ namespace Bonanza
         Material _ballMat, _pipMat;
 
         // audio
-        AudioClip _clickHi, _clickLo;
         double _clickBeat;
 
         // HUD
@@ -64,13 +63,14 @@ namespace Bonanza
 
         // ------------------------------------------------------------ contract
 
+        public override double MusicBeatAt(double time) => _round.Map.BeatAt(time);
+        public override double MusicTimeAt(double beat) => _round.Map.TimeAt(beat);
+
         public override void Load()
         {
             BuildStage();
-            // A short sine blip — a placeholder metronome until the music is chosen.
-            _clickHi = Tones.Blip(1760, 0.04f, 60);
-            _clickLo = Tones.Blip(1175, 0.04f, 60);
             _round = new SwingRound(Save.OffsetMs);
+            _round.Judged += (v, _) => MusicJudged(v != Verdict.Miss);
             _round.PitchLaunched += OnLaunched;
             _round.PitchPassed += OnPassed;
             _round.Contact += OnContact;
@@ -177,14 +177,15 @@ namespace Bonanza
 
         void StartSwing() => _swingT = 0;
 
-        /// Schedule each beat's click a little ahead, on the audio clock itself.
+        /// The count-in ticks over the lead-in (the web has no click after it; the
+        /// music carries the beat), scheduled a little ahead on the audio clock itself.
         void ScheduleClicks()
         {
             double horizon = _round.BeatAt(_now + 0.2);
-            while (_clickBeat <= horizon && _clickBeat <= SwingRules.EndBeat)
+            while (_clickBeat <= horizon && _clickBeat < 0)
             {
                 double at = _round.Map.TimeAt(_clickBeat);
-                if (at > _now) Host.PlayAt(BeatMap.Frac(_clickBeat / 4) < 1e-6 ? _clickHi : _clickLo, at, 0.35f);
+                if (at > _now) Host.CountTick(at, Core.CountIn.Accent((int)_clickBeat));
                 _clickBeat += 1;
             }
         }

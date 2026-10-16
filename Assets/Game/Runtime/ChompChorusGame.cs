@@ -57,6 +57,9 @@ namespace Bonanza
 
         // ------------------------------------------------------------ contract
 
+        public override double MusicBeatAt(double time) => _round.Map.BeatAt(time);
+        public override double MusicTimeAt(double beat) => _round.Map.TimeAt(beat);
+
         public override void Load()
         {
             // In a party the lineup's CPUs sing the other voices; free play is lane 0 and 0.8 CPUs.
@@ -174,6 +177,7 @@ namespace Bonanza
         {
             var l = _lanes[i];
             bool hit = v != Verdict.Miss;
+            if (!cpu) MusicJudged(hit);
             if (!hit && !cpu && Host.Autoplay)
                 Debug.Log($"[MISS] game={Id} beat={note.Beat} now={_round.BeatAt(_now):F3} dt={Time.unscaledDeltaTime:F3}");
             bool wasAlive = l.AliveT > 0.5f;
@@ -302,6 +306,7 @@ namespace Bonanza
             if (!_finaleDone && beat >= ChompChart.FinaleEnd)
             {
                 _finaleDone = true;
+                Host.MusicStop(1.1f);   // web chompChorus: the track fades out under the last note
                 int h = _round.FinaleHits;
                 _say.Banner(h == N ? "FULL CHORD!" : h >= 2 ? "NICE CHORUS" : "ROUGH NIGHT", 1.8f);
             }

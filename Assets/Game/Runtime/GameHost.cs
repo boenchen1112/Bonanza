@@ -141,6 +141,25 @@ namespace Bonanza
         public void CountTick(double t, int accent) =>
             PlayAt(Tones.Blip(accent == 0 ? 1568 : 1175, 0.05f, 50), t, 0.3f);
 
+        // ------------------------------------------------------------ music
+
+        MusicPlayer _music;
+
+        /// A judged note by the human player, for the adaptive music level.
+        public void MusicJudge(bool hit) => _music.OnJudge(hit);
+
+        /// Duck the music under something (1 = full): the drumline call.
+        public void MusicDuck(float v) => _music.SetDuck(v);
+
+        /// Fade the music out (Chomp Chorus ends its track under the last note).
+        public void MusicStop(float fade) => _music.Stop(fade);
+
+        /// The title theme runs under every menu screen and the party hub.
+        void EnsureTitleMusic()
+        {
+            if (_music.Current != "title") _music.PlayShell("title");
+        }
+
         // ------------------------------------------------------------ setup
 
         static readonly Dictionary<PrimitiveType, Mesh> _meshes = new Dictionary<PrimitiveType, Mesh>();
@@ -197,6 +216,11 @@ namespace Bonanza
             Bind("right", "<Keyboard>/rightArrow", "<Keyboard>/d", "<Gamepad>/dpad/right", "<Gamepad>/buttonEast");
             Bind("pause", "<Keyboard>/escape", "<Keyboard>/p", "<Gamepad>/start");
 
+            _music = gameObject.AddComponent<MusicPlayer>();
+            _music.Init(this);
+            _music.Prepare("title");
+            _music.Prepare("results");
+
             _voices = new AudioSource[16];
             for (int i = 0; i < _voices.Length; i++)
             {
@@ -233,6 +257,9 @@ namespace Bonanza
             _game = (Minigame)go.AddComponent(e.Type);
             _game.Bind(this, Seed(e.Id));
             _game.Load();
+            _music.Prepare(e.Id);   // decode now; the rules card waits for it
+            _startRequested = false;
+            _rulesWait = 0;
             _mode = Mode.Rules;
         }
 
@@ -248,6 +275,11 @@ namespace Bonanza
         {
             _pausedTotal = 0;
             _game.Begin(Now + 0.6);
+            var g = _game;
+            _music.PlayGame(_entry.Id, g.MusicTimeAt(MusicTracks.GameStartBeat),
+                () => g.MusicBeatAt(Now) - MusicTracks.GameStartBeat,
+                // the pitch lags the call by an audio buffer or two: aim a little ahead
+                g.MusicFollowsTempo ? (Func<double>)(() => g.MusicTempo(g.MusicBeatAt(Now + 0.04))) : null);
             _autoChart.Clear();
             _autoCursor = 0;
             if (Autoplay)
@@ -264,6 +296,8 @@ namespace Bonanza
             _game = null;
             AudioListener.pause = false; Time.timeScale = 1;
             foreach (var v in _voices) v.Stop();
+            _music.SetDuck(1);
+            if (_music.Current != "title") _music.Stop(0.25f);
         }
 
         void Finish(Outcome o)
@@ -273,6 +307,7 @@ namespace Bonanza
             _autoWait = 2.5f;
             _resultsT = 0;
             _stung = false;
+            _music.PlayShell("results");
             Debug.Log($"[RESULT] game={_entry.Id} {o.LogLine()} autoplay={Autoplay}");
             Save.Record(_entry.Id, o, out _newScore, out _newRank);
             if (_party != null && _party.CurrentGame == _entry.Id)
@@ -348,6 +383,7 @@ namespace Bonanza
             _mode = Mode.Playing;
             AudioListener.pause = false; Time.timeScale = 1;
             _game.OnResume();
+            _music.OnResume();
         }
 
         // ------------------------------------------------------------ loop
@@ -444,15 +480,24 @@ namespace Bonanza
                     break;
 
                 case Mode.Rules:
-                    bool go = Autoplay;
+                    _startRequested |= Autoplay;
                     while (_presses.Count > 0)
                     {
                         var p = _presses.Dequeue();
                         if (p.Action == "pause") { BackOut(); break; }
-                        go = true;
+                        _startRequested = true;
                     }
                     _presses.Clear();
-                    if (go && _mode == Mode.Rules && _clock.Running) Begin();
+                    if (_startRequested && _mode == Mode.Rules && _clock.Running)
+                    {
+                        // The round's music has to be decoded before it starts: the
+                        // count-in is two bars of it.
+                        _rulesWait += Time.unscaledDeltaTime;
+                        bool ready = _music.Ready(_entry.Id);
+                        if (!ready && _rulesWait < MusicLoadTimeout) break;
+                        if (!ready) Debug.LogError($"[MUSIC] {_entry.Id} not decoded after {MusicLoadTimeout}s; starting without it");
+                        Begin();
+                    }
                     break;
 
                 case Mode.Playing:
@@ -516,9 +561,15 @@ namespace Bonanza
                     _presses.Clear();
                     break;
             }
+
+            if (_mode == Mode.Title || _mode == Mode.Menu || _mode == Mode.Options || _mode == Mode.Roster || _mode == Mode.PartyHub)
+                EnsureTitleMusic();
+            _music.Tick(_mode == Mode.Paused);
         }
 
-        bool _gatePressed;
+        bool _gatePressed, _startRequested;
+        float _rulesWait;
+        const float MusicLoadTimeout = 6;
 
         void ToHub()
         {

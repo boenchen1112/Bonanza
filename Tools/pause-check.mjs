@@ -35,7 +35,10 @@ const browser = await chromium.launch({ headless: true, args: ['--use-angle=d3d1
 const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
 const errors = [];
 page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
-page.on('console', (m) => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
+page.on('console', (m) => {
+  if (m.type() === 'error') errors.push('console: ' + m.text());
+  if (process.env.MUSIC && m.text().includes('[MUSIC]')) console.log(m.text());   // MUSIC=1: show the music player's log
+});
 const wait = (s) => new Promise((r) => setTimeout(r, s * 1000));
 
 await page.goto(`http://127.0.0.1:${PORT}/?game=${GAME}`, { waitUntil: 'load' });

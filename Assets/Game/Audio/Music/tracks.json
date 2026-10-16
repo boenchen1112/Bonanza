@@ -1,0 +1,991 @@
+{
+  "generator": "Tools/music/render.mjs",
+  "sampleRate": 44100,
+  "channels": 2,
+  "tracks": [
+    {
+      "id": "swing-kings",
+      "title": "Seventh Inning Swagger",
+      "bpm": 124,
+      "secondsPerBeat": 0.4838709677419355,
+      "secondsPerBar": 1.935483870967742,
+      "beatsPerBar": 4,
+      "bars": 16,
+      "swing": 0.11,
+      "firstBeatOffsetSeconds": 0.00933,
+      "loop": true,
+      "loopStartSeconds": 0,
+      "loopLengthSeconds": 30.967741935483872,
+      "lengthSeconds": 30.967732426303854,
+      "musicalLengthSeconds": 30.967741935483872,
+      "adaptive": {
+        "intensityLevels": 4,
+        "quantise": "bar",
+        "mixes": "iN = cumulative mix at intensity N",
+        "stems": "tN = additive layers with min==N"
+      },
+      "layerNames": [
+        "kick",
+        "snare",
+        "ghosts",
+        "hats",
+        "ride",
+        "tambourine",
+        "crash",
+        "tomfill",
+        "bass",
+        "organ",
+        "stabs",
+        "lead",
+        "harmony",
+        "bighit"
+      ],
+      "layersByMin": {
+        "0": [
+          "kick",
+          "snare",
+          "hats",
+          "crash",
+          "tomfill",
+          "bass",
+          "bighit"
+        ],
+        "1": [
+          "organ",
+          "stabs"
+        ],
+        "2": [
+          "ghosts",
+          "ride",
+          "lead"
+        ],
+        "3": [
+          "tambourine",
+          "harmony"
+        ]
+      },
+      "files": {
+        "i0": {
+          "wav": "swing-kings.i0.wav",
+          "seconds": 30.967732426303854,
+          "frames": 1365677,
+          "peak": 0.9592,
+          "rms": 0.221,
+          "ogg": "swing-kings.i0.ogg",
+          "oggBytes": 422822
+        },
+        "i1": {
+          "wav": "swing-kings.i1.wav",
+          "seconds": 30.967732426303854,
+          "frames": 1365677,
+          "peak": 0.9694,
+          "rms": 0.2236,
+          "ogg": "swing-kings.i1.ogg",
+          "oggBytes": 424264
+        },
+        "i2": {
+          "wav": "swing-kings.i2.wav",
+          "seconds": 30.967732426303854,
+          "frames": 1365677,
+          "peak": 0.9612,
+          "rms": 0.2329,
+          "ogg": "swing-kings.i2.ogg",
+          "oggBytes": 466161
+        },
+        "i3": {
+          "wav": "swing-kings.i3.wav",
+          "seconds": 30.967732426303854,
+          "frames": 1365677,
+          "peak": 0.9615,
+          "rms": 0.236,
+          "ogg": "swing-kings.i3.ogg",
+          "oggBytes": 465744
+        },
+        "t0": {
+          "wav": "swing-kings.t0.wav",
+          "seconds": 30.967732426303854,
+          "frames": 1365677,
+          "peak": 0.9592,
+          "rms": 0.221,
+          "ogg": "swing-kings.t0.ogg",
+          "oggBytes": 422865
+        },
+        "t1": {
+          "wav": "swing-kings.t1.wav",
+          "seconds": 30.967732426303854,
+          "frames": 1365677,
+          "peak": 0.3996,
+          "rms": 0.0403,
+          "ogg": "swing-kings.t1.ogg",
+          "oggBytes": 354571
+        },
+        "t2": {
+          "wav": "swing-kings.t2.wav",
+          "seconds": 30.967732426303854,
+          "frames": 1365677,
+          "peak": 0.4564,
+          "rms": 0.0737,
+          "ogg": "swing-kings.t2.ogg",
+          "oggBytes": 498226
+        },
+        "t3": {
+          "wav": "swing-kings.t3.wav",
+          "seconds": 30.967732426303854,
+          "frames": 1365677,
+          "peak": 0.3241,
+          "rms": 0.046,
+          "ogg": "swing-kings.t3.ogg",
+          "oggBytes": 441598
+        }
+      },
+      "verify": {
+        "kickEvents": 68,
+        "detected": 68,
+        "firstKickExpectedS": 0,
+        "firstKickMeasuredErrS": 0.009342403628117914,
+        "meanErrS": 0.009330388069205872,
+        "maxAbsErrS": 0.00934752395581917
+      },
+      "refStats": {
+        "peak": 0.9691857695579529,
+        "rms": 0.23861325151823157,
+        "clipped": false,
+        "silent": false
+      }
+    },
+    {
+      "id": "drumline-dash",
+      "title": "Street Beat Parade",
+      "bpm": 132,
+      "secondsPerBeat": 0.45454545454545453,
+      "secondsPerBar": 1.8181818181818181,
+      "beatsPerBar": 4,
+      "bars": 16,
+      "swing": 0,
+      "firstBeatOffsetSeconds": 0.00931,
+      "loop": true,
+      "loopStartSeconds": 0,
+      "loopLengthSeconds": 29.09090909090909,
+      "lengthSeconds": 29.09090702947846,
+      "musicalLengthSeconds": 29.09090909090909,
+      "adaptive": {
+        "intensityLevels": 4,
+        "quantise": "bar",
+        "mixes": "iN = cumulative mix at intensity N",
+        "stems": "tN = additive layers with min==N"
+      },
+      "layerNames": [
+        "bassdrums",
+        "snareCall",
+        "tenorResp",
+        "rimClicks",
+        "cymbals",
+        "crash",
+        "rollout",
+        "sousa",
+        "hornHits",
+        "hornPad",
+        "mellophone",
+        "piccolo"
+      ],
+      "layersByMin": {
+        "0": [
+          "bassdrums",
+          "snareCall",
+          "tenorResp",
+          "crash",
+          "rollout",
+          "sousa"
+        ],
+        "1": [
+          "rimClicks",
+          "cymbals",
+          "hornHits"
+        ],
+        "2": [
+          "hornPad",
+          "mellophone"
+        ],
+        "3": [
+          "piccolo"
+        ]
+      },
+      "files": {
+        "i0": {
+          "wav": "drumline-dash.i0.wav",
+          "seconds": 29.09090702947846,
+          "frames": 1282909,
+          "peak": 0.9522,
+          "rms": 0.2193,
+          "ogg": "drumline-dash.i0.ogg",
+          "oggBytes": 386576
+        },
+        "i1": {
+          "wav": "drumline-dash.i1.wav",
+          "seconds": 29.09090702947846,
+          "frames": 1282909,
+          "peak": 0.9548,
+          "rms": 0.2192,
+          "ogg": "drumline-dash.i1.ogg",
+          "oggBytes": 394433
+        },
+        "i2": {
+          "wav": "drumline-dash.i2.wav",
+          "seconds": 29.09090702947846,
+          "frames": 1282909,
+          "peak": 0.9612,
+          "rms": 0.2308,
+          "ogg": "drumline-dash.i2.ogg",
+          "oggBytes": 442443
+        },
+        "i3": {
+          "wav": "drumline-dash.i3.wav",
+          "seconds": 29.09090702947846,
+          "frames": 1282909,
+          "peak": 0.9737,
+          "rms": 0.2306,
+          "ogg": "drumline-dash.i3.ogg",
+          "oggBytes": 445872
+        },
+        "t0": {
+          "wav": "drumline-dash.t0.wav",
+          "seconds": 29.09090702947846,
+          "frames": 1282909,
+          "peak": 0.9522,
+          "rms": 0.2193,
+          "ogg": "drumline-dash.t0.ogg",
+          "oggBytes": 386571
+        },
+        "t1": {
+          "wav": "drumline-dash.t1.wav",
+          "seconds": 29.09090702947846,
+          "frames": 1282909,
+          "peak": 0.4285,
+          "rms": 0.0104,
+          "ogg": "drumline-dash.t1.ogg",
+          "oggBytes": 397477
+        },
+        "t2": {
+          "wav": "drumline-dash.t2.wav",
+          "seconds": 29.09090702947846,
+          "frames": 1282909,
+          "peak": 0.4733,
+          "rms": 0.0814,
+          "ogg": "drumline-dash.t2.ogg",
+          "oggBytes": 431130
+        },
+        "t3": {
+          "wav": "drumline-dash.t3.wav",
+          "seconds": 29.09090702947846,
+          "frames": 1282909,
+          "peak": 0.1368,
+          "rms": 0.0103,
+          "ogg": "drumline-dash.t3.ogg",
+          "oggBytes": 404812
+        }
+      },
+      "verify": {
+        "kickEvents": 104,
+        "detected": 104,
+        "firstKickExpectedS": 0,
+        "firstKickMeasuredErrS": 0.009297052154195011,
+        "meanErrS": 0.009310927168070414,
+        "maxAbsErrS": 0.009332096474956586
+      },
+      "refStats": {
+        "peak": 0.9568690657615662,
+        "rms": 0.23100519114063578,
+        "clipped": false,
+        "silent": false
+      }
+    },
+    {
+      "id": "bounce-brigade",
+      "title": "Rubber Band Stand",
+      "bpm": 118,
+      "secondsPerBeat": 0.5084745762711864,
+      "secondsPerBar": 2.0338983050847457,
+      "beatsPerBar": 4,
+      "bars": 16,
+      "swing": 0.055,
+      "firstBeatOffsetSeconds": 0.00932,
+      "loop": true,
+      "loopStartSeconds": 0,
+      "loopLengthSeconds": 32.54237288135593,
+      "lengthSeconds": 32.54238095238095,
+      "musicalLengthSeconds": 32.54237288135593,
+      "adaptive": {
+        "intensityLevels": 4,
+        "quantise": "bar",
+        "mixes": "iN = cumulative mix at intensity N",
+        "stems": "tN = additive layers with min==N"
+      },
+      "layerNames": [
+        "kick",
+        "clap",
+        "offhats",
+        "ticks",
+        "shaker",
+        "crash",
+        "fill",
+        "bass",
+        "upstrokes",
+        "pad",
+        "hook",
+        "sparkle",
+        "boing"
+      ],
+      "layersByMin": {
+        "0": [
+          "kick",
+          "clap",
+          "offhats",
+          "crash",
+          "fill",
+          "bass",
+          "upstrokes"
+        ],
+        "1": [
+          "shaker",
+          "pad",
+          "boing"
+        ],
+        "2": [
+          "ticks",
+          "hook"
+        ],
+        "3": [
+          "sparkle"
+        ]
+      },
+      "files": {
+        "i0": {
+          "wav": "bounce-brigade.i0.wav",
+          "seconds": 32.54238095238095,
+          "frames": 1435119,
+          "peak": 0.9262,
+          "rms": 0.1893,
+          "ogg": "bounce-brigade.i0.ogg",
+          "oggBytes": 456364
+        },
+        "i1": {
+          "wav": "bounce-brigade.i1.wav",
+          "seconds": 32.54238095238095,
+          "frames": 1435119,
+          "peak": 0.9328,
+          "rms": 0.199,
+          "ogg": "bounce-brigade.i1.ogg",
+          "oggBytes": 449247
+        },
+        "i2": {
+          "wav": "bounce-brigade.i2.wav",
+          "seconds": 32.54238095238095,
+          "frames": 1435119,
+          "peak": 0.9438,
+          "rms": 0.2016,
+          "ogg": "bounce-brigade.i2.ogg",
+          "oggBytes": 498090
+        },
+        "i3": {
+          "wav": "bounce-brigade.i3.wav",
+          "seconds": 32.54238095238095,
+          "frames": 1435119,
+          "peak": 0.9524,
+          "rms": 0.2024,
+          "ogg": "bounce-brigade.i3.ogg",
+          "oggBytes": 507026
+        },
+        "t0": {
+          "wav": "bounce-brigade.t0.wav",
+          "seconds": 32.54238095238095,
+          "frames": 1435119,
+          "peak": 0.9262,
+          "rms": 0.1893,
+          "ogg": "bounce-brigade.t0.ogg",
+          "oggBytes": 456335
+        },
+        "t1": {
+          "wav": "bounce-brigade.t1.wav",
+          "seconds": 32.54238095238095,
+          "frames": 1435119,
+          "peak": 0.4481,
+          "rms": 0.0653,
+          "ogg": "bounce-brigade.t1.ogg",
+          "oggBytes": 440206
+        },
+        "t2": {
+          "wav": "bounce-brigade.t2.wav",
+          "seconds": 32.54238095238095,
+          "frames": 1435119,
+          "peak": 0.5287,
+          "rms": 0.0397,
+          "ogg": "bounce-brigade.t2.ogg",
+          "oggBytes": 529589
+        },
+        "t3": {
+          "wav": "bounce-brigade.t3.wav",
+          "seconds": 32.54238095238095,
+          "frames": 1435119,
+          "peak": 0.1401,
+          "rms": 0.02,
+          "ogg": "bounce-brigade.t3.ogg",
+          "oggBytes": 483401
+        }
+      },
+      "verify": {
+        "kickEvents": 44,
+        "detected": 44,
+        "firstKickExpectedS": 0,
+        "firstKickMeasuredErrS": 0.009319727891156463,
+        "meanErrS": 0.00932061884846444,
+        "maxAbsErrS": 0.009332026595949117
+      },
+      "refStats": {
+        "peak": 0.9464113712310791,
+        "rms": 0.19971740648765934,
+        "clipped": false,
+        "silent": false
+      }
+    },
+    {
+      "id": "chomp-chorus",
+      "title": "Snack Attack Shuffle",
+      "bpm": 140,
+      "secondsPerBeat": 0.42857142857142855,
+      "secondsPerBar": 1.7142857142857142,
+      "beatsPerBar": 4,
+      "bars": 16,
+      "swing": 0.035,
+      "firstBeatOffsetSeconds": 0.00932,
+      "loop": true,
+      "loopStartSeconds": 0,
+      "loopLengthSeconds": 27.428571428571427,
+      "lengthSeconds": 27.428571428571427,
+      "musicalLengthSeconds": 27.428571428571427,
+      "adaptive": {
+        "intensityLevels": 4,
+        "quantise": "bar",
+        "mixes": "iN = cumulative mix at intensity N",
+        "stems": "tN = additive layers with min==N"
+      },
+      "layerNames": [
+        "kick",
+        "clap",
+        "openhat",
+        "closedhat",
+        "shaker",
+        "snareOff",
+        "crash",
+        "fill",
+        "bass",
+        "clav",
+        "pad",
+        "riff",
+        "horns",
+        "bighit"
+      ],
+      "layersByMin": {
+        "0": [
+          "kick",
+          "clap",
+          "openhat",
+          "crash",
+          "fill",
+          "bass",
+          "bighit"
+        ],
+        "1": [
+          "closedhat",
+          "clav"
+        ],
+        "2": [
+          "shaker",
+          "snareOff",
+          "pad",
+          "riff"
+        ],
+        "3": [
+          "horns"
+        ]
+      },
+      "files": {
+        "i0": {
+          "wav": "chomp-chorus.i0.wav",
+          "seconds": 27.428571428571427,
+          "frames": 1209600,
+          "peak": 0.9355,
+          "rms": 0.1813,
+          "ogg": "chomp-chorus.i0.ogg",
+          "oggBytes": 402396
+        },
+        "i1": {
+          "wav": "chomp-chorus.i1.wav",
+          "seconds": 27.428571428571427,
+          "frames": 1209600,
+          "peak": 0.9414,
+          "rms": 0.1813,
+          "ogg": "chomp-chorus.i1.ogg",
+          "oggBytes": 413853
+        },
+        "i2": {
+          "wav": "chomp-chorus.i2.wav",
+          "seconds": 27.428571428571427,
+          "frames": 1209600,
+          "peak": 0.9439,
+          "rms": 0.1956,
+          "ogg": "chomp-chorus.i2.ogg",
+          "oggBytes": 474880
+        },
+        "i3": {
+          "wav": "chomp-chorus.i3.wav",
+          "seconds": 27.428571428571427,
+          "frames": 1209600,
+          "peak": 0.9459,
+          "rms": 0.1999,
+          "ogg": "chomp-chorus.i3.ogg",
+          "oggBytes": 477393
+        },
+        "t0": {
+          "wav": "chomp-chorus.t0.wav",
+          "seconds": 27.428571428571427,
+          "frames": 1209600,
+          "peak": 0.9355,
+          "rms": 0.1813,
+          "ogg": "chomp-chorus.t0.ogg",
+          "oggBytes": 402402
+        },
+        "t1": {
+          "wav": "chomp-chorus.t1.wav",
+          "seconds": 27.428571428571427,
+          "frames": 1209600,
+          "peak": 0.2664,
+          "rms": 0.0097,
+          "ogg": "chomp-chorus.t1.ogg",
+          "oggBytes": 400748
+        },
+        "t2": {
+          "wav": "chomp-chorus.t2.wav",
+          "seconds": 27.428571428571427,
+          "frames": 1209600,
+          "peak": 0.4343,
+          "rms": 0.0815,
+          "ogg": "chomp-chorus.t2.ogg",
+          "oggBytes": 517504
+        },
+        "t3": {
+          "wav": "chomp-chorus.t3.wav",
+          "seconds": 27.428571428571427,
+          "frames": 1209600,
+          "peak": 0.2902,
+          "rms": 0.0448,
+          "ogg": "chomp-chorus.t3.ogg",
+          "oggBytes": 412974
+        }
+      },
+      "verify": {
+        "kickEvents": 68,
+        "detected": 68,
+        "firstKickExpectedS": 0,
+        "firstKickMeasuredErrS": 0.009319727891156463,
+        "meanErrS": 0.009320394824597242,
+        "maxAbsErrS": 0.009331065759639046
+      },
+      "refStats": {
+        "peak": 0.9100276231765747,
+        "rms": 0.19391870995526791,
+        "clipped": false,
+        "silent": false
+      }
+    },
+    {
+      "id": "finale-fever",
+      "title": "Last One Standing",
+      "bpm": 150,
+      "secondsPerBeat": 0.4,
+      "secondsPerBar": 1.6,
+      "beatsPerBar": 4,
+      "bars": 16,
+      "swing": 0,
+      "firstBeatOffsetSeconds": 0.00932,
+      "loop": true,
+      "loopStartSeconds": 0,
+      "loopLengthSeconds": 25.6,
+      "lengthSeconds": 25.6,
+      "musicalLengthSeconds": 25.6,
+      "adaptive": {
+        "intensityLevels": 4,
+        "quantise": "bar",
+        "mixes": "iN = cumulative mix at intensity N",
+        "stems": "tN = additive layers with min==N"
+      },
+      "layerNames": [
+        "kick",
+        "snare",
+        "taiko",
+        "hats",
+        "ride",
+        "crash",
+        "rollout",
+        "riser",
+        "bass",
+        "choir",
+        "stabs",
+        "lead",
+        "leadOct",
+        "bighit"
+      ],
+      "layersByMin": {
+        "0": [
+          "kick",
+          "snare",
+          "crash",
+          "rollout",
+          "bass",
+          "bighit"
+        ],
+        "1": [
+          "taiko",
+          "hats",
+          "riser",
+          "choir"
+        ],
+        "2": [
+          "stabs",
+          "lead"
+        ],
+        "3": [
+          "ride",
+          "leadOct"
+        ]
+      },
+      "files": {
+        "i0": {
+          "wav": "finale-fever.i0.wav",
+          "seconds": 25.6,
+          "frames": 1128960,
+          "peak": 0.9723,
+          "rms": 0.2948,
+          "ogg": "finale-fever.i0.ogg",
+          "oggBytes": 332157
+        },
+        "i1": {
+          "wav": "finale-fever.i1.wav",
+          "seconds": 25.6,
+          "frames": 1128960,
+          "peak": 0.99,
+          "rms": 0.3036,
+          "ogg": "finale-fever.i1.ogg",
+          "oggBytes": 340838
+        },
+        "i2": {
+          "wav": "finale-fever.i2.wav",
+          "seconds": 25.6,
+          "frames": 1128960,
+          "peak": 0.991,
+          "rms": 0.3052,
+          "ogg": "finale-fever.i2.ogg",
+          "oggBytes": 384940
+        },
+        "i3": {
+          "wav": "finale-fever.i3.wav",
+          "seconds": 25.6,
+          "frames": 1128960,
+          "peak": 0.9926,
+          "rms": 0.3051,
+          "ogg": "finale-fever.i3.ogg",
+          "oggBytes": 388725
+        },
+        "t0": {
+          "wav": "finale-fever.t0.wav",
+          "seconds": 25.6,
+          "frames": 1128960,
+          "peak": 0.9723,
+          "rms": 0.2948,
+          "ogg": "finale-fever.t0.ogg",
+          "oggBytes": 332169
+        },
+        "t1": {
+          "wav": "finale-fever.t1.wav",
+          "seconds": 25.6,
+          "frames": 1128960,
+          "peak": 0.7641,
+          "rms": 0.1065,
+          "ogg": "finale-fever.t1.ogg",
+          "oggBytes": 344976
+        },
+        "t2": {
+          "wav": "finale-fever.t2.wav",
+          "seconds": 25.6,
+          "frames": 1128960,
+          "peak": 0.4725,
+          "rms": 0.0535,
+          "ogg": "finale-fever.t2.ogg",
+          "oggBytes": 416490
+        },
+        "t3": {
+          "wav": "finale-fever.t3.wav",
+          "seconds": 25.6,
+          "frames": 1128960,
+          "peak": 0.2293,
+          "rms": 0.0163,
+          "ogg": "finale-fever.t3.ogg",
+          "oggBytes": 394228
+        }
+      },
+      "verify": {
+        "kickEvents": 68,
+        "detected": 68,
+        "firstKickExpectedS": 0,
+        "firstKickMeasuredErrS": 0.009319727891156463,
+        "meanErrS": 0.009319727891155719,
+        "maxAbsErrS": 0.00931972789115676
+      },
+      "refStats": {
+        "peak": 0.9924669861793518,
+        "rms": 0.30426143799390853,
+        "clipped": false,
+        "silent": false
+      }
+    },
+    {
+      "id": "title",
+      "title": "Bonanza!",
+      "bpm": 112,
+      "secondsPerBeat": 0.5357142857142857,
+      "secondsPerBar": 2.142857142857143,
+      "beatsPerBar": 4,
+      "bars": 8,
+      "swing": 0.08,
+      "firstBeatOffsetSeconds": 0.00932,
+      "loop": true,
+      "loopStartSeconds": 0,
+      "loopLengthSeconds": 17.142857142857142,
+      "lengthSeconds": 17.142857142857142,
+      "musicalLengthSeconds": 17.142857142857142,
+      "adaptive": {
+        "intensityLevels": 3,
+        "quantise": "bar",
+        "mixes": "iN = cumulative mix at intensity N",
+        "stems": "tN = additive layers with min==N"
+      },
+      "layerNames": [
+        "kick",
+        "clap",
+        "hats",
+        "shaker",
+        "crash",
+        "bass",
+        "pad",
+        "upstrokes",
+        "hook",
+        "hookDouble"
+      ],
+      "layersByMin": {
+        "0": [
+          "kick",
+          "clap",
+          "hats",
+          "crash",
+          "bass",
+          "pad"
+        ],
+        "1": [
+          "upstrokes",
+          "hook"
+        ],
+        "2": [
+          "shaker",
+          "hookDouble"
+        ],
+        "3": []
+      },
+      "files": {
+        "i0": {
+          "wav": "title.i0.wav",
+          "seconds": 17.142857142857142,
+          "frames": 756000,
+          "peak": 0.841,
+          "rms": 0.1763,
+          "ogg": "title.i0.ogg",
+          "oggBytes": 232803
+        },
+        "i1": {
+          "wav": "title.i1.wav",
+          "seconds": 17.142857142857142,
+          "frames": 756000,
+          "peak": 0.8526,
+          "rms": 0.1795,
+          "ogg": "title.i1.ogg",
+          "oggBytes": 253995
+        },
+        "i2": {
+          "wav": "title.i2.wav",
+          "seconds": 17.142857142857142,
+          "frames": 756000,
+          "peak": 0.8505,
+          "rms": 0.1799,
+          "ogg": "title.i2.ogg",
+          "oggBytes": 260432
+        },
+        "i3": {
+          "wav": "title.i3.wav",
+          "seconds": 17.142857142857142,
+          "frames": 756000,
+          "peak": 0.8506,
+          "rms": 0.1799,
+          "ogg": "title.i3.ogg",
+          "oggBytes": 260626
+        },
+        "t0": {
+          "wav": "title.t0.wav",
+          "seconds": 17.142857142857142,
+          "frames": 756000,
+          "peak": 0.841,
+          "rms": 0.1763,
+          "ogg": "title.t0.ogg",
+          "oggBytes": 232802
+        },
+        "t1": {
+          "wav": "title.t1.wav",
+          "seconds": 17.142857142857142,
+          "frames": 756000,
+          "peak": 0.2929,
+          "rms": 0.0366,
+          "ogg": "title.t1.ogg",
+          "oggBytes": 260587
+        },
+        "t2": {
+          "wav": "title.t2.wav",
+          "seconds": 17.142857142857142,
+          "frames": 756000,
+          "peak": 0.2613,
+          "rms": 0.0161,
+          "ogg": "title.t2.ogg",
+          "oggBytes": 280235
+        }
+      },
+      "verify": {
+        "kickEvents": 20,
+        "detected": 20,
+        "firstKickExpectedS": 0,
+        "firstKickMeasuredErrS": 0.009319727891156463,
+        "meanErrS": 0.009321995464852835,
+        "maxAbsErrS": 0.009331065759639046
+      },
+      "refStats": {
+        "peak": 0.8464069962501526,
+        "rms": 0.1767536707932238,
+        "clipped": false,
+        "silent": false
+      }
+    },
+    {
+      "id": "results",
+      "title": "Take a Bow",
+      "bpm": 128,
+      "secondsPerBeat": 0.46875,
+      "secondsPerBar": 1.875,
+      "beatsPerBar": 4,
+      "bars": 4,
+      "swing": 0,
+      "firstBeatOffsetSeconds": 0.00949,
+      "loop": false,
+      "loopStartSeconds": 0,
+      "loopLengthSeconds": null,
+      "lengthSeconds": 10.5,
+      "musicalLengthSeconds": 7.5,
+      "adaptive": {
+        "intensityLevels": 1,
+        "quantise": "bar",
+        "mixes": "iN = cumulative mix at intensity N",
+        "stems": "tN = additive layers with min==N"
+      },
+      "layerNames": [
+        "kick",
+        "snare",
+        "crash",
+        "bass",
+        "chords",
+        "sparkle",
+        "organ",
+        "hits"
+      ],
+      "layersByMin": {
+        "0": [
+          "kick",
+          "snare",
+          "crash",
+          "bass",
+          "chords",
+          "sparkle",
+          "organ",
+          "hits"
+        ],
+        "1": [],
+        "2": [],
+        "3": []
+      },
+      "files": {
+        "i0": {
+          "wav": "results.i0.wav",
+          "seconds": 10.5,
+          "frames": 463050,
+          "peak": 0.9875,
+          "rms": 0.2581,
+          "ogg": "results.i0.ogg",
+          "oggBytes": 151877
+        },
+        "i1": {
+          "wav": "results.i1.wav",
+          "seconds": 10.5,
+          "frames": 463050,
+          "peak": 0.9875,
+          "rms": 0.2581,
+          "ogg": "results.i1.ogg",
+          "oggBytes": 151878
+        },
+        "i2": {
+          "wav": "results.i2.wav",
+          "seconds": 10.5,
+          "frames": 463050,
+          "peak": 0.9872,
+          "rms": 0.258,
+          "ogg": "results.i2.ogg",
+          "oggBytes": 151946
+        },
+        "i3": {
+          "wav": "results.i3.wav",
+          "seconds": 10.5,
+          "frames": 463050,
+          "peak": 0.9875,
+          "rms": 0.2581,
+          "ogg": "results.i3.ogg",
+          "oggBytes": 151881
+        },
+        "t0": {
+          "wav": "results.t0.wav",
+          "seconds": 10.5,
+          "frames": 463050,
+          "peak": 0.9872,
+          "rms": 0.258,
+          "ogg": "results.t0.ogg",
+          "oggBytes": 151943
+        }
+      },
+      "verify": {
+        "kickEvents": 12,
+        "detected": 12,
+        "firstKickExpectedS": 0,
+        "firstKickMeasuredErrS": 0.011337868480725623,
+        "meanErrS": 0.009493929516250955,
+        "maxAbsErrS": 0.011337868480725623
+      },
+      "refStats": {
+        "peak": 0.2041923701763153,
+        "rms": 0.04029251314309063,
+        "clipped": false,
+        "silent": false
+      }
+    }
+  ]
+}

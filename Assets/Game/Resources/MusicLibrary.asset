@@ -1,0 +1,51 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 060396fe0cee84b24981091e94b983f1, type: 3}
+  m_Name: MusicLibrary
+  m_EditorClassIdentifier: Bonanza.Runtime::Bonanza.MusicLibrary
+  entries:
+  - id: swing-kings
+    mixes:
+    - {fileID: 8300000, guid: debafdd50fd8b4f7688050ba6bc1ce6f, type: 3}
+    - {fileID: 8300000, guid: aa20f0444d34c45d8a9a6ca0f98a2a96, type: 3}
+    - {fileID: 8300000, guid: 615e862b5f9cb4ab58455d013a7f591f, type: 3}
+    - {fileID: 8300000, guid: abc9aee1eb8cd47f8a94032e95e8dc23, type: 3}
+  - id: drumline-dash
+    mixes:
+    - {fileID: 8300000, guid: 430643ac957214fdf861af8306605614, type: 3}
+    - {fileID: 8300000, guid: ba19d9a9bc4f44ac09f70e94224a943f, type: 3}
+    - {fileID: 8300000, guid: b5e216535a1b84802940fd9b800a068f, type: 3}
+    - {fileID: 8300000, guid: 6b13782611e954715bbb8adc3f1157ab, type: 3}
+  - id: bounce-brigade
+    mixes:
+    - {fileID: 8300000, guid: 421b018654de34693860152d5b48e14b, type: 3}
+    - {fileID: 8300000, guid: 286e18fc98c964e6fb0d369afd7e200e, type: 3}
+    - {fileID: 8300000, guid: 649b36119b29b4d8593d21e99b437416, type: 3}
+    - {fileID: 8300000, guid: b8ef41ba48da84b56806d92fd8fd9e31, type: 3}
+  - id: chomp-chorus
+    mixes:
+    - {fileID: 8300000, guid: 6bc1ffcd0846b4ec49964f156dbfd05f, type: 3}
+    - {fileID: 8300000, guid: 956da42e9d28d45e793be51fdbe3794d, type: 3}
+    - {fileID: 8300000, guid: 99cb4887604034845b50c4d7f715e534, type: 3}
+    - {fileID: 8300000, guid: 4e4578b1300344c2c88d87173fc8e4b5, type: 3}
+  - id: finale-fever
+    mixes:
+    - {fileID: 8300000, guid: 1763759d1d387406ca15d0eaebaa13b9, type: 3}
+    - {fileID: 8300000, guid: 90558e489271c46009130a1530add21c, type: 3}
+    - {fileID: 8300000, guid: 2d0447ea7493b4934bdbaead5fcaeafd, type: 3}
+    - {fileID: 8300000, guid: 50c4f6824d3454e9a9e08f0270f446e4, type: 3}
+  - id: title
+    mixes:
+    - {fileID: 8300000, guid: 7ca5f3f1f575646fe9fbb260900cabac, type: 3}
+  - id: results
+    mixes:
+    - {fileID: 8300000, guid: 589afa5813ee849dda1010b0fe97f53d, type: 3}

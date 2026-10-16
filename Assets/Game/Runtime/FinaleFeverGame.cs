@@ -52,6 +52,11 @@ namespace Bonanza
 
         // ------------------------------------------------------------ contract
 
+        public override double MusicBeatAt(double time) => _round.Map.BeatAt(time);
+        public override double MusicTimeAt(double beat) => _round.Map.TimeAt(beat);
+        public override bool MusicFollowsTempo => true;
+        public override double MusicTempo(double beat) => _round.Map.BpmAt(beat) / FeverChart.Bpm0;
+
         public override void Load()
         {
             _round = new FeverRound(Save.OffsetMs);
@@ -219,6 +224,7 @@ namespace Bonanza
             var orb = _orbs.Find(o => o.On && o.Note == note);
             if (orb != null) { orb.On = false; orb.T.gameObject.SetActive(false); }
             var pos = Strike + new Vector3(n.Lane * 1.34f, 0.5f, 0);
+            MusicJudged(v != Verdict.Miss);
             if (n.Kind == "finale")
             {
                 bool hit = v != Verdict.Miss;

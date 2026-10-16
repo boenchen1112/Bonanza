@@ -72,6 +72,9 @@ namespace Bonanza
 
         // ------------------------------------------------------------ contract
 
+        public override double MusicBeatAt(double time) => _round.Map.BeatAt(time);
+        public override double MusicTimeAt(double beat) => _round.Map.TimeAt(beat);
+
         public override void Load()
         {
             _round = new DrumlineRound(0xd12b, Save.OffsetMs, Host.Lineup);
@@ -217,6 +220,7 @@ namespace Bonanza
         void OnCallStart(DrumPhrase p)
         {
             _speedTarget = 4.0f;
+            Host.MusicDuck(p.Finale ? DuckFinale : DuckCall);   // web: the call sits in a hole in the mix
             Host.Play(Crash, p.Finale ? 0.3f : 0.16f, 1, 0.35f);
             if (p.Finale && !_finaleAnnounced)
             {
@@ -225,12 +229,20 @@ namespace Bonanza
             }
         }
 
-        void OnRespStart(DrumPhrase p) => _speedTarget = 5.6f;
+        // web drumlineDash: music volume 0.72 normally, 0.34 under a call, 0.30 under the finale call.
+        const float DuckCall = 0.34f / 0.72f, DuckFinale = 0.30f / 0.72f;
+
+        void OnRespStart(DrumPhrase p)
+        {
+            _speedTarget = 5.6f;
+            Host.MusicDuck(1);
+        }
 
         void OnJudged(Note note, Verdict v, double errMs)
         {
             var p = (DrumPhrase)note.Data;
             var y = _m[0];
+            MusicJudged(v != Verdict.Miss);
             var pos = new Vector3(y.X + 0.25f, 2.6f, LaneZ[0] - 0.25f);
             _say.Verdict(v, pos, p.Finale ? 1.2f : 1);
             double at = System.Math.Max(note.Time + errMs / 1000, _now + 0.004);
