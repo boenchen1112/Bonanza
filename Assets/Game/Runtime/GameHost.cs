@@ -21,6 +21,7 @@ using Bonanza.Core;
 using Bonanza.HudKit;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.LowLevel;
 
 namespace Bonanza
 {
@@ -94,21 +95,143 @@ namespace Bonanza
 
         // ------------------------------------------------------------ input
 
-        struct PressEvent { public string Action; public double Audio; }
+        enum PressKind { Down, Up, Move }
+        struct PressEvent { public string Action; public double Audio; public PressKind Kind; public float Y; }
         readonly Queue<PressEvent> _presses = new Queue<PressEvent>();
         readonly List<InputAction> _actions = new List<InputAction>();
-        public static readonly string[] Actions = { "a", "left", "down", "up", "right" };
+        public static readonly string[] Actions = InputMap.GameActions;
 
-        InputAction Bind(string name, params string[] paths)
+        // What is down right now (web Input._held). The pointer button counts as "a".
+        readonly HeldActions _held = new HeldActions();
+        readonly StickDpad _stick = new StickDpad();
+        bool _pointerDown;
+        float _pointerY;
+        bool _inputLog;
+        int _blurSeen;
+
+        /// True while the action is down (keys, pad, pointer). Cleared by window blur.
+        public bool IsHeld(string action) => _held.IsHeld(action);
+        /// True while the pointer button (mouse, touch) is down.
+        public bool PointerHeld => _pointerDown;
+        /// The pointer's height at its last sample: 0 at the top of the screen, 1 at the bottom (web clientY / innerHeight).
+        public float PointerY => _pointerY;
+
+        static string HeldName(string action) => action == "click" ? "a" : action;
+
+        void InputLog(string what, string action, double audio)
         {
-            var act = new InputAction(name, InputActionType.Button);
-            foreach (var p in paths) act.AddBinding(p);
-            // The callback's timestamp is when the press happened, not the
-            // frame it was noticed on.
-            act.performed += ctx => _presses.Enqueue(new PressEvent { Action = name, Audio = _clock.ToAudioTime(ctx.time) });
+            if (_inputLog) Debug.Log($"[INPUT] {what} {action} t={audio:F4}");
+        }
+
+        void InputDown(string action, double audio)
+        {
+            _held.Down(HeldName(action));
+            if (action == "click")
+            {
+                _pointerDown = true;
+                var ptr = Pointer.current;
+                if (ptr != null) PointerSample(ptr.position.ReadValue().y, audio);
+            }
+            _presses.Enqueue(new PressEvent { Action = action, Audio = audio, Kind = PressKind.Down });
+            InputLog("down", action, audio);
+        }
+
+        void InputUp(string action, double audio, string why = "up")
+        {
+            if (action == "pause") return;
+            if (!_held.Up(HeldName(action))) return;   // already released (blur, or a second key of the same action)
+            if (action == "click") _pointerDown = false;
+            _presses.Enqueue(new PressEvent { Action = HeldName(action), Audio = audio, Kind = PressKind.Up });
+            InputLog(why, action, audio);
+        }
+
+        void PointerSample(float screenY, double audio)
+        {
+            _pointerY = Screen.height > 0 ? Mathf.Clamp01(1f - screenY / Screen.height) : 0;
+            _presses.Enqueue(new PressEvent { Action = "move", Audio = audio, Kind = PressKind.Move, Y = _pointerY });
+            if (_inputLog) Debug.Log($"[INPUT] move y={_pointerY:F3} t={audio:F4}");
+        }
+
+        /// Window blur: release everything held, or the player comes back to a stuck key.
+        void ReleaseAll()
+        {
+            double t = _clock.Now;
+            foreach (var a in _held.ReleaseAll())
+            {
+                _presses.Enqueue(new PressEvent { Action = a, Audio = t, Kind = PressKind.Up });
+                InputLog("blur", a, t);
+            }
+            _pointerDown = false;
+            _stick.Reset();
+        }
+
+        void OnApplicationFocus(bool focus)
+        {
+            if (!focus) ReleaseAll();
+        }
+
+        /// One physical control -> one action. The callback's timestamp is when the press happened, not the
+        /// frame it was noticed on. Key auto-repeat never reaches a Button action.
+        void BindControl(string action, string path)
+        {
+            var act = new InputAction(action, InputActionType.Button);
+            act.AddBinding(path);
+            act.performed += ctx => InputDown(action, _clock.ToAudioTime(ctx.time));
+            act.canceled += ctx => InputUp(action, _clock.ToAudioTime(ctx.time));
             act.Enable();
             _actions.Add(act);
-            return act;
+        }
+
+        // A web KeyboardEvent.code as an Input System path: KeyZ -> z, ArrowLeft -> leftArrow, Space -> space.
+        static string KeyPath(string code)
+        {
+            if (code.StartsWith("Key")) return "<Keyboard>/" + char.ToLowerInvariant(code[3]);
+            if (code.StartsWith("Arrow")) return "<Keyboard>/" + char.ToLowerInvariant(code[5]) + code.Substring(6) + "Arrow";
+            return "<Keyboard>/" + char.ToLowerInvariant(code[0]) + code.Substring(1);
+        }
+
+        static string PadPath(int button)
+        {
+            switch (button)
+            {
+                case 0: return "<Gamepad>/buttonSouth";
+                case 1: return "<Gamepad>/buttonEast";
+                case 2: return "<Gamepad>/buttonWest";
+                case 3: return "<Gamepad>/buttonNorth";
+                case 9: return "<Gamepad>/start";
+                case 12: return "<Gamepad>/dpad/up";
+                case 13: return "<Gamepad>/dpad/down";
+                case 14: return "<Gamepad>/dpad/left";
+                case 15: return "<Gamepad>/dpad/right";
+            }
+            return null;
+        }
+
+        void BindInput()
+        {
+            foreach (var kv in InputMap.Keys) BindControl(kv.Value, KeyPath(kv.Key));
+            foreach (var kv in InputMap.PadButtons) BindControl(kv.Value, PadPath(kv.Key));
+            BindControl("click", "<Mouse>/leftButton");
+            BindControl("click", "<Touchscreen>/primaryTouch/press");
+            // Pointer height while the button is held.
+            var move = new InputAction("pointer", InputActionType.PassThrough);
+            move.AddBinding("<Pointer>/position");
+            move.performed += ctx =>
+            {
+                if (_pointerDown) PointerSample(ctx.ReadValue<Vector2>().y, _clock.ToAudioTime(ctx.time));
+            };
+            move.Enable();
+            _actions.Add(move);
+        }
+
+        /// Gamepad state has no event timestamps worth trusting: the stick is read on the frame (web pollGamepads).
+        void PollPad()
+        {
+            var pad = Gamepad.current;
+            if (pad == null) return;
+            var v = pad.leftStick.ReadValue();
+            double t = _clock.ToAudioTime(InputState.currentTime);
+            _stick.Update(v.x, -v.y, (a, down) => { if (down) InputDown(a, t); else InputUp(a, t); });
         }
 
         // ------------------------------------------------------------ clock
@@ -225,13 +348,10 @@ namespace Bonanza
             bool pin = q != null && Enum.TryParse(q, true, out forced);
             RenderQuality.Apply(pin ? forced : Settings.Graphics);
 
-            Bind("a", "<Keyboard>/space", "<Keyboard>/enter", "<Keyboard>/j", "<Gamepad>/buttonSouth");
-            Bind("click", "<Mouse>/leftButton", "<Touchscreen>/primaryTouch/press");
-            Bind("left", "<Keyboard>/leftArrow", "<Keyboard>/a", "<Gamepad>/dpad/left", "<Gamepad>/buttonWest");
-            Bind("down", "<Keyboard>/downArrow", "<Keyboard>/s", "<Gamepad>/dpad/down");
-            Bind("up", "<Keyboard>/upArrow", "<Keyboard>/w", "<Gamepad>/dpad/up", "<Gamepad>/buttonNorth");
-            Bind("right", "<Keyboard>/rightArrow", "<Keyboard>/d", "<Gamepad>/dpad/right", "<Gamepad>/buttonEast");
-            Bind("pause", "<Keyboard>/escape", "<Keyboard>/p", "<Gamepad>/start");
+            _inputLog = url.Contains("inputlog") || Environment.GetEnvironmentVariable("BONANZA_INPUTLOG") == "1";
+            BindInput();
+            BonanzaBlur.Install();
+            _blurSeen = BonanzaBlur.Count();
 
             _music = gameObject.AddComponent<MusicPlayer>();
             _music.Init(this);
@@ -453,6 +573,12 @@ namespace Bonanza
 
         void Update()
         {
+            PollPad();
+            int blurs = BonanzaBlur.Count();
+            if (blurs != _blurSeen) { _blurSeen = blurs; ReleaseAll(); }
+            // Only a round wants releases and pointer samples; every screen takes presses.
+            if (_mode != Mode.Playing) DropNonPresses();
+
             switch (_mode)
             {
                 case Mode.Gate:
@@ -486,7 +612,7 @@ namespace Bonanza
                         if (p.Action == "up" || p.Action == "left") _menuIndex = (_menuIndex + Games.Count - 1) % Games.Count;
                         else if (p.Action == "down" || p.Action == "right") _menuIndex = (_menuIndex + 1) % Games.Count;
                         else if (p.Action == "a") { Open(Games[_menuIndex]); break; }
-                        else if (p.Action == "pause") { _mode = Mode.Title; break; }
+                        else if (InputMap.IsBack(p.Action)) { _mode = Mode.Title; break; }
                     }
                     _presses.Clear();
                     break;
@@ -507,7 +633,7 @@ namespace Bonanza
                         else if (p.Action == "down") _optIndex = (_optIndex + 1) % OptionRows.Length;
                         else if (p.Action == "left" || p.Action == "right") AdjustOption(_optIndex, p.Action == "right" ? 1 : -1);
                         else if (p.Action == "a") OptionChoice(_optIndex);
-                        else if (p.Action == "pause") { _mode = Mode.Title; break; }
+                        else if (InputMap.IsBack(p.Action)) { _mode = Mode.Title; break; }
                     }
                     _presses.Clear();
                     break;
@@ -520,7 +646,7 @@ namespace Bonanza
                         else if (p.Action == "down") _rosterIndex = (_rosterIndex + 1) % 4;
                         else if ((p.Action == "left" || p.Action == "right") && _rosterIndex < 3) CycleSlot(_rosterIndex + 1, p.Action == "right" ? 1 : -1);
                         else if (p.Action == "a") { if (_rosterIndex < 3) CycleSlot(_rosterIndex + 1, 1); else { StartParty(); break; } }
-                        else if (p.Action == "pause") { _mode = Mode.Title; break; }
+                        else if (InputMap.IsBack(p.Action)) { _mode = Mode.Title; break; }
                     }
                     _presses.Clear();
                     break;
@@ -532,7 +658,7 @@ namespace Bonanza
                         var p = _presses.Dequeue();
                         if (Autoplay) continue;
                         if (p.Action == "a") next = true;
-                        else if (p.Action == "pause") { EndParty(); break; }
+                        else if (InputMap.IsBack(p.Action)) { EndParty(); break; }
                     }
                     _presses.Clear();
                     if (next && _mode == Mode.PartyHub)
@@ -547,7 +673,7 @@ namespace Bonanza
                     while (_presses.Count > 0)
                     {
                         var p = _presses.Dequeue();
-                        if (p.Action == "pause") { BackOut(); break; }
+                        if (InputMap.IsBack(p.Action)) { BackOut(); break; }
                         _startRequested = true;
                     }
                     _presses.Clear();
@@ -573,7 +699,7 @@ namespace Bonanza
                         // Counting back in: the round stays frozen until the count ends.
                         _resumeLeft -= Time.unscaledDeltaTime;
                         bool reopen = false;
-                        while (_presses.Count > 0) if (_presses.Dequeue().Action == "pause") reopen = true;
+                        while (_presses.Count > 0) if (InputMap.IsBack(_presses.Dequeue().Action)) reopen = true;
                         if (reopen) _resumeLeft = 0;
                         else if (_resumeLeft <= 0) Resume();
                         break;
@@ -581,7 +707,7 @@ namespace Bonanza
                     while (_presses.Count > 0)
                     {
                         var p = _presses.Dequeue();
-                        if (p.Action == "pause") { CountBackIn(); break; }
+                        if (InputMap.IsBack(p.Action)) { CountBackIn(); break; }
                         int np = PauseItems.Length;
                         if (p.Action == "up") _pauseIndex = (_pauseIndex + np - 1) % np;
                         if (p.Action == "down") _pauseIndex = (_pauseIndex + 1) % np;
@@ -607,7 +733,7 @@ namespace Bonanza
                         while (_presses.Count > 0)
                         {
                             var p = _presses.Dequeue();
-                            if (Autoplay || p.Action != "a") continue;
+                            if (Autoplay || (p.Action != "a" && !InputMap.IsBack(p.Action))) continue;
                             if (_resultsT < RevealEnd) _resultsT = RevealEnd;   // the first press finishes the reveal
                             else on = true;
                         }
@@ -618,9 +744,9 @@ namespace Bonanza
                     {
                         var p = _presses.Dequeue();
                         if (Autoplay) continue;
-                        if (_resultsT < RevealEnd && p.Action != "pause") { _resultsT = RevealEnd; continue; }
+                        if (_resultsT < RevealEnd && !InputMap.IsBack(p.Action)) { _resultsT = RevealEnd; continue; }
                         if (p.Action == "a") { Open(_entry); break; }                       // again
-                        if (p.Action == "pause" || p.Action == "left") { CloseGame(); _mode = Mode.Menu; break; }
+                        if (InputMap.IsBack(p.Action) || p.Action == "left") { CloseGame(); _mode = Mode.Menu; break; }
                     }
                     _presses.Clear();
                     break;
@@ -640,6 +766,16 @@ namespace Bonanza
                 case Mode.Playing: return _clock.Running ? FramePhase.Playing : FramePhase.Paused;
                 case Mode.Paused: return FramePhase.Paused;
                 default: return FramePhase.Between;
+            }
+        }
+
+        void DropNonPresses()
+        {
+            int n = _presses.Count;
+            for (int i = 0; i < n; i++)
+            {
+                var p = _presses.Dequeue();
+                if (p.Kind == PressKind.Down) _presses.Enqueue(p);
             }
         }
 
@@ -757,9 +893,11 @@ namespace Bonanza
             while (_presses.Count > 0)
             {
                 var p = _presses.Dequeue();
+                if (p.Kind == PressKind.Move) { _game.PointerMove(p.Y, p.Audio - _pausedTotal); continue; }
+                if (p.Kind == PressKind.Up) { _game.Release(p.Action, p.Audio - _pausedTotal); continue; }
                 if (p.Action == "pause") { if (!Autoplay) { Pause(); return; } continue; }
                 // Mouse and touch are the "a" button in play.
-                _game.Press(p.Action == "click" ? "a" : p.Action, p.Audio - _pausedTotal);
+                _game.Press(HeldName(p.Action), p.Audio - _pausedTotal);
             }
             _game.Tick(now, Time.deltaTime);
             var o = _game.Result();
@@ -796,7 +934,7 @@ namespace Bonanza
                         Hud.Text(new Rect(r.x + 16 * s, r.y + r.height * 0.5f, r.width, r.height * 0.5f), e.Blurb + (best != null ? "   BEST " + best : ""), Hud.Small, new Color(1, 1, 1, 0.8f), TextAnchor.MiddleLeft);
                         if (GUI.Button(r, GUIContent.none, GUIStyle.none)) { _menuIndex = i; Open(e); }
                     }
-                    Hud.Center(0.9f, "UP/DOWN to choose   SPACE / click to play   ESC: back", Hud.Small, new Color(1, 1, 1, 0.7f), 40);
+                    Hud.Center(0.9f, "UP/DOWN to choose   SPACE / click to play   ESC / X: back", Hud.Small, new Color(1, 1, 1, 0.7f), 40);
                     break;
 
                 case Mode.Title:
@@ -831,7 +969,7 @@ namespace Bonanza
                         Hud.Center(0.8f, "Tap is the default. Mouse and camera conducting arrive later; until then taps are used.", Hud.Small, new Color(1, 1, 1, 0.7f), 40);
                     else if (_optIndex == (int)Opt.Offset)
                         Hud.Center(0.8f, "Negative offset = your presses land late.\nPress late and see GOOD more than PERFECT? Try -20 ms steps.", Hud.Small, new Color(1, 1, 1, 0.7f), 80);
-                    Hud.Center(0.9f, "UP/DOWN choose   LEFT/RIGHT adjust   ESC back", Hud.Small, new Color(1, 1, 1, 0.7f), 40);
+                    Hud.Center(0.9f, "UP/DOWN choose   LEFT/RIGHT adjust   ESC / X back", Hud.Small, new Color(1, 1, 1, 0.7f), 40);
                     break;
 
                 case Mode.Roster:
@@ -843,7 +981,7 @@ namespace Bonanza
                         if (MenuRow(i - 1, 0.34f + 80 * s / Screen.height, CastNames[i], SlotLabel(_slotTier[i]), _rosterIndex == i - 1, s))
                         { _rosterIndex = i - 1; CycleSlot(i, 1); }
                     if (MenuRow(3, 0.34f + 80 * s / Screen.height, "START PARTY", null, _rosterIndex == 3, s)) StartParty();
-                    Hud.Center(0.9f, "UP/DOWN choose   LEFT/RIGHT change a rival   ESC back", Hud.Small, new Color(1, 1, 1, 0.7f), 40);
+                    Hud.Center(0.9f, "UP/DOWN choose   LEFT/RIGHT change a rival   ESC / X back", Hud.Small, new Color(1, 1, 1, 0.7f), 40);
                     break;
 
                 case Mode.PartyHub:
@@ -856,7 +994,7 @@ namespace Bonanza
                     Hud.Center(0.22f, _game.Title, Hud.Big, Hud.Gold, 120);
                     Hud.Center(0.42f, _game.Blurb, Hud.Mid, Color.white);
                     Hud.Center(0.55f, _game.Controls, Hud.Small, Color.white, 80);
-                    Hud.Center(0.75f, "PRESS TO START   (ESC: back)", Hud.Mid, Hud.Gold);
+                    Hud.Center(0.75f, "PRESS TO START   (ESC / X: back)", Hud.Mid, Hud.Gold);
                     break;
 
                 case Mode.Playing:

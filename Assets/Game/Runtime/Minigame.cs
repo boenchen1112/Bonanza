@@ -6,7 +6,11 @@
 //   Begin(now)      the transport starts; the game anchors its beat map here.
 //   Tick(now, dt)   per frame, after this frame's presses. `now` is GAME time
 //                   (audio time minus time spent paused), never frame time.
-//   Press(a, t)     one press, action in {a, left, down, up, right}, at game time t.
+//   Press(a, t)     one press, action in {a, b, left, down, up, right}, at game time t.
+//   Release(a, t)   the matching release (key-up, pointer-up, pad release, window blur), at game time t.
+//                   Default no-op. Host.IsHeld(a) is the live held state.
+//   PointerMove(y, t) while the pointer button is held: y = 0 (top) .. 1 (bottom) of the screen, at game
+//                   time t, one call per movement and one on the press itself. Default no-op.
 //   Result()        null until the round is over.
 //   TestChart()     the presses a perfect bot makes (action, game time); valid after Begin.
 //   DrawHud(s)      the game's own IMGUI HUD, from the host's OnGUI. s = Screen.height/720. A game with
@@ -59,6 +63,8 @@ namespace Bonanza
         public abstract void Begin(double now);
         public abstract void Tick(double now, float dt);
         public abstract void Press(string action, double time);
+        public virtual void Release(string action, double time) { }
+        public virtual void PointerMove(float y01, double time) { }
         public abstract Outcome Result();
         public abstract IEnumerable<KeyValuePair<string, double>> TestChart();
         public virtual void DrawHud(float s) { }

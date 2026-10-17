@@ -279,13 +279,12 @@ namespace Bonanza.Core
         public double BeatAt(double t) => Map.BeatAt(t);
         public double Accuracy => Max > 0 ? Math.Min(1, Raw / Max) : 1;
 
-        /// up = left, down = right; 'a' falls back to the nearest lane note, so
+        /// up = left, down and b = right; 'a' falls back to the nearest lane note, so
         /// nobody is locked out of a chord for using one thumb.
         public bool Press(string action, double time)
         {
             if (Done) return false;
-            if (action == "up") action = "left";
-            if (action == "down") action = "right";
+            action = InputMap.FinaleLane(action);
             if (action != "a" && action != "left" && action != "right") return false;
             var r = Judge.Press(action, time);
             if (r == null && action == "a") r = Judge.Press("left", time) ?? Judge.Press("right", time);

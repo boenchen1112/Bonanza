@@ -33,6 +33,11 @@ namespace Bonanza
         readonly Callouts _say = new Callouts();
         double _now, _lastBeat = -99;
         bool _playing, _finishShown, _demoBounced;
+        /// True from the press to the release of the button (web bounceBrigade `held`): the coil on a charge pad.
+        bool _held;
+        double _holdStart = -1e9;
+        public bool Held => _held;
+        public double HoldStart => _holdStart;
 
         sealed class Slab { public Transform Pivot; public Material Top, Body; public Color C; public float Pop, Glow; }
         readonly List<Slab> _slabs = new List<Slab>();
@@ -106,8 +111,18 @@ namespace Bonanza
         public override void Press(string action, double time)
         {
             if (!_playing || action != "a") return;
+            if (!_held) { _held = true; _holdStart = time; }
             if (!_round.Press(action, time)) Host.Play(TickClip, 0.1f);
         }
+
+        // In tap mode the release note is an ordinary press (the second tap), so there is nothing to judge
+        // on release; the flag only tells the stage the button is no longer down.
+        public override void Release(string action, double time)
+        {
+            if (action == "a") _held = false;
+        }
+
+        public override void OnResume() { _held = Host.IsHeld("a"); }
 
         public override void Tick(double now, float dt)
         {

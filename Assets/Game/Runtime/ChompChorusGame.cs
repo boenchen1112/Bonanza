@@ -53,6 +53,10 @@ namespace Bonanza
         readonly List<Cue> _cues = new List<Cue>();
         int _cueAt;
         bool _finaleBanner, _finaleDone;
+        /// Frames in the finale's hold window, and those with a key held (web finale.frames / heldFrames).
+        public int FinaleFrames { get; private set; }
+        public int FinaleHeldFrames { get; private set; }
+        public double FinaleSustain => FinaleFrames > 0 ? (double)FinaleHeldFrames / FinaleFrames : 0;
         double _lastBeat = -99;
 
         // ------------------------------------------------------------ contract
@@ -319,6 +323,14 @@ namespace Bonanza
             if (_round == null) return;
             double beat = _playing ? _round.BeatAt(_now) : 0;
             bool finaleHold = beat >= ChompChart.FinaleBeat + 0.45 && beat <= ChompChart.FinaleEnd + 0.5;
+            if (_playing && finaleHold)
+            {
+                // Web chompChorus finale stats: frames the player really held a key through the last bar.
+                FinaleFrames++;
+                bool held = Host.IsHeld("a");
+                foreach (var a in ChompChart.Actions) held |= Host.IsHeld(a);
+                if (held) FinaleHeldFrames++;
+            }
             for (int i = 0; i < N; i++)
             {
                 var l = _lanes[i];
