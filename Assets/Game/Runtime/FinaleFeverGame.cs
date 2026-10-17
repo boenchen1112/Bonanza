@@ -97,7 +97,6 @@ namespace Bonanza
                 _pips[l + 1] = Prim(PrimitiveType.Sphere, Strike + new Vector3(l * 1.34f, 0, -0.05f), Vector3.one * 0.28f,
                     l < 0 ? LaneL : l > 0 ? LaneR : Gold).transform;
 
-            Prewarm();
             PlaceCamera(0, false, 1, true);
         }
 
@@ -157,8 +156,9 @@ namespace Bonanza
             {
                 var c = cues[_cueA++];
                 double at = System.Math.Max(_round.Map.TimeAt(c.Beat), now + 0.004);
-                if (c.Type == "call") BossVoice(c, at);
-                else Host.PlayAt(Rim, at, c.Accent ? 0.24f : 0.15f, 1, -0.08f);
+                // web fireAudioCues: the key is read at dispatch (scaleInfo() now), not at the cue's own beat.
+                if (c.Type == "call") BossVoice(c, at, DegAt(beat));
+                else Host.PlayVoice(VoiceCatalog.FinaleRim, at, c.Accent ? 1 : VoiceMix.FinaleRimPlain);
             }
             while (_cueV < cues.Count && cues[_cueV].Beat <= beat)
             {
@@ -241,9 +241,9 @@ namespace Bonanza
             if (v != Verdict.Miss)
             {
                 // The player's answer: bright, high, in the chord the track sits on; panned to their side.
-                var chord = ChordAt(n.Beat);
-                int midi = chord[_round.Combo % chord.Length] + (n.Kind == "solo" ? 24 : 12);
-                Host.PlayAt(Bell(midi), _now + 0.004, 0.2f, 1, 0.28f);
+                int deg = DegAt(_round.BeatAt(_now)), i = _round.Combo;
+                Host.PlayVoice(VoiceCatalog.FinaleAnswer(deg, i, n.Kind == "solo"), _now + 0.004);
+                if (n.Kind == "swing") Host.PlayVoice(VoiceCatalog.FinalePluck(deg, i), _now + 0.004);
                 _ringPulse = Mathf.Max(_ringPulse, n.Kind == "swing" ? 1.4f : 0.9f);
                 _playerLean = 1;
             }
@@ -274,60 +274,19 @@ namespace Bonanza
             Host.PlaySfx("coin", _now);
         }
 
-        // ------------------------------------------------------------ sound (placeholder synth)
+        // ------------------------------------------------------------ sound (baked web voices, VoiceCatalog)
 
-        /// The track's chord at a beat, in the register of the web build's scaleInfo().
-        static int[] ChordAt(double beat)
+        /// The chord degree the track sits on at a game beat (web scaleInfo().chordDeg). The web reads it when it
+        /// plays a voice, so a cue dispatched just before a bar line still sounds on the bar that is ending.
+        static int DegAt(double beat) => Harmony.FinaleFever.ChordDegAt((int)System.Math.Floor((beat + FeverChart.LeadBeats) / 4));
+
+        /// The boss sounds like a boss: low brass or an orchestra hit over a taiko, two octaves under the player's
+        /// bells, panned hard to his side (web bossVoice). The chord is the track's, unshifted, as the web reads it.
+        void BossVoice(FeverCue c, double at, int deg)
         {
-            int bar = (int)System.Math.Floor((beat + FeverChart.LeadBeats) / 4);
-            var c = Harmony.FinaleFever.ChordAtBar(bar);
-            var o = new int[c.Length];
-            for (int i = 0; i < c.Length; i++) o[i] = c[i] + 12;
-            return o;
-        }
-
-        static AudioClip Brass(int midi, bool accent) => Tones.Blip(Tones.Midi(midi), accent ? 0.3f : 0.16f, accent ? 6 : 10, Wave.Square, 0.98f);
-        static AudioClip Tom(float hz) => Tones.Blip(hz, 0.4f, 9, Wave.Sine, 0.7f);
-        static AudioClip Bell(int midi) => Tones.Blip(Tones.Midi(midi), 0.24f, 12, Wave.Sine);
-        static AudioClip Rim => Tones.Blip(1900, 0.03f, 90, Wave.Noise);
-
-        /// The boss sounds like a boss: low brass over a tom, panned to his side.
-        void BossVoice(FeverCue c, double at)
-        {
-            var chord = ChordAt(c.Beat);
-            int midi = chord[c.Tone % chord.Length] - 12;
-            if (c.Kind == "swing")
-            {
-                foreach (var m in chord) Host.PlayAt(Brass(m - 12, true), at, 0.1f, 1, -0.34f);
-                Host.PlayAt(Tom(86), at, 0.6f, 1, -0.34f);
-            }
-            else if (c.Kind == "chord")
-            {
-                Host.PlayAt(Brass(midi, false), at, 0.14f, 1, -0.3f);
-                Host.PlayAt(Brass(midi + 7, false), at, 0.12f, 1, -0.3f);
-                Host.PlayAt(Tom(128), at, 0.35f, 1, -0.3f);
-            }
-            else
-            {
-                Host.PlayAt(Brass(midi, c.Accent), at, c.Accent ? 0.17f : 0.11f, 1, -0.32f);
-                if (c.Accent) Host.PlayAt(Tom(112), at, 0.3f, 1, -0.28f);
-            }
-        }
-
-        /// Built before the round: synthesising mid-round stalls a frame.
-        void Prewarm()
-        {
-            var seen = new HashSet<int>();
-            for (int bar = 0; bar < 16; bar++)
-                foreach (var m in ChordAt(bar * 4 - FeverChart.LeadBeats))
-                    if (seen.Add(m))
-                    {
-                        Brass(m - 12, true); Brass(m - 12, false);
-                        foreach (var d in new[] { -12, 12, 24 }) Bell(m + d);
-                        Brass(m - 12 + 7, false);
-                    }
-            foreach (var hz in new[] { 86f, 112f, 128f }) Tom(hz);
-            _ = Rim;
+            if (c.Kind == "swing") Host.PlayVoice(VoiceCatalog.FinaleSwing(deg), at);
+            else if (c.Kind == "chord") Host.PlayVoice(VoiceCatalog.FinaleChord(deg, c.Tone), at);
+            else Host.PlayVoice(VoiceCatalog.FinaleCall(deg, c.Tone, c.Accent), at);
         }
 
         // ------------------------------------------------------------ stage

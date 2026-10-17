@@ -95,7 +95,6 @@ namespace Bonanza
             Prim(PrimitiveType.Capsule, new Vector3(0, 0.6f, 0), new Vector3(0.8f, 0.6f, 0.8f), Hex(0x2fd6c0), _bouncer);
             Prim(PrimitiveType.Sphere, new Vector3(0.18f, 1.05f, -0.28f), Vector3.one * 0.28f, Color.white, _bouncer);   // eye, facing the run
 
-            Prewarm();
             _camAnchorY = _camY = (float)_round.Platforms[0].Y;
             PlaceCamera(_round.MotionAt(BounceChart.RunwayBeat), 1, true);
         }
@@ -142,7 +141,7 @@ namespace Bonanza
             if (!_demoBounced && beat >= -1)
             {
                 _demoBounced = true;
-                PlayNote(_round.Platforms[0], Verdict.Great, now + 0.01);
+                PlayNote(_round.Platforms[0], Verdict.Great, now + 0.01, 1);   // web: playPlatformNote(plats[0], 'great', rawNow + 0.01, 1)
                 _slabs[0].Pop = 0.7f;
             }
         }
@@ -177,7 +176,7 @@ namespace Bonanza
                 if (hit)
                 {
                     if (p.Charge) PlaySustain(p, v, at);
-                    else PlayNote(p, v, at);
+                    else PlayNote(p, v, at, System.Math.Max(0.5, p.FlightBeats));
                     _slabs[p.Index].Pop = v == Verdict.Perfect ? 1 : v == Verdict.Great ? 0.8f : 0.55f;
                 }
                 else { Thud(at); Host.PlaySfx("miss", at); }
@@ -196,59 +195,28 @@ namespace Bonanza
             Host.PlaySfx("fanfare", _now + 0.02);
         }
 
-        // ------------------------------------------------------------ sound (placeholder synth)
+        // ------------------------------------------------------------ sound (baked web voices, VoiceCatalog)
 
-        static float Gain(Verdict v) => v == Verdict.Perfect ? 1 : v == Verdict.Great ? 0.86f : 0.66f;
-        static AudioClip Pluck(int midi, float bright) => Tones.Blip(Tones.Midi(midi), 0.34f, bright, Wave.Triangle);
-        static AudioClip Bell(int midi) => Tones.Blip(Tones.Midi(midi), 0.5f, 7, Wave.Sine);
-        static AudioClip Lead(int midi) => Tones.Blip(Tones.Midi(midi), 0.9f, 2.2f, Wave.Square);
-        static AudioClip Kick => Tones.Blip(110, 0.26f, 14, Wave.Sine, 0.45f);
-        static AudioClip Spring => Tones.Blip(2600, 0.03f, 80, Wave.Noise);
-        static AudioClip ThudClip => Tones.Blip(90, 0.12f, 20, Wave.Noise, 0.6f);
-        static AudioClip Fanfare(int k) => Tones.Blip(Tones.Midi(74 + new[] { 0, 4, 7, 12 }[k]), 0.4f, 5, Wave.Square);
+        /// A platform's note, scheduled at the press so mistiming is audible. One baked clip per (verdict, pitch, length):
+        /// the web's pluck (+ the octave on a great and a perfect, + a bell on a perfect) and the springboard hit.
+        void PlayNote(BouncePlatform p, Verdict v, double at, double durBeats) => Host.PlayVoice(VoiceCatalog.BounceNote(v, p.Midi, durBeats), at);
 
-        /// A platform's note, scheduled at the press so mistiming is audible;
-        /// a perfect adds the octave on top, an okay is dull.
-        void PlayNote(BouncePlatform p, Verdict v, double at)
-        {
-            float g = Gain(v);
-            Host.PlayAt(Pluck(p.Midi, v == Verdict.Perfect ? 6 : v == Verdict.Great ? 8 : 12), at, 0.34f * g, 1, 0.06f);
-            if (v != Verdict.Good) Host.PlayAt(Pluck(p.Midi + 12, 12), at + 0.014, 0.12f * g);
-            if (v == Verdict.Perfect) Host.PlayAt(Bell(p.Midi + 12), at + 0.02, 0.1f);
-            Host.PlayAt(Spring, at, 0.08f * g);
-        }
-
+        /// A charge ramp's contact: the lead held for the roll, a pluck, the riser under it (web playSustain).
         void PlaySustain(BouncePlatform p, Verdict v, double at)
         {
-            float g = Gain(v);
-            Host.PlayAt(Lead(p.Midi), at, 0.16f * g);
-            Host.PlayAt(Pluck(p.Midi, 8), at, 0.2f * g);
-            Host.PlayAt(Spring, at, 0.09f);
+            Host.PlayVoice(VoiceCatalog.BounceHold(p.Midi, p.Roll), at, VoiceMix.BounceGain(v));
+            Host.PlayVoice(VoiceCatalog.BounceRise(p.Roll), at);
         }
 
+        /// The launch: a bell and a high pluck on the verdict's gain, a kick, a crash on the finale ramp (web playRelease).
         void PlayRelease(BouncePlatform p, Verdict v, double at, bool huge)
         {
-            float g = Gain(v);
-            Host.PlayAt(Bell(p.Midi + 12), at, 0.15f * g);
-            Host.PlayAt(Pluck(p.Midi + 19, 6), at, 0.13f * g);
-            Host.PlayAt(Kick, at, 0.5f);
-            if (huge) Host.PlayAt(Fanfare(3), at + 0.05, 0.12f);
+            Host.PlayVoice(VoiceCatalog.BounceRelease(p.Midi, huge), at, VoiceMix.BounceGain(v));
+            Host.PlayVoice(VoiceCatalog.BounceKick, at);
+            if (huge) Host.PlayVoice(VoiceCatalog.BounceBigCrash, at);
         }
 
-        void Thud(double at) => Host.PlayAt(ThudClip, at, 0.2f);
-
-        /// Built before the round: synthesising mid-round stalls a frame.
-        void Prewarm()
-        {
-            var seen = new HashSet<int>();
-            foreach (var p in _round.Platforms)
-                if (seen.Add(p.Midi))
-                {
-                    foreach (var b in new[] { 6f, 8f, 12f }) Pluck(p.Midi, b);
-                    Pluck(p.Midi + 12, 12); Bell(p.Midi + 12); Lead(p.Midi); Pluck(p.Midi + 19, 6);
-                }
-            _ = Fanfare(3); _ = Kick; _ = Spring; _ = ThudClip;
-        }
+        void Thud(double at) => Host.PlayVoice(VoiceCatalog.BounceThud, at);
 
         // ------------------------------------------------------------ stage
 
@@ -276,7 +244,7 @@ namespace Bonanza
             if (m.Air && m.Outcome == "plunge" && !_splashed[m.K] && m.Y <= BounceRound.SplashY + 0.25)
             {
                 _splashed[m.K] = true;
-                Host.Play(ThudClip, 0.22f, 0.7f);
+                Host.PlayVoice(VoiceCatalog.BounceSplash, _now + 0.01);   // web: a low noise hit at rawNow + 0.01
                 _say.Say("SPLASH!", new Vector3((float)m.X, (float)BounceChart.WaterY + 1, 0), Foam, 0.8f);
             }
 

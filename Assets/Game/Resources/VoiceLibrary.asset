@@ -1,0 +1,529 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 76ade2b6d67db40b1bcb143c76e63cb3, type: 3}
+  m_Name: VoiceLibrary
+  m_EditorClassIdentifier: Bonanza.Runtime::Bonanza.SfxLibrary
+  entries:
+  - id: dd_call_0
+    clip: {fileID: 8300000, guid: 1dd537257a09f4789bb0059aac19e6d1, type: 3}
+  - id: dd_call_1
+    clip: {fileID: 8300000, guid: 39939a59c319c4ae6a2344567ff083bc, type: 3}
+  - id: dd_call_2
+    clip: {fileID: 8300000, guid: cfd837b95d1ac4385af6aabd70c231ab, type: 3}
+  - id: dd_call_3
+    clip: {fileID: 8300000, guid: e149e3d71b60c4fc6b9d14176a05b7cf, type: 3}
+  - id: dd_call_4
+    clip: {fileID: 8300000, guid: 6a55a0b219cd0440e8a1dcab4b647182, type: 3}
+  - id: dd_callhat
+    clip: {fileID: 8300000, guid: f0a6be476e10045cc91fc50f2ce3f191, type: 3}
+  - id: dd_handoff
+    clip: {fileID: 8300000, guid: f35254354fff74393b4610433744a6a4, type: 3}
+  - id: dd_crash
+    clip: {fileID: 8300000, guid: 0ce4feb48d8db4535912f450ca42b15c, type: 3}
+  - id: dd_fumble
+    clip: {fileID: 8300000, guid: 0b3512a9c4bce455eaf0d745be533873, type: 3}
+  - id: dd_snare
+    clip: {fileID: 8300000, guid: 038702059524443f6b397659aaa62bb0, type: 3}
+  - id: dd_stumble_1
+    clip: {fileID: 8300000, guid: 76d881998ce8f4ccab32b6c4bed8aa0a, type: 3}
+  - id: dd_stumble_2
+    clip: {fileID: 8300000, guid: fc19f0e27056a433cae410f1792127e4, type: 3}
+  - id: dd_stumble_3
+    clip: {fileID: 8300000, guid: a117f09dc0fab426e88f1e12dee9c5db, type: 3}
+  - id: bb_note_p_71_458
+    clip: {fileID: 8300000, guid: fbe8d4b9e91c94753910da15390c3c3e, type: 3}
+  - id: bb_note_g_71_458
+    clip: {fileID: 8300000, guid: 8a942625e417441139cdb7b236347073, type: 3}
+  - id: bb_note_o_71_458
+    clip: {fileID: 8300000, guid: e32bf38e94c204325959883eedd59ff2, type: 3}
+  - id: bb_note_p_74_458
+    clip: {fileID: 8300000, guid: 3d9962872296b4cee8937a6773eb5912, type: 3}
+  - id: bb_note_g_74_458
+    clip: {fileID: 8300000, guid: 8688b86de971049609bae0f8471d2449, type: 3}
+  - id: bb_note_o_74_458
+    clip: {fileID: 8300000, guid: 35c692e225e9d49d4a7770afb9bb403b, type: 3}
+  - id: bb_note_p_78_458
+    clip: {fileID: 8300000, guid: dc90dbfa350464b799b86b3e6df77d04, type: 3}
+  - id: bb_note_g_78_458
+    clip: {fileID: 8300000, guid: 042351863c2a849bf9355a778a48afe8, type: 3}
+  - id: bb_note_o_78_458
+    clip: {fileID: 8300000, guid: 1da11ee9b60074600866db9bd936dbd6, type: 3}
+  - id: bb_note_p_83_458
+    clip: {fileID: 8300000, guid: f9a55c6b3c60546b696dccb30bbf0441, type: 3}
+  - id: bb_note_g_83_458
+    clip: {fileID: 8300000, guid: 4dc15bda680874d749a7c770bf789204, type: 3}
+  - id: bb_note_o_83_458
+    clip: {fileID: 8300000, guid: 8c992248cca804ee8ac6671a556ac5b0, type: 3}
+  - id: bb_note_p_67_458
+    clip: {fileID: 8300000, guid: 1654cbfd9ff604a18a1a1faf76b9c461, type: 3}
+  - id: bb_note_g_67_458
+    clip: {fileID: 8300000, guid: c2f5138d3236a4b88af4cb72e7c95b96, type: 3}
+  - id: bb_note_o_67_458
+    clip: {fileID: 8300000, guid: a2618434c55b8455a868457a04eccb41, type: 3}
+  - id: bb_note_p_79_458
+    clip: {fileID: 8300000, guid: 511302cf77afe44b8b9929eacf48a414, type: 3}
+  - id: bb_note_g_79_458
+    clip: {fileID: 8300000, guid: 83fab7f716b6f429d9ac38b8bb9c0457, type: 3}
+  - id: bb_note_o_79_458
+    clip: {fileID: 8300000, guid: f0325a9d913f84262bd1955bffd95913, type: 3}
+  - id: bb_note_p_76_458
+    clip: {fileID: 8300000, guid: 3d86592ee47fd432abdfe0c65f030f9b, type: 3}
+  - id: bb_note_g_76_458
+    clip: {fileID: 8300000, guid: fd125d610ff71462ca9b1d30227e8d4a, type: 3}
+  - id: bb_note_o_76_458
+    clip: {fileID: 8300000, guid: 3c1ee54cbe7454170bc7a4800b9c6c2f, type: 3}
+  - id: bb_note_p_73_458
+    clip: {fileID: 8300000, guid: bf4bb16d04533449bad4b51c02a521e4, type: 3}
+  - id: bb_note_g_73_458
+    clip: {fileID: 8300000, guid: 457e126bd6ebc4706807f9efd4f8fd55, type: 3}
+  - id: bb_note_o_73_458
+    clip: {fileID: 8300000, guid: e8271f23fcaa547ba97603653d93a69a, type: 3}
+  - id: bb_note_p_69_458
+    clip: {fileID: 8300000, guid: 0181a86d9f4814738bb45f309426cbbf, type: 3}
+  - id: bb_note_g_69_458
+    clip: {fileID: 8300000, guid: ffbc059f6754a402082f216acd47ddb9, type: 3}
+  - id: bb_note_o_69_458
+    clip: {fileID: 8300000, guid: 1b64c441c3c6342c68c73b9bdae3179a, type: 3}
+  - id: bb_note_p_81_458
+    clip: {fileID: 8300000, guid: e815849d6c6eb4d8eb9e1beb39949c84, type: 3}
+  - id: bb_note_g_81_458
+    clip: {fileID: 8300000, guid: f3395382219da4d1e8839a26e8576cee, type: 3}
+  - id: bb_note_o_81_458
+    clip: {fileID: 8300000, guid: 5af31433a02664b808b1027a8b196224, type: 3}
+  - id: bb_note_p_83_229
+    clip: {fileID: 8300000, guid: e0fb3bbd56cdf43ed96e9a84ca1e3337, type: 3}
+  - id: bb_note_g_83_229
+    clip: {fileID: 8300000, guid: 6af1d9d394b5543fe84e5f1ae47580c4, type: 3}
+  - id: bb_note_o_83_229
+    clip: {fileID: 8300000, guid: d50ac400eabc44d009e6dfc222ac69aa, type: 3}
+  - id: bb_note_p_78_686
+    clip: {fileID: 8300000, guid: 8aff8adbb857b4b8e82d09c4b88654ee, type: 3}
+  - id: bb_note_g_78_686
+    clip: {fileID: 8300000, guid: b4354c25cfeea4b47aac69b097c1be0d, type: 3}
+  - id: bb_note_o_78_686
+    clip: {fileID: 8300000, guid: 4d9f09d40ee124593a627700975342cb, type: 3}
+  - id: bb_note_p_71_686
+    clip: {fileID: 8300000, guid: e8eb8aaca4f454ab8b0f010dbdca7187, type: 3}
+  - id: bb_note_g_71_686
+    clip: {fileID: 8300000, guid: 0e9fdb1bd8ff24950826dad97814f5be, type: 3}
+  - id: bb_note_o_71_686
+    clip: {fileID: 8300000, guid: 5e3edf15fee6e432a9cf8befcf800b4f, type: 3}
+  - id: bb_note_p_81_229
+    clip: {fileID: 8300000, guid: a10c2319986734233a9524845e8f405e, type: 3}
+  - id: bb_note_g_81_229
+    clip: {fileID: 8300000, guid: 9f5ce1a9f11e3412c83384cd66cc3704, type: 3}
+  - id: bb_note_o_81_229
+    clip: {fileID: 8300000, guid: 9525a80afd116476ea003676d78b807c, type: 3}
+  - id: bb_note_p_79_686
+    clip: {fileID: 8300000, guid: 784a9011a12274bfeb1885b192f4f3c5, type: 3}
+  - id: bb_note_g_79_686
+    clip: {fileID: 8300000, guid: 0d803f7b3496441a4af3c0178389fc15, type: 3}
+  - id: bb_note_o_79_686
+    clip: {fileID: 8300000, guid: ad5084fa99a92425cae9fc462fef272d, type: 3}
+  - id: bb_note_p_85_458
+    clip: {fileID: 8300000, guid: cbc7f7d09422243909e36c4378a2699a, type: 3}
+  - id: bb_note_g_85_458
+    clip: {fileID: 8300000, guid: f3a0a42c2b6384c4291aa76969db6a78, type: 3}
+  - id: bb_note_o_85_458
+    clip: {fileID: 8300000, guid: 674091e27ea834a8386275e3ace12a2c, type: 3}
+  - id: bb_note_p_81_686
+    clip: {fileID: 8300000, guid: c4b9e3635321641b58f817963fc5875e, type: 3}
+  - id: bb_note_g_81_686
+    clip: {fileID: 8300000, guid: d8e8a3a01fe784d61b940615cab10720, type: 3}
+  - id: bb_note_o_81_686
+    clip: {fileID: 8300000, guid: 577bb81f29e8b426596004904eafc3df, type: 3}
+  - id: bb_note_p_74_229
+    clip: {fileID: 8300000, guid: f37af1cdbaec34d7082364d9be9f87e1, type: 3}
+  - id: bb_note_g_74_229
+    clip: {fileID: 8300000, guid: dab822e6872574200bf4c6f3f9cf5255, type: 3}
+  - id: bb_note_o_74_229
+    clip: {fileID: 8300000, guid: 0fbb4c34ec20948ee91f821f9c342fb9, type: 3}
+  - id: bb_note_p_83_686
+    clip: {fileID: 8300000, guid: 0e940465828a54932a6ad02398dd8007, type: 3}
+  - id: bb_note_g_83_686
+    clip: {fileID: 8300000, guid: 0a0c0d87145de420192587addcb2050c, type: 3}
+  - id: bb_note_o_83_686
+    clip: {fileID: 8300000, guid: e2b3d0fed181c44c3afe75cdfdeef7f1, type: 3}
+  - id: bb_note_p_79_229
+    clip: {fileID: 8300000, guid: e4f20f3a1f14e468e89317b83e5e0a13, type: 3}
+  - id: bb_note_g_79_229
+    clip: {fileID: 8300000, guid: 47165c6394a6c413c8b3f331423267cc, type: 3}
+  - id: bb_note_o_79_229
+    clip: {fileID: 8300000, guid: 1dde59bd6343343099ad1a1d3d4ec796, type: 3}
+  - id: bb_note_p_71_229
+    clip: {fileID: 8300000, guid: c1a4b5d438da7487b81e30e5e619012a, type: 3}
+  - id: bb_note_g_71_229
+    clip: {fileID: 8300000, guid: fd08e48c6a72b4ddbbb01132c75cbc11, type: 3}
+  - id: bb_note_o_71_229
+    clip: {fileID: 8300000, guid: 375a73504202f4804b0427aa78d9fa05, type: 3}
+  - id: bb_note_p_73_229
+    clip: {fileID: 8300000, guid: 8e3a6b91e557647f0afe52afa67f7c9b, type: 3}
+  - id: bb_note_g_73_229
+    clip: {fileID: 8300000, guid: e5cc6be7991554018a06225c7efbe3d2, type: 3}
+  - id: bb_note_o_73_229
+    clip: {fileID: 8300000, guid: 3bdb7f0c4e37e45f8a411f0388b47b73, type: 3}
+  - id: bb_note_p_86_458
+    clip: {fileID: 8300000, guid: 76b5402f293c04d5ea5f3503fe4cd12b, type: 3}
+  - id: bb_note_g_86_458
+    clip: {fileID: 8300000, guid: 84e9cb8b81f9f430fbbeb06e2ab76477, type: 3}
+  - id: bb_note_o_86_458
+    clip: {fileID: 8300000, guid: b9ed3d5b6e8f74b078ad22e6d2ce868a, type: 3}
+  - id: bb_note_p_78_229
+    clip: {fileID: 8300000, guid: 1fde0ade2d8b9436cb19a60bc6093f75, type: 3}
+  - id: bb_note_g_78_229
+    clip: {fileID: 8300000, guid: 50516fde6b12746f086d34cda9f0df57, type: 3}
+  - id: bb_note_o_78_229
+    clip: {fileID: 8300000, guid: f8e13e0ac86394f09b2086cc783f4252, type: 3}
+  - id: bb_note_p_86_229
+    clip: {fileID: 8300000, guid: 69614962f4954426ba336d062feb8ba0, type: 3}
+  - id: bb_note_g_86_229
+    clip: {fileID: 8300000, guid: f779e66820ed84c1ca1cea060ce4fd9a, type: 3}
+  - id: bb_note_o_86_229
+    clip: {fileID: 8300000, guid: 3fab2a753bd5a48fb8b9eb1840ea9fc2, type: 3}
+  - id: bb_note_p_85_229
+    clip: {fileID: 8300000, guid: 8c99c0f30ac3b40c88a3a00eefe3e671, type: 3}
+  - id: bb_note_g_85_229
+    clip: {fileID: 8300000, guid: 356a44004d446448ab9ddae8571f8575, type: 3}
+  - id: bb_note_o_85_229
+    clip: {fileID: 8300000, guid: 2811a98a4951844eabe76933b8f69789, type: 3}
+  - id: bb_note_p_76_229
+    clip: {fileID: 8300000, guid: de448862cdb3e444aabfc7cc11058943, type: 3}
+  - id: bb_note_g_76_229
+    clip: {fileID: 8300000, guid: 6b1a96a4d804c49178aaf79fe49bce16, type: 3}
+  - id: bb_note_o_76_229
+    clip: {fileID: 8300000, guid: 667eaf08a02d24255b5dbce967a0f819, type: 3}
+  - id: bb_hold_81_1017
+    clip: {fileID: 8300000, guid: b30baea774e3342f691f56974481d0c1, type: 3}
+  - id: bb_rise_1017
+    clip: {fileID: 8300000, guid: fc38040055e83468bb7e2df77d86d871, type: 3}
+  - id: bb_release_81_0
+    clip: {fileID: 8300000, guid: fca3bb8408c7c46e99383eadb06e9755, type: 3}
+  - id: bb_hold_78_1017
+    clip: {fileID: 8300000, guid: 528a99297fe5a4190990843a9c639284, type: 3}
+  - id: bb_release_78_0
+    clip: {fileID: 8300000, guid: ec545e957885f4b919e50051aa163229, type: 3}
+  - id: bb_release_81_1
+    clip: {fileID: 8300000, guid: aeb3cc8da570a45a4afe6adc8b521384, type: 3}
+  - id: bb_kick
+    clip: {fileID: 8300000, guid: 33f687a4dfd304a48935734456fbd7a7, type: 3}
+  - id: bb_bigcrash
+    clip: {fileID: 8300000, guid: 109b79e8e7c46407b823e4eac0a6a016, type: 3}
+  - id: bb_thud
+    clip: {fileID: 8300000, guid: b4744bde167fd4cda931d168802392b5, type: 3}
+  - id: bb_splash
+    clip: {fileID: 8300000, guid: e90a0f933683a4344a1063a03eb9f796, type: 3}
+  - id: cc_sing_0_0
+    clip: {fileID: 8300000, guid: 3f03fafcacbe84474966fc12e4c6e40e, type: 3}
+  - id: cc_bell_0_0
+    clip: {fileID: 8300000, guid: 90995a6838dd34c16bef0d497aea0b5c, type: 3}
+  - id: cc_sour_0_0
+    clip: {fileID: 8300000, guid: 7636b12f1314c43a896acfa1d431bd62, type: 3}
+  - id: cc_bed_0_0
+    clip: {fileID: 8300000, guid: a972b877f420f47fdba2882be71f5776, type: 3}
+  - id: cc_fsing_0_0
+    clip: {fileID: 8300000, guid: 320168ac479e44fc8b8a67cce8947720, type: 3}
+  - id: cc_sing_1_0
+    clip: {fileID: 8300000, guid: 80791eefbf1504a6a829b2a33d175991, type: 3}
+  - id: cc_bell_1_0
+    clip: {fileID: 8300000, guid: 9b42fa92294644c1ea0edf86de723f98, type: 3}
+  - id: cc_sour_1_0
+    clip: {fileID: 8300000, guid: 8ea44d53a8e4846deb4d27687eca1286, type: 3}
+  - id: cc_bed_1_0
+    clip: {fileID: 8300000, guid: ede6b7c1346bf4c5a9107b15d4642ec1, type: 3}
+  - id: cc_fsing_1_0
+    clip: {fileID: 8300000, guid: ef3be3af3518e4b17af47f45a6c62f78, type: 3}
+  - id: cc_sing_2_0
+    clip: {fileID: 8300000, guid: f3a356101727849d5941d3a6e4f395f8, type: 3}
+  - id: cc_bell_2_0
+    clip: {fileID: 8300000, guid: 3f39ce55ff487422aaa884012f5c28a9, type: 3}
+  - id: cc_sour_2_0
+    clip: {fileID: 8300000, guid: 08a5fddd3757e445aaf279e621c16825, type: 3}
+  - id: cc_bed_2_0
+    clip: {fileID: 8300000, guid: a657bd87ebcd84ba3b9a2e3081b77e74, type: 3}
+  - id: cc_fsing_2_0
+    clip: {fileID: 8300000, guid: c17d3d166a1f1440cb950541edbbc12a, type: 3}
+  - id: cc_sing_3_0
+    clip: {fileID: 8300000, guid: 2eeb658d1118f44d9b73abbd428f5c47, type: 3}
+  - id: cc_bell_3_0
+    clip: {fileID: 8300000, guid: 6a0e92c87608244888d1d6482e6ff119, type: 3}
+  - id: cc_sour_3_0
+    clip: {fileID: 8300000, guid: 937b4b8c4899347b585bf33808ee464e, type: 3}
+  - id: cc_bed_3_0
+    clip: {fileID: 8300000, guid: e1c123f6794134d5d83d240ae0c67c9a, type: 3}
+  - id: cc_fsing_3_0
+    clip: {fileID: 8300000, guid: 73897e79a91ed4a64955c9f6bfb37390, type: 3}
+  - id: cc_sing_0_3
+    clip: {fileID: 8300000, guid: 0e938ca602f674ab5a96f3141e2043a8, type: 3}
+  - id: cc_bell_0_3
+    clip: {fileID: 8300000, guid: 4cfd3495a1b8543ac8974e817e9ca22d, type: 3}
+  - id: cc_sour_0_3
+    clip: {fileID: 8300000, guid: 0a97661f3eabc4a4b9dbae7bca5de15d, type: 3}
+  - id: cc_bed_0_3
+    clip: {fileID: 8300000, guid: 7083b0e4fee074dbfa3d90ecc272a1e8, type: 3}
+  - id: cc_sing_1_3
+    clip: {fileID: 8300000, guid: d468b48fd4b744dde8310ca3fb31467d, type: 3}
+  - id: cc_bell_1_3
+    clip: {fileID: 8300000, guid: bd67e50c93794462ea2a3dd3c4371476, type: 3}
+  - id: cc_sour_1_3
+    clip: {fileID: 8300000, guid: 2244da0b6e8924f2c8ffd3bf4f67b012, type: 3}
+  - id: cc_bed_1_3
+    clip: {fileID: 8300000, guid: 368b8f3ceae7843959531418f0e3cd3a, type: 3}
+  - id: cc_sing_2_3
+    clip: {fileID: 8300000, guid: 34ba4bcffe1424201aa797876b8a47ca, type: 3}
+  - id: cc_bell_2_3
+    clip: {fileID: 8300000, guid: 775b647d2872e4fa5a356a0a37a6fa6b, type: 3}
+  - id: cc_sour_2_3
+    clip: {fileID: 8300000, guid: 600295aeaedf74dea86752e8e6066a9f, type: 3}
+  - id: cc_bed_2_3
+    clip: {fileID: 8300000, guid: 510369b0757e74b53afbaf846660f384, type: 3}
+  - id: cc_sing_3_3
+    clip: {fileID: 8300000, guid: 113eca01175bd489ca43a1dd12d39153, type: 3}
+  - id: cc_bell_3_3
+    clip: {fileID: 8300000, guid: e0d1d61862f4a4bb7bdf5c829bc4e0b7, type: 3}
+  - id: cc_sour_3_3
+    clip: {fileID: 8300000, guid: 43e3c145be3b4480dafed1e59b5c1353, type: 3}
+  - id: cc_bed_3_3
+    clip: {fileID: 8300000, guid: 0cb0a9d5cac924b17b6a05abc736ce91, type: 3}
+  - id: cc_sing_0_4
+    clip: {fileID: 8300000, guid: c5326325a77b74e03a8fb1ef10075d09, type: 3}
+  - id: cc_bell_0_4
+    clip: {fileID: 8300000, guid: e18b2bfb184ba4de794a942bf3123f28, type: 3}
+  - id: cc_sour_0_4
+    clip: {fileID: 8300000, guid: cf21dc34afc5a4b3ebba8ae17f68d7a3, type: 3}
+  - id: cc_bed_0_4
+    clip: {fileID: 8300000, guid: c449cf1054478497e8053e069ef4c72c, type: 3}
+  - id: cc_sing_1_4
+    clip: {fileID: 8300000, guid: ca98e86ac9b154b4db43b3ff736028c3, type: 3}
+  - id: cc_bell_1_4
+    clip: {fileID: 8300000, guid: 1424e4a7ba7f349fcaa4dc2e25355f06, type: 3}
+  - id: cc_sour_1_4
+    clip: {fileID: 8300000, guid: 64d7ff310a27545979af84d7e6633a6c, type: 3}
+  - id: cc_bed_1_4
+    clip: {fileID: 8300000, guid: 9a9a08ed89262484aa0c08f3e5440bc5, type: 3}
+  - id: cc_sing_2_4
+    clip: {fileID: 8300000, guid: 14aa3b4bcccc843d98bdca4c697d0d39, type: 3}
+  - id: cc_bell_2_4
+    clip: {fileID: 8300000, guid: 669a0bfd07ff04161976e340e70f94a5, type: 3}
+  - id: cc_sour_2_4
+    clip: {fileID: 8300000, guid: 433a6994f714f41bdb23079d0357e645, type: 3}
+  - id: cc_bed_2_4
+    clip: {fileID: 8300000, guid: a28dc8fefa824470798e2cef829a9add, type: 3}
+  - id: cc_sing_3_4
+    clip: {fileID: 8300000, guid: 52047716da689434d8ffe366787e7a78, type: 3}
+  - id: cc_bell_3_4
+    clip: {fileID: 8300000, guid: a03d2613bd0e3491eac32674247abd29, type: 3}
+  - id: cc_sour_3_4
+    clip: {fileID: 8300000, guid: 555bdea6af6624050a6360a0a1b18ef7, type: 3}
+  - id: cc_bed_3_4
+    clip: {fileID: 8300000, guid: 895b944b48e5947b2bfee591d8b2de64, type: 3}
+  - id: cc_sing_0_6
+    clip: {fileID: 8300000, guid: 51b3499828bb34cdba5811022e5337c5, type: 3}
+  - id: cc_bell_0_6
+    clip: {fileID: 8300000, guid: 25e917ee451184509ab3a6d23e63f5a0, type: 3}
+  - id: cc_sour_0_6
+    clip: {fileID: 8300000, guid: 54bf1f0e0f3e644e49f4b9ce1bf5a733, type: 3}
+  - id: cc_bed_0_6
+    clip: {fileID: 8300000, guid: 0f6fd66c327cd4af3ae1c57a191e4ca5, type: 3}
+  - id: cc_sing_1_6
+    clip: {fileID: 8300000, guid: 7b02ee08c452941d0a95ab63a60200ea, type: 3}
+  - id: cc_bell_1_6
+    clip: {fileID: 8300000, guid: 6b261d802410046fcaa8408d443baa1e, type: 3}
+  - id: cc_sour_1_6
+    clip: {fileID: 8300000, guid: cdbdfeeaabbe54d4dbcb608168c27e10, type: 3}
+  - id: cc_bed_1_6
+    clip: {fileID: 8300000, guid: 260cd6e010ffe4f60b62fdac9869d500, type: 3}
+  - id: cc_sing_2_6
+    clip: {fileID: 8300000, guid: 7bbc8f8cfd13643b487e20f2dfbd07ea, type: 3}
+  - id: cc_bell_2_6
+    clip: {fileID: 8300000, guid: 41388143dd2024b9dac68a35a0d65752, type: 3}
+  - id: cc_sour_2_6
+    clip: {fileID: 8300000, guid: f36cbf32bef9e4cbf99bdf89f060bb3e, type: 3}
+  - id: cc_bed_2_6
+    clip: {fileID: 8300000, guid: c29c9f9f114604ea5945aea861443fc4, type: 3}
+  - id: cc_sing_3_6
+    clip: {fileID: 8300000, guid: 45d7dce89ee284989bef0a6f04e340b1, type: 3}
+  - id: cc_bell_3_6
+    clip: {fileID: 8300000, guid: 825cc3ca4323d42cab2b242d86b0f6c3, type: 3}
+  - id: cc_sour_3_6
+    clip: {fileID: 8300000, guid: ff003686bbb4d4707b593941186f2e13, type: 3}
+  - id: cc_bed_3_6
+    clip: {fileID: 8300000, guid: dcf53728814454ad09daa9c9cade66dd, type: 3}
+  - id: cc_gulp_0
+    clip: {fileID: 8300000, guid: 00f62d835f86148c095ca9e79d76a0d3, type: 3}
+  - id: cc_gulpbig_0
+    clip: {fileID: 8300000, guid: 27705683c93074bcda2002df867d48e4, type: 3}
+  - id: cc_gulp_1
+    clip: {fileID: 8300000, guid: 86032b885208b4692b65917931430e3f, type: 3}
+  - id: cc_gulpbig_1
+    clip: {fileID: 8300000, guid: 1d837bf614fff4eeabd17b111009c65c, type: 3}
+  - id: cc_gulp_2
+    clip: {fileID: 8300000, guid: f95243bf2ece2495d83e703571757c02, type: 3}
+  - id: cc_gulpbig_2
+    clip: {fileID: 8300000, guid: 0c2d7637a32814641981c865684ad3bd, type: 3}
+  - id: cc_gulp_3
+    clip: {fileID: 8300000, guid: 1daa75cf808294454be4b065a2b6971a, type: 3}
+  - id: cc_gulpbig_3
+    clip: {fileID: 8300000, guid: 5003f9eb95bc7416eb3afb8cde2a9290, type: 3}
+  - id: ff_swing_0
+    clip: {fileID: 8300000, guid: b5a83dd10e4174560be444f883e4ab7d, type: 3}
+  - id: ff_chord_0_0
+    clip: {fileID: 8300000, guid: b2bfcd2ba4522464885042f8044ccf4f, type: 3}
+  - id: ff_chord_0_1
+    clip: {fileID: 8300000, guid: 7c121f22a025e469c885a07f5de72bef, type: 3}
+  - id: ff_chord_0_2
+    clip: {fileID: 8300000, guid: ee469721578954a21afd033ef6da34b1, type: 3}
+  - id: ff_call_0_0_n
+    clip: {fileID: 8300000, guid: 881f65f309213469d99691ce5474aa1a, type: 3}
+  - id: ff_call_0_0_a
+    clip: {fileID: 8300000, guid: 6a4823aff30714dccb52dee9a6874b16, type: 3}
+  - id: ff_call_0_1_n
+    clip: {fileID: 8300000, guid: 33267f5e6fcb144f1900b96e81c539b0, type: 3}
+  - id: ff_call_0_1_a
+    clip: {fileID: 8300000, guid: 42a962dd3a05f472b9a6abc3f3462648, type: 3}
+  - id: ff_call_0_2_n
+    clip: {fileID: 8300000, guid: 4decb6f1e4be64514963df8954dadd93, type: 3}
+  - id: ff_call_0_2_a
+    clip: {fileID: 8300000, guid: 8ade469451d644ac69a491d88f4f5662, type: 3}
+  - id: ff_ans_0_0_12
+    clip: {fileID: 8300000, guid: 33990d88bb45c45a48965e79166f0c78, type: 3}
+  - id: ff_ans_0_0_24
+    clip: {fileID: 8300000, guid: 0f1a3e6ab6abe48fb858b7d3a51d934e, type: 3}
+  - id: ff_pluck_0_0
+    clip: {fileID: 8300000, guid: 00ed67e72fa06439db02e751522fc237, type: 3}
+  - id: ff_ans_0_1_12
+    clip: {fileID: 8300000, guid: 951eb09d093ad46d4b0608c40eca4c51, type: 3}
+  - id: ff_ans_0_1_24
+    clip: {fileID: 8300000, guid: 6fdf938b5d32349c8b2d7fe23fe01ce1, type: 3}
+  - id: ff_pluck_0_1
+    clip: {fileID: 8300000, guid: 36d51c989103241e19cf2888dadca34b, type: 3}
+  - id: ff_ans_0_2_12
+    clip: {fileID: 8300000, guid: b5923fb5b7dae4cebb0291a7e9102c75, type: 3}
+  - id: ff_ans_0_2_24
+    clip: {fileID: 8300000, guid: 16582572e47d5405497a6df75ca4a504, type: 3}
+  - id: ff_pluck_0_2
+    clip: {fileID: 8300000, guid: f897b9b62a1d240318c44bc92907500f, type: 3}
+  - id: ff_swing_3
+    clip: {fileID: 8300000, guid: bd864defb9dd742ef8d93cbc6b21588f, type: 3}
+  - id: ff_chord_3_0
+    clip: {fileID: 8300000, guid: 13905768ea4d94d2ea5ee60451bd0215, type: 3}
+  - id: ff_chord_3_1
+    clip: {fileID: 8300000, guid: 450fb0340dbb3476bb25357634fb4d33, type: 3}
+  - id: ff_chord_3_2
+    clip: {fileID: 8300000, guid: 1748025e8bbe244c08ec4cc60270822b, type: 3}
+  - id: ff_call_3_0_n
+    clip: {fileID: 8300000, guid: 6702efa2a781d46b28b9e43846dcec9b, type: 3}
+  - id: ff_call_3_0_a
+    clip: {fileID: 8300000, guid: dab2bf62efb7142bf87369d1dfecbce8, type: 3}
+  - id: ff_call_3_1_n
+    clip: {fileID: 8300000, guid: 1fd2c5c5e04174654b6a818976770d5d, type: 3}
+  - id: ff_call_3_1_a
+    clip: {fileID: 8300000, guid: 15db32ecb20f64bb2ab431865a086ad2, type: 3}
+  - id: ff_call_3_2_n
+    clip: {fileID: 8300000, guid: 05f38832ea39648168c048b61a2b7fd0, type: 3}
+  - id: ff_call_3_2_a
+    clip: {fileID: 8300000, guid: 6056a90ba5c6843a49e8544a8200dac6, type: 3}
+  - id: ff_ans_3_0_12
+    clip: {fileID: 8300000, guid: f5c114c6b4a2c472685e3097450815a1, type: 3}
+  - id: ff_ans_3_0_24
+    clip: {fileID: 8300000, guid: 88974b1666a6d4c1eb83300d6358333a, type: 3}
+  - id: ff_pluck_3_0
+    clip: {fileID: 8300000, guid: 043f2ee125f51439e8b410abc7ad4cc2, type: 3}
+  - id: ff_ans_3_1_12
+    clip: {fileID: 8300000, guid: 6547ac4cca45a4c708a8e80dc8480d1e, type: 3}
+  - id: ff_ans_3_1_24
+    clip: {fileID: 8300000, guid: 995bf2f814cca4ff980587beb3ca7874, type: 3}
+  - id: ff_pluck_3_1
+    clip: {fileID: 8300000, guid: 36d49aae91e414d3681d64bdacedbf07, type: 3}
+  - id: ff_ans_3_2_12
+    clip: {fileID: 8300000, guid: e34388c67741d49378a1c95e82fc4840, type: 3}
+  - id: ff_ans_3_2_24
+    clip: {fileID: 8300000, guid: 45fa12c97e79748fa9738cade7d64423, type: 3}
+  - id: ff_pluck_3_2
+    clip: {fileID: 8300000, guid: a8f659559c4374fe3a5ba83739d5c9c6, type: 3}
+  - id: ff_swing_4
+    clip: {fileID: 8300000, guid: 38148abae016049f78452a454ada893d, type: 3}
+  - id: ff_chord_4_0
+    clip: {fileID: 8300000, guid: d0bcd824cd8204b7f905b779eca3ee63, type: 3}
+  - id: ff_chord_4_1
+    clip: {fileID: 8300000, guid: 28c4af472cab54e9b8d6b05889a51d4b, type: 3}
+  - id: ff_chord_4_2
+    clip: {fileID: 8300000, guid: 553e834a661a640e3957d4d4b66b472a, type: 3}
+  - id: ff_call_4_0_n
+    clip: {fileID: 8300000, guid: 2d28a7219af744af3a89f26708ca2e83, type: 3}
+  - id: ff_call_4_0_a
+    clip: {fileID: 8300000, guid: 510e01483447d442d96eeeb5d53d9aac, type: 3}
+  - id: ff_call_4_1_n
+    clip: {fileID: 8300000, guid: 9837c1a68d6134984bfaa41f6f28233d, type: 3}
+  - id: ff_call_4_1_a
+    clip: {fileID: 8300000, guid: 6de5bfede7ebd408c93af5a8e38f8ed4, type: 3}
+  - id: ff_call_4_2_n
+    clip: {fileID: 8300000, guid: 7530d06b72a0e44a98122a792dd5d514, type: 3}
+  - id: ff_call_4_2_a
+    clip: {fileID: 8300000, guid: ffca5f14063f140ae8550f8bc2f41227, type: 3}
+  - id: ff_ans_4_0_12
+    clip: {fileID: 8300000, guid: f7e672c4999f648b6a6f25c0833e4b26, type: 3}
+  - id: ff_ans_4_0_24
+    clip: {fileID: 8300000, guid: ae28441c56a874c09bd8de506e39f2ba, type: 3}
+  - id: ff_pluck_4_0
+    clip: {fileID: 8300000, guid: 2541988c359984071aeb06ac8a501489, type: 3}
+  - id: ff_ans_4_1_12
+    clip: {fileID: 8300000, guid: f58659cb7c26c44db84708e8b33d22a1, type: 3}
+  - id: ff_ans_4_1_24
+    clip: {fileID: 8300000, guid: 3841804cb185a48e08ee25f51dc42642, type: 3}
+  - id: ff_pluck_4_1
+    clip: {fileID: 8300000, guid: cf81e8983c1fb4e508267db3aa149698, type: 3}
+  - id: ff_ans_4_2_12
+    clip: {fileID: 8300000, guid: 2a9320e01ad8c439ba1820897b68af7a, type: 3}
+  - id: ff_ans_4_2_24
+    clip: {fileID: 8300000, guid: 3ba0baea4aa5c47cea9a363ef5c8fe0e, type: 3}
+  - id: ff_pluck_4_2
+    clip: {fileID: 8300000, guid: bb590fba7a243492ca5b7dff19086077, type: 3}
+  - id: ff_swing_5
+    clip: {fileID: 8300000, guid: 8fb94acee26014d3e807a97f5b99ab4a, type: 3}
+  - id: ff_chord_5_0
+    clip: {fileID: 8300000, guid: 8195cdaacca104ffd9fb4bfb902ed341, type: 3}
+  - id: ff_chord_5_1
+    clip: {fileID: 8300000, guid: fe8fc6c00db0f4c5c98dec942547d3d8, type: 3}
+  - id: ff_chord_5_2
+    clip: {fileID: 8300000, guid: 60fb80f1881ac492895ba37f1ec4489a, type: 3}
+  - id: ff_call_5_0_n
+    clip: {fileID: 8300000, guid: 2849c97158b924d3388a9d2860eef490, type: 3}
+  - id: ff_call_5_0_a
+    clip: {fileID: 8300000, guid: 51e4a54b991e14e879a9b9b46c1f8872, type: 3}
+  - id: ff_call_5_1_n
+    clip: {fileID: 8300000, guid: 5a216674865e54d47bdaebdeec81ad39, type: 3}
+  - id: ff_call_5_1_a
+    clip: {fileID: 8300000, guid: bb3a78ecfcfd744ec8879a149efc6d55, type: 3}
+  - id: ff_call_5_2_n
+    clip: {fileID: 8300000, guid: 6aad7e98b381a4a568d8985cb2643904, type: 3}
+  - id: ff_call_5_2_a
+    clip: {fileID: 8300000, guid: 9f7433545bf5e49e4a30f4cbbfd81955, type: 3}
+  - id: ff_ans_5_0_12
+    clip: {fileID: 8300000, guid: 97a6f9e30afa04a4f877f63facedb864, type: 3}
+  - id: ff_ans_5_0_24
+    clip: {fileID: 8300000, guid: c76410cfff7ac4c6aa267f0b09a4d3d2, type: 3}
+  - id: ff_pluck_5_0
+    clip: {fileID: 8300000, guid: 66fcf95de66604a7faf86dc958577cc3, type: 3}
+  - id: ff_ans_5_1_12
+    clip: {fileID: 8300000, guid: 21df4b1e7a5834a51a7417a3cb84fbc9, type: 3}
+  - id: ff_ans_5_1_24
+    clip: {fileID: 8300000, guid: 9fdb3eb1ebcb8474389a1edc5bbbd527, type: 3}
+  - id: ff_pluck_5_1
+    clip: {fileID: 8300000, guid: 779adba81a5754ed39e9d1a6dc6a198c, type: 3}
+  - id: ff_ans_5_2_12
+    clip: {fileID: 8300000, guid: cb1fdd07d79c54960988ab2f23400cb9, type: 3}
+  - id: ff_ans_5_2_24
+    clip: {fileID: 8300000, guid: 69e53019379cd4393a78e3f7ba24bdb1, type: 3}
+  - id: ff_pluck_5_2
+    clip: {fileID: 8300000, guid: 1e6437754215e4abfb169ce7853702e7, type: 3}
+  - id: ff_rim
+    clip: {fileID: 8300000, guid: f8a4bea2f69804b7c99d87f58797fe05, type: 3}

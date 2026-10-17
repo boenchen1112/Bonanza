@@ -34,7 +34,6 @@ namespace Bonanza
         static readonly Color CallHue = Hex(0xff5fd0);   // magenta: his turn
         static readonly Color RespHue = Hex(0xffb03a);   // gold: your turn
         static readonly Color Dark = Hex(0x2a1030);
-        static readonly float[] TomHz = { 252, 214, 180, 152, 128 };
 
         struct Framing { public Vector3 Target; public float Distance, Height, Yaw, Fov; }
         static readonly Framing CamResp = new Framing { Target = new Vector3(0.6f, 1.5f, -0.1f), Distance = 11.4f, Height = 3.9f, Yaw = 0.30f, Fov = 50 };
@@ -144,7 +143,6 @@ namespace Bonanza
             Prim(PrimitiveType.Cube, new Vector3(0, 5.3f, 0.1f), new Vector3(0.4f, 0.6f, 6.9f), RespHue, _gate);
             _gate.gameObject.SetActive(false);
 
-            Prewarm();
         }
 
         public override void Begin(double now)
@@ -221,7 +219,7 @@ namespace Bonanza
         {
             _speedTarget = 4.0f;
             Host.MusicDuck(p.Finale ? DuckFinale : DuckCall);   // web: the call sits in a hole in the mix
-            Host.Play(Crash, p.Finale ? 0.3f : 0.16f, 1, 0.35f);
+            Host.PlayVoice(VoiceCatalog.DrumCrash, _now + 0.01, p.Finale ? VoiceMix.DrumCrashFinale : 1);   // web onCallStart: crash at rawNow + 0.01, finale 0.30 / 0.16
             if (p.Finale && !_finaleAnnounced)
             {
                 _finaleAnnounced = true;
@@ -248,8 +246,7 @@ namespace Bonanza
             double at = System.Math.Max(note.Time + errMs / 1000, _now + 0.004);
             if (v != Verdict.Miss)
             {
-                Host.PlayAt(SnareNoise, at, v == Verdict.Perfect ? 0.5f : 0.4f, 1, -0.18f);
-                Host.PlayAt(SnareBody, at, 0.25f, 1, -0.18f);
+                Host.PlayVoice(VoiceCatalog.DrumSnare, at, v == Verdict.Perfect ? VoiceMix.DrumSnarePerfect : 1);   // web: snare gain 0.42, 0.58 on a perfect
                 Host.PlaySfx(SfxTheory.VerdictSfx(v), at);   // web: the verdict in the chord, over the snare
                 y.Hop = v == Verdict.Perfect ? 1.1f : 0.8f;
             }
@@ -264,8 +261,7 @@ namespace Bonanza
         {
             var y = _m[0];
             y.Stagger = 1;
-            Host.Play(Rim, 0.3f, 1, -0.3f);
-            Host.Play(Thud, 0.18f, 1, -0.3f);
+            Host.PlayVoice(VoiceCatalog.DrumFumble, _now + 0.005);   // web fumble: rim and a low hit at rawNow + 0.005
             _say.Say("FUMBLE", new Vector3(y.X, 2.2f, LaneZ[0]), new Color(0.6f, 0.55f, 0.7f), 0.5f, 0.7f);
         }
 
@@ -276,7 +272,7 @@ namespace Bonanza
                 if (_round.Racers[i].Stumbled)
                 {
                     _m[i].Stagger = 1;
-                    Host.Play(Tones.Blip(96, 0.3f, 10, Wave.Sine, 0.7f), 0.2f, 1, (i - 2) * 0.3f);
+                    Host.PlayVoice(VoiceCatalog.DrumStumble(i), _now + 0.02);   // web: tom 96 Hz panned by racer, at rawNow + 0.02
                 }
         }
 
@@ -289,23 +285,7 @@ namespace Bonanza
             Host.PlaySfx("fanfare", _now + 0.02);
         }
 
-        // ------------------------------------------------------------ sound (placeholder synth)
-
-        static AudioClip TomClip(int k) => Tones.Blip(TomHz[k], 0.26f, 14, Wave.Sine, 0.75f);
-        static AudioClip Rim => Tones.Blip(1900, 0.03f, 90, Wave.Noise);
-        static AudioClip Hat => Tones.Blip(8000, 0.08f, 40, Wave.Noise);
-        static AudioClip Crash => Tones.Blip(6000, 0.9f, 4, Wave.Noise);
-        static AudioClip SnareNoise => Tones.Blip(3000, 0.12f, 28, Wave.Noise);
-        static AudioClip SnareBody => Tones.Blip(190, 0.08f, 40, Wave.Triangle, 0.8f);
-        static AudioClip Thud => Tones.Blip(110, 0.07f, 40, Wave.Sine, 0.7f);
-
-        /// Built before the round: synthesising mid-round stalls a frame.
-        void Prewarm()
-        {
-            for (int k = 0; k < 5; k++) TomClip(k);
-            _ = Rim; _ = Hat; _ = Crash; _ = SnareNoise; _ = SnareBody; _ = Thud;
-            Tones.Blip(96, 0.3f, 10, Wave.Sine, 0.7f);
-        }
+        // ------------------------------------------------------------ sound (baked web voices, VoiceCatalog)
 
         void PumpCues(double now)
         {
@@ -317,13 +297,11 @@ namespace Bonanza
                 if (c.Kind == 0)
                 {
                     // His voice: tuned toms + rim, panned right. Nothing else uses it.
-                    int k = c.I % TomHz.Length;
-                    float big = c.P.Finale ? 1.25f : 1;
-                    Host.PlayAt(TomClip(k), at, 0.55f * big, 1, 0.24f + k * 0.05f);
-                    Host.PlayAt(Rim, at, 0.22f * big, 1, 0.34f);
-                    if (c.I == 0) Host.PlayAt(Hat, at, 0.12f, 1, 0.4f);
+                    // web playCall: tuned tom + rim (x1.25 on the finale), the opening hat on the first note.
+                    Host.PlayVoice(VoiceCatalog.DrumCall(c.I), at, c.P.Finale ? VoiceMix.DrumFinaleCall : 1);
+                    if (c.I == 0) Host.PlayVoice(VoiceCatalog.DrumCallHat, at);
                 }
-                else if (c.Kind == 1) Host.PlayAt(Hat, at, 0.14f, 1, 0.1f);
+                else if (c.Kind == 1) Host.PlayVoice(VoiceCatalog.DrumHandoff, at);
                 else Host.CountTick(at, c.I);
             }
         }

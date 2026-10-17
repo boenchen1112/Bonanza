@@ -25,7 +25,7 @@ namespace Bonanza
         public const float Level = 0.425f;
 
         GameHost _host;
-        SfxLibrary _lib;
+        SfxLibrary _lib, _voiceLib;
         readonly HashSet<string> _want = new HashSet<string>();
         readonly HashSet<string> _warned = new HashSet<string>();
         readonly List<string> _shell = new List<string>();
@@ -34,6 +34,9 @@ namespace Bonanza
 
         /// Print a `[SFX]` line per sound played (autoplay gates and Tools/sfx-check.mjs read them).
         public bool Log;
+        /// Print a `[VOICE]` line per game voice played. Only with `?voicelog` in the URL (Tools/sfx-check.mjs): the
+        /// voices are several times as frequent as the SFX, and the gates must not pay for console output.
+        public bool LogVoices;
         /// Sounds played, by clip (verification).
         public readonly Dictionary<string, int> Played = new Dictionary<string, int>();
 
@@ -44,6 +47,9 @@ namespace Bonanza
             _host = host;
             _lib = Resources.Load<SfxLibrary>("SfxLibrary");
             if (_lib == null) Debug.LogError("[SFX] Resources/SfxLibrary missing: no sound effects");
+            _voiceLib = Resources.Load<SfxLibrary>("VoiceLibrary");
+            if (_voiceLib == null) Debug.LogError("[SFX] Resources/VoiceLibrary missing: no game voices");
+            LogVoices = Application.absoluteURL != null && Application.absoluteURL.Contains("voicelog");
             // Pause-menu sounds play while the listener is paused (web: the menu is audible under a stopped transport).
             _ui = new AudioSource[2];
             for (int i = 0; i < _ui.Length; i++)
@@ -58,19 +64,23 @@ namespace Bonanza
             Prepare(null);
         }
 
-        /// Start decoding the shell's clips and `game`'s (null: the shell's only). Drops the other games' samples. Call from Load().
+        AudioClip Find(string name) => _lib.Find(name) ?? _voiceLib?.Find(name);
+
+        /// Start decoding the shell's clips and `game`'s (null: the shell's only), its game voices included. Drops the other
+        /// games' samples. Call from Load().
         public void Prepare(string game)
         {
             if (_lib == null) return;
             var want = new HashSet<string>(_shell);
             if (game != null && SfxCatalog.Contexts.Contains(game))
                 foreach (var c in SfxCatalog.ClipsOf(game)) want.Add(c.Name);
+            if (game != null) foreach (var n in VoiceCatalog.ClipsOf(game)) want.Add(n);
             foreach (var name in _want)
-                if (!want.Contains(name)) _lib.Find(name)?.UnloadAudioData();
+                if (!want.Contains(name)) Find(name)?.UnloadAudioData();
             foreach (var name in want)
             {
                 if (_want.Contains(name)) continue;
-                var clip = _lib.Find(name);
+                var clip = Find(name);
                 if (clip == null) { Warn("missing:" + name, "no clip " + name); continue; }
                 clip.LoadAudioData();
             }
@@ -86,7 +96,7 @@ namespace Bonanza
                 if (_lib == null) return true;
                 foreach (var name in _want)
                 {
-                    var c = _lib.Find(name);
+                    var c = Find(name);
                     if (c == null) continue;
                     if (c.loadState == AudioDataLoadState.Failed) { Warn("failed:" + name, "decode failed: " + name); continue; }
                     if (c.loadState != AudioDataLoadState.Loaded) return false;
@@ -98,6 +108,22 @@ namespace Bonanza
         void Warn(string key, string msg)
         {
             if (_warned.Add(key)) Debug.LogError("[SFX] " + msg);
+        }
+
+        /// Play a baked game voice (VoiceCatalog) at game time `t` (immediately when past). `gain` is the clip's multiplier from
+        /// VoiceMix (1 = the clip as baked, which carries the web's per-call gain and pan). Same level as the SFX: Level.
+        /// A clip that is not decoded is skipped (logged once), never loaded on the spot.
+        public void PlayVoice(string name, double t, float gain = 1)
+        {
+            if (_voiceLib == null || name == null) return;
+            var clip = _voiceLib.Find(name);
+            if (clip == null) { Warn("novoice:" + name, "no voice clip " + name); return; }
+            if (clip.loadState != AudioDataLoadState.Loaded) { Warn("cold:" + name, $"{name} is not decoded: skipped"); return; }
+            float vol = Level * gain;
+            _host.PlayAt(clip, t, vol, 1, 0);
+            Played.TryGetValue(name, out int n);
+            Played[name] = n + 1;
+            if (LogVoices) Debug.Log($"[VOICE] clip={name} t={t:F4} vol={vol * Settings.Sfx:F3}");
         }
 
         /// Play `sfx` of `ctx` on chord degree `deg` at game time `t` (immediately when past). `arg` is the count

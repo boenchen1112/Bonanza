@@ -8,6 +8,11 @@
 //     logs one per sound under ?autoplay/?debug) and the short AudioBufferSourceNodes Unity starts for them, and
 //     asserts the output carries an RMS burst after each clip start, that the round's hit moments sound
 //     (swing-kings: a verdict sound after every impact), and prints the autoplay biasMs.
+//     Since ticket 30 the same run covers the games' own instrument voices (Assets/Game/Audio/Voices, the `[VOICE]` lines
+//     the host logs under ?voicelog): every game's voices are counted per kind and tied to its round (a snare per drum
+//     hit, a note / hold / release per Bounce hit, an answer per Finale hit, a singer per Chomp hit), each is looked up in
+//     Assets/Game/Audio/Voices/voices.json, and the RMS burst check runs for all games (the voices are baked, not
+//     placeholder clips of the SFX's length).
 //  2. Pause menu (?debug, no autoplay): Escape, then Down. The menu's sounds play while the listener is paused;
 //     the tap must see them.
 //
@@ -53,7 +58,7 @@ async function open(query, collect) {
   page.on('console', (m) => {
     const t = m.text();
     if (m.type() === 'error' || t.includes('[ERROR]')) errors.push('console: ' + t);
-    if (collect && (t.includes('[SFX]') || t.includes('[RESULT]'))) lines.push({ at: Date.now(), t: t.trim() });
+    if (collect && (t.includes('[SFX]') || t.includes('[VOICE]') || t.includes('[RESULT]'))) lines.push({ at: Date.now(), t: t.trim() });
   });
   await page.addInitScript(() => {
     window.__env = [];       // [ctx time of the buffer, rms] from a pass-through tap in front of the destination
@@ -92,6 +97,10 @@ async function open(query, collect) {
   return { page, errors, lines };
 }
 
+const voiceManifest = JSON.parse(fs.readFileSync(new URL('../Assets/Game/Audio/Voices/voices.json', import.meta.url), 'utf8'));
+const sfxManifest = JSON.parse(fs.readFileSync(new URL('../Assets/Game/Audio/Sfx/sfx.json', import.meta.url), 'utf8'));
+const clipInfo = new Map([...voiceManifest.clips, ...sfxManifest.clips].map((c) => [c.name, c]));
+const kindOf = (n) => n.split('_').slice(0, 2).join('_');
 const clipOf = (t) => /clip=(\S+)/.exec(t)?.[1];
 
 // ---- run 1: music off (Options, music row, 15 x Left: 75% -> 0), then an autoplay round
@@ -103,7 +112,7 @@ const clipOf = (t) => /clip=(\S+)/.exec(t)?.[1];
   await o.page.close();
 }
 {
-  const r = await open(`?autoplay&game=${GAME}`, true);
+  const r = await open(`?autoplay&game=${GAME}&voicelog`, true);
   const t0 = Date.now();
   while (!r.lines.some((l) => l.t.includes('[RESULT]')) && Date.now() - t0 < 240000) await wait(0.5);
   await wait(1.5);
@@ -121,21 +130,72 @@ const clipOf = (t) => /clip=(\S+)/.exec(t)?.[1];
   check(sfx.length > 0, 'the host logged SFX plays');
   check(starts.length >= sfx.length * 0.9, `every SFX reaches Web Audio (${starts.length} sources for ${sfx.length} sounds)`);
 
+  // ---- the games' own voices: one log line each, counted per kind against the round's result
+  const vox = r.lines.filter((l) => l.t.includes('[VOICE]')).map((l) => ({ clip: clipOf(l.t), t: Number(/ t=(\S+)/.exec(l.t)[1]), vol: Number(/ vol=(\S+)/.exec(l.t)[1]) }));
+  const vk = {};
+  for (const v of vox) vk[kindOf(v.clip)] = (vk[kindOf(v.clip)] || 0) + 1;
+  info(`${vox.length} voices: ` + Object.entries(vk).map(([k, n]) => `${k}=${n}`).join(' '));
+  const num = (k) => Number(new RegExp(`${k}=(\\d+)`).exec(res || '')?.[1] || 0);
+  const hits = num('perfect') + num('great') + num('good'), misses = num('miss');
+  const n = (k) => vk[k] || 0;
+  check(vox.every((v) => clipInfo.has(v.clip)), 'every voice played is a baked clip of voices.json');
+  if (GAME === 'swing-kings') check(vox.length === 0, `Swing Kings plays no game voices (${vox.length})`);
+  if (GAME === 'drumline-dash') {
+    check(n('dd_snare') === hits, `a snare under every hit (${n('dd_snare')} for ${hits} hits)`);
+    check(n('dd_call') >= 20 && n('dd_callhat') >= 3, `the call: toms + rim (${n('dd_call')}) and the opening hats (${n('dd_callhat')})`);
+    check(n('dd_handoff') >= 3 && n('dd_crash') >= 3, `handoff hats ${n('dd_handoff')}, crash per call ${n('dd_crash')}`);
+  }
+  if (GAME === 'bounce-brigade') {
+    const play = n('bb_note') + n('bb_hold') + n('bb_release');
+    check(play === hits + 1, `a note, hold or release per hit, plus the demo bounce (${play} for ${hits} hits)`);
+    check(n('bb_kick') === n('bb_release') && n('bb_rise') === n('bb_hold'), `kick per release (${n('bb_kick')}), riser per hold (${n('bb_rise')})`);
+    check(n('bb_bigcrash') === 1, `one crash on the finale ramp (${n('bb_bigcrash')})`);
+    check(n('bb_thud') === misses, `a thud per miss (${n('bb_thud')} for ${misses})`);
+  }
+  if (GAME === 'chomp-chorus') {
+    check(n('cc_sing') + n('cc_fsing') >= hits, `a singer per hit and per CPU note (${n('cc_sing') + n('cc_fsing')} for ${hits} player hits)`);
+    check(n('cc_bed') >= 4 * 20, `the four-part bed under the bars (${n('cc_bed')})`);
+    check(n('cc_gulp') + n('cc_gulpbig') >= 20 && n('cc_gulpbig') >= 1, `breaths ${n('cc_gulp')} and the big one ${n('cc_gulpbig')}`);
+    check(n('cc_bell') >= 1 && n('cc_fsing') >= 1, `perfect-note bells ${n('cc_bell')}, the finale note ${n('cc_fsing')}`);
+  }
+  if (GAME === 'finale-fever') {
+    check(n('ff_ans') >= hits - 2 && n('ff_ans') <= hits, `a bell answer per hit (${n('ff_ans')} for ${hits} hits)`);
+    check(n('ff_swing') >= 1 && n('ff_chord') >= 1 && n('ff_call') >= 10, `boss: swing ${n('ff_swing')}, chord ${n('ff_chord')}, notes ${n('ff_call')}`);
+    check(n('ff_rim') >= 1 && n('ff_pluck') >= 1, `solo ticks ${n('ff_rim')}, swing plucks ${n('ff_pluck')}`);
+  }
+
   // Output energy: baseline = the quiet floor between sounds (music is off), burst = 90 ms after a clip start.
   const rms = env.map((e) => e[1]).sort((a, b) => a - b);
   const floor = rms[Math.floor(rms.length * 0.1)] || 0;
   const median = rms[Math.floor(rms.length * 0.5)] || 0;
   info(`output rms: floor(p10)=${floor.toFixed(5)} median=${median.toFixed(5)} peak=${rms[rms.length - 1].toFixed(4)}`);
-  const long = starts.filter((s) => s.len / s.sr > 0.15);   // not the ticks (those are 0.03 s and quiet by design)
-  let loud = 0;
-  for (const s of long) {
-    let sum = 0, n = 0;
-    for (const [t, v] of env) if (t >= s.when - 0.002 && t < s.when + 0.09) { sum += v; n++; }
-    if (n && sum / n > Math.max(0.002, floor * 4)) loud++;
+  // Every logged sound (SFX and voices) is matched to the short source Unity started for it by clip length, in order;
+  // a sound counts as heard when the output's loudest buffer in the 120 ms after its start is above 0.004 or a rise
+  // over the 50 ms before it (the music is off, so what is there is the clips; dense phrases overlap, so no stricter test is fair). Clips quieter than 0.01 at the output are not judged.
+  const logged = [...sfx.map((x) => ({ clip: x.clip, vol: 1 })), ...vox];
+  const byLen = new Map();
+  for (const s of starts) { const k = Math.round(s.len / s.sr * 1000); (byLen.get(k) || byLen.set(k, []).get(k)).push(s); }
+  const kindLoud = {};
+  let judged = 0, loud = 0, unmatched = 0;
+  for (const v of logged) {
+    const c = clipInfo.get(v.clip); if (!c || c.seconds < 0.15) continue;
+    const cand = byLen.get(Math.round(c.seconds * 1000));
+    if (!cand || !cand.length) { unmatched++; continue; }
+    const st = cand.shift();
+    const k = kindOf(v.clip), a = (kindLoud[k] ||= { n: 0, loud: 0, weak: 0 });
+    if (v.vol !== 1 && c.peak * v.vol < 0.01) { a.weak++; continue; }
+    let pre = 0, pn = 0, post = 0;
+    for (const [t, e] of env) {
+      if (t >= st.when - 0.05 && t < st.when - 0.002) { pre += e; pn++; }
+      else if (t >= st.when && t < st.when + 0.12) post = Math.max(post, e);
+    }
+    const ok = post > 0.004 || post > (pn ? pre / pn : 0) * 1.4 && post > 0.002;
+    if (process.env.DBG && !ok) console.log('quiet', v.clip, 'when', st.when.toFixed(3), 'pre', (pn ? pre / pn : 0).toFixed(4), 'post', post.toFixed(4), 'peak', c.peak, 'vol', v.vol);
+    a.n++; judged++; if (ok) { a.loud++; loud++; }
   }
-  // Only swing-kings plays nothing but baked SFX; the other games still voice their own notes with placeholder clips of the same length.
-  if (GAME !== 'swing-kings') info(`burst check applies to swing-kings only (${loud}/${long.length})`);
-  else check(long.length > 0 && loud >= long.length * 0.9, `an RMS burst follows ${loud}/${long.length} chord clips (music off)`);
+  info('bursts per kind: ' + Object.entries(kindLoud).map(([k, a]) => `${k} ${a.loud}/${a.n}${a.weak ? `(+${a.weak} weak)` : ''}`).join(' '));
+  check(judged > 0 && loud >= judged * 0.85, `an RMS burst follows ${loud}/${judged} chord and voice clips (music off; ${unmatched} not matched to a started source)`);
+  check(unmatched <= logged.length * 0.1, `every logged clip reaches Web Audio as its own source (${unmatched} unmatched of ${logged.length})`);
 
   if (GAME === 'swing-kings') {
     const n = (re) => sfx.filter((s) => re.test(s.clip)).length;

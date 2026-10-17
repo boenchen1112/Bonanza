@@ -95,7 +95,6 @@ namespace Bonanza
                 l.Breath = Prim(PrimitiveType.Sphere, new Vector3(x, l.HeadY + 0.7f, 0), Vector3.zero, Mat(new Color(1, 1, 1, 1))).transform;
                 l.Meter = Prim(PrimitiveType.Cube, new Vector3(x + 0.75f, 0, -0.2f), new Vector3(0.12f, 0, 0.12f), l.BodyMat).transform;
             }
-            Prewarm();
         }
 
         public override void Begin(double now)
@@ -207,50 +206,38 @@ namespace Bonanza
             _say.Verdict(v, new Vector3(ChompChart.X[i], l.HeadY + 0.6f, 0), cpu ? 0.5f : 1);
         }
 
-        // ------------------------------------------------------------ sound (placeholder synth)
+        // ------------------------------------------------------------ sound (baked web voices, VoiceCatalog)
 
-        float MidiFor(int lane, double beat)
-        {
-            // Harmony of the track (audio/music/chomp-chorus.js); the loop starts with the transport.
-            int bar = (int)System.Math.Floor((beat + ChompChart.LeadBeats) / 4);
-            var c = Harmony.ChompChorus.ChordAtBar(bar);
-            return c[System.Math.Min(lane, c.Length - 1)] + 24;
-        }
+        /// The chord degree the track sits on at a game beat (web _chordAt: the loop's chord for that bar). Lane i
+        /// sings chord tone i two octaves up; every (lane, chord) voice is a baked clip.
+        static int DegAt(double beat) => Harmony.ChompChorus.ChordDegAt((int)System.Math.Floor((beat + ChompChart.LeadBeats) / 4));
 
-        static float Spb => (float)(60 / ChompChart.Bpm);
-        AudioClip SingClip(int lane, double beat, bool finale) => Tones.Blip(Tones.Midi(MidiFor(lane, beat)), finale ? Spb * 4 : Spb * 0.85f, finale ? 0.8f : 3f, Wave.Triangle);
-        AudioClip SourClip(int lane, double beat) => Tones.Blip(Tones.Midi(MidiFor(lane, beat) - 12), 0.3f, 8, Wave.Square, 0.45f);
-        static AudioClip GulpClip(int lane, bool big) => Tones.Blip(150 + lane * 26, Spb * (big ? 3.4f : 0.62f), big ? 1.5f : 6f, Wave.Sine, big ? 4.4f : 3f);
-        AudioClip BedClip(int lane, double beat) => Tones.Blip(Tones.Midi(MidiFor(lane, beat)), Spb * 3.9f, 0.9f, Wave.Triangle, 1, 0.8f);
-
-        /// Synthesise every clip the round can ask for before it starts: built
-        /// lazily, a 1.7 s finale clip stalls a frame long enough to push a
-        /// press outside the claim window.
-        void Prewarm()
-        {
-            for (int bar = -ChompChart.LeadBeats / 4 - 1; bar * 4 <= ChompChart.EndBeat + 4; bar++)
-                for (int i = 0; i < N; i++)
-                {
-                    double beat = bar * 4;
-                    SingClip(i, beat, false); SingClip(i, beat, true); SourClip(i, beat); BedClip(i, beat);
-                }
-            for (int i = 0; i < N; i++) { GulpClip(i, false); GulpClip(i, true); }
-        }
-
+        /// The singer: a detuned lead held 0.85 beats (the finale: four beats), a bell on top for a perfect and on the finale.
         void Sing(int lane, Verdict v, double at, bool finale)
         {
-            float gain = finale ? 0.34f : v == Verdict.Perfect ? 0.3f : v == Verdict.Great ? 0.25f : 0.18f;
-            Host.PlayAt(SingClip(lane, _round.BeatAt(at), finale), at, gain);
+            int deg = DegAt(_round.BeatAt(at));
+            if (finale)
+            {
+                Host.PlayVoice(VoiceCatalog.ChompFinaleSing(lane, deg), at);
+                Host.PlayVoice(VoiceCatalog.ChompBell(lane, deg), at);
+                return;
+            }
+            Host.PlayVoice(VoiceCatalog.ChompSing(lane, deg), at,
+                v == Verdict.Perfect ? VoiceMix.ChompSingPerfect : v == Verdict.Great ? 1 : VoiceMix.ChompSingGood);
+            if (v == Verdict.Perfect) Host.PlayVoice(VoiceCatalog.ChompBell(lane, deg), at);
         }
 
-        void Sour(int lane, double at) => Host.PlayAt(SourClip(lane, _round.BeatAt(at)), at, 0.12f);
+        /// The hole: a lane that just died gets a deflating raspberry in its ear.
+        void Sour(int lane, double at) => Host.PlayVoice(VoiceCatalog.ChompSour(lane, DegAt(_round.BeatAt(at))), at);
 
-        void Gulp(int lane, double at, bool big) => Host.PlayAt(GulpClip(lane, big), at, big ? 0.12f : 0.08f);
+        void Gulp(int lane, double at, bool big) => Host.PlayVoice(VoiceCatalog.ChompGulp(lane, big), at);
 
+        /// One bar of sustained four-part harmony, minus every voice that is out.
         void Bed(double at, double beat)
         {
+            int deg = DegAt(beat);
             for (int i = 0; i < N; i++)
-                if (_round.Alive[i]) Host.PlayAt(BedClip(i, beat), at, 0.07f);
+                if (_round.Alive[i]) Host.PlayVoice(VoiceCatalog.ChompBed(i, deg), at);
         }
 
         void PumpCues(double now)

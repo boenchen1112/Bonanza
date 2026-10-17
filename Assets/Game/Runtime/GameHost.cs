@@ -322,6 +322,13 @@ namespace Bonanza
             _sfx.Play(_entry.Id, sfx, deg, t, arg, gain, pan);
         }
 
+        /// A game's own instrument voice, baked from the web (VoiceCatalog names the clips, VoiceMix the multipliers),
+        /// at game time `t`. Not chord-locked here: the game picks the clip for the chord it wants.
+        public void PlayVoice(string clip, double t, float gain = 1)
+        {
+            if (_sfx != null) _sfx.PlayVoice(clip, t, gain);
+        }
+
         /// A menu or results sound on the title / results music's chord (web shell sfx(ctx, name)). With no shell
         /// music running the web falls back to a C major key: the title's first chord here.
         public void ShellSfx(string sfx, double delay = 0)
@@ -453,7 +460,7 @@ namespace Bonanza
             _music.Prepare("title");
             _music.Prepare("results");
 
-            _voices = new AudioSource[16];
+            _voices = new AudioSource[40];   // baked voice tails ring for seconds; a reused source is cut (PlayAt)
             for (int i = 0; i < _voices.Length; i++)
             {
                 _voices[i] = gameObject.AddComponent<AudioSource>();
