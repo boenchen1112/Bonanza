@@ -1,7 +1,8 @@
 // Placeholder sounds, synthesised once into AudioClips at load. WebGL has no
 // OnAudioFilterRead, so nothing is generated live; clips are scheduled with
-// PlayScheduled on the audio clock. The real SFX come from ElevenLabs and the
-// music will be the web prototype's original tracks (Reference/web/src/audio/music/).
+// PlayScheduled on the audio clock. The web's SFX kit (verdicts, impact, count-in,
+// menu sounds, stings) is baked offline and played by Sfx; what is left here are the
+// games' own voices (a platform's pluck, a drum, a singer) that have no baked version.
 
 using System.Collections.Generic;
 using UnityEngine;

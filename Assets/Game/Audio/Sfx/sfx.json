@@ -1,0 +1,1549 @@
+{
+ "generator": "Tools/sfx/render-sfx.mjs",
+ "sampleRate": 44100,
+ "graphDelaySamples": 415,
+ "vorbisQuality": 3,
+ "clips": [
+  {
+   "name": "bounce-brigade_count_0",
+   "sfx": "count",
+   "ctx": "bounce-brigade",
+   "chordDeg": 0,
+   "arg": 0,
+   "seconds": 0.991,
+   "peak": 0.383,
+   "bytes": 16202
+  },
+  {
+   "name": "bounce-brigade_count_1",
+   "sfx": "count",
+   "ctx": "bounce-brigade",
+   "chordDeg": 0,
+   "arg": 1,
+   "seconds": 0.979,
+   "peak": 0.2462,
+   "bytes": 15205
+  },
+  {
+   "name": "bounce-brigade_fanfare",
+   "sfx": "fanfare",
+   "ctx": "bounce-brigade",
+   "chordDeg": 0,
+   "arg": null,
+   "seconds": 2.766,
+   "peak": 0.8322,
+   "bytes": 37932
+  },
+  {
+   "name": "bounce-brigade_miss_0",
+   "sfx": "miss",
+   "ctx": "bounce-brigade",
+   "chordDeg": 0,
+   "arg": null,
+   "seconds": 0.879,
+   "peak": 0.282,
+   "bytes": 14185
+  },
+  {
+   "name": "bounce-brigade_miss_3",
+   "sfx": "miss",
+   "ctx": "bounce-brigade",
+   "chordDeg": 3,
+   "arg": null,
+   "seconds": 0.824,
+   "peak": 0.2548,
+   "bytes": 13583
+  },
+  {
+   "name": "bounce-brigade_miss_4",
+   "sfx": "miss",
+   "ctx": "bounce-brigade",
+   "chordDeg": 4,
+   "arg": null,
+   "seconds": 0.863,
+   "peak": 0.2761,
+   "bytes": 14022
+  },
+  {
+   "name": "bounce-brigade_miss_5",
+   "sfx": "miss",
+   "ctx": "bounce-brigade",
+   "chordDeg": 5,
+   "arg": null,
+   "seconds": 0.824,
+   "peak": 0.2548,
+   "bytes": 13583
+  },
+  {
+   "name": "chomp-chorus_count_0",
+   "sfx": "count",
+   "ctx": "chomp-chorus",
+   "chordDeg": 0,
+   "arg": 0,
+   "seconds": 0.991,
+   "peak": 0.3859,
+   "bytes": 16841
+  },
+  {
+   "name": "chomp-chorus_count_1",
+   "sfx": "count",
+   "ctx": "chomp-chorus",
+   "chordDeg": 0,
+   "arg": 1,
+   "seconds": 0.991,
+   "peak": 0.2634,
+   "bytes": 15761
+  },
+  {
+   "name": "chomp-chorus_fanfare",
+   "sfx": "fanfare",
+   "ctx": "chomp-chorus",
+   "chordDeg": 0,
+   "arg": null,
+   "seconds": 2.91,
+   "peak": 0.8363,
+   "bytes": 40353
+  },
+  {
+   "name": "chomp-chorus_good_0",
+   "sfx": "good",
+   "ctx": "chomp-chorus",
+   "chordDeg": 0,
+   "arg": null,
+   "seconds": 1.157,
+   "peak": 0.2814,
+   "bytes": 17417
+  },
+  {
+   "name": "chomp-chorus_good_3",
+   "sfx": "good",
+   "ctx": "chomp-chorus",
+   "chordDeg": 3,
+   "arg": null,
+   "seconds": 1.155,
+   "peak": 0.2642,
+   "bytes": 17327
+  },
+  {
+   "name": "chomp-chorus_good_4",
+   "sfx": "good",
+   "ctx": "chomp-chorus",
+   "chordDeg": 4,
+   "arg": null,
+   "seconds": 1.157,
+   "peak": 0.2814,
+   "bytes": 17417
+  },
+  {
+   "name": "chomp-chorus_good_6",
+   "sfx": "good",
+   "ctx": "chomp-chorus",
+   "chordDeg": 6,
+   "arg": null,
+   "seconds": 1.154,
+   "peak": 0.2814,
+   "bytes": 17523
+  },
+  {
+   "name": "chomp-chorus_great_0",
+   "sfx": "great",
+   "ctx": "chomp-chorus",
+   "chordDeg": 0,
+   "arg": null,
+   "seconds": 1.211,
+   "peak": 0.3627,
+   "bytes": 20507
+  },
+  {
+   "name": "chomp-chorus_great_3",
+   "sfx": "great",
+   "ctx": "chomp-chorus",
+   "chordDeg": 3,
+   "arg": null,
+   "seconds": 1.226,
+   "peak": 0.3757,
+   "bytes": 20004
+  },
+  {
+   "name": "chomp-chorus_great_4",
+   "sfx": "great",
+   "ctx": "chomp-chorus",
+   "chordDeg": 4,
+   "arg": null,
+   "seconds": 1.234,
+   "peak": 0.3534,
+   "bytes": 19846
+  },
+  {
+   "name": "chomp-chorus_great_6",
+   "sfx": "great",
+   "ctx": "chomp-chorus",
+   "chordDeg": 6,
+   "arg": null,
+   "seconds": 1.237,
+   "peak": 0.347,
+   "bytes": 20659
+  },
+  {
+   "name": "chomp-chorus_impact_0",
+   "sfx": "impact",
+   "ctx": "chomp-chorus",
+   "chordDeg": 0,
+   "arg": null,
+   "seconds": 1.442,
+   "peak": 0.866,
+   "bytes": 21247
+  },
+  {
+   "name": "chomp-chorus_impact_3",
+   "sfx": "impact",
+   "ctx": "chomp-chorus",
+   "chordDeg": 3,
+   "arg": null,
+   "seconds": 1.44,
+   "peak": 0.8327,
+   "bytes": 21427
+  },
+  {
+   "name": "chomp-chorus_impact_4",
+   "sfx": "impact",
+   "ctx": "chomp-chorus",
+   "chordDeg": 4,
+   "arg": null,
+   "seconds": 1.439,
+   "peak": 0.8883,
+   "bytes": 21406
+  },
+  {
+   "name": "chomp-chorus_impact_6",
+   "sfx": "impact",
+   "ctx": "chomp-chorus",
+   "chordDeg": 6,
+   "arg": null,
+   "seconds": 1.447,
+   "peak": 0.8901,
+   "bytes": 21489
+  },
+  {
+   "name": "chomp-chorus_miss_0",
+   "sfx": "miss",
+   "ctx": "chomp-chorus",
+   "chordDeg": 0,
+   "arg": null,
+   "seconds": 0.924,
+   "peak": 0.2808,
+   "bytes": 14632
+  },
+  {
+   "name": "chomp-chorus_miss_3",
+   "sfx": "miss",
+   "ctx": "chomp-chorus",
+   "chordDeg": 3,
+   "arg": null,
+   "seconds": 0.924,
+   "peak": 0.2808,
+   "bytes": 14632
+  },
+  {
+   "name": "chomp-chorus_miss_4",
+   "sfx": "miss",
+   "ctx": "chomp-chorus",
+   "chordDeg": 4,
+   "arg": null,
+   "seconds": 0.824,
+   "peak": 0.2548,
+   "bytes": 13583
+  },
+  {
+   "name": "chomp-chorus_miss_6",
+   "sfx": "miss",
+   "ctx": "chomp-chorus",
+   "chordDeg": 6,
+   "arg": null,
+   "seconds": 0.824,
+   "peak": 0.2548,
+   "bytes": 13583
+  },
+  {
+   "name": "chomp-chorus_perfect_0",
+   "sfx": "perfect",
+   "ctx": "chomp-chorus",
+   "chordDeg": 0,
+   "arg": null,
+   "seconds": 1.881,
+   "peak": 0.3458,
+   "bytes": 27457
+  },
+  {
+   "name": "chomp-chorus_perfect_3",
+   "sfx": "perfect",
+   "ctx": "chomp-chorus",
+   "chordDeg": 3,
+   "arg": null,
+   "seconds": 1.831,
+   "peak": 0.4721,
+   "bytes": 26016
+  },
+  {
+   "name": "chomp-chorus_perfect_4",
+   "sfx": "perfect",
+   "ctx": "chomp-chorus",
+   "chordDeg": 4,
+   "arg": null,
+   "seconds": 1.84,
+   "peak": 0.4088,
+   "bytes": 26248
+  },
+  {
+   "name": "chomp-chorus_perfect_6",
+   "sfx": "perfect",
+   "ctx": "chomp-chorus",
+   "chordDeg": 6,
+   "arg": null,
+   "seconds": 1.83,
+   "peak": 0.3827,
+   "bytes": 27392
+  },
+  {
+   "name": "drumline-dash_count_0",
+   "sfx": "count",
+   "ctx": "drumline-dash",
+   "chordDeg": 0,
+   "arg": 0,
+   "seconds": 0.991,
+   "peak": 0.3698,
+   "bytes": 16407
+  },
+  {
+   "name": "drumline-dash_count_1",
+   "sfx": "count",
+   "ctx": "drumline-dash",
+   "chordDeg": 0,
+   "arg": 1,
+   "seconds": 0.932,
+   "peak": 0.2389,
+   "bytes": 14875
+  },
+  {
+   "name": "drumline-dash_fanfare",
+   "sfx": "fanfare",
+   "ctx": "drumline-dash",
+   "chordDeg": 0,
+   "arg": null,
+   "seconds": 2.788,
+   "peak": 0.8358,
+   "bytes": 37647
+  },
+  {
+   "name": "drumline-dash_good_0",
+   "sfx": "good",
+   "ctx": "drumline-dash",
+   "chordDeg": 0,
+   "arg": null,
+   "seconds": 1.157,
+   "peak": 0.2814,
+   "bytes": 17417
+  },
+  {
+   "name": "drumline-dash_good_3",
+   "sfx": "good",
+   "ctx": "drumline-dash",
+   "chordDeg": 3,
+   "arg": null,
+   "seconds": 1.154,
+   "peak": 0.2733,
+   "bytes": 17881
+  },
+  {
+   "name": "drumline-dash_good_4",
+   "sfx": "good",
+   "ctx": "drumline-dash",
+   "chordDeg": 4,
+   "arg": null,
+   "seconds": 1.157,
+   "peak": 0.2814,
+   "bytes": 17417
+  },
+  {
+   "name": "drumline-dash_good_5",
+   "sfx": "good",
+   "ctx": "drumline-dash",
+   "chordDeg": 5,
+   "arg": null,
+   "seconds": 1.154,
+   "peak": 0.2733,
+   "bytes": 17881
+  },
+  {
+   "name": "drumline-dash_good_6",
+   "sfx": "good",
+   "ctx": "drumline-dash",
+   "chordDeg": 6,
+   "arg": null,
+   "seconds": 1.158,
+   "peak": 0.2641,
+   "bytes": 17240
+  },
+  {
+   "name": "drumline-dash_great_0",
+   "sfx": "great",
+   "ctx": "drumline-dash",
+   "chordDeg": 0,
+   "arg": null,
+   "seconds": 1.278,
+   "peak": 0.3361,
+   "bytes": 20179
+  },
+  {
+   "name": "drumline-dash_great_3",
+   "sfx": "great",
+   "ctx": "drumline-dash",
+   "chordDeg": 3,
+   "arg": null,
+   "seconds": 1.244,
+   "peak": 0.3475,
+   "bytes": 20258
+  },
+  {
+   "name": "drumline-dash_great_4",
+   "sfx": "great",
+   "ctx": "drumline-dash",
+   "chordDeg": 4,
+   "arg": null,
+   "seconds": 1.218,
+   "peak": 0.3343,
+   "bytes": 19942
+  },
+  {
+   "name": "drumline-dash_great_5",
+   "sfx": "great",
+   "ctx": "drumline-dash",
+   "chordDeg": 5,
+   "arg": null,
+   "seconds": 1.294,
+   "peak": 0.375,
+   "bytes": 21452
+  },
+  {
+   "name": "drumline-dash_great_6",
+   "sfx": "great",
+   "ctx": "drumline-dash",
+   "chordDeg": 6,
+   "arg": null,
+   "seconds": 1.227,
+   "peak": 0.359,
+   "bytes": 21121
+  },
+  {
+   "name": "drumline-dash_miss_0",
+   "sfx": "miss",
+   "ctx": "drumline-dash",
+   "chordDeg": 0,
+   "arg": null,
+   "seconds": 0.924,
+   "peak": 0.2808,
+   "bytes": 14632
+  },
+  {
+   "name": "drumline-dash_miss_3",
+   "sfx": "miss",
+   "ctx": "drumline-dash",
+   "chordDeg": 3,
+   "arg": null,
+   "seconds": 0.924,
+   "peak": 0.2808,
+   "bytes": 14632
+  },
+  {
+   "name": "drumline-dash_miss_4",
+   "sfx": "miss",
+   "ctx": "drumline-dash",
+   "chordDeg": 4,
+   "arg": null,
+   "seconds": 0.854,
+   "peak": 0.2361,
+   "bytes": 13772
+  },
+  {
+   "name": "drumline-dash_miss_5",
+   "sfx": "miss",
+   "ctx": "drumline-dash",
+   "chordDeg": 5,
+   "arg": null,
+   "seconds": 0.924,
+   "peak": 0.2808,
+   "bytes": 14632
+  },
+  {
+   "name": "drumline-dash_miss_6",
+   "sfx": "miss",
+   "ctx": "drumline-dash",
+   "chordDeg": 6,
+   "arg": null,
+   "seconds": 0.854,
+   "peak": 0.2361,
+   "bytes": 13772
+  },
+  {
+   "name": "drumline-dash_perfect_0",
+   "sfx": "perfect",
+   "ctx": "drumline-dash",
+   "chordDeg": 0,
+   "arg": null,
+   "seconds": 1.855,
+   "peak": 0.414,
+   "bytes": 26555
+  },
+  {
+   "name": "drumline-dash_perfect_3",
+   "sfx": "perfect",
+   "ctx": "drumline-dash",
+   "chordDeg": 3,
+   "arg": null,
+   "seconds": 1.953,
+   "peak": 0.4242,
+   "bytes": 28248
+  },
+  {
+   "name": "drumline-dash_perfect_4",
+   "sfx": "perfect",
+   "ctx": "drumline-dash",
+   "chordDeg": 4,
+   "arg": null,
+   "seconds": 1.84,
+   "peak": 0.3827,
+   "bytes": 27249
+  },
+  {
+   "name": "drumline-dash_perfect_5",
+   "sfx": "perfect",
+   "ctx": "drumline-dash",
+   "chordDeg": 5,
+   "arg": null,
+   "seconds": 1.883,
+   "peak": 0.4208,
+   "bytes": 26828
+  },
+  {
+   "name": "drumline-dash_perfect_6",
+   "sfx": "perfect",
+   "ctx": "drumline-dash",
+   "chordDeg": 6,
+   "arg": null,
+   "seconds": 1.85,
+   "peak": 0.3817,
+   "bytes": 27691
+  },
+  {
+   "name": "finale-fever_coin",
+   "sfx": "coin",
+   "ctx": "finale-fever",
+   "chordDeg": 0,
+   "arg": null,
+   "seconds": 1.566,
+   "peak": 0.1942,
+   "bytes": 23017
+  },
+  {
+   "name": "finale-fever_combo_0",
+   "sfx": "combo",
+   "ctx": "finale-fever",
+   "chordDeg": 0,
+   "arg": 0,
+   "seconds": 1.765,
+   "peak": 0.3027,
+   "bytes": 24124
+  },
+  {
+   "name": "finale-fever_combo_1",
+   "sfx": "combo",
+   "ctx": "finale-fever",
+   "chordDeg": 0,
+   "arg": 1,
+   "seconds": 1.775,
+   "peak": 0.2727,
+   "bytes": 24428
+  },
+  {
+   "name": "finale-fever_combo_2",
+   "sfx": "combo",
+   "ctx": "finale-fever",
+   "chordDeg": 0,
+   "arg": 2,
+   "seconds": 1.77,
+   "peak": 0.2628,
+   "bytes": 24944
+  },
+  {
+   "name": "finale-fever_combo_3",
+   "sfx": "combo",
+   "ctx": "finale-fever",
+   "chordDeg": 0,
+   "arg": 3,
+   "seconds": 1.737,
+   "peak": 0.244,
+   "bytes": 24438
+  },
+  {
+   "name": "finale-fever_combo_4",
+   "sfx": "combo",
+   "ctx": "finale-fever",
+   "chordDeg": 0,
+   "arg": 4,
+   "seconds": 1.844,
+   "peak": 0.3287,
+   "bytes": 25640
+  },
+  {
+   "name": "finale-fever_combo_5",
+   "sfx": "combo",
+   "ctx": "finale-fever",
+   "chordDeg": 0,
+   "arg": 5,
+   "seconds": 1.823,
+   "peak": 0.3309,
+   "bytes": 25836
+  },
+  {
+   "name": "finale-fever_combo_6",
+   "sfx": "combo",
+   "ctx": "finale-fever",
+   "chordDeg": 0,
+   "arg": 6,
+   "seconds": 1.847,
+   "peak": 0.3057,
+   "bytes": 26421
+  },
+  {
+   "name": "finale-fever_combo_7",
+   "sfx": "combo",
+   "ctx": "finale-fever",
+   "chordDeg": 0,
+   "arg": 7,
+   "seconds": 1.78,
+   "peak": 0.3467,
+   "bytes": 25705
+  },
+  {
+   "name": "finale-fever_combo_8",
+   "sfx": "combo",
+   "ctx": "finale-fever",
+   "chordDeg": 0,
+   "arg": 8,
+   "seconds": 1.823,
+   "peak": 0.2488,
+   "bytes": 26748
+  },
+  {
+   "name": "finale-fever_combo_9",
+   "sfx": "combo",
+   "ctx": "finale-fever",
+   "chordDeg": 0,
+   "arg": 9,
+   "seconds": 1.743,
+   "peak": 0.3103,
+   "bytes": 26017
+  },
+  {
+   "name": "finale-fever_count_0",
+   "sfx": "count",
+   "ctx": "finale-fever",
+   "chordDeg": 0,
+   "arg": 0,
+   "seconds": 0.991,
+   "peak": 0.3873,
+   "bytes": 16263
+  },
+  {
+   "name": "finale-fever_count_1",
+   "sfx": "count",
+   "ctx": "finale-fever",
+   "chordDeg": 0,
+   "arg": 1,
+   "seconds": 0.99,
+   "peak": 0.2521,
+   "bytes": 15885
+  },
+  {
+   "name": "finale-fever_fanfare",
+   "sfx": "fanfare",
+   "ctx": "finale-fever",
+   "chordDeg": 0,
+   "arg": null,
+   "seconds": 2.77,
+   "peak": 0.8446,
+   "bytes": 38129
+  },
+  {
+   "name": "finale-fever_good_0",
+   "sfx": "good",
+   "ctx": "finale-fever",
+   "chordDeg": 0,
+   "arg": null,
+   "seconds": 1.157,
+   "peak": 0.2814,
+   "bytes": 17417
+  },
+  {
+   "name": "finale-fever_good_3",
+   "sfx": "good",
+   "ctx": "finale-fever",
+   "chordDeg": 3,
+   "arg": null,
+   "seconds": 1.151,
+   "peak": 0.2592,
+   "bytes": 17944
+  },
+  {
+   "name": "finale-fever_good_4",
+   "sfx": "good",
+   "ctx": "finale-fever",
+   "chordDeg": 4,
+   "arg": null,
+   "seconds": 1.157,
+   "peak": 0.2642,
+   "bytes": 17593
+  },
+  {
+   "name": "finale-fever_good_5",
+   "sfx": "good",
+   "ctx": "finale-fever",
+   "chordDeg": 5,
+   "arg": null,
+   "seconds": 1.157,
+   "peak": 0.2814,
+   "bytes": 17417
+  },
+  {
+   "name": "finale-fever_great_0",
+   "sfx": "great",
+   "ctx": "finale-fever",
+   "chordDeg": 0,
+   "arg": null,
+   "seconds": 1.234,
+   "peak": 0.3534,
+   "bytes": 19846
+  },
+  {
+   "name": "finale-fever_great_3",
+   "sfx": "great",
+   "ctx": "finale-fever",
+   "chordDeg": 3,
+   "arg": null,
+   "seconds": 1.295,
+   "peak": 0.3627,
+   "bytes": 21471
+  },
+  {
+   "name": "finale-fever_great_4",
+   "sfx": "great",
+   "ctx": "finale-fever",
+   "chordDeg": 4,
+   "arg": null,
+   "seconds": 1.43,
+   "peak": 0.3312,
+   "bytes": 23481
+  },
+  {
+   "name": "finale-fever_great_5",
+   "sfx": "great",
+   "ctx": "finale-fever",
+   "chordDeg": 5,
+   "arg": null,
+   "seconds": 1.22,
+   "peak": 0.3361,
+   "bytes": 19718
+  },
+  {
+   "name": "finale-fever_impact_0",
+   "sfx": "impact",
+   "ctx": "finale-fever",
+   "chordDeg": 0,
+   "arg": null,
+   "seconds": 1.447,
+   "peak": 0.8326,
+   "bytes": 21047
+  },
+  {
+   "name": "finale-fever_impact_3",
+   "sfx": "impact",
+   "ctx": "finale-fever",
+   "chordDeg": 3,
+   "arg": null,
+   "seconds": 1.442,
+   "peak": 0.8915,
+   "bytes": 21167
+  },
+  {
+   "name": "finale-fever_impact_4",
+   "sfx": "impact",
+   "ctx": "finale-fever",
+   "chordDeg": 4,
+   "arg": null,
+   "seconds": 1.453,
+   "peak": 0.8231,
+   "bytes": 21277
+  },
+  {
+   "name": "finale-fever_impact_5",
+   "sfx": "impact",
+   "ctx": "finale-fever",
+   "chordDeg": 5,
+   "arg": null,
+   "seconds": 1.442,
+   "peak": 0.8339,
+   "bytes": 21425
+  },
+  {
+   "name": "finale-fever_miss_0",
+   "sfx": "miss",
+   "ctx": "finale-fever",
+   "chordDeg": 0,
+   "arg": null,
+   "seconds": 0.824,
+   "peak": 0.2548,
+   "bytes": 13583
+  },
+  {
+   "name": "finale-fever_miss_3",
+   "sfx": "miss",
+   "ctx": "finale-fever",
+   "chordDeg": 3,
+   "arg": null,
+   "seconds": 0.924,
+   "peak": 0.2808,
+   "bytes": 14632
+  },
+  {
+   "name": "finale-fever_miss_4",
+   "sfx": "miss",
+   "ctx": "finale-fever",
+   "chordDeg": 4,
+   "arg": null,
+   "seconds": 0.824,
+   "peak": 0.2548,
+   "bytes": 13583
+  },
+  {
+   "name": "finale-fever_miss_5",
+   "sfx": "miss",
+   "ctx": "finale-fever",
+   "chordDeg": 5,
+   "arg": null,
+   "seconds": 0.924,
+   "peak": 0.2808,
+   "bytes": 14632
+  },
+  {
+   "name": "finale-fever_perfect_0",
+   "sfx": "perfect",
+   "ctx": "finale-fever",
+   "chordDeg": 0,
+   "arg": null,
+   "seconds": 1.84,
+   "peak": 0.4088,
+   "bytes": 26251
+  },
+  {
+   "name": "finale-fever_perfect_3",
+   "sfx": "perfect",
+   "ctx": "finale-fever",
+   "chordDeg": 3,
+   "arg": null,
+   "seconds": 1.872,
+   "peak": 0.3458,
+   "bytes": 27327
+  },
+  {
+   "name": "finale-fever_perfect_4",
+   "sfx": "perfect",
+   "ctx": "finale-fever",
+   "chordDeg": 4,
+   "arg": null,
+   "seconds": 1.866,
+   "peak": 0.4343,
+   "bytes": 28507
+  },
+  {
+   "name": "finale-fever_perfect_5",
+   "sfx": "perfect",
+   "ctx": "finale-fever",
+   "chordDeg": 5,
+   "arg": null,
+   "seconds": 1.854,
+   "peak": 0.3963,
+   "bytes": 26605
+  },
+  {
+   "name": "results_good_0",
+   "sfx": "good",
+   "ctx": "results",
+   "chordDeg": 0,
+   "arg": null,
+   "seconds": 1.157,
+   "peak": 0.2814,
+   "bytes": 17417
+  },
+  {
+   "name": "results_good_3",
+   "sfx": "good",
+   "ctx": "results",
+   "chordDeg": 3,
+   "arg": null,
+   "seconds": 1.152,
+   "peak": 0.2641,
+   "bytes": 17211
+  },
+  {
+   "name": "results_good_4",
+   "sfx": "good",
+   "ctx": "results",
+   "chordDeg": 4,
+   "arg": null,
+   "seconds": 1.154,
+   "peak": 0.2814,
+   "bytes": 17523
+  },
+  {
+   "name": "results_great_0",
+   "sfx": "great",
+   "ctx": "results",
+   "chordDeg": 0,
+   "arg": null,
+   "seconds": 1.22,
+   "peak": 0.3361,
+   "bytes": 19718
+  },
+  {
+   "name": "results_great_3",
+   "sfx": "great",
+   "ctx": "results",
+   "chordDeg": 3,
+   "arg": null,
+   "seconds": 1.233,
+   "peak": 0.3526,
+   "bytes": 20470
+  },
+  {
+   "name": "results_great_4",
+   "sfx": "great",
+   "ctx": "results",
+   "chordDeg": 4,
+   "arg": null,
+   "seconds": 1.226,
+   "peak": 0.347,
+   "bytes": 20563
+  },
+  {
+   "name": "results_miss_0",
+   "sfx": "miss",
+   "ctx": "results",
+   "chordDeg": 0,
+   "arg": null,
+   "seconds": 0.924,
+   "peak": 0.2808,
+   "bytes": 14632
+  },
+  {
+   "name": "results_miss_3",
+   "sfx": "miss",
+   "ctx": "results",
+   "chordDeg": 3,
+   "arg": null,
+   "seconds": 0.924,
+   "peak": 0.2808,
+   "bytes": 14632
+  },
+  {
+   "name": "results_miss_4",
+   "sfx": "miss",
+   "ctx": "results",
+   "chordDeg": 4,
+   "arg": null,
+   "seconds": 0.824,
+   "peak": 0.2548,
+   "bytes": 13583
+  },
+  {
+   "name": "results_perfect_0",
+   "sfx": "perfect",
+   "ctx": "results",
+   "chordDeg": 0,
+   "arg": null,
+   "seconds": 1.855,
+   "peak": 0.3963,
+   "bytes": 26870
+  },
+  {
+   "name": "results_perfect_3",
+   "sfx": "perfect",
+   "ctx": "results",
+   "chordDeg": 3,
+   "arg": null,
+   "seconds": 1.951,
+   "peak": 0.4256,
+   "bytes": 27788
+  },
+  {
+   "name": "results_perfect_4",
+   "sfx": "perfect",
+   "ctx": "results",
+   "chordDeg": 4,
+   "arg": null,
+   "seconds": 1.835,
+   "peak": 0.3827,
+   "bytes": 27334
+  },
+  {
+   "name": "results_ui_0",
+   "sfx": "ui",
+   "ctx": "results",
+   "chordDeg": 0,
+   "arg": null,
+   "seconds": 1.154,
+   "peak": 0.2651,
+   "bytes": 18186
+  },
+  {
+   "name": "results_ui_3",
+   "sfx": "ui",
+   "ctx": "results",
+   "chordDeg": 3,
+   "arg": null,
+   "seconds": 1.155,
+   "peak": 0.2466,
+   "bytes": 18143
+  },
+  {
+   "name": "results_ui_4",
+   "sfx": "ui",
+   "ctx": "results",
+   "chordDeg": 4,
+   "arg": null,
+   "seconds": 1.154,
+   "peak": 0.2582,
+   "bytes": 18143
+  },
+  {
+   "name": "swing-kings_coin",
+   "sfx": "coin",
+   "ctx": "swing-kings",
+   "chordDeg": 0,
+   "arg": null,
+   "seconds": 1.591,
+   "peak": 0.1952,
+   "bytes": 23447
+  },
+  {
+   "name": "swing-kings_count_0",
+   "sfx": "count",
+   "ctx": "swing-kings",
+   "chordDeg": 0,
+   "arg": 0,
+   "seconds": 0.991,
+   "peak": 0.4039,
+   "bytes": 16445
+  },
+  {
+   "name": "swing-kings_count_1",
+   "sfx": "count",
+   "ctx": "swing-kings",
+   "chordDeg": 0,
+   "arg": 1,
+   "seconds": 0.975,
+   "peak": 0.2541,
+   "bytes": 15562
+  },
+  {
+   "name": "swing-kings_fanfare",
+   "sfx": "fanfare",
+   "ctx": "swing-kings",
+   "chordDeg": 0,
+   "arg": null,
+   "seconds": 2.676,
+   "peak": 0.7989,
+   "bytes": 37228
+  },
+  {
+   "name": "swing-kings_good_0",
+   "sfx": "good",
+   "ctx": "swing-kings",
+   "chordDeg": 0,
+   "arg": null,
+   "seconds": 1.158,
+   "peak": 0.2641,
+   "bytes": 17240
+  },
+  {
+   "name": "swing-kings_good_3",
+   "sfx": "good",
+   "ctx": "swing-kings",
+   "chordDeg": 3,
+   "arg": null,
+   "seconds": 1.152,
+   "peak": 0.2641,
+   "bytes": 17211
+  },
+  {
+   "name": "swing-kings_good_4",
+   "sfx": "good",
+   "ctx": "swing-kings",
+   "chordDeg": 4,
+   "arg": null,
+   "seconds": 1.157,
+   "peak": 0.2814,
+   "bytes": 17417
+  },
+  {
+   "name": "swing-kings_good_5",
+   "sfx": "good",
+   "ctx": "swing-kings",
+   "chordDeg": 5,
+   "arg": null,
+   "seconds": 1.158,
+   "peak": 0.2641,
+   "bytes": 17240
+  },
+  {
+   "name": "swing-kings_great_0",
+   "sfx": "great",
+   "ctx": "swing-kings",
+   "chordDeg": 0,
+   "arg": null,
+   "seconds": 1.239,
+   "peak": 0.3526,
+   "bytes": 20794
+  },
+  {
+   "name": "swing-kings_great_3",
+   "sfx": "great",
+   "ctx": "swing-kings",
+   "chordDeg": 3,
+   "arg": null,
+   "seconds": 1.223,
+   "peak": 0.359,
+   "bytes": 21025
+  },
+  {
+   "name": "swing-kings_great_4",
+   "sfx": "great",
+   "ctx": "swing-kings",
+   "chordDeg": 4,
+   "arg": null,
+   "seconds": 1.28,
+   "peak": 0.3361,
+   "bytes": 20275
+  },
+  {
+   "name": "swing-kings_great_5",
+   "sfx": "great",
+   "ctx": "swing-kings",
+   "chordDeg": 5,
+   "arg": null,
+   "seconds": 1.245,
+   "peak": 0.3581,
+   "bytes": 20191
+  },
+  {
+   "name": "swing-kings_impact_0",
+   "sfx": "impact",
+   "ctx": "swing-kings",
+   "chordDeg": 0,
+   "arg": null,
+   "seconds": 1.45,
+   "peak": 0.824,
+   "bytes": 21331
+  },
+  {
+   "name": "swing-kings_impact_3",
+   "sfx": "impact",
+   "ctx": "swing-kings",
+   "chordDeg": 3,
+   "arg": null,
+   "seconds": 1.461,
+   "peak": 0.8354,
+   "bytes": 21192
+  },
+  {
+   "name": "swing-kings_impact_4",
+   "sfx": "impact",
+   "ctx": "swing-kings",
+   "chordDeg": 4,
+   "arg": null,
+   "seconds": 1.446,
+   "peak": 0.8194,
+   "bytes": 21004
+  },
+  {
+   "name": "swing-kings_impact_5",
+   "sfx": "impact",
+   "ctx": "swing-kings",
+   "chordDeg": 5,
+   "arg": null,
+   "seconds": 1.441,
+   "peak": 0.8571,
+   "bytes": 21470
+  },
+  {
+   "name": "swing-kings_miss_0",
+   "sfx": "miss",
+   "ctx": "swing-kings",
+   "chordDeg": 0,
+   "arg": null,
+   "seconds": 0.924,
+   "peak": 0.2808,
+   "bytes": 14632
+  },
+  {
+   "name": "swing-kings_miss_3",
+   "sfx": "miss",
+   "ctx": "swing-kings",
+   "chordDeg": 3,
+   "arg": null,
+   "seconds": 0.854,
+   "peak": 0.2361,
+   "bytes": 13772
+  },
+  {
+   "name": "swing-kings_miss_4",
+   "sfx": "miss",
+   "ctx": "swing-kings",
+   "chordDeg": 4,
+   "arg": null,
+   "seconds": 0.924,
+   "peak": 0.2808,
+   "bytes": 14632
+  },
+  {
+   "name": "swing-kings_miss_5",
+   "sfx": "miss",
+   "ctx": "swing-kings",
+   "chordDeg": 5,
+   "arg": null,
+   "seconds": 0.924,
+   "peak": 0.2808,
+   "bytes": 14632
+  },
+  {
+   "name": "swing-kings_perfect_0",
+   "sfx": "perfect",
+   "ctx": "swing-kings",
+   "chordDeg": 0,
+   "arg": null,
+   "seconds": 1.951,
+   "peak": 0.4256,
+   "bytes": 27789
+  },
+  {
+   "name": "swing-kings_perfect_3",
+   "sfx": "perfect",
+   "ctx": "swing-kings",
+   "chordDeg": 3,
+   "arg": null,
+   "seconds": 1.849,
+   "peak": 0.3817,
+   "bytes": 27524
+  },
+  {
+   "name": "swing-kings_perfect_4",
+   "sfx": "perfect",
+   "ctx": "swing-kings",
+   "chordDeg": 4,
+   "arg": null,
+   "seconds": 1.854,
+   "peak": 0.414,
+   "bytes": 26675
+  },
+  {
+   "name": "swing-kings_perfect_5",
+   "sfx": "perfect",
+   "ctx": "swing-kings",
+   "chordDeg": 5,
+   "arg": null,
+   "seconds": 1.831,
+   "peak": 0.4691,
+   "bytes": 25967
+  },
+  {
+   "name": "swoosh",
+   "sfx": "swoosh",
+   "ctx": null,
+   "chordDeg": null,
+   "arg": null,
+   "seconds": 0.293,
+   "peak": 0.0045,
+   "bytes": 6311
+  },
+  {
+   "name": "tick",
+   "sfx": "tick",
+   "ctx": null,
+   "chordDeg": null,
+   "arg": 0.12,
+   "seconds": 0.03,
+   "peak": 0.0889,
+   "bytes": 4518
+  },
+  {
+   "name": "title_fanfare",
+   "sfx": "fanfare",
+   "ctx": "title",
+   "chordDeg": 0,
+   "arg": null,
+   "seconds": 2.802,
+   "peak": 0.8267,
+   "bytes": 37766
+  },
+  {
+   "name": "title_great_0",
+   "sfx": "great",
+   "ctx": "title",
+   "chordDeg": 0,
+   "arg": null,
+   "seconds": 1.225,
+   "peak": 0.3361,
+   "bytes": 19907
+  },
+  {
+   "name": "title_great_1",
+   "sfx": "great",
+   "ctx": "title",
+   "chordDeg": 1,
+   "arg": null,
+   "seconds": 1.272,
+   "peak": 0.3581,
+   "bytes": 20426
+  },
+  {
+   "name": "title_great_3",
+   "sfx": "great",
+   "ctx": "title",
+   "chordDeg": 3,
+   "arg": null,
+   "seconds": 1.239,
+   "peak": 0.3526,
+   "bytes": 20794
+  },
+  {
+   "name": "title_great_4",
+   "sfx": "great",
+   "ctx": "title",
+   "chordDeg": 4,
+   "arg": null,
+   "seconds": 1.237,
+   "peak": 0.347,
+   "bytes": 20659
+  },
+  {
+   "name": "title_great_5",
+   "sfx": "great",
+   "ctx": "title",
+   "chordDeg": 5,
+   "arg": null,
+   "seconds": 1.211,
+   "peak": 0.3627,
+   "bytes": 20507
+  },
+  {
+   "name": "title_miss_0",
+   "sfx": "miss",
+   "ctx": "title",
+   "chordDeg": 0,
+   "arg": null,
+   "seconds": 0.924,
+   "peak": 0.2808,
+   "bytes": 14632
+  },
+  {
+   "name": "title_miss_1",
+   "sfx": "miss",
+   "ctx": "title",
+   "chordDeg": 1,
+   "arg": null,
+   "seconds": 0.879,
+   "peak": 0.282,
+   "bytes": 14185
+  },
+  {
+   "name": "title_miss_3",
+   "sfx": "miss",
+   "ctx": "title",
+   "chordDeg": 3,
+   "arg": null,
+   "seconds": 0.924,
+   "peak": 0.2808,
+   "bytes": 14632
+  },
+  {
+   "name": "title_miss_4",
+   "sfx": "miss",
+   "ctx": "title",
+   "chordDeg": 4,
+   "arg": null,
+   "seconds": 0.824,
+   "peak": 0.2548,
+   "bytes": 13583
+  },
+  {
+   "name": "title_miss_5",
+   "sfx": "miss",
+   "ctx": "title",
+   "chordDeg": 5,
+   "arg": null,
+   "seconds": 0.924,
+   "peak": 0.2808,
+   "bytes": 14632
+  },
+  {
+   "name": "title_perfect_0",
+   "sfx": "perfect",
+   "ctx": "title",
+   "chordDeg": 0,
+   "arg": null,
+   "seconds": 1.854,
+   "peak": 0.3963,
+   "bytes": 26599
+  },
+  {
+   "name": "title_perfect_1",
+   "sfx": "perfect",
+   "ctx": "title",
+   "chordDeg": 1,
+   "arg": null,
+   "seconds": 1.829,
+   "peak": 0.4691,
+   "bytes": 26150
+  },
+  {
+   "name": "title_perfect_3",
+   "sfx": "perfect",
+   "ctx": "title",
+   "chordDeg": 3,
+   "arg": null,
+   "seconds": 1.951,
+   "peak": 0.4256,
+   "bytes": 27788
+  },
+  {
+   "name": "title_perfect_4",
+   "sfx": "perfect",
+   "ctx": "title",
+   "chordDeg": 4,
+   "arg": null,
+   "seconds": 1.835,
+   "peak": 0.3827,
+   "bytes": 27334
+  },
+  {
+   "name": "title_perfect_5",
+   "sfx": "perfect",
+   "ctx": "title",
+   "chordDeg": 5,
+   "arg": null,
+   "seconds": 1.872,
+   "peak": 0.3458,
+   "bytes": 27325
+  },
+  {
+   "name": "title_uiBack_0",
+   "sfx": "uiBack",
+   "ctx": "title",
+   "chordDeg": 0,
+   "arg": null,
+   "seconds": 1.17,
+   "peak": 0.2074,
+   "bytes": 17491
+  },
+  {
+   "name": "title_uiBack_1",
+   "sfx": "uiBack",
+   "ctx": "title",
+   "chordDeg": 1,
+   "arg": null,
+   "seconds": 1.174,
+   "peak": 0.2147,
+   "bytes": 17453
+  },
+  {
+   "name": "title_uiBack_3",
+   "sfx": "uiBack",
+   "ctx": "title",
+   "chordDeg": 3,
+   "arg": null,
+   "seconds": 1.171,
+   "peak": 0.2147,
+   "bytes": 17479
+  },
+  {
+   "name": "title_uiBack_4",
+   "sfx": "uiBack",
+   "ctx": "title",
+   "chordDeg": 4,
+   "arg": null,
+   "seconds": 1.17,
+   "peak": 0.2074,
+   "bytes": 17491
+  },
+  {
+   "name": "title_uiBack_5",
+   "sfx": "uiBack",
+   "ctx": "title",
+   "chordDeg": 5,
+   "arg": null,
+   "seconds": 1.174,
+   "peak": 0.2147,
+   "bytes": 17453
+  },
+  {
+   "name": "title_ui_0",
+   "sfx": "ui",
+   "ctx": "title",
+   "chordDeg": 0,
+   "arg": null,
+   "seconds": 1.154,
+   "peak": 0.2651,
+   "bytes": 18186
+  },
+  {
+   "name": "title_ui_1",
+   "sfx": "ui",
+   "ctx": "title",
+   "chordDeg": 1,
+   "arg": null,
+   "seconds": 1.157,
+   "peak": 0.2466,
+   "bytes": 18189
+  },
+  {
+   "name": "title_ui_3",
+   "sfx": "ui",
+   "ctx": "title",
+   "chordDeg": 3,
+   "arg": null,
+   "seconds": 1.157,
+   "peak": 0.2466,
+   "bytes": 18189
+  },
+  {
+   "name": "title_ui_4",
+   "sfx": "ui",
+   "ctx": "title",
+   "chordDeg": 4,
+   "arg": null,
+   "seconds": 1.154,
+   "peak": 0.2582,
+   "bytes": 18143
+  },
+  {
+   "name": "title_ui_5",
+   "sfx": "ui",
+   "ctx": "title",
+   "chordDeg": 5,
+   "arg": null,
+   "seconds": 1.154,
+   "peak": 0.2651,
+   "bytes": 18186
+  }
+ ],
+ "totalBytes": 3140641
+}

@@ -112,7 +112,7 @@ namespace Bonanza
         {
             if (!_playing || action != "a") return;
             if (!_held) { _held = true; _holdStart = time; }
-            if (!_round.Press(action, time)) Host.Play(TickClip, 0.1f);
+            if (!_round.Press(action, time)) Host.PlaySfx("tick", time, gain: 0.12f);   // web: the ghost-press tick (FEEL.ghostPressTick)
         }
 
         // In tap mode the release note is an ordinary press (the second tap), so there is nothing to judge
@@ -180,12 +180,12 @@ namespace Bonanza
                     else PlayNote(p, v, at);
                     _slabs[p.Index].Pop = v == Verdict.Perfect ? 1 : v == Verdict.Great ? 0.8f : 0.55f;
                 }
-                else Thud(at);
+                else { Thud(at); Host.PlaySfx("miss", at); }
             }
             else
             {
                 if (hit) { PlayRelease(p, v, at, p.Kind == 'F'); _launchFlash = 1; }
-                else Thud(at);
+                else { Thud(at); Host.PlaySfx("miss", at); }
             }
         }
 
@@ -193,7 +193,7 @@ namespace Bonanza
         {
             bool hit = _round.FinishHit;
             _say.Banner(hit ? "FINISH!" : "FINISH", 2.0f, hit ? "the tune is yours" : "you got there", hit ? Gold : new Color(0.81f, 0.83f, 1));
-            for (int k = 0; k < 4; k++) Host.PlayAt(Fanfare(k), _now + 0.02 + k * 0.1, 0.13f);
+            Host.PlaySfx("fanfare", _now + 0.02);
         }
 
         // ------------------------------------------------------------ sound (placeholder synth)
@@ -206,7 +206,6 @@ namespace Bonanza
         static AudioClip Spring => Tones.Blip(2600, 0.03f, 80, Wave.Noise);
         static AudioClip ThudClip => Tones.Blip(90, 0.12f, 20, Wave.Noise, 0.6f);
         static AudioClip Fanfare(int k) => Tones.Blip(Tones.Midi(74 + new[] { 0, 4, 7, 12 }[k]), 0.4f, 5, Wave.Square);
-        static AudioClip TickClip => Tones.Blip(2400, 0.02f, 120);
 
         /// A platform's note, scheduled at the press so mistiming is audible;
         /// a perfect adds the octave on top, an okay is dull.
@@ -248,8 +247,7 @@ namespace Bonanza
                     foreach (var b in new[] { 6f, 8f, 12f }) Pluck(p.Midi, b);
                     Pluck(p.Midi + 12, 12); Bell(p.Midi + 12); Lead(p.Midi); Pluck(p.Midi + 19, 6);
                 }
-            for (int k = 0; k < 4; k++) Fanfare(k);
-            _ = Kick; _ = Spring; _ = ThudClip; _ = TickClip;
+            _ = Fanfare(3); _ = Kick; _ = Spring; _ = ThudClip;
         }
 
         // ------------------------------------------------------------ stage

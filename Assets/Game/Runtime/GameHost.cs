@@ -307,9 +307,51 @@ namespace Bonanza
 
         public void Play(AudioClip clip, float volume = 0.35f, float pitch = 1, float pan = 0) => PlayAt(clip, 0, volume, pitch, pan);
 
-        /// The shared count-in tick (web audio sfx 'count').
-        public void CountTick(double t, int accent) =>
-            PlayAt(Tones.Blip(accent == 0 ? 1568 : 1175, 0.05f, 50), t, 0.3f);
+        // The web's SFX kit (audio/index.js SFX), baked per chord (Sfx.cs). Every web SFX reads the chord the music sits on.
+        Sfx _sfx;
+
+        /// A web SFX in the round's key: `sfx` is perfect/great/good/miss/impact/count/combo/fanfare/coin/tick/swoosh,
+        /// `t` the game time it sounds (immediately when past), `arg` the count beat or combo level, `gain` the
+        /// web's per-call gain (tick only). The chord is the one the round's music is on when called.
+        public void PlaySfx(string sfx, double t, int arg = 0, float gain = 1, float pan = 0)
+        {
+            if (_sfx == null || _game == null || _entry == null) return;
+            var h = Harmony.ForContext(_entry.Id);
+            // The web reads the chord at the moment of the call (key()), not at the scheduled time, so a cluster of sounds shares one chord.
+            int deg = h == null ? 0 : h.ChordDegAt(h.BarAt(_game.MusicBeatAt(Now)));
+            _sfx.Play(_entry.Id, sfx, deg, t, arg, gain, pan);
+        }
+
+        /// A menu or results sound on the title / results music's chord (web shell sfx(ctx, name)). With no shell
+        /// music running the web falls back to a C major key: the title's first chord here.
+        public void ShellSfx(string sfx, double delay = 0)
+        {
+            if (_sfx == null) return;
+            string ctx = "title"; int deg = 0;
+            if (_music.ShellClock(out var id, out double zero, out double spb))
+            {
+                var h = Harmony.ForContext(id);
+                if (h != null && SfxCatalog.Supports(id, sfx)) { ctx = id; deg = h.ChordDegAt(h.BarAt((Now - zero) / spb)); }
+            }
+            _sfx.Play(ctx, sfx, deg, Now + delay, whilePaused: _mode == Mode.Paused);
+        }
+
+        /// The shared count-in tick (web audio sfx 'count'): chord-locked to the game's key. accent 0 is the downbeat.
+        public void CountTick(double t, int accent) => PlaySfx("count", t, accent);
+
+        /// The title's tick on every bar (web title.js: `if (b % 4 === 0) sfx(ctx, 'tick', t)`), scheduled on the bar line.
+        double _tickedBar = double.NegativeInfinity;
+        void TitleBarTick()
+        {
+            if (!_music.ShellClock(out var id, out double zero, out double spb) || id != "title") return;
+            double bar = System.Math.Floor((Now - zero) / spb / 4) + 1;
+            double at = zero + bar * 4 * spb;
+            if (bar != _tickedBar && at - Now < 0.12 && at > Now)
+            {
+                _tickedBar = bar;
+                _sfx.Play("title", "tick", 0, at, 0, 0.12f);
+            }
+        }
 
         // ------------------------------------------------------------ music
 
@@ -417,6 +459,8 @@ namespace Bonanza
                 _voices[i] = gameObject.AddComponent<AudioSource>();
                 _voices[i].playOnAwake = false;
             }
+            _sfx = new Sfx { Log = _debug };
+            _sfx.Init(this, gameObject);
         }
 
         void OnDestroy()
@@ -483,6 +527,7 @@ namespace Bonanza
             _game.Bind(this, Seed(e.Id));
             _game.Load();
             _music.Prepare(e.Id);   // decode now; the rules card waits for it
+            _sfx.Prepare(e.Id);     // ... and for the game's sound effects
             _startRequested = false;
             _rulesWait = 0;
             _mode = Mode.Rules;
@@ -529,6 +574,7 @@ namespace Bonanza
             _resultsT = 0;
             _stung = false;
             _music.PlayShell("results");
+            ShellSfx("ui");
             Debug.Log($"[RESULT] game={_entry.Id} {o.LogLine()} autoplay={Autoplay}");
             Save.Record(_entry.Id, o, out _newScore, out _newRank);
             if (_party != null && _party.CurrentGame == _entry.Id)
@@ -608,6 +654,7 @@ namespace Bonanza
         {
             _autoWait = 1.5f;
             _mode = Mode.PartyHub;
+            ShellSfx(_party.Done ? "fanfare" : "ui");
             Debug.Log($"[SHELL] hub index={_party.Index} game={_party.CurrentGame ?? "-"}");
         }
 
@@ -653,6 +700,7 @@ namespace Bonanza
             _pauseIndex = 0;
             _resumeLeft = 0;
             AudioListener.pause = true; Time.timeScale = 0;   // freezes visual-only Update() animation
+            ShellSfx("uiBack");
             _game.OnPause();
             _music.OnPause();
         }
@@ -789,11 +837,12 @@ namespace Bonanza
                     while (_presses.Count > 0)
                     {
                         var p = _presses.Dequeue();
-                        if (p.Action == "up" || p.Action == "left") _titleIndex = (_titleIndex + TitleItems.Length - 1) % TitleItems.Length;
-                        else if (p.Action == "down" || p.Action == "right") _titleIndex = (_titleIndex + 1) % TitleItems.Length;
+                        if (p.Action == "up" || p.Action == "left") { _titleIndex = (_titleIndex + TitleItems.Length - 1) % TitleItems.Length; ShellSfx("ui"); }
+                        else if (p.Action == "down" || p.Action == "right") { _titleIndex = (_titleIndex + 1) % TitleItems.Length; ShellSfx("ui"); }
                         else if (p.Action == "a") { TitleChoice(_titleIndex); break; }
                     }
                     _presses.Clear();
+                    TitleBarTick();
                     break;
 
                 case Mode.Menu:
@@ -802,8 +851,8 @@ namespace Bonanza
                         var p = _presses.Dequeue();
                         if (p.Action == "up" || p.Action == "left") MenuStep(-1);
                         else if (p.Action == "down" || p.Action == "right") MenuStep(1);
-                        else if (p.Action == "a") { _from = "freeplay"; Open(Games[_menuIndex]); break; }
-                        else if (InputMap.IsBack(p.Action)) { _mode = Mode.Title; break; }
+                        else if (p.Action == "a") { _from = "freeplay"; ShellSfx("fanfare"); Open(Games[_menuIndex]); break; }
+                        else if (InputMap.IsBack(p.Action)) { ShellSfx("uiBack"); _mode = Mode.Title; break; }
                     }
                     _presses.Clear();
                     break;
@@ -816,15 +865,16 @@ namespace Bonanza
                         if (_confirmReset)
                         {
                             // Anything but SPACE cancels.
-                            if (p.Action == "a") Save.ResetProgress(Games.Select(e => e.Id));
+                            if (p.Action == "a") { Save.ResetProgress(Games.Select(e => e.Id)); ShellSfx("fanfare"); }
+                            else ShellSfx("uiBack");
                             _confirmReset = false;
                             continue;
                         }
-                        if (p.Action == "up") _optIndex = (_optIndex + OptionRows.Length - 1) % OptionRows.Length;
-                        else if (p.Action == "down") _optIndex = (_optIndex + 1) % OptionRows.Length;
+                        if (p.Action == "up") { _optIndex = (_optIndex + OptionRows.Length - 1) % OptionRows.Length; ShellSfx("ui"); }
+                        else if (p.Action == "down") { _optIndex = (_optIndex + 1) % OptionRows.Length; ShellSfx("ui"); }
                         else if (p.Action == "left" || p.Action == "right") AdjustOption(_optIndex, p.Action == "right" ? 1 : -1);
                         else if (p.Action == "a") OptionChoice(_optIndex);
-                        else if (InputMap.IsBack(p.Action)) { _mode = Mode.Title; break; }
+                        else if (InputMap.IsBack(p.Action)) { ShellSfx("uiBack"); _mode = Mode.Title; break; }
                     }
                     _presses.Clear();
                     break;
@@ -833,11 +883,11 @@ namespace Bonanza
                     while (_presses.Count > 0)
                     {
                         var p = _presses.Dequeue();
-                        if (p.Action == "up") _rosterIndex = (_rosterIndex + 3) % 4;
-                        else if (p.Action == "down") _rosterIndex = (_rosterIndex + 1) % 4;
+                        if (p.Action == "up") { _rosterIndex = (_rosterIndex + 3) % 4; ShellSfx("ui"); }
+                        else if (p.Action == "down") { _rosterIndex = (_rosterIndex + 1) % 4; ShellSfx("ui"); }
                         else if ((p.Action == "left" || p.Action == "right") && _rosterIndex < 3) CycleSlot(_rosterIndex + 1, p.Action == "right" ? 1 : -1);
                         else if (p.Action == "a") { if (_rosterIndex < 3) CycleSlot(_rosterIndex + 1, 1); else { TryStartParty(); break; } }
-                        else if (InputMap.IsBack(p.Action)) { _mode = Mode.Title; break; }
+                        else if (InputMap.IsBack(p.Action)) { ShellSfx("uiBack"); _mode = Mode.Title; break; }
                     }
                     _presses.Clear();
                     if (_rosterFlash != null && (_rosterFlashT -= Time.unscaledDeltaTime) <= 0) _rosterFlash = null;
@@ -850,11 +900,12 @@ namespace Bonanza
                         var p = _presses.Dequeue();
                         if (Autoplay) continue;
                         if (p.Action == "a") next = true;
-                        else if (InputMap.IsBack(p.Action)) { EndParty(); break; }
+                        else if (InputMap.IsBack(p.Action)) { ShellSfx("uiBack"); EndParty(); break; }
                     }
                     _presses.Clear();
                     if (next && _mode == Mode.PartyHub)
                     {
+                        if (!Autoplay) ShellSfx("fanfare");
                         var go = ShellNav.PartyConfirmRoute(_party.Done, _party.CurrentGame);
                         if (go.View == ShellNav.Title) { if (!Autoplay) EndParty(); }
                         else { _from = go.From; Open(Find(go.Game)); }
@@ -875,7 +926,7 @@ namespace Bonanza
                         // The round's music has to be decoded before it starts: the
                         // count-in is two bars of it.
                         _rulesWait += Time.unscaledDeltaTime;
-                        bool ready = _music.Ready(_entry.Id);
+                        bool ready = _music.Ready(_entry.Id) && _sfx.Ready;
                         if (!ready && _rulesWait < MusicLoadTimeout) break;
                         if (!ready) Debug.LogError($"[MUSIC] {_entry.Id} not decoded after {MusicLoadTimeout}s; starting without it");
                         Begin();
@@ -900,10 +951,10 @@ namespace Bonanza
                     while (_presses.Count > 0)
                     {
                         var p = _presses.Dequeue();
-                        if (InputMap.IsBack(p.Action)) { CountBackIn(); break; }
+                        if (InputMap.IsBack(p.Action)) { ShellSfx("uiBack"); CountBackIn(); break; }
                         int np = PauseItems.Length;
-                        if (p.Action == "up") _pauseIndex = (_pauseIndex + np - 1) % np;
-                        if (p.Action == "down") _pauseIndex = (_pauseIndex + 1) % np;
+                        if (p.Action == "up") { _pauseIndex = (_pauseIndex + np - 1) % np; ShellSfx("ui"); }
+                        if (p.Action == "down") { _pauseIndex = (_pauseIndex + 1) % np; ShellSfx("ui"); }
                         if (p.Action == "a") { PauseChoice(_pauseIndex); break; }
                     }
                     _presses.Clear();
@@ -928,7 +979,7 @@ namespace Bonanza
                             var p = _presses.Dequeue();
                             if (Autoplay || (p.Action != "a" && !InputMap.IsBack(p.Action))) continue;
                             if (_resultsT < RevealEnd) _resultsT = RevealEnd;   // the first press finishes the reveal
-                            else on = true;
+                            else { on = true; ShellSfx("ui"); }
                         }
                         if (on) ToHub();
                         break;
@@ -938,8 +989,8 @@ namespace Bonanza
                         var p = _presses.Dequeue();
                         if (Autoplay) continue;
                         if (_resultsT < RevealEnd && !InputMap.IsBack(p.Action)) { _resultsT = RevealEnd; continue; }
-                        if (p.Action == "a") { Open(_entry); break; }                       // again
-                        if (InputMap.IsBack(p.Action) || p.Action == "left") { LeaveRound(); break; }
+                        if (p.Action == "a") { ShellSfx("ui"); Open(_entry); break; }                       // again
+                        if (InputMap.IsBack(p.Action) || p.Action == "left") { ShellSfx("ui"); LeaveRound(); break; }
                     }
                     _presses.Clear();
                     break;
@@ -992,6 +1043,7 @@ namespace Bonanza
         void PauseChoice(int i)
         {
             var item = PauseItems[i];
+            ShellSfx(item == "QUIT TO HUB" || item == "QUIT TO MENU" ? "uiBack" : "ui");   // web pause.js / play.js
             if (item == "RESUME") CountBackIn();
             else if (item == "RESTART")
             {
@@ -1010,6 +1062,7 @@ namespace Bonanza
         void TitleChoice(int i)
         {
             _titleIndex = i;
+            ShellSfx("fanfare");
             var r = ShellNav.TitleMenuRoute(TitleIds[i]);
             if (r.View == ShellNav.Roster && r.Mode == "free") GoRoute(new Route(ShellNav.FreePlay));   // Free Play is solo: no roster
             else GoRoute(r);
@@ -1019,7 +1072,7 @@ namespace Bonanza
         void MenuStep(int dir)
         {
             _menuIndex = ShellNav.CarouselStep(_menuIndex, dir, Games.Count, out bool atEnd);
-            if (atEnd) Play(Tones.Blip(660, 0.02f, 40), 0.2f);
+            ShellSfx(atEnd ? "tick" : "ui");   // web freeplay.js: a press at the end of the rail still ticks
         }
 
         // The roster miss line. The miss sfx slot belongs to the sfx port (ticket 25); until then a low blip.
@@ -1032,9 +1085,10 @@ namespace Bonanza
             if (problem != null)
             {
                 _rosterFlash = problem; _rosterFlashT = 2f;
-                Play(Tones.Blip(220, 0.12f, 60), 0.3f);   // TODO(ticket 25): the 'miss' voice
+                ShellSfx("miss");   // web roster.js: 'SEAT AT LEAST ONE RIVAL'
                 return;
             }
+            ShellSfx("fanfare");
             StartParty();
         }
 
@@ -1043,6 +1097,8 @@ namespace Bonanza
             if (!RosterRules.CanChange(slot)) return;   // seat 0 is always the human
             int n = Party.CpuTiers.Length + 1;
             _slotTier[slot] = (_slotTier[slot] + dir + n) % n;
+            // Seating a rival locks it in (web roster.js lockIn: a CPU is a 'great'); emptying the seat unlocks it.
+            ShellSfx(_slotTier[slot] < Party.CpuTiers.Length ? "great" : "uiBack");
         }
 
         static string SlotLabel(int tier) => tier < Party.CpuTiers.Length ? "CPU " + Party.CpuTiers[tier].label : "OFF";
@@ -1067,7 +1123,7 @@ namespace Bonanza
                 case Opt.Swing: Settings.SwingInputChoice = Settings.Cycle(Settings.SwingInputChoice, dir); break;
                 default: return;
             }
-            Play(Tones.Blip(880, 0.04f, 60), 0.3f);   // the web's ui sound; also lets the SFX level be heard
+            ShellSfx("ui");   // the web's ui sound; also lets the SFX level be heard
         }
 
         void OptionChoice(int row)
@@ -1075,8 +1131,8 @@ namespace Bonanza
             _optIndex = row;
             switch ((Opt)row)
             {
-                case Opt.Reset: _confirmReset = true; break;
-                case Opt.Back: _mode = Mode.Title; break;
+                case Opt.Reset: _confirmReset = true; ShellSfx("uiBack"); break;
+                case Opt.Back: ShellSfx("uiBack"); _mode = Mode.Title; break;
                 case Opt.Reduce: case Opt.Graphics: case Opt.Swing: AdjustOption(row, 1); break;
             }
         }
@@ -1308,7 +1364,7 @@ namespace Bonanza
                         // The record: rank, best score, plays (web freeplay.js card).
                         Hud.Text(new Rect(r.x, r.y, r.width - 16 * s, r.height * 0.6f), $"RANK {card.Rank}   BEST {card.Best}", Hud.Small, sel ? Hud.Gold : Color.white, TextAnchor.MiddleRight);
                         Hud.Text(new Rect(r.x, r.y + r.height * 0.5f, r.width - 16 * s, r.height * 0.5f), card.Plays, Hud.Small, new Color(1, 1, 1, 0.6f), TextAnchor.MiddleRight);
-                        if (GUI.Button(r, GUIContent.none, GUIStyle.none)) { _menuIndex = i; _from = "freeplay"; Open(e); }
+                        if (GUI.Button(r, GUIContent.none, GUIStyle.none)) { _menuIndex = i; _from = "freeplay"; ShellSfx("fanfare"); Open(e); }
                     }
                     Hud.Center(0.9f, "UP/DOWN to choose   SPACE / click to play   ESC / X: back", Hud.Small, new Color(1, 1, 1, 0.7f), 40);
                     break;
@@ -1342,7 +1398,7 @@ namespace Bonanza
                         bool grey = i == (int)Opt.Swing && Settings.SwingInputChoice == SwingInput.Camera && !Settings.CameraInputAvailable;
                         if (MenuRow(i, 0.21f, label, OptionValue(i), i == _optIndex, s, 50, 44, grey, 0.6f))
                         {
-                            if (_confirmReset) { if (isReset) Save.ResetProgress(Games.Select(e => e.Id)); _confirmReset = false; }
+                            if (_confirmReset) { if (isReset) { Save.ResetProgress(Games.Select(e => e.Id)); ShellSfx("fanfare"); } else ShellSfx("uiBack"); _confirmReset = false; }
                             else OptionChoice(i);
                         }
                     }
@@ -1419,20 +1475,9 @@ namespace Bonanza
         float _resultsT;
         bool _stung;
 
-        /// Each rank has its own sting, S the full fanfare down to a D's slide off the chord.
-        void RankSting(string rank)
-        {
-            (float at, int midi)[] notes = rank switch
-            {
-                "S" => new[] { (0f, 72), (0.09f, 76), (0.18f, 79), (0.3f, 84) },
-                "A" => new[] { (0f, 72), (0.05f, 76), (0.1f, 79) },
-                "B" => new[] { (0f, 72), (0.05f, 76) },
-                "C" => new[] { (0f, 67) },
-                _ => new[] { (0f, 61), (0.12f, 58) },
-            };
-            foreach (var (at, midi) in notes)
-                PlayAt(Tones.Blip(Tones.Midi(midi), at == 0.3f ? 0.6f : 0.18f, 8, rank == "S" ? Wave.Square : Wave.Sine), Now + 0.02 + at, 0.18f);
-        }
+        /// Each rank has its own sting, S the full fanfare down to a D's slide off the chord (web results.js RANK_STING),
+        /// on the results track's chord.
+        void RankSting(string rank) => ShellSfx(SfxTheory.RankSting(rank));
 
         /// The card is on the canvas (HudKit/ResultsCard); IMGUI keeps the AGAIN / MENU click targets for mouse and touch.
         void DrawResults(float s)

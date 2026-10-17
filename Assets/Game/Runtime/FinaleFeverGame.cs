@@ -61,7 +61,7 @@ namespace Bonanza
             _round.Judged += OnJudged;
             _round.HeartLost += OnHeartLost;
             _round.HeartGained += OnHeartGained;
-            _round.Ghost += () => { Host.Play(TickClip, 0.12f); _playerLean = -0.4f; };
+            _round.Ghost += () => { Host.PlaySfx("tick", _now, gain: 0.12f); _playerLean = -0.4f; };
 
             _cam = Camera.main.transform;
 
@@ -213,6 +213,7 @@ namespace Bonanza
             else if (section == "solo")
             {
                 _say.Banner("SOLO", 1.8f, "No signals. Just the music.", Pink);
+                Host.PlaySfx("swoosh", _now);
                 KillOrbs();   // nothing on screen may tell you when
             }
         }
@@ -230,10 +231,13 @@ namespace Bonanza
                 _say.Verdict(hit ? Verdict.Perfect : Verdict.Miss, pos, 1.4f);
                 _camPunch = 1.6f;
                 _ringPulse = 2;
-                if (hit) for (int k = 0; k < 4; k++) Host.PlayAt(Fanfare(k), _now + 0.02 + k * 0.1, 0.13f, 1, 0.1f);
+                Host.PlaySfx(hit ? "fanfare" : "impact", _now);   // web finaleHit: the cadence on the last note, a thud when the maestro takes it
                 return;
             }
             _say.Verdict(v, pos, n.Kind == "swing" ? 1.3f : 1);
+            Host.PlaySfx(SfxTheory.VerdictSfx(v), _now);
+            // A milestone hit climbs the scale (web: sfx('combo', min(9, combo / 10)) on perfect and great).
+            if (v >= Verdict.Great && Bonanza.Look.Feel.IsMilestone(_round.Combo)) Host.PlaySfx("combo", _now, System.Math.Min(9, _round.Combo / 10));
             if (v != Verdict.Miss)
             {
                 // The player's answer: bright, high, in the chord the track sits on; panned to their side.
@@ -245,7 +249,6 @@ namespace Bonanza
             }
             else
             {
-                Host.PlayAt(MissTone, _now + 0.004, 0.12f);
                 _camPunch = Mathf.Max(_camPunch, 0.3f);
                 _ringPulse = Mathf.Max(_ringPulse, 0.25f);
             }
@@ -259,7 +262,8 @@ namespace Bonanza
                 _surviveShown = true;
                 _say.Banner("SURVIVE!", 1.9f, "Nobody leaves the finale.", Red);
             }
-            Host.Play(MissTone, 0.16f);
+            Host.PlaySfx("miss", _now);
+            if (left == 0) Host.PlaySfx("impact", _now);   // web loseHeart: the last heart goes with a thud
         }
         bool _surviveShown;
 
@@ -267,7 +271,7 @@ namespace Bonanza
         {
             _heartPop = 1;
             _say.Say("NICE!", Strike + new Vector3(0, 1.5f, 0), Lime, 0.8f);
-            Host.Play(Coin, 0.14f, 1, 0.2f);
+            Host.PlaySfx("coin", _now);
         }
 
         // ------------------------------------------------------------ sound (placeholder synth)
@@ -285,11 +289,7 @@ namespace Bonanza
         static AudioClip Brass(int midi, bool accent) => Tones.Blip(Tones.Midi(midi), accent ? 0.3f : 0.16f, accent ? 6 : 10, Wave.Square, 0.98f);
         static AudioClip Tom(float hz) => Tones.Blip(hz, 0.4f, 9, Wave.Sine, 0.7f);
         static AudioClip Bell(int midi) => Tones.Blip(Tones.Midi(midi), 0.24f, 12, Wave.Sine);
-        static AudioClip Fanfare(int k) => Tones.Blip(Tones.Midi(76 + new[] { 0, 4, 7, 12 }[k]), 0.4f, 5, Wave.Square);
         static AudioClip Rim => Tones.Blip(1900, 0.03f, 90, Wave.Noise);
-        static AudioClip MissTone => Tones.Blip(140, 0.2f, 12, Wave.Square, 0.7f);
-        static AudioClip Coin => Tones.Blip(Tones.Midi(88), 0.18f, 14, Wave.Square, 1.33f);
-        static AudioClip TickClip => Tones.Blip(2400, 0.02f, 120);
 
         /// The boss sounds like a boss: low brass over a tom, panned to his side.
         void BossVoice(FeverCue c, double at)
@@ -327,8 +327,7 @@ namespace Bonanza
                         Brass(m - 12 + 7, false);
                     }
             foreach (var hz in new[] { 86f, 112f, 128f }) Tom(hz);
-            for (int k = 0; k < 4; k++) Fanfare(k);
-            _ = Rim; _ = MissTone; _ = Coin; _ = TickClip;
+            _ = Rim;
         }
 
         // ------------------------------------------------------------ stage

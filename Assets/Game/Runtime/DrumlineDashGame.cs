@@ -176,7 +176,7 @@ namespace Bonanza
         public override void Press(string action, double time)
         {
             if (!_playing || action != "a") return;
-            if (!_round.Press(time) && _round.Mode == DrumMode.Lead) Host.Play(TickClip, 0.12f);
+            if (!_round.Press(time) && _round.Mode == DrumMode.Lead) Host.PlaySfx("tick", time, gain: 0.12f);
         }
 
         public override void Tick(double now, float dt)
@@ -250,11 +250,12 @@ namespace Bonanza
             {
                 Host.PlayAt(SnareNoise, at, v == Verdict.Perfect ? 0.5f : 0.4f, 1, -0.18f);
                 Host.PlayAt(SnareBody, at, 0.25f, 1, -0.18f);
+                Host.PlaySfx(SfxTheory.VerdictSfx(v), at);   // web: the verdict in the chord, over the snare
                 y.Hop = v == Verdict.Perfect ? 1.1f : 0.8f;
             }
             else
             {
-                Host.PlayAt(MissTone, _now + 0.004, 0.14f, 1, -0.2f);
+                Host.PlaySfx("miss", _now + 0.004);
                 y.Stagger = 0.5f;
             }
         }
@@ -285,7 +286,7 @@ namespace Bonanza
             int place = _round.You.Place;
             _say.Banner(place == 1 ? "WINNER!" : place + new[] { "st", "nd", "rd", "th" }[place - 1] + " PLACE", 2.4f,
                 $"{_round.Perfect} perfect - best streak {_round.MaxCombo}", place == 1 ? RespHue : Color.white);
-            for (int k = 0; k < 3; k++) Host.PlayAt(Tones.Blip(Tones.Midi(72 + k * 4), 0.35f, 5, Wave.Square), _now + 0.02 + k * 0.11, 0.12f);
+            Host.PlaySfx("fanfare", _now + 0.02);
         }
 
         // ------------------------------------------------------------ sound (placeholder synth)
@@ -297,16 +298,13 @@ namespace Bonanza
         static AudioClip SnareNoise => Tones.Blip(3000, 0.12f, 28, Wave.Noise);
         static AudioClip SnareBody => Tones.Blip(190, 0.08f, 40, Wave.Triangle, 0.8f);
         static AudioClip Thud => Tones.Blip(110, 0.07f, 40, Wave.Sine, 0.7f);
-        static AudioClip MissTone => Tones.Blip(140, 0.2f, 12, Wave.Square, 0.7f);
-        static AudioClip TickClip => Tones.Blip(2400, 0.02f, 120);
 
         /// Built before the round: synthesising mid-round stalls a frame.
         void Prewarm()
         {
             for (int k = 0; k < 5; k++) TomClip(k);
-            _ = Rim; _ = Hat; _ = Crash; _ = SnareNoise; _ = SnareBody; _ = Thud; _ = MissTone; _ = TickClip;
+            _ = Rim; _ = Hat; _ = Crash; _ = SnareNoise; _ = SnareBody; _ = Thud;
             Tones.Blip(96, 0.3f, 10, Wave.Sine, 0.7f);
-            for (int k = 0; k < 3; k++) Tones.Blip(Tones.Midi(72 + k * 4), 0.35f, 5, Wave.Square);
         }
 
         void PumpCues(double now)

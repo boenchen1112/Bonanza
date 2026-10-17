@@ -54,6 +54,7 @@ namespace Bonanza
 
         // audio
         double _clickBeat;
+        bool _finishShown;
 
         // HUD (canvas: Ui). Presentation only; it ages on real time.
         float _outsClear;               // seconds until the lamps reset after the side is retired
@@ -81,7 +82,7 @@ namespace Bonanza
             _round.PitchPassed += OnPassed;
             _round.Contact += OnContact;
             _round.Whiff += OnWhiff;
-            _round.SwingAtNothing += _ => StartSwing();
+            _round.SwingAtNothing += _ => { StartSwing(); Host.PlaySfx("swoosh", _now); };
         }
 
         public override void Begin(double now)
@@ -100,7 +101,9 @@ namespace Bonanza
 
         public override void Press(string action, double time)
         {
-            if (action == "a") _round.Press(time);
+            if (action != "a") return;
+            _round.Press(time);
+            Host.PlaySfx("tick", time, gain: 0.05f);   // web beginWindup: the windup tick on every swing
         }
 
         public override void Tick(double now, float dt)
@@ -120,6 +123,8 @@ namespace Bonanza
                 Look.SetPalette(night ? "swing-kings-night" : "swing-kings", night ? 2.4f : 0.8f);
             }
             ScheduleClicks();
+            // The song ends on a word, on the last bar's downbeat (web: GAME! and the fanfare).
+            if (!_finishShown && beat >= SwingRules.EndBeat - 4) { _finishShown = true; Host.PlaySfx("fanfare", now); }
             UpdatePitchBalls(beat);
             UpdateCamera(beat, dt);
             UpdateHud(beat);
@@ -317,6 +322,9 @@ namespace Bonanza
                 b.Pips.Add(pip);
             }
             _pitchBalls[p] = b;
+            // The machine's launch tick, and the demo swing's windup tick with it (web update(): tick 0.16, beginWindup 0.05).
+            Host.PlaySfx("tick", _now, gain: 0.16f);
+            if (p.Kind == PitchKind.Demo) Host.PlaySfx("tick", _now, gain: 0.05f);
         }
 
         void ClearPips(Ball b)
@@ -420,6 +428,12 @@ namespace Bonanza
             var rig = Look.Rig;
             if (!c.IsDemo) rig.Shake(big ? 0.12f : 0.05f, new Vector3(dir.x, 0.5f, 0));
 
+            // --- sound (web connect()): the hit, its verdict in the chord, a coin on a big one, the fanfare on the slam
+            Host.PlaySfx("impact", _now);
+            if (!c.IsDemo) Host.PlaySfx(SfxTheory.VerdictSfx(c.Verdict), _now + 0.01);
+            if (big) Host.PlaySfx("coin", _now + 0.06);
+            if (p.Finale) Host.PlaySfx("fanfare", _now + 0.1);
+
             var f = Feel.ForCombo(c.Verdict, c.Combo);
             if (!c.IsDemo)
             {
@@ -453,6 +467,7 @@ namespace Bonanza
             if (w.Swung) StartSwing();
             if (_outsClear > 0) { _outsClear = 0; Ui.Outs(0); }   // a new out while SIDE RETIRED still holds the lamps: the new inning starts now
             Ui.Outs(w.Outs);
+            Host.PlaySfx("miss", _now);
             var fx = Look.Fx;
             var o = VerdictOpts.Default;
             o.Combo = 0; o.GroundY = 0; o.Text = false; o.Stage = false;

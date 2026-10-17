@@ -168,6 +168,18 @@ namespace Bonanza
             Begin(id, _host.Now + 0.18, null, false);
         }
 
+        MusicTrackInfo _shellInfo;
+        double _shellZero;
+
+        /// The shell track last started (title or results) and the game time its beat 0 sounds, so menu sounds can
+        /// be locked to its chord (web key()). False during a round. A one-shot that has run out keeps counting:
+        /// the web's results track goes on cycling its four bars.
+        public bool ShellClock(out string id, out double beatZeroGame, out double spb)
+        {
+            id = _shellInfo?.Id; beatZeroGame = _shellZero; spb = _shellInfo?.SecondsPerBeat ?? 0.5;
+            return _shellInfo != null;
+        }
+
         void Begin(string id, double beatZeroGame, Func<double> fileBeat, bool adaptive)
         {
             if (_lib == null) return;
@@ -186,6 +198,8 @@ namespace Bonanza
             deck.FileBeat = fileBeat;
             deck.Gain = 1;
             deck.Adaptive = adaptive;
+            _shellInfo = adaptive ? null : info;
+            _shellZero = beatZeroGame;
             deck.Current = deck.Pending = adaptive ? 1 : 0;
             deck.LastBar = int.MinValue;
             deck.Resyncs = 0; deck.SeekHold = 0; deck.OverSince = -1; deck.ResumeMark = -1; deck.Bias = 0; deck.CalAt = -1;

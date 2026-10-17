@@ -1,0 +1,323 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 76ade2b6d67db40b1bcb143c76e63cb3, type: 3}
+  m_Name: SfxLibrary
+  m_EditorClassIdentifier: Bonanza.Runtime::Bonanza.SfxLibrary
+  entries:
+  - id: tick
+    clip: {fileID: 8300000, guid: b02896b8f93e64a0192ed8034f1a0dd1, type: 3}
+  - id: swoosh
+    clip: {fileID: 8300000, guid: cbf1ec354986f4da6a2634803a92fdcc, type: 3}
+  - id: swing-kings_perfect_0
+    clip: {fileID: 8300000, guid: d374bf0d5d6374df4a739b5840bc3cf0, type: 3}
+  - id: swing-kings_perfect_3
+    clip: {fileID: 8300000, guid: 2f4d9d51b927441a78f40cb030a8ab3d, type: 3}
+  - id: swing-kings_perfect_4
+    clip: {fileID: 8300000, guid: 527d05169f93945dbacdb40c520c665f, type: 3}
+  - id: swing-kings_perfect_5
+    clip: {fileID: 8300000, guid: 1bd8792286f8447ddaeee9d54109fb86, type: 3}
+  - id: swing-kings_great_0
+    clip: {fileID: 8300000, guid: 1b1d22d50498d44c7b77c9b1f9076d8f, type: 3}
+  - id: swing-kings_great_3
+    clip: {fileID: 8300000, guid: 3c28929f3e4e441b9af58d8675d13cdf, type: 3}
+  - id: swing-kings_great_4
+    clip: {fileID: 8300000, guid: 0c52478b4026745c499601506ceda67d, type: 3}
+  - id: swing-kings_great_5
+    clip: {fileID: 8300000, guid: 7efc6042e202d44c799b1b5e60bf5abc, type: 3}
+  - id: swing-kings_good_0
+    clip: {fileID: 8300000, guid: 4da47842dcf6b4bbeab772d49881cfd7, type: 3}
+  - id: swing-kings_good_3
+    clip: {fileID: 8300000, guid: 719a85da145884eeeb9e94b8dc78de18, type: 3}
+  - id: swing-kings_good_4
+    clip: {fileID: 8300000, guid: 74b0448c5402d4abe9adcf94ba6c480d, type: 3}
+  - id: swing-kings_good_5
+    clip: {fileID: 8300000, guid: b0fc33d5fbf9049e8ba99053ced4c4ab, type: 3}
+  - id: swing-kings_miss_0
+    clip: {fileID: 8300000, guid: 5d25f08721bcb4c31aa5cfdcb0e6d27e, type: 3}
+  - id: swing-kings_miss_3
+    clip: {fileID: 8300000, guid: 615fe8926f69e4efea1eae7eaab05121, type: 3}
+  - id: swing-kings_miss_4
+    clip: {fileID: 8300000, guid: 666e4378210ed4393a602e057a0c86ec, type: 3}
+  - id: swing-kings_miss_5
+    clip: {fileID: 8300000, guid: 415aaa18a55ff4bdb87d0c32ef18f074, type: 3}
+  - id: swing-kings_impact_0
+    clip: {fileID: 8300000, guid: 332dee64538ae41e99801250e204fb3d, type: 3}
+  - id: swing-kings_impact_3
+    clip: {fileID: 8300000, guid: 3eb2888d1e97c46d0a2019d1e81f0b10, type: 3}
+  - id: swing-kings_impact_4
+    clip: {fileID: 8300000, guid: 326ef87f5d0764576a5ada5e3e89267d, type: 3}
+  - id: swing-kings_impact_5
+    clip: {fileID: 8300000, guid: 550ff984480864860878fad2e0d165da, type: 3}
+  - id: swing-kings_fanfare
+    clip: {fileID: 8300000, guid: 253c63151060a4d77885e240e2cce96b, type: 3}
+  - id: swing-kings_coin
+    clip: {fileID: 8300000, guid: c8e2be416b1384a25bc4eccb400c13e5, type: 3}
+  - id: swing-kings_count_0
+    clip: {fileID: 8300000, guid: e6e80ec7e22c44155bd1945d5e8623f4, type: 3}
+  - id: swing-kings_count_1
+    clip: {fileID: 8300000, guid: 76d32f628ecd741b1958e7087efff3ae, type: 3}
+  - id: bounce-brigade_miss_0
+    clip: {fileID: 8300000, guid: ca67bbf2d4d0c4500b2bc89f3b8d2611, type: 3}
+  - id: bounce-brigade_miss_3
+    clip: {fileID: 8300000, guid: 90aea06d359c74a45a1b5d77baed8f44, type: 3}
+  - id: bounce-brigade_miss_4
+    clip: {fileID: 8300000, guid: 2b2973ed96e6d486b9cbd7fe0bd2a9c3, type: 3}
+  - id: bounce-brigade_miss_5
+    clip: {fileID: 8300000, guid: 15424cd64e90140b9b4e2a57f2e4690d, type: 3}
+  - id: bounce-brigade_fanfare
+    clip: {fileID: 8300000, guid: fa46ae939b69043d2ab86286e491fc5a, type: 3}
+  - id: bounce-brigade_count_0
+    clip: {fileID: 8300000, guid: 9d8895bc989dd46e1b4355548441de43, type: 3}
+  - id: bounce-brigade_count_1
+    clip: {fileID: 8300000, guid: 7dec1f56043e34137ae48c161b445f21, type: 3}
+  - id: chomp-chorus_perfect_0
+    clip: {fileID: 8300000, guid: 9a7d72a663f38426a873b7c441681964, type: 3}
+  - id: chomp-chorus_perfect_3
+    clip: {fileID: 8300000, guid: 4f63557fb4d4c4571b0c6f406e6d362f, type: 3}
+  - id: chomp-chorus_perfect_4
+    clip: {fileID: 8300000, guid: 75c28625b90f64321b2f58de27b617cd, type: 3}
+  - id: chomp-chorus_perfect_6
+    clip: {fileID: 8300000, guid: a274b91543b164dc19470376665ce6c3, type: 3}
+  - id: chomp-chorus_great_0
+    clip: {fileID: 8300000, guid: 38129eb744083438caec99eb30506dca, type: 3}
+  - id: chomp-chorus_great_3
+    clip: {fileID: 8300000, guid: db5ca53e8e81f4fedbd6a48562e9ee63, type: 3}
+  - id: chomp-chorus_great_4
+    clip: {fileID: 8300000, guid: 04eb2b9542ecb41218db8182a746c661, type: 3}
+  - id: chomp-chorus_great_6
+    clip: {fileID: 8300000, guid: 92c03dcc74b6a4e559180d9fa41278db, type: 3}
+  - id: chomp-chorus_good_0
+    clip: {fileID: 8300000, guid: d449d21406e7a43e6bc522d646a5ab88, type: 3}
+  - id: chomp-chorus_good_3
+    clip: {fileID: 8300000, guid: 20601a07ec59d4237b957a7f1ec38e28, type: 3}
+  - id: chomp-chorus_good_4
+    clip: {fileID: 8300000, guid: 7cfc77125f9934befb9727d103344178, type: 3}
+  - id: chomp-chorus_good_6
+    clip: {fileID: 8300000, guid: 80237ab6fd2c445b3b51766f12e85a1b, type: 3}
+  - id: chomp-chorus_miss_0
+    clip: {fileID: 8300000, guid: 3ef9b462cb7d34376a70623b27734ad9, type: 3}
+  - id: chomp-chorus_miss_3
+    clip: {fileID: 8300000, guid: 28ee2203bf5684bd1b04a8ba03dfd0be, type: 3}
+  - id: chomp-chorus_miss_4
+    clip: {fileID: 8300000, guid: 75eb9899b3fa54d81a6624485cbe8c8f, type: 3}
+  - id: chomp-chorus_miss_6
+    clip: {fileID: 8300000, guid: 3786efa08b34d4721851227fa2cda55d, type: 3}
+  - id: chomp-chorus_impact_0
+    clip: {fileID: 8300000, guid: 659e8840354ed4c8ba480b2a77563149, type: 3}
+  - id: chomp-chorus_impact_3
+    clip: {fileID: 8300000, guid: f804ada12fafd40dd90a1b77b9bbd370, type: 3}
+  - id: chomp-chorus_impact_4
+    clip: {fileID: 8300000, guid: 615af4717196d4bf385c6d9d6364b4d2, type: 3}
+  - id: chomp-chorus_impact_6
+    clip: {fileID: 8300000, guid: 3efb70ff9356e4bef9e0369a5279ebb5, type: 3}
+  - id: chomp-chorus_fanfare
+    clip: {fileID: 8300000, guid: d0879f8e4d7d747d48c8797693ccd148, type: 3}
+  - id: chomp-chorus_count_0
+    clip: {fileID: 8300000, guid: 6ed5bd1b67ea1482c8279f818e3b7060, type: 3}
+  - id: chomp-chorus_count_1
+    clip: {fileID: 8300000, guid: 8c49405eca53b4d18ac605aa61afca89, type: 3}
+  - id: drumline-dash_perfect_0
+    clip: {fileID: 8300000, guid: d2ba3df39f1ce4411b4015c0dab9e73e, type: 3}
+  - id: drumline-dash_perfect_3
+    clip: {fileID: 8300000, guid: 53422ed3cf6584e4a89a1aa051abde82, type: 3}
+  - id: drumline-dash_perfect_4
+    clip: {fileID: 8300000, guid: 8c20c354fefe949708015cf754f3bd2d, type: 3}
+  - id: drumline-dash_perfect_5
+    clip: {fileID: 8300000, guid: 586fd23094b654810a897a757b410bbe, type: 3}
+  - id: drumline-dash_perfect_6
+    clip: {fileID: 8300000, guid: 7677d0cee234b441fa49ac57d4ea9d3c, type: 3}
+  - id: drumline-dash_great_0
+    clip: {fileID: 8300000, guid: c0dd1054aa0134bb499269b1d2834c6a, type: 3}
+  - id: drumline-dash_great_3
+    clip: {fileID: 8300000, guid: 8513eee70692c4e39a87cd713c672071, type: 3}
+  - id: drumline-dash_great_4
+    clip: {fileID: 8300000, guid: 42b865a1216e54d138f45d501c4b4326, type: 3}
+  - id: drumline-dash_great_5
+    clip: {fileID: 8300000, guid: 3219a629d0d284c11a4ee90d229a81fc, type: 3}
+  - id: drumline-dash_great_6
+    clip: {fileID: 8300000, guid: 88cb2243a533647c2b013a231c99277c, type: 3}
+  - id: drumline-dash_good_0
+    clip: {fileID: 8300000, guid: 791b06ba9a2554d9593e8a963644551b, type: 3}
+  - id: drumline-dash_good_3
+    clip: {fileID: 8300000, guid: e952edc27fd7a4769bc63135863a97d7, type: 3}
+  - id: drumline-dash_good_4
+    clip: {fileID: 8300000, guid: 0cb35ff8979c4492882cae4ded160322, type: 3}
+  - id: drumline-dash_good_5
+    clip: {fileID: 8300000, guid: 99e419fad8f2d4379aec6613d568614c, type: 3}
+  - id: drumline-dash_good_6
+    clip: {fileID: 8300000, guid: 91327bbcbcd4c4e7088acf57ca8576cb, type: 3}
+  - id: drumline-dash_miss_0
+    clip: {fileID: 8300000, guid: 49694e78b169945b9975c4298e7402af, type: 3}
+  - id: drumline-dash_miss_3
+    clip: {fileID: 8300000, guid: 6b47a4062c47a4794b57405bf14b9675, type: 3}
+  - id: drumline-dash_miss_4
+    clip: {fileID: 8300000, guid: c4018f876272a49bd90892a1e772ede5, type: 3}
+  - id: drumline-dash_miss_5
+    clip: {fileID: 8300000, guid: d436fa8f27d954ad9a18958db6deee65, type: 3}
+  - id: drumline-dash_miss_6
+    clip: {fileID: 8300000, guid: a703399acea1449d5bac3388df513433, type: 3}
+  - id: drumline-dash_fanfare
+    clip: {fileID: 8300000, guid: 8d80baa3ff58b43b0af4ae8e191b20d6, type: 3}
+  - id: drumline-dash_count_0
+    clip: {fileID: 8300000, guid: 27fae5b21153d43ea8a322cd7c54c9e6, type: 3}
+  - id: drumline-dash_count_1
+    clip: {fileID: 8300000, guid: e467ed0a7061646498817cb590a9ddea, type: 3}
+  - id: finale-fever_perfect_0
+    clip: {fileID: 8300000, guid: 4dea366ee46ae434fa83a6790b53f11b, type: 3}
+  - id: finale-fever_perfect_3
+    clip: {fileID: 8300000, guid: b34c52f4709a6465e8e198929851958f, type: 3}
+  - id: finale-fever_perfect_4
+    clip: {fileID: 8300000, guid: b1c16e81a9f4b4960a4849787ba7c7bf, type: 3}
+  - id: finale-fever_perfect_5
+    clip: {fileID: 8300000, guid: 934cc781fa0d540e2bd9b07599e00299, type: 3}
+  - id: finale-fever_great_0
+    clip: {fileID: 8300000, guid: ce9d35399c55d41749130560d5a2623c, type: 3}
+  - id: finale-fever_great_3
+    clip: {fileID: 8300000, guid: eee9de78f5a42475f8803882cef4060d, type: 3}
+  - id: finale-fever_great_4
+    clip: {fileID: 8300000, guid: 298ab399823ea489980e37c448ee2fa3, type: 3}
+  - id: finale-fever_great_5
+    clip: {fileID: 8300000, guid: 504e3e391fe5a401ea57bfd192e47a68, type: 3}
+  - id: finale-fever_good_0
+    clip: {fileID: 8300000, guid: 417518659b02f49919cc47a035e53682, type: 3}
+  - id: finale-fever_good_3
+    clip: {fileID: 8300000, guid: 1c321760328494581b45c0b7c9069305, type: 3}
+  - id: finale-fever_good_4
+    clip: {fileID: 8300000, guid: 4994bdc2533054efdbf07b1203a37675, type: 3}
+  - id: finale-fever_good_5
+    clip: {fileID: 8300000, guid: ae437c52ff8be4c6ebc9bbb5fc8f07fe, type: 3}
+  - id: finale-fever_miss_0
+    clip: {fileID: 8300000, guid: 7bcce8202f78b4bb6ad9f8eb14dcb2be, type: 3}
+  - id: finale-fever_miss_3
+    clip: {fileID: 8300000, guid: 53fa996eadcf94f768fe048eeaf053d9, type: 3}
+  - id: finale-fever_miss_4
+    clip: {fileID: 8300000, guid: 038616a1d39254fffadc77f21b5134b1, type: 3}
+  - id: finale-fever_miss_5
+    clip: {fileID: 8300000, guid: a329e19437edf402fa80110004682d83, type: 3}
+  - id: finale-fever_impact_0
+    clip: {fileID: 8300000, guid: 602fbe0f1afde448e8c5e60be3306ebe, type: 3}
+  - id: finale-fever_impact_3
+    clip: {fileID: 8300000, guid: fb9764cbbec8e408099e8eae89dc0590, type: 3}
+  - id: finale-fever_impact_4
+    clip: {fileID: 8300000, guid: d7cfe978291dd43fa921bc6b6651fefb, type: 3}
+  - id: finale-fever_impact_5
+    clip: {fileID: 8300000, guid: 76e6fa330785c4252ab89f4c225edc3e, type: 3}
+  - id: finale-fever_fanfare
+    clip: {fileID: 8300000, guid: b5be9313701514f41b3558bcc01e6e6b, type: 3}
+  - id: finale-fever_coin
+    clip: {fileID: 8300000, guid: 4b2920851883849d780f27b879edc847, type: 3}
+  - id: finale-fever_count_0
+    clip: {fileID: 8300000, guid: b43b59435950745d6b6607783c608a99, type: 3}
+  - id: finale-fever_count_1
+    clip: {fileID: 8300000, guid: 4aa31a4268f2b428bb8ce82954d2ed69, type: 3}
+  - id: finale-fever_combo_0
+    clip: {fileID: 8300000, guid: 8e900fe3951bf4916bd49b04be1169ca, type: 3}
+  - id: finale-fever_combo_1
+    clip: {fileID: 8300000, guid: ee01550d4cccd4e5f818ac8d4d7e3c59, type: 3}
+  - id: finale-fever_combo_2
+    clip: {fileID: 8300000, guid: 2a2d63869e3d74bc99ad5c74d41a6180, type: 3}
+  - id: finale-fever_combo_3
+    clip: {fileID: 8300000, guid: a75d0de82be35409faeb85e520000cca, type: 3}
+  - id: finale-fever_combo_4
+    clip: {fileID: 8300000, guid: 65186ed9b7c064612891bb274f245d88, type: 3}
+  - id: finale-fever_combo_5
+    clip: {fileID: 8300000, guid: 127e436477ce7405999bc35683d0e0c7, type: 3}
+  - id: finale-fever_combo_6
+    clip: {fileID: 8300000, guid: 83ccf7dacfaa04e9b8282029d85c949e, type: 3}
+  - id: finale-fever_combo_7
+    clip: {fileID: 8300000, guid: d794289941cf240d1b144b60762f2694, type: 3}
+  - id: finale-fever_combo_8
+    clip: {fileID: 8300000, guid: 47917f15291b74c079750bc2ab5e7dee, type: 3}
+  - id: finale-fever_combo_9
+    clip: {fileID: 8300000, guid: b532476919f6743a1b12d40209d2de4c, type: 3}
+  - id: title_ui_0
+    clip: {fileID: 8300000, guid: 6191d5611b6124b4f9ab825c99b589cc, type: 3}
+  - id: title_ui_1
+    clip: {fileID: 8300000, guid: 8cfb8f21935d2458e8268ca102d59558, type: 3}
+  - id: title_ui_3
+    clip: {fileID: 8300000, guid: 0b312e986884945eda234a9a093a8534, type: 3}
+  - id: title_ui_4
+    clip: {fileID: 8300000, guid: a210a72d7aa264747a163247a53aec32, type: 3}
+  - id: title_ui_5
+    clip: {fileID: 8300000, guid: 7c5bb7c8a1be84203916e1b32b115c26, type: 3}
+  - id: title_uiBack_0
+    clip: {fileID: 8300000, guid: 50b17b37258dd46c685b89ba25fa0663, type: 3}
+  - id: title_uiBack_1
+    clip: {fileID: 8300000, guid: 6a322bda2873d4ae4ac2794c769757c2, type: 3}
+  - id: title_uiBack_3
+    clip: {fileID: 8300000, guid: 1d6c0389dfa3d48b2878e9b86bbcc8e5, type: 3}
+  - id: title_uiBack_4
+    clip: {fileID: 8300000, guid: 012bc00f20ea7424b8de3e1c064c1e53, type: 3}
+  - id: title_uiBack_5
+    clip: {fileID: 8300000, guid: f49470d8a194e48cea8876adbee0a0bb, type: 3}
+  - id: title_perfect_0
+    clip: {fileID: 8300000, guid: c8de4791be9e94adf926decc0a01b069, type: 3}
+  - id: title_perfect_1
+    clip: {fileID: 8300000, guid: 70cac7924045d4b9491b71606cd1c866, type: 3}
+  - id: title_perfect_3
+    clip: {fileID: 8300000, guid: e56f3feb81a27452ba9e44f68018444e, type: 3}
+  - id: title_perfect_4
+    clip: {fileID: 8300000, guid: ba38217697990403fb8ed4a8af8032ca, type: 3}
+  - id: title_perfect_5
+    clip: {fileID: 8300000, guid: 237012c08252b4f0dbd9067b4213093b, type: 3}
+  - id: title_great_0
+    clip: {fileID: 8300000, guid: 0496aa4760a9c4f4298e5cdbf12e31a9, type: 3}
+  - id: title_great_1
+    clip: {fileID: 8300000, guid: ea1c9e01dc59e470cb0b86c71e300a9c, type: 3}
+  - id: title_great_3
+    clip: {fileID: 8300000, guid: 7e0a9b945ef5242b88169c4231d28155, type: 3}
+  - id: title_great_4
+    clip: {fileID: 8300000, guid: c1c2fb506f4854f60917b12e9d3fd5eb, type: 3}
+  - id: title_great_5
+    clip: {fileID: 8300000, guid: ec23f43e09c7c4098a6e3a26dbe75ef1, type: 3}
+  - id: title_miss_0
+    clip: {fileID: 8300000, guid: 45c18c7f9504b4801b6b086a2a4fa419, type: 3}
+  - id: title_miss_1
+    clip: {fileID: 8300000, guid: 6f04a42a6abba48468216eac756cbed5, type: 3}
+  - id: title_miss_3
+    clip: {fileID: 8300000, guid: fc70d561cde804ddea279befe8b5832e, type: 3}
+  - id: title_miss_4
+    clip: {fileID: 8300000, guid: 65f8bc889be5748e9abff7f0bca0c52f, type: 3}
+  - id: title_miss_5
+    clip: {fileID: 8300000, guid: 31938acc9cdf044698bc1433893b5f61, type: 3}
+  - id: title_fanfare
+    clip: {fileID: 8300000, guid: 28cb3d30b143349eb92afa7733f632ce, type: 3}
+  - id: results_ui_0
+    clip: {fileID: 8300000, guid: 217058d69c76a4c049ca83b5798d5d22, type: 3}
+  - id: results_ui_3
+    clip: {fileID: 8300000, guid: 3734cd88ab5e34c58b908aeca0af48ed, type: 3}
+  - id: results_ui_4
+    clip: {fileID: 8300000, guid: b6052bd460cf8488aba77b034907cd78, type: 3}
+  - id: results_perfect_0
+    clip: {fileID: 8300000, guid: 298c11aa0b87746a1ae6e2571d5b49c3, type: 3}
+  - id: results_perfect_3
+    clip: {fileID: 8300000, guid: a92fdf27f61e84968a32939daa57ebc1, type: 3}
+  - id: results_perfect_4
+    clip: {fileID: 8300000, guid: 26e5c6dc3d2994fd9b3de961ba41d4f9, type: 3}
+  - id: results_great_0
+    clip: {fileID: 8300000, guid: 46db204ec7cee411db1875f72010ec61, type: 3}
+  - id: results_great_3
+    clip: {fileID: 8300000, guid: 167a5c1b215ff458083a8ea6ac651622, type: 3}
+  - id: results_great_4
+    clip: {fileID: 8300000, guid: 0e9918134d8654c37a0689c17f55199b, type: 3}
+  - id: results_good_0
+    clip: {fileID: 8300000, guid: eb94a13dc3eaa44ab94b8db6e96db123, type: 3}
+  - id: results_good_3
+    clip: {fileID: 8300000, guid: 8af8920a9f2c44d0c8ef8f10a2493ba2, type: 3}
+  - id: results_good_4
+    clip: {fileID: 8300000, guid: d035d7da25c1a46b0803df6b7b85dde5, type: 3}
+  - id: results_miss_0
+    clip: {fileID: 8300000, guid: d174251150f7e451abc89d0ba349a7db, type: 3}
+  - id: results_miss_3
+    clip: {fileID: 8300000, guid: a377e6d3327b84128b37177dc96a5930, type: 3}
+  - id: results_miss_4
+    clip: {fileID: 8300000, guid: 99e18ca4a0dd042cd88c3b54b04cc4b8, type: 3}

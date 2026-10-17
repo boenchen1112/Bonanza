@@ -141,7 +141,7 @@ namespace Bonanza
             {
                 // A press that claimed no note: a tick, and the singer flinches.
                 _lanes[_round.Human].Flinch = 1;
-                Host.Play(TickClip, 0.15f);
+                Host.PlaySfx("tick", time, gain: 0.12f);
             }
         }
 
@@ -177,6 +177,9 @@ namespace Bonanza
 
         // ------------------------------------------------------------ verdicts
 
+        double _lastVerdictAt = -99;
+        bool _finaleArmed;
+
         void OnJudged(int i, Verdict v, double errMs, ChompNote note, bool cpu)
         {
             var l = _lanes[i];
@@ -186,6 +189,10 @@ namespace Bonanza
                 Debug.Log($"[MISS] game={Id} beat={note.Beat} now={_round.BeatAt(_now):F3} dt={Time.unscaledDeltaTime:F3}");
             bool wasAlive = l.AliveT > 0.5f;
             double at = System.Math.Max(_round.Map.TimeAt(note.Beat) + errMs / 1000, _now + 0.004);
+            // Web: CPU voices judge in the same frame as the player's; only the player's note sounds its verdict.
+            bool dense = cpu || _now - _lastVerdictAt < 0.055;
+            if (!cpu) _lastVerdictAt = _now;
+            if (!dense) Host.PlaySfx(SfxTheory.VerdictSfx(v), at);
             if (hit)
             {
                 l.Sing = 1;
@@ -215,8 +222,6 @@ namespace Bonanza
         AudioClip SourClip(int lane, double beat) => Tones.Blip(Tones.Midi(MidiFor(lane, beat) - 12), 0.3f, 8, Wave.Square, 0.45f);
         static AudioClip GulpClip(int lane, bool big) => Tones.Blip(150 + lane * 26, Spb * (big ? 3.4f : 0.62f), big ? 1.5f : 6f, Wave.Sine, big ? 4.4f : 3f);
         AudioClip BedClip(int lane, double beat) => Tones.Blip(Tones.Midi(MidiFor(lane, beat)), Spb * 3.9f, 0.9f, Wave.Triangle, 1, 0.8f);
-        static AudioClip TickClip => Tones.Blip(2400, 0.02f, 120);
-        static AudioClip FinishClip => Tones.Blip(Tones.Midi(81), 0.6f, 3, Wave.Square);
 
         /// Synthesise every clip the round can ask for before it starts: built
         /// lazily, a 1.7 s finale clip stalls a frame long enough to push a
@@ -230,7 +235,6 @@ namespace Bonanza
                     SingClip(i, beat, false); SingClip(i, beat, true); SourClip(i, beat); BedClip(i, beat);
                 }
             for (int i = 0; i < N; i++) { GulpClip(i, false); GulpClip(i, true); }
-            _ = TickClip; _ = FinishClip;
         }
 
         void Sing(int lane, Verdict v, double at, bool finale)
@@ -258,7 +262,7 @@ namespace Bonanza
                 double at = System.Math.Max(c.Time, now + 0.003);
                 if (c.Kind == 0) Gulp(c.Lane, at, c.Big);
                 else if (c.Kind == 1) Bed(at, c.Beat);
-                else Host.PlayAt(FinishClip, at, 0.12f);
+                else Host.PlaySfx("fanfare", at);
             }
         }
 
@@ -306,6 +310,13 @@ namespace Bonanza
             {
                 _finaleBanner = true;
                 _say.Banner("ALL FOUR!", 1.3f, "big note - hold it");
+                Host.PlaySfx("swoosh", _now);
+            }
+            // Once the late half of the claim window is out, a finale that was hit at all lands with an impact (web _finale).
+            if (!_finaleArmed && beat >= ChompChart.FinaleBeat + 0.45 && beat <= ChompChart.FinaleEnd + 0.5)
+            {
+                _finaleArmed = true;
+                if (_round.FinaleHits > 0) Host.PlaySfx("impact", _now);
             }
             if (!_finaleDone && beat >= ChompChart.FinaleEnd)
             {
