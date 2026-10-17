@@ -338,7 +338,7 @@ namespace Bonanza
             {
                 double rate = s0.clip.frequency;
                 // The file position the game's clock asks for (a tempo ramp is rendered into the file, so this holds for it too).
-                double expect = _host.Now - d.BeatZeroGame + info.BeatOffset;
+                double expect = _host.NowRaw - d.BeatZeroGame + info.BeatOffset;   // the file position is read on the dsp axis, not the heard one
                 double actual = s0.timeSamples / rate;
                 double len = s0.clip.samples / rate;
                 if (info.Loop) { expect = expect % len; double e = actual - expect; e -= Math.Round(e / len) * len; ComputeErr(d, e, s0, info, len); }

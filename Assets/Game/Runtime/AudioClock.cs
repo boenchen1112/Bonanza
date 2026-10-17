@@ -12,6 +12,7 @@
 // dspTime stands still until then. Nothing may be scheduled against the clock
 // before `Running` is true — the game gates its start on a press.
 
+using Bonanza.Core;
 using UnityEngine;
 using UnityEngine.InputSystem.LowLevel;
 
@@ -31,15 +32,32 @@ namespace Bonanza
         /// dspTime is advancing: the browser has unlocked audio.
         public bool Running => _moving >= 3;
 
-        /// Current audio time, continuous between audio-buffer steps.
-        public double Now => _hasOffset ? InputState.currentTime + _offset : AudioSettings.dspTime;
+        readonly LatencySlew _latency = new LatencySlew();
+
+        /// The output latency currently subtracted from Now and ToAudioTime, seconds (web clock.js _outputLatency).
+        public double Latency => _latency.Value;
+
+        /// The estimate the applied latency is moving toward, seconds.
+        public double LatencyTarget => _latency.Target;
+
+        /// Take a fresh output-latency estimate (call about once a second). While `running` (a round is
+        /// being played) it is slewed in: Now subtracts it, so a jump would jump the beat on screen.
+        public double RefreshLatency(double target, bool running) => _latency.Refresh(target, running);
+
+        /// Audio time on the dsp axis, continuous between audio-buffer steps, NOT latency-compensated:
+        /// where the mixer is now. Scheduling (PlayScheduled) and file positions live on this axis.
+        public double RawNow => _hasOffset ? InputState.currentTime + _offset : AudioSettings.dspTime;
+
+        /// Current audio time, continuous between audio-buffer steps and latency-compensated: the moment
+        /// the player HEARS right now (web clock.now()).
+        public double Now => RawNow - _latency.Value;
 
         /// Raw dspTime — for AudioSource.PlayScheduled.
         public double DspNow => AudioSettings.dspTime;
 
         /// Convert an input-system timestamp (e.g. InputAction.CallbackContext.time)
-        /// to audio time.
-        public double ToAudioTime(double inputTime) => _hasOffset ? inputTime + _offset : AudioSettings.dspTime;
+        /// to audio time, latency-compensated like Now (web clock.toAudioTime).
+        public double ToAudioTime(double inputTime) => (_hasOffset ? inputTime + _offset : AudioSettings.dspTime) - _latency.Value;
 
         /// Re-anchor the input->audio offset to dspTime right now. WebGL stalls dspTime while the listener is
         /// paused but the input clock runs on, so after a pause the old offset is off by the pause's length and

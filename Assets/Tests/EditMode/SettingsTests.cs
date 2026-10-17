@@ -18,10 +18,56 @@ namespace Bonanza.Core.Tests
     public class SettingsTests
     {
         ISettingsStore _saved;
+        System.Func<bool> _savedOs;
         MemStore _m;
 
-        [SetUp] public void SetUp() { _saved = Settings.Store; _m = new MemStore(); Settings.Store = _m; Settings.CameraInputAvailable = false; }
-        [TearDown] public void TearDown() { Settings.Store = _saved; }
+        [SetUp] public void SetUp()
+        {
+            _saved = Settings.Store; _m = new MemStore(); Settings.Store = _m; Settings.CameraInputAvailable = false;
+            _savedOs = Settings.OsReduceMotion; Settings.OsReduceMotion = () => false;
+        }
+        [TearDown] public void TearDown() { Settings.Store = _saved; Settings.OsReduceMotion = _savedOs; }
+
+        [Test] public void ReduceMotion_is_the_option_or_the_OS_flag()
+        {
+            bool os = false;
+            Settings.OsReduceMotion = () => os;
+            // option off, OS off
+            Assert.IsFalse(Settings.ReduceMotion);
+            // option off, OS on: the OS flag alone turns it on, the stored option stays off
+            os = true;
+            Assert.IsTrue(Settings.ReduceMotion);
+            Assert.IsFalse(Settings.ReduceMotionOption);
+            // option on, OS on
+            Settings.ReduceMotionOption = true;
+            Assert.IsTrue(Settings.ReduceMotion);
+            // option on, OS off
+            os = false;
+            Assert.IsTrue(Settings.ReduceMotion);
+            // back to option off, OS off
+            Settings.ReduceMotionOption = false;
+            Assert.IsFalse(Settings.ReduceMotion);
+        }
+
+        [Test] public void ReduceMotion_follows_the_OS_flag_live_and_ResetAll_keeps_it()
+        {
+            bool os = false;
+            Settings.OsReduceMotion = () => os;
+            Assert.IsFalse(Settings.ReduceMotion);
+            os = true;                                   // the media query's change event flips the source
+            Assert.IsTrue(Settings.ReduceMotion);
+            Settings.ResetAll();                         // clears the saved option, not the OS setting
+            Assert.IsFalse(Settings.ReduceMotionOption);
+            Assert.IsTrue(Settings.ReduceMotion);
+        }
+
+        [Test] public void NotifyChanged_raises_Changed()
+        {
+            int n = 0; System.Action h = () => n++;
+            Settings.Changed += h;
+            try { Settings.NotifyChanged(); } finally { Settings.Changed -= h; }
+            Assert.AreEqual(1, n);
+        }
 
         [Test] public void Defaults_match_the_web()
         {
@@ -68,7 +114,7 @@ namespace Bonanza.Core.Tests
 
         [Test] public void Values_round_trip_through_the_store()
         {
-            Settings.Music = 0.4f; Settings.Sfx = 0.1f; Settings.OffsetMs = -35; Settings.ReduceMotion = true;
+            Settings.Music = 0.4f; Settings.Sfx = 0.1f; Settings.OffsetMs = -35; Settings.ReduceMotionOption = true;
             Settings.Graphics = GraphicsSetting.Low; Settings.SwingInputChoice = SwingInput.Mouse;
             Assert.AreEqual(0.4f, Settings.Music, 1e-6f);
             Assert.AreEqual(0.1f, Settings.Sfx, 1e-6f);
@@ -144,7 +190,7 @@ namespace Bonanza.Core.Tests
         {
             int n = 0; System.Action h = () => n++;
             Settings.Changed += h;
-            Settings.Music = 0.5f; Settings.ReduceMotion = true;
+            Settings.Music = 0.5f; Settings.ReduceMotionOption = true;
             Settings.Changed -= h;
             Assert.AreEqual(2, n);
         }

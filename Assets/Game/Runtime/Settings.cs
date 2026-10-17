@@ -139,13 +139,23 @@ namespace Bonanza
             set { Store.SetFloat(KeyOffset, ClampOffset(value)); Touch(); }
         }
 
-        /// Tone down shake, flashes and camera moves. Read by the look/FX/camera code.
-        /// (The web also honours the OS prefers-reduced-motion; the Unity build does not read it.)
-        public static bool ReduceMotion
+        /// The OS "prefers-reduced-motion" flag. Swapped by tests; in a browser it is the cached media query
+        /// (BonanzaBrowser, updated on the query's change events), elsewhere false.
+        public static Func<bool> OsReduceMotion = () => BonanzaBrowser.ReducedMotion;
+
+        /// Tell listeners something outside the store changed (the OS flag flipped).
+        public static void NotifyChanged() => Changed?.Invoke();
+
+        /// The Options toggle as saved, without the OS flag.
+        public static bool ReduceMotionOption
         {
             get => Store.GetFloat(KeyReduce, 0) > 0.5f;
             set { Store.SetFloat(KeyReduce, value ? 1 : 0); Touch(); }
         }
+
+        /// Tone down shake, flashes and camera moves. Read by the look/FX/camera code. Like the web
+        /// (shell/theme.js reducedMotion): the option OR the OS prefers-reduced-motion.
+        public static bool ReduceMotion => ReduceMotionOption || OsReduceMotion();
 
         public static GraphicsSetting Graphics
         {

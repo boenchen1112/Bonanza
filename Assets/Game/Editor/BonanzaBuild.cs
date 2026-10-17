@@ -7,9 +7,10 @@ using UnityEngine;
 
 // Batch-mode entry points driven by Tools/unity-batch.sh. Every method is a static
 // -executeMethod target; failures throw or call EditorApplication.Exit(1) so the
-// process exit code is non-zero. PlayerSettings are never written here: the WebGL
-// settings stored in ProjectSettings (Brotli, no decompression fallback, ...) are used
-// as they are, and the build only asserts the ones that matter.
+// process exit code is non-zero. PlayerSettings are not rewritten here except the WebGL page
+// template (Assets/WebGLTemplates/Bonanza): the other WebGL settings stored in ProjectSettings
+// (Brotli, no decompression fallback, ...) are used as they are, and the build only asserts the
+// ones that matter.
 public static class BonanzaBuild
 {
     static string ProjectRoot => Directory.GetParent(Application.dataPath).FullName;
@@ -32,6 +33,13 @@ public static class BonanzaBuild
             throw new Exception("WebGL compression is " + PlayerSettings.WebGL.compressionFormat + ", expected Brotli.");
         if (PlayerSettings.WebGL.decompressionFallback)
             throw new Exception("WebGL decompression fallback is on; the gates expect .br files.");
+
+        const string Template = "PROJECT:Bonanza";
+        if (PlayerSettings.WebGL.template != Template)
+        {
+            PlayerSettings.WebGL.template = Template;
+            Debug.Log("[BonanzaBuild] WebGL template -> " + Template);
+        }
 
         var opts = new BuildPlayerOptions
         {

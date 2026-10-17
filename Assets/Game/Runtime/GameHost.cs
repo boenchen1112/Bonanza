@@ -242,7 +242,14 @@ namespace Bonanza
         public bool ClockRunning => _clock.Running;
 
         /// dspTime for a game-time instant, for AudioSource.PlayScheduled.
-        public double DspAt(double gameTime) => gameTime + _pausedTotal - _clock.Now + _clock.DspNow;
+        /// Game time is the HEARD axis (latency-compensated, like the web): a sound scheduled at dsp time T is
+        /// heard at T plus the device latency, which is when the game clock reads T. So game time g is scheduled
+        /// at dsp g (+ pauses), and the latency must not enter here: it uses the raw, uncompensated clock.
+        public double DspAt(double gameTime) => gameTime + _pausedTotal - _clock.RawNow + _clock.DspNow;
+
+        /// Game time on the dsp axis (not latency-compensated): where the mixer is. File positions
+        /// (AudioSource.timeSamples) are read on this axis.
+        public double NowRaw => Now + _clock.Latency;
 
         // ------------------------------------------------------------ sound
 
@@ -352,6 +359,11 @@ namespace Bonanza
             BindInput();
             BonanzaBlur.Install();
             _blurSeen = BonanzaBlur.Count();
+            BonanzaBrowser.Install();
+            BonanzaBrowser.Poll();
+            // `?latencySlew=fast` (test harness only): refresh the output latency every 0.1 s instead of 1 s,
+            // so the 2 ms/refresh slew converges in seconds. The slew itself (deadband, step) is unchanged.
+            _latencyEvery = QueryParam(url, "latencySlew") == "fast" ? 0.1f : 1f;
 
             _music = gameObject.AddComponent<MusicPlayer>();
             _music.Init(this);
@@ -571,8 +583,58 @@ namespace Bonanza
 
         // ------------------------------------------------------------ loop
 
+        // ------------------------------------------------------------ browser bridge
+
+        float _latencyEvery = 1f, _nextLatencyAt;
+        double _loggedLatency = -1, _loggedTarget = -1;
+        bool _audioSeenRunning, _audioLost;
+        float _audioLostSince = -1;
+
+        /// Output latency once a second (web main.js setInterval; only while the context runs), the OS
+        /// reduced-motion flag, and the audio-context watch.
+        void UpdateBrowser()
+        {
+            if (BonanzaBrowser.Poll()) Settings.NotifyChanged();
+            if (!BonanzaBrowser.Available) return;
+
+            var st = BonanzaBrowser.AudioState();
+            float t = Time.unscaledTime;
+            if (st == BrowserAudioState.Running)
+            {
+                _audioSeenRunning = true;
+                _audioLostSince = -1;
+                if (_audioLost) { _audioLost = false; Debug.Log("[AUDIO] resumed"); }
+            }
+            else if (_audioSeenRunning && st != BrowserAudioState.Unknown && !_audioLost)
+            {
+                // Unlocked once and not running now: the tab went to sleep or the OS took the output
+                // (an iOS call, a Bluetooth switch). Audio stays dead until a gesture resumes it, so say so.
+                if (_audioLostSince < 0) _audioLostSince = t;
+                else if (t - _audioLostSince > 0.3f)
+                {
+                    _audioLost = true;
+                    Debug.Log("[AUDIO] lost state=" + st);
+                    if (_mode == Mode.Playing) Pause();   // the clock stalls with the context; do not play on
+                }
+            }
+
+            if (st == BrowserAudioState.Running && t >= _nextLatencyAt)
+            {
+                _nextLatencyAt = t + _latencyEvery;
+                double target = LatencySlew.Resolve(BonanzaBrowser.OutputLatency(), BonanzaBrowser.BaseLatency());
+                double v = _clock.RefreshLatency(target, _mode == Mode.Playing);
+                if (v != _loggedLatency || target != _loggedTarget)
+                {
+                    _loggedLatency = v; _loggedTarget = target;
+                    Debug.Log($"[LATENCY] applied={v * 1000:F1}ms target={target * 1000:F1}ms out={BonanzaBrowser.OutputLatency() * 1000:F1}ms base={BonanzaBrowser.BaseLatency() * 1000:F1}ms ctx={BonanzaBrowser.AudioSource()}");
+                }
+            }
+        }
+
         void Update()
         {
+            UpdateBrowser();
+            if (_audioLost) _presses.Clear();   // the gesture that resumes the audio is not a menu or game press
             PollPad();
             int blurs = BonanzaBlur.Count();
             if (blurs != _blurSeen) { _blurSeen = blurs; ReleaseAll(); }
@@ -834,7 +896,7 @@ namespace Bonanza
                 case Opt.Music: Settings.Music = Settings.StepPct(Settings.Music, dir); break;
                 case Opt.Sfx: Settings.Sfx = Settings.StepPct(Settings.Sfx, dir); break;
                 case Opt.Offset: Settings.OffsetMs = Settings.StepOffset(Settings.OffsetMs, dir); break;
-                case Opt.Reduce: Settings.ReduceMotion = !Settings.ReduceMotion; break;
+                case Opt.Reduce: Settings.ReduceMotionOption = !Settings.ReduceMotionOption; break;
                 case Opt.Graphics:
                     Settings.Graphics = Settings.Cycle(Settings.Graphics, dir);
                     RenderQuality.Apply(Settings.Graphics);   // live, so the difference shows before leaving
@@ -863,7 +925,7 @@ namespace Bonanza
                 case Opt.Music: return Mathf.RoundToInt(Settings.Music * 100) + "%";
                 case Opt.Sfx: return Mathf.RoundToInt(Settings.Sfx * 100) + "%";
                 case Opt.Offset: { float v = Settings.OffsetMs; return (v > 0 ? "+" : "") + v.ToString("0") + "ms"; }
-                case Opt.Reduce: return Settings.ReduceMotion ? "ON" : "OFF";
+                case Opt.Reduce: return Settings.ReduceMotionOption ? "ON" : Settings.ReduceMotion ? "ON (SYSTEM)" : "OFF";
                 case Opt.Graphics: return Settings.Graphics.ToString().ToUpperInvariant();
                 case Opt.Swing:
                     switch (Settings.SwingInputChoice)
@@ -912,6 +974,14 @@ namespace Bonanza
             if (_mode == Mode.Playing && _game != null && _game.UseCanvasHud) return;
             Hud.Begin();
             float s = Hud.S;
+            if (_audioLost)
+            {
+                // The OS took the audio output (or the tab slept). Nothing else is clickable until a tap resumes it.
+                Hud.Dim(0.85f);
+                Hud.Center(0.34f, "AUDIO PAUSED", Hud.Big, Hud.Gold, 120);
+                Hud.Center(0.55f, "TAP TO RESUME AUDIO", Hud.Mid, Color.white);
+                return;
+            }
             switch (_mode)
             {
                 case Mode.Gate:

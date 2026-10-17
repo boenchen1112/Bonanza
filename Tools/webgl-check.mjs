@@ -35,7 +35,10 @@ const server = http.createServer((req, res) => {
 await new Promise((r) => server.listen(PORT, '127.0.0.1', r));
 
 const browser = await chromium.launch({ headless: true, args: ['--use-angle=d3d11', '--mute-audio'] });
-const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+// The page template fills the window; 960x600 is the canvas size the gates always ran at, so their numbers
+// (biasMs ~8) stay comparable. VIEWPORT=1280x800 overrides (the bigger canvas is slower, so biasMs rises to ~12).
+const [VW, VH] = (process.env.VIEWPORT || '960x600').split('x').map(Number);
+const page = await browser.newPage({ viewport: { width: VW, height: VH } });
 const errors = [];
 const results = [];
 const T0 = Date.now();   // LIVE=1 prints result lines as they arrive, for long runs
@@ -43,6 +46,7 @@ let seen = false;
 page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
 page.on('console', (m) => {
   const t = m.text();
+  if (process.env.LOGS && (t.includes('[LATENCY]') || t.includes('[AUDIO]'))) console.log(t);
   if (m.type() === 'error') errors.push('console: ' + t);
   if (t.includes('[RESULT]') || t.includes('[MISS]') || t.includes('[PARTY') || (process.env.MUSIC && t.includes('[MUSIC]'))) {   // MUSIC=1 also keeps the music player's log
     results.push(t);
@@ -63,7 +67,7 @@ try {
 }
 console.log('loaded in', ((Date.now() - t0) / 1000).toFixed(1), 's');
 await new Promise((r) => setTimeout(r, 1500));
-await page.mouse.click(640, 400);   // the user gesture that unlocks audio
+await page.mouse.click(VW / 2, VH / 2);   // the user gesture that unlocks audio
 if (WAIT_LOG) {
   const t1 = Date.now();
   while (!seen && Date.now() - t1 < WAIT_S * 1000) await new Promise((r) => setTimeout(r, 500));
