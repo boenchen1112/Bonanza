@@ -41,6 +41,15 @@ namespace Bonanza
         /// to audio time.
         public double ToAudioTime(double inputTime) => _hasOffset ? inputTime + _offset : AudioSettings.dspTime;
 
+        /// Re-anchor the input->audio offset to dspTime right now. WebGL stalls dspTime while the listener is
+        /// paused but the input clock runs on, so after a pause the old offset is off by the pause's length and
+        /// the next Update would snap it: everything read through Now in between (and the pause length computed
+        /// from it) would be wrong. Call it as the pause is lifted.
+        public void Rebase()
+        {
+            if (_hasOffset) _offset = AudioSettings.dspTime - InputState.currentTime;
+        }
+
         void Update()
         {
             double dsp = AudioSettings.dspTime;

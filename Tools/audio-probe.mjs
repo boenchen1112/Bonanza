@@ -10,6 +10,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { chromium } from 'playwright';
+import { installMusicHook, analyzeResume } from './music-hook.mjs';
 
 const DIR = process.argv[2];
 const GAME = process.argv[3] || 'swing-kings';
@@ -65,6 +66,7 @@ await page.addInitScript(() => {
     return connect.call(this, dest, ...rest);
   };
 });
+await installMusicHook(page);
 const wait = (s) => new Promise((r) => setTimeout(r, s * 1000));
 let consumed = 0;
 const marks = [];
@@ -78,7 +80,8 @@ const mark = async (label) => {
   return seg;
 };
 // Where, within a beat, the music's energy falls: a histogram of the envelope by phase of the beat.
-const SPB = 60 / 124, BINS = 96;
+const BPM = { 'swing-kings': 124, 'drumline-dash': 132, 'bounce-brigade': 118, 'chomp-chorus': 140, 'finale-fever': 150 }[GAME] || 124;   // finale-fever: its start tempo (the ramp is slow over the first seconds)
+const SPB = 60 / BPM, BINS = 96;
 function hist(seg) {
   const h = new Float64Array(BINS), n = new Float64Array(BINS);
   for (const [t, v] of seg) { const b = Math.floor(((t % SPB) / SPB) * BINS) % BINS; h[b] += v; n[b]++; }
@@ -94,7 +97,7 @@ function shift(a, b) {
   return (best / BINS) * SPB;
 }
 
-await page.goto(`http://127.0.0.1:${PORT}/?game=${GAME}`, { waitUntil: 'load' });
+await page.goto(`http://127.0.0.1:${PORT}/?game=${GAME}${process.env.PROBE_QUERY || ''}`, { waitUntil: 'load' });
 await page.waitForFunction(() => getComputedStyle(document.querySelector('#unity-loading-container')).display === 'none', null, { timeout: 60000 });
 await wait(1.5);
 await page.mouse.click(640, 400);
@@ -122,10 +125,26 @@ const D = quiet.length ? quiet[quiet.length - 1][0] - quiet[0][0] : NaN;   // ti
 const sh = shift(hist(pre), hist(post));   // post's grid sits `sh` after pre's
 const wrap = (x) => { x = ((x % SPB) + SPB) % SPB; return x > SPB / 2 ? x - SPB : x; };
 console.log(`silent for ${D.toFixed(3)} s (${(D / SPB).toFixed(2)} beats)`);
-console.log(`if the music froze with the game it carries on where it stopped, so after the silence its beat grid has moved by ${(wrap(D) * 1000).toFixed(0)} ms mod a beat; if it ran on in the dark it has not moved (0 ms)`);
-// About 40 ms of audio is already queued in the browser when the pause lands and plays out after it, so
-// the silence reads that much shorter than the pause: a difference of about +40 ms means the music is on the grid.
-console.log(`measured grid move ${(wrap(sh) * 1000).toFixed(0)} ms; difference from "froze" ${(wrap(sh - D) * 1000).toFixed(0)} ms`);
+// The game's clock (dspTime) stands still while the listener is paused and the music is paused with it, so
+// after a pause of `dctx` seconds of audio time the music's beat grid must have moved by exactly dctx
+// (mod a beat): the music carries on where it froze. dctx is the pause as the page saw it
+// (first stop -> the unpause's first start, Tools/music-hook.mjs), not the silence, which is about an output
+// buffer shorter. The envelope histogram has 5 ms bins, so its error is good to about that.
+const a = analyzeResume(await page.evaluate(() => window.__musicEv));
+let fail = errors.length > 0;
+if (a.error) { console.log('FAIL ' + a.error); fail = true; }
+else {
+  const err = wrap(sh - a.dctx);
+  console.log(`pause ${(a.dctx * 1000).toFixed(0)} ms of audio time; measured grid move ${(wrap(sh) * 1000).toFixed(0)} ms; expected ${(wrap(a.dctx) * 1000).toFixed(0)} ms`);
+  // finale-fever's tempo ramps, so a constant-tempo beat histogram cannot say anything exact about it: report only.
+  const exact = GAME !== 'finale-fever';
+  console.log(`${!exact ? 'INFO' : Math.abs(err) < 0.015 ? 'PASS' : 'FAIL'} resume error (envelope) ${(err * 1000).toFixed(1)} ms (< 15 ms${exact ? '' : '; not asserted: the tempo ramps'})`);
+  console.log(`${Math.abs(a.e) < 0.015 ? 'PASS' : 'FAIL'} resume error (JS sources) ${(a.e * 1000).toFixed(1)} ms (< 15 ms)`);
+  console.log(`${a.spread < 0.005 ? 'PASS' : 'FAIL'} one copy of the music plays after the resume (sources differ by ${(a.spread * 1000).toFixed(1)} ms)`);
+  if (a.spread >= 0.005) fail = true;
+  if ((exact && Math.abs(err) >= 0.015) || Math.abs(a.e) >= 0.015) fail = true;
+}
 console.log('errors:', errors.length ? errors.join('\n') : 'none');
 await browser.close();
 server.close();
+if (fail) process.exitCode = 1;

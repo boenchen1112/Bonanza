@@ -416,9 +416,7 @@ namespace Bonanza
             _game.Begin(Now + 0.6);
             var g = _game;
             _music.PlayGame(_entry.Id, g.MusicTimeAt(MusicTracks.GameStartBeat),
-                () => g.MusicBeatAt(Now) - MusicTracks.GameStartBeat,
-                // the pitch lags the call by an audio buffer or two: aim a little ahead
-                g.MusicFollowsTempo ? (Func<double>)(() => g.MusicTempo(g.MusicBeatAt(Now + 0.04))) : null);
+                () => g.MusicBeatAt(Now) - MusicTracks.GameStartBeat);
             _autoChart.Clear();
             _autoCursor = 0;
             if (Autoplay)
@@ -546,6 +544,7 @@ namespace Bonanza
             _resumeLeft = 0;
             AudioListener.pause = true; Time.timeScale = 0;   // freezes visual-only Update() animation
             _game.OnPause();
+            _music.OnPause();
         }
 
         /// Beats of count-in after a pause (web play.js RESUME_BEATS): three is
@@ -562,9 +561,10 @@ namespace Bonanza
         void Resume()
         {
             _resumeLeft = 0;
+            AudioListener.pause = false; Time.timeScale = 1;
+            _clock.Rebase();
             _pausedTotal += _clock.Now - _pausedAt;
             _mode = Mode.Playing;
-            AudioListener.pause = false; Time.timeScale = 1;
             _game.OnResume();
             _music.OnResume();
         }

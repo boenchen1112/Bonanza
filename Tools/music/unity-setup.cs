@@ -33,7 +33,7 @@ var entries = new System.Collections.Generic.List<Bonanza.MusicLibrary.Entry>();
 foreach (var t in Bonanza.MusicTracks.All)
 {
     var mixes = new System.Collections.Generic.List<UnityEngine.AudioClip>();
-    if (t.Levels == 4) for (int i = 0; i < 4; i++) mixes.Add(UnityEditor.AssetDatabase.LoadAssetAtPath<UnityEngine.AudioClip>($"{Dir}/{t.Id}.i{i}.ogg"));
+    if (t.Levels == 4) for (int i = 0; i < 4; i++) mixes.Add(UnityEditor.AssetDatabase.LoadAssetAtPath<UnityEngine.AudioClip>($"{Dir}/{t.Stem}.i{i}.ogg"));
     else mixes.Add(UnityEditor.AssetDatabase.LoadAssetAtPath<UnityEngine.AudioClip>($"{Dir}/{t.Id}.{(t.Id == "title" ? "i1" : "i0")}.ogg"));
     foreach (var c in mixes) if (c == null) report.Add("MISSING clip for " + t.Id);
     entries.Add(new Bonanza.MusicLibrary.Entry { id = t.Id, mixes = mixes.ToArray() });

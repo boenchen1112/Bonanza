@@ -54,8 +54,6 @@ namespace Bonanza
 
         public override double MusicBeatAt(double time) => _round.Map.BeatAt(time);
         public override double MusicTimeAt(double beat) => _round.Map.TimeAt(beat);
-        public override bool MusicFollowsTempo => true;
-        public override double MusicTempo(double beat) => _round.Map.BpmAt(beat) / FeverChart.Bpm0;
 
         public override void Load()
         {

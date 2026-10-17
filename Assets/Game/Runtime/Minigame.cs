@@ -76,10 +76,6 @@ namespace Bonanza
         // The transport, for the music. A round's beat map, in game time. Valid after Begin.
         public abstract double MusicBeatAt(double time);
         public abstract double MusicTimeAt(double beat);
-        /// Tempo against the track's rendered tempo at `beat` (1 unless the game ramps its tempo).
-        public virtual double MusicTempo(double beat) => 1;
-        /// True for a game whose tempo changes mid-round, so the track is pitch-scaled to follow it.
-        public virtual bool MusicFollowsTempo => false;
         /// A note the human player judged; steers the music's intensity. CPU notes never call this.
         protected void MusicJudged(bool hit) => Host.MusicJudge(hit);
 

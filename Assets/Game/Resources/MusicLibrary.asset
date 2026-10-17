@@ -39,10 +39,10 @@ MonoBehaviour:
     - {fileID: 8300000, guid: 4e4578b1300344c2c88d87173fc8e4b5, type: 3}
   - id: finale-fever
     mixes:
-    - {fileID: 8300000, guid: 1763759d1d387406ca15d0eaebaa13b9, type: 3}
-    - {fileID: 8300000, guid: 90558e489271c46009130a1530add21c, type: 3}
-    - {fileID: 8300000, guid: 2d0447ea7493b4934bdbaead5fcaeafd, type: 3}
-    - {fileID: 8300000, guid: 50c4f6824d3454e9a9e08f0270f446e4, type: 3}
+    - {fileID: 8300000, guid: dcef9b16c2b2043a98ffcd172c63e8b6, type: 3}
+    - {fileID: 8300000, guid: d1e2ec1f7cb284e3380e1428ab245a51, type: 3}
+    - {fileID: 8300000, guid: 7f0012ca7350248a596eb784ec1eea47, type: 3}
+    - {fileID: 8300000, guid: 11e8bd693ae3c4fbeaae607f952e1aa7, type: 3}
   - id: title
     mixes:
     - {fileID: 8300000, guid: 7ca5f3f1f575646fe9fbb260900cabac, type: 3}

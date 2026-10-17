@@ -3,6 +3,10 @@
 // from the web prototype's synth tracks; Assets/Game/Audio/Music/tracks.json
 // is that tool's manifest and MusicTracksTests keeps this table equal to it.
 //
+// Finale Fever is the exception: its tempo ramp (FeverChart.BpmAt) is rendered
+// into the file (finale-fever-ramped.json), so the clip plays at pitch 1 and
+// its position is simply game time since the track's first beat plus BeatOffset.
+//
 // Beat grid: the render puts the first beat of every track `BeatOffset`
 // seconds into the file (graph latency measured by the renderer), so a clip
 // is started that much before its first beat's audio time. Bar 0 of a game's
@@ -21,6 +25,11 @@ namespace Bonanza
         public bool Loop;
         public int Frames;          // sample frames in each mix file
         public int Levels;          // intensity mixes shipped: i0..i3, or the one that ever plays (title i1, results i0)
+        /// A full-length, non-looping render with the game's tempo ramp built in (Tools/music/render-ramped.mjs):
+        /// file position = game time since the track's first beat + BeatOffset, at pitch 1.
+        public bool Ramped;
+        /// File name stem of the mix clips (Assets/Game/Audio/Music/{Stem}.iN.ogg).
+        public string Stem => Ramped ? Id + "-ramped" : Id;
 
         public const int BeatsPerBar = 4;
         public const int Rate = 44100;
@@ -40,7 +49,7 @@ namespace Bonanza
             new MusicTrackInfo { Id = "drumline-dash",  Bpm = 132, Bars = 16, BeatOffset = 0.00931, Loop = true,  Frames = 1282909, Levels = 4 },
             new MusicTrackInfo { Id = "bounce-brigade", Bpm = 118, Bars = 16, BeatOffset = 0.00932, Loop = true,  Frames = 1435119, Levels = 4 },
             new MusicTrackInfo { Id = "chomp-chorus",   Bpm = 140, Bars = 16, BeatOffset = 0.00932, Loop = true,  Frames = 1209600, Levels = 4 },
-            new MusicTrackInfo { Id = "finale-fever",   Bpm = 150, Bars = 16, BeatOffset = 0.00932, Loop = true,  Frames = 1128960, Levels = 4 },
+            new MusicTrackInfo { Id = "finale-fever",   Bpm = 150, Bars = 54, BeatOffset = 0.01018, Loop = false, Frames = 3626124, Levels = 4, Ramped = true },
             new MusicTrackInfo { Id = "title",          Bpm = 112, Bars = 8,  BeatOffset = 0.00932, Loop = true,  Frames = 756000,  Levels = 1 },
             new MusicTrackInfo { Id = "results",        Bpm = 128, Bars = 4,  BeatOffset = 0.00949, Loop = false, Frames = 463050,  Levels = 1 },
         };

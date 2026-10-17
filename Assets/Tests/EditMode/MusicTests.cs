@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Text.RegularExpressions;
+using Bonanza.Core;
 using NUnit.Framework;
 using UnityEngine;
 
@@ -20,6 +21,16 @@ namespace Bonanza.Core.Tests
             public bool loop;
         }
 
+        [Serializable] class Ramped
+        {
+            public bool ramped, loop;
+            public int musicalBeats, fileBeatZeroIsGameBeat;
+            public double firstBeatOffsetSeconds;
+            public double[] beatSeconds, bpmAtBeat;
+        }
+
+        static string RampedJson => File.ReadAllText(Path.Combine(Application.dataPath, "Game/Audio/Music/finale-fever-ramped.json"));
+
         static string Json => File.ReadAllText(Path.Combine(Application.dataPath, "Game/Audio/Music/tracks.json"));
 
         static Manifest Load() => JsonUtility.FromJson<Manifest>(Json);
@@ -34,6 +45,7 @@ namespace Bonanza.Core.Tests
                 var info = MusicTracks.Find(t.id);
                 Assert.IsNotNull(info, t.id);
                 Assert.AreEqual(t.bpm, info.Bpm, t.id + " bpm");
+                if (info.Ramped) continue;   // played from finale-fever-ramped.json instead (RampedFinaleIsTheGamesBeatMap)
                 Assert.AreEqual(t.bars, info.Bars, t.id + " bars");
                 Assert.AreEqual(t.loop, info.Loop, t.id + " loop");
                 Assert.AreEqual(MusicTrackInfo.BeatsPerBar, t.beatsPerBar, t.id);
@@ -44,6 +56,40 @@ namespace Bonanza.Core.Tests
                 var mm = Regex.Match(Json, "\"id\": \"" + t.id + "\"[\\s\\S]*?\"frames\": (\\d+)");
                 Assert.IsTrue(mm.Success, t.id + " frames");
                 Assert.AreEqual(int.Parse(mm.Groups[1].Value), info.Frames, t.id + " frames");
+            }
+        }
+
+        [Test]
+        public void RampedFinaleIsTheGamesBeatMap()
+        {
+            var info = MusicTracks.Find("finale-fever");
+            Assert.IsTrue(info.Ramped);
+            Assert.IsFalse(info.Loop);
+            foreach (var t in MusicTracks.All) if (t.Id != "finale-fever") Assert.IsFalse(t.Ramped, t.Id);
+            Assert.AreEqual("finale-fever-ramped", info.Stem);
+
+            var j = JsonUtility.FromJson<Ramped>(RampedJson);
+            Assert.IsTrue(j.ramped);
+            Assert.IsFalse(j.loop);
+            Assert.AreEqual((int)MusicTracks.GameStartBeat, j.fileBeatZeroIsGameBeat, "file beat 0 is game beat -8");
+            Assert.AreEqual(j.firstBeatOffsetSeconds, info.BeatOffset, 1e-9);
+            Assert.AreEqual(j.musicalBeats + 1, j.beatSeconds.Length);
+            // Every mix file has the frame count the table pins.
+            var m = Regex.Matches(RampedJson, "\"frames\": (\\d+)");
+            Assert.AreEqual(4, m.Count);
+            foreach (Match f in m) Assert.AreEqual(3626124, int.Parse(f.Groups[1].Value));
+            Assert.AreEqual(3626124, info.Frames);
+            Assert.GreaterOrEqual(info.FileSeconds, j.beatSeconds[j.musicalBeats] + j.firstBeatOffsetSeconds);
+
+            // The file's beat k sounds where the game's own map puts game beat k - 8.
+            var map = new RampMap(FeverChart.BpmAt, FeverChart.Bpm0, FeverChart.EndBeat + 16);
+            map.Start(0, MusicTracks.GameStartBeat);
+            double t0 = map.TimeAt(MusicTracks.GameStartBeat);
+            foreach (int k in new[] { 0, 1, 7, 8, 9, 16, 33, 64, 100, 150, 200, 208, 216 })
+            {
+                double want = map.TimeAt(k + MusicTracks.GameStartBeat) - t0;
+                Assert.AreEqual(want, j.beatSeconds[k], 0.001, "file beat " + k);
+                Assert.AreEqual(map.BpmAt(k + MusicTracks.GameStartBeat), j.bpmAtBeat[k], 0.05, "bpm at file beat " + k);
             }
         }
 
