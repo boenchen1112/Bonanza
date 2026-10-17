@@ -13,6 +13,17 @@
 // "[RESULT] game=<id> ..." at the end. `?autoplay&party` plays a whole party
 // with the default roster, logging "[PARTY] ..." per round and
 // "[PARTY-DONE] ..." at the end.
+//
+// URL parameters (Core/UrlParams.cs parses them; the web main.js ones keep their names): `?scene=<id>`
+// (title, freeplay|menu, roster, party, options, a game id, play&game=<id>), `?game=<id>`, `?quality=`,
+// `?scale=<n>` (render scale 0.5-2), `?perf` (the perf HUD; the ` key toggles it), `?swingInput=tap|mouse|camera`,
+// `?seed=<n>`. An unknown scene or game id logs one "[ERROR] unknown ..." line and lands on the title.
+//
+// Faults: whatever a game throws (Load, Begin, a press, Tick, Result, the HUD, its own Update) is caught here.
+// The host logs exactly one "[ERROR] ..." line (a console warning, not an error: the gates read the line itself),
+// keeps it in LastError, destroys the half-built game and goes to the title. If no game was involved (the
+// title or another shell screen failed) it stops on a plain error text instead of looping (Mode.Dead).
+// `?game=fault` (only with `?autoplay` or `?debug`) is a game whose Load throws, for Tools/fault-check.mjs.
 
 using System;
 using System.Collections.Generic;
@@ -49,13 +60,21 @@ namespace Bonanza
 
         public static Entry Find(string id) => Games.Find(e => e.Id == id);
 
+        /// Test-only: never in Games (so never in the menu or a party); reachable only by `?game=fault`.
+        static readonly Entry FaultEntry = new Entry { Id = "fault", Title = "FAULT", Blurb = "Test only: Load throws.", Type = typeof(FaultGame) };
+
+        static Entry EntryFor(string id) => Find(id) ?? (id == "fault" ? FaultEntry : null);
+
+        /// The last fault the host caught (null if none). Web `lastError`.
+        public string LastError { get; private set; }
+
         // ------------------------------------------------------------ state
 
         /// URP Lit, referenced from the scene so the build keeps its shader.
         [SerializeField] Material greybox;
         public Material Greybox => greybox;
 
-        enum Mode { Gate, Title, Menu, Options, Roster, PartyHub, Rules, Playing, Paused, Results }
+        enum Mode { Gate, Title, Menu, Options, Roster, PartyHub, Rules, Playing, Paused, Results, Dead }
 
         AudioClock _clock;
         Mode _mode = Mode.Gate;
@@ -64,7 +83,9 @@ namespace Bonanza
         /// The canvas HUD (uGUI + TextMeshPro): score, banners, countdown, results card. Games that set
         /// Minigame.UseCanvasHud draw on it; the shell screens and the other games still use IMGUI.
         public GameHud Ui { get; private set; }
-        string _autoGame;
+        SceneTarget _boot = new SceneTarget(SceneKind.Title);   // where the gate leads (`?scene=` / `?game=`)
+        bool _debug;                                            // `?autoplay` or `?debug`: test-only ids are honoured
+        uint? _seedOverride;                                    // `?seed=<n>`
         bool _autoParty;
         int _partySeed = -1;   // `party=<n>`: seed the party as if n had been played before
 
@@ -84,6 +105,8 @@ namespace Bonanza
         /// The party's lineup while a party runs; null in free play.
         public IList<PartyPlayer> Lineup => _party?.Players;
         Minigame _game;
+        GameObject _gameGo;   // the game's root, set before its components exist so a failed build can be torn down
+        string _phase = "";   // what the host was doing when a fault hit: load, begin, tick, result, finish, gui
         Entry _entry;
         /// How the open round was reached: "freeplay" (the list, or a direct `?game=`) or "party".
         string _from;
@@ -225,6 +248,12 @@ namespace Bonanza
             };
             move.Enable();
             _actions.Add(move);
+            // The perf HUD toggle (web main.js: the ` key). Not a game action.
+            var perf = new InputAction("perf", InputActionType.Button);
+            perf.AddBinding("<Keyboard>/backquote");
+            perf.performed += ctx => TogglePerf();
+            perf.Enable();
+            _actions.Add(perf);
         }
 
         /// Gamepad state has no event timestamps worth trusting: the stick is read on the frame (web pollGamepads).
@@ -336,29 +365,38 @@ namespace Bonanza
             Ui = GameHud.Create(transform);
             var args = Environment.GetCommandLineArgs();
             string url = Application.absoluteURL ?? "";
-            Autoplay = url.Contains("autoplay") || Array.IndexOf(args, "-autoplay") >= 0
+            var uo = UrlParams.Parse(url);
+            Autoplay = uo.Autoplay || Array.IndexOf(args, "-autoplay") >= 0
                        || Environment.GetEnvironmentVariable("BONANZA_AUTOPLAY") == "1";
-            _autoGame = QueryParam(url, "game");
+            _debug = Autoplay || uo.Debug;
+            string gameArg = uo.Game;
             int gi = Array.IndexOf(args, "-game");
-            if (_autoGame == null && gi >= 0 && gi + 1 < args.Length) _autoGame = args[gi + 1];
-            if (_autoGame == null) _autoGame = Environment.GetEnvironmentVariable("BONANZA_GAME");
-            if (_autoGame == null || Find(_autoGame) == null) _autoGame = Autoplay || _autoGame != null ? "swing-kings" : null;
+            if (gameArg == null && gi >= 0 && gi + 1 < args.Length) gameArg = args[gi + 1];
+            if (gameArg == null) gameArg = Environment.GetEnvironmentVariable("BONANZA_GAME");
+            _seedOverride = uo.Seed;
             // `?autoplay&party`: the bot plays a whole party with the default roster.
-            string partyArg = QueryParam(url, "party");
-            if (int.TryParse(partyArg, out int ps) && ps >= 0) _partySeed = ps;
-            _autoParty = partyArg != null || Array.IndexOf(args, "-party") >= 0
+            _partySeed = uo.PartySeed;
+            _autoParty = uo.Party || Array.IndexOf(args, "-party") >= 0
                          || Environment.GetEnvironmentVariable("BONANZA_PARTY") == "1";
+            _boot = ResolveBoot(uo.Scene, gameArg);
             Settings.Migrate();
             AudioListener.volume = 1;   // the music and SFX levels are applied at their own sources
             _sfxVol = Settings.Sfx;
             Settings.Changed += OnSettingsChanged;
+            Application.logMessageReceived += OnLogMessage;
             // `?quality=auto|high|medium|low` pins the Graphics setting for this run (test harness), like the web.
-            string q = QueryParam(url, "quality");
+            // `?scale=<n>` pins the render scale on top of it.
             GraphicsSetting forced = default;
-            bool pin = q != null && Enum.TryParse(q, true, out forced);
+            bool pin = uo.Quality != null && Enum.TryParse(uo.Quality, true, out forced);
+            if (uo.Scale.HasValue) RenderQuality.OverrideScale(uo.Scale.Value);
             RenderQuality.Apply(pin ? forced : Settings.Graphics);
+            if (uo.SwingInputName != null && Enum.TryParse(uo.SwingInputName, true, out SwingInput si)) Settings.SwingInputOverride = si;
+            if (uo.Perf) { _perf = true; Debug.Log("[PERF] hud=on"); }
+            if (uo.Scale.HasValue || uo.SwingInputName != null || uo.Seed.HasValue)
+                Debug.Log($"[URL] applied scale={(uo.Scale.HasValue ? RenderQuality.Level.Scale.ToString("0.##") : "-")} swingInput={uo.SwingInputName ?? "-"} seed={(uo.Seed.HasValue ? uo.Seed.Value.ToString() : "-")}");
+            if (uo.Ignored.Count > 0) Debug.Log("[URL] ignored: " + string.Join("; ", uo.Ignored));
 
-            _inputLog = url.Contains("inputlog") || Environment.GetEnvironmentVariable("BONANZA_INPUTLOG") == "1";
+            _inputLog = uo.InputLog || Environment.GetEnvironmentVariable("BONANZA_INPUTLOG") == "1";
             BindInput();
             BonanzaBlur.Install();
             _blurSeen = BonanzaBlur.Count();
@@ -366,7 +404,7 @@ namespace Bonanza
             BonanzaBrowser.Poll();
             // `?latencySlew=fast` (test harness only): refresh the output latency every 0.1 s instead of 1 s,
             // so the 2 ms/refresh slew converges in seconds. The slew itself (deadband, step) is unchanged.
-            _latencyEvery = QueryParam(url, "latencySlew") == "fast" ? 0.1f : 1f;
+            _latencyEvery = uo.LatencyFast ? 0.1f : 1f;
 
             _music = gameObject.AddComponent<MusicPlayer>();
             _music.Init(this);
@@ -384,19 +422,50 @@ namespace Bonanza
         void OnDestroy()
         {
             Settings.Changed -= OnSettingsChanged;
+            Application.logMessageReceived -= OnLogMessage;
             foreach (var a in _actions) a.Dispose();
         }
 
-        static string QueryParam(string url, string key)
+        /// Where the gate leads: `?scene=` wins over `?game=`; an autoplay run with neither plays swing-kings.
+        /// An id nothing registers is reported once and the run lands on the title.
+        SceneTarget ResolveBoot(string scene, string game)
         {
-            int q = url.IndexOf('?');
-            if (q < 0) return null;
-            foreach (var part in url.Substring(q + 1).Split('&', '#'))
+            var ids = Games.Select(e => e.Id).ToList();
+            if (scene != null)
             {
-                var kv = part.Split('=');
-                if (kv[0] == key) return kv.Length > 1 ? Uri.UnescapeDataString(kv[1]) : "";
+                var t = SceneIds.Resolve(scene, ids, _debug, game);
+                if (t.Kind != SceneKind.Unknown) return t;
+                BootError($"unknown scene '{scene}'");
+                return new SceneTarget(SceneKind.Title);
             }
-            return null;
+            if (game != null)
+            {
+                string g = SceneIds.ResolveGame(game, ids, _debug);
+                if (g != null) return new SceneTarget(SceneKind.Game, g);
+                BootError($"unknown game id '{game}'");
+                return new SceneTarget(SceneKind.Title);
+            }
+            return Autoplay && !_autoParty ? new SceneTarget(SceneKind.Game, "swing-kings") : new SceneTarget(SceneKind.Title);
+        }
+
+        void BootError(string msg)
+        {
+            LastError = msg;
+            Debug.LogWarning("[ERROR] " + msg);
+        }
+
+        /// Show the screen a boot target names.
+        void Enter(SceneTarget t)
+        {
+            switch (t.Kind)
+            {
+                case SceneKind.FreePlay: GoRoute(new Route(ShellNav.FreePlay)); break;
+                case SceneKind.Roster: GoRoute(new Route(ShellNav.Roster, mode: "party")); break;
+                case SceneKind.Party: StartParty(); break;
+                case SceneKind.Options: GoRoute(new Route(ShellNav.Options)); break;
+                case SceneKind.Game: _from = "freeplay"; Open(EntryFor(t.Game)); break;
+                default: _mode = Mode.Title; break;
+            }
         }
 
         // ------------------------------------------------------------ routing
@@ -408,8 +477,9 @@ namespace Bonanza
             _entry = e;
             _outcome = null;
             Debug.Log($"[SHELL] open game={e.Id} from={_from ?? "-"}");
-            var go = new GameObject(e.Id);
-            _game = (Minigame)go.AddComponent(e.Type);
+            _phase = "load";
+            _gameGo = new GameObject(e.Id);
+            _game = (Minigame)_gameGo.AddComponent(e.Type);
             _game.Bind(this, Seed(e.Id));
             _game.Load();
             _music.Prepare(e.Id);   // decode now; the rules card waits for it
@@ -418,10 +488,11 @@ namespace Bonanza
             _mode = Mode.Rules;
         }
 
-        static uint Seed(string id) => Party.GameSeed(id);
+        uint Seed(string id) => _seedOverride ?? Party.GameSeed(id);
 
         void Begin()
         {
+            _phase = "begin";
             _pausedTotal = 0;
             _game.Begin(Now + 0.6);
             var g = _game;
@@ -440,7 +511,8 @@ namespace Bonanza
         void CloseGame()
         {
             Ui.Clear();
-            if (_game != null) Destroy(_game.gameObject);
+            if (_gameGo != null) Destroy(_gameGo);
+            _gameGo = null;
             _game = null;
             AudioListener.pause = false; Time.timeScale = 1;
             foreach (var v in _voices) v.Stop();
@@ -450,6 +522,7 @@ namespace Bonanza
 
         void Finish(Outcome o)
         {
+            _phase = "finish";
             _outcome = o;
             _mode = Mode.Results;
             _autoWait = 2.5f;
@@ -659,6 +732,25 @@ namespace Bonanza
 
         void Update()
         {
+            if (_mode == Mode.Dead) { _presses.Clear(); return; }
+            try
+            {
+                if (_externalFault != null)
+                {
+                    // A game's own Update / LateUpdate threw (Unity logged it; we only see the log).
+                    string msg = _externalFault;
+                    _externalFault = null;
+                    if (_gameGo != null) { Fault("update", msg, null); return; }
+                }
+                UpdateMode();
+                PerfSample();
+                LogScreen();
+            }
+            catch (Exception e) { Fault(_phase, e); }
+        }
+
+        void UpdateMode()
+        {
             UpdateBrowser();
             if (_audioLost) _presses.Clear();   // the gesture that resumes the audio is not a menu or game press
             PollPad();
@@ -677,8 +769,7 @@ namespace Bonanza
                     if ((_gatePressed || Autoplay) && _clock.Running)
                     {
                         if (_autoParty) StartParty();
-                        else if (_autoGame != null) { _from = "freeplay"; Open(Find(_autoGame)); }
-                        else _mode = Mode.Title;
+                        else Enter(_boot);
                     }
                     break;
 
@@ -1013,6 +1104,7 @@ namespace Bonanza
 
         void TickGame()
         {
+            _phase = "tick";
             double now = Now;
             if (Autoplay)
             {
@@ -1034,13 +1126,152 @@ namespace Bonanza
                 _game.Press(HeldName(p.Action), p.Audio - _pausedTotal);
             }
             _game.Tick(now, Time.deltaTime);
+            _phase = "result";
             var o = _game.Result();
             if (o != null) Finish(o);
+        }
+
+        // ------------------------------------------------------------ faults
+
+        string _externalFault;
+        bool _recovering;
+        Mode _loggedMode = Mode.Gate;
+
+        void OnLogMessage(string condition, string stack, LogType type)
+        {
+            if (type == LogType.Exception && _gameGo != null && _externalFault == null && _mode != Mode.Dead)
+                _externalFault = condition;
+        }
+
+        /// Log the shell screen the player is on when it changes (the gates read these lines).
+        void LogScreen()
+        {
+            if (_mode == _loggedMode) return;
+            _loggedMode = _mode;
+            switch (_mode)
+            {
+                case Mode.Title: Debug.Log("[SHELL] screen=title"); break;
+                case Mode.Menu: Debug.Log("[SHELL] screen=menu"); break;
+                case Mode.Options: Debug.Log("[SHELL] screen=options"); break;
+                case Mode.Roster: Debug.Log("[SHELL] screen=roster"); break;
+                case Mode.Dead: Debug.Log("[SHELL] screen=dead"); break;
+            }
+        }
+
+        void Fault(string phase, Exception e) => Fault(phase, e.GetType().Name + ": " + e.Message, e.ToString());
+
+        /// One fault: one "[ERROR]" line (a warning in the console: a Debug.LogError would also trip the page-error
+        /// check of every gate; the gates match the line instead), LastError, and back to the title with no game left
+        /// behind. A fault with no game involved is the shell itself failing: stop on an error text, do not loop.
+        void Fault(string phase, string msg, string detail)
+        {
+            if (_mode == Mode.Dead || _recovering) return;
+            _recovering = true;
+            bool inGame = _gameGo != null;
+            string id = inGame ? (_entry?.Id ?? "?") : null;
+            LastError = (inGame ? id + " " : "") + phase + ": " + msg;
+            Debug.LogWarning("[ERROR] " + LastError);
+            if (detail != null) Debug.Log("[FAULT] " + detail);
+            try
+            {
+                if (!inGame) { Die(); return; }
+                _gameGo.SetActive(false);   // off the screen this frame; Destroy is end of frame
+                _party = null;
+                _presses.Clear();
+                CloseGame();
+                _mode = Mode.Title;
+                Debug.Log("[SHELL] title after-error");
+            }
+            catch (Exception) { Die(); }
+            finally { _recovering = false; LogScreen(); }
+        }
+
+        /// The shell failed and there is nothing safe to go back to: stop here, say so.
+        void Die()
+        {
+            try { CloseGame(); } catch (Exception) { }
+            _mode = Mode.Dead;
+        }
+
+        GUIStyle _deadStyle;
+
+        void DrawDead()
+        {
+            var c = GUI.color;
+            GUI.color = new Color(0.02f, 0.02f, 0.04f, 1);
+            GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
+            GUI.color = Color.white;
+            if (_deadStyle == null)
+                _deadStyle = new GUIStyle(GUI.skin.label) { fontSize = Mathf.Max(14, Screen.height / 28), alignment = TextAnchor.MiddleCenter, wordWrap = true };
+            GUI.Label(new Rect(Screen.width * 0.1f, 0, Screen.width * 0.8f, Screen.height),
+                "BONANZA STOPPED\n\n" + (LastError ?? "unknown error") + "\n\nReload the page to try again.", _deadStyle);
+            GUI.color = c;
+        }
+
+        // ------------------------------------------------------------ perf HUD
+
+        bool _perf;
+        int _perfFrames;
+        float _perfSum, _perfMax;
+        string _perfText = "perf: measuring";
+        GUIContent _perfContent;
+        GUIStyle _perfStyle;
+
+        void TogglePerf()
+        {
+            _perf = !_perf;
+            _perfFrames = 0; _perfSum = 0; _perfMax = 0;
+            Debug.Log(_perf ? "[PERF] hud=on" : "[PERF] hud=off");
+        }
+
+        /// Counters per frame (no allocation); the text is rebuilt twice a second.
+        void PerfSample()
+        {
+            if (!_perf) return;
+            float dt = Time.unscaledDeltaTime;
+            _perfFrames++; _perfSum += dt;
+            if (dt > _perfMax) _perfMax = dt;
+            if (_perfSum < 0.5f) return;
+            var l = RenderQuality.Level;
+            _perfText = string.Format("fps {0:0}   frame {1:0.0} ms   worst {2:0.0} ms\ngraphics {3:0.##}x {4} {5} level {6}",
+                _perfFrames / _perfSum, 1000f * _perfSum / _perfFrames, 1000f * _perfMax,
+                l.Scale, l.Tier.ToString().ToLowerInvariant(),
+                RenderQuality.Auto ? "(auto: " + RenderQuality.Reason + ")" : "(" + RenderQuality.Reason + ")", RenderQuality.LadderIndex);
+            if (_perfContent != null) _perfContent.text = _perfText;
+            _perfFrames = 0; _perfSum = 0; _perfMax = 0;
+        }
+
+        void DrawPerf()
+        {
+            if (_perfContent == null)
+            {
+                _perfContent = new GUIContent(_perfText);
+                _perfStyle = new GUIStyle(GUI.skin.label) { fontSize = 13, alignment = TextAnchor.MiddleLeft };
+                _perfStyle.normal.textColor = new Color(0.79f, 1f, 0.69f);
+            }
+            var r = new Rect(8, Screen.height - 52, 420, 44);
+            var c = GUI.color;
+            GUI.color = new Color(0.02f, 0.03f, 0.04f, 0.78f);
+            GUI.DrawTexture(r, Texture2D.whiteTexture);
+            GUI.color = c;
+            GUI.Label(new Rect(r.x + 8, r.y, r.width - 8, r.height), _perfContent, _perfStyle);
         }
 
         // ------------------------------------------------------------ screens
 
         void OnGUI()
+        {
+            try
+            {
+                if (_mode == Mode.Dead) { DrawDead(); return; }
+                _phase = "gui";
+                DrawScreens();
+                if (_perf && Event.current.type == EventType.Repaint) DrawPerf();
+            }
+            catch (Exception e) { if (_mode != Mode.Dead) Fault("gui", e); }
+        }
+
+        void DrawScreens()
         {
             // A canvas-HUD game plays with no IMGUI pass at all.
             if (_mode == Mode.Playing && _game != null && _game.UseCanvasHud) return;

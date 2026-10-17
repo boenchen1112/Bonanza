@@ -41,10 +41,32 @@ namespace Bonanza
         // RESET PROGRESS leaves it alone.
         static string DeviceKey => GraphicsPolicy.LevelKey(SystemInfo.graphicsDeviceName);
 
+        /// `?scale=<n>`: pin the render scale for this run (web stage.setRenderScale). Clamped to
+        /// UrlParams.ScaleMin..ScaleMax; the Auto governor stops walking the ladder. 0 = no override.
+        public static float ScaleOverride { get; private set; }
+
+        public static void OverrideScale(float scale)
+        {
+            ScaleOverride = scale > 0 ? Mathf.Clamp(scale, UrlParams.ScaleMin, UrlParams.ScaleMax) : 0;
+        }
+
         /// Apply the saved setting (call at startup and when the option changes).
         public static void Apply(GraphicsSetting setting)
         {
             Setting = setting;
+            if (ScaleOverride > 0)
+            {
+                // The tier still follows the setting; the scale is pinned, so Auto has nothing left to govern.
+                _governor = null;
+                var tier = setting == GraphicsSetting.Auto
+                    ? GraphicsPolicy.Ladder[GraphicsPolicy.AutoStart(SystemInfo.graphicsDeviceName, -1)].Tier
+                    : GraphicsPolicy.Fixed(setting).Tier;
+                Reason = "?scale";
+                Level = new QualityLevel(ScaleOverride, tier);
+                LadderIndex = 0;
+                Push();
+                return;
+            }
             if (setting == GraphicsSetting.Auto)
             {
                 int start = GraphicsPolicy.AutoStart(SystemInfo.graphicsDeviceName, Settings.Store.Has(DeviceKey) ? (int)Settings.Store.GetFloat(DeviceKey, -1) : -1);

@@ -163,11 +163,15 @@ namespace Bonanza
             set { Store.SetString(KeyGraphics, value.ToString().ToLowerInvariant()); Touch(); }
         }
 
-        /// The chosen Swing Kings input, as saved.
+        /// `?swingInput=` for this session: wins over the saved choice until the player picks one in Options.
+        /// Never written to the store.
+        public static SwingInput? SwingInputOverride;
+
+        /// The chosen Swing Kings input: the session override, else as saved.
         public static SwingInput SwingInputChoice
         {
-            get => ReadEnum(KeySwing, SwingInput.Tap);
-            set { Store.SetString(KeySwing, value.ToString().ToLowerInvariant()); Touch(); }
+            get => SwingInputOverride ?? ReadEnum(KeySwing, SwingInput.Tap);
+            set { SwingInputOverride = null; Store.SetString(KeySwing, value.ToString().ToLowerInvariant()); Touch(); }
         }
 
         /// The input Swing Kings should use now: the choice, or Tap when it is not available yet.
