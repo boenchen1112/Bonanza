@@ -23,6 +23,9 @@ namespace Bonanza.Look
 
         readonly Item[] _items;
         readonly PlateBatch _plates;
+        readonly Material _textMat, _subMat;
+        readonly System.Collections.Generic.Dictionary<string, Material> _wordMats = new System.Collections.Generic.Dictionary<string, Material>();
+        readonly float _capEm;   // cap height of the callout font, in em (the glyph quads are placed against it)
         // The plate shader and Stroke take LINEAR colours (custom shader, linear project). TextMeshPro text colours
         // (vertex gradient, colour) are given as sRGB: TMP linearises vertex colours itself in a linear project.
         // The plate fill goes to the shader as sRGB bytes (rgb(16,11,40)) and is decoded there: a linear value in a UNorm8
@@ -44,12 +47,71 @@ namespace Bonanza.Look
             { "STRIKE!", G(0xffffff, 0xffd9b0, 0xff8a3c) },
             { "SIDE RETIRED!", G(0xffffff, 0xffb0bd, 0xff4d6a) },
         };
+        // Web makeWordTexture: createLinearGradient over cy-0.5em..cy+0.5em, stops 0 / 0.55 / 1, interpolated in sRGB. The word sits in
+        // the band by its cap height: the cap top is at BandTop and the baseline at BandBottom (fractions of the band). Fitted so the measured row
+        // profile (top / middle / bottom 30% of the cap rows, lum > 140) of HOME RUN matches the web render: the web's glyph edges darken
+        // the top rows and the Lilita caps are shorter, so the cap line is mapped a little outside the band.
+        const float BandTop = 0f, BandBottom = 0.88f, GradMid = 0.55f, SubOutline = 0.37f, SubDilate = 0.2f;
+        const int GradRes = 64;
+
+        /// 1 x 64 sRGB texture of the three-stop gradient; texel row 0 (v = 0) is the bottom stop, c2.
+        static Texture2D GradTex(Color[] g)
+        {
+            var tex = new Texture2D(1, GradRes, TextureFormat.RGBA32, false, false) { name = "WordGrad", wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear };
+            var px = new Color32[GradRes];
+            for (int i = 0; i < GradRes; i++)
+            {
+                float u = 1 - (i + 0.5f) / GradRes;   // 0 = top of the band
+                Color c = u <= GradMid ? Color.Lerp(g[0], g[1], u / GradMid) : Color.Lerp(g[1], g[2], (u - GradMid) / (1 - GradMid));
+                px[i] = new Color32((byte)Mathf.RoundToInt(c.r * 255f), (byte)Mathf.RoundToInt(c.g * 255f), (byte)Mathf.RoundToInt(c.b * 255f), 255);
+            }
+            tex.SetPixels32(px); tex.Apply(false, true);
+            return tex;
+        }
+
+        /// Write each glyph vertex's face-texture v from its height against the cap line (uv2 is the face texture's UV in the TMP shader).
+        void MapGradient(TextMeshPro t)
+        {
+            var ti = t.textInfo;
+            if (ti.characterCount == 0) return;
+            float baseline = 0; bool found = false;
+            for (int i = 0; i < ti.characterCount && !found; i++) if (ti.characterInfo[i].isVisible) { baseline = ti.characterInfo[i].baseLine; found = true; }
+            if (!found) return;
+            float capH = _capEm * t.fontSize * 0.1f;   // fontSize 10 -> 1 world unit per em
+            var mi = ti.meshInfo[0];
+            var v = mi.vertices; var uv2 = mi.uvs2;
+            for (int k = 0; k < mi.vertexCount; k++)
+            {
+                float f = (v[k].y - baseline) / capH;                 // 0 at the baseline, 1 at the cap top
+                float u = Mathf.LerpUnclamped(BandBottom, BandTop, f);         // 0 = band top
+                uv2[k] = new Vector2(0.5f, 1 - u);
+            }
+            t.UpdateVertexData(TMP_VertexDataUpdateFlags.Uv2);
+        }
+
         static Color[] G(uint a, uint b, uint c) => new[] { Feel.Hex(a), Feel.Hex(b), Feel.Hex(c) };
 
         public CalloutPool(Transform parent, int max, Material plateMat, Material textMat, TMP_FontAsset font)
         {
             _plates = new PlateBatch(parent, plateMat, max, 40);
             _items = new Item[max];
+            _textMat = textMat;
+            if (textMat)
+            {
+                // Web sub-line: an 8 px dark stroke (4 px out of a 36 px em = 0.11 em) and no soft shadow.
+                _subMat = new Material(textMat) { name = "CalloutSub" };
+                _subMat.DisableKeyword("UNDERLAY_ON");
+                _subMat.SetFloat("_OutlineWidth", SubOutline);
+                _subMat.SetFloat("_FaceDilate", SubDilate);
+                // One material per tier word: its face texture is the word's 3-stop sRGB gradient. Glyph v (uv2) is written per spawn.
+                foreach (var kv in WordGrad)
+                {
+                    var m = new Material(textMat) { name = "CalloutWord " + kv.Key };
+                    m.SetTexture("_FaceTex", GradTex(kv.Value));
+                    _wordMats[kv.Key] = m;
+                }
+            }
+            _capEm = font ? font.faceInfo.capLine / Mathf.Max(1f, font.faceInfo.pointSize) : 0.7f;
             for (int i = 0; i < max; i++)
             {
                 var go = new GameObject("Callout", typeof(TextMeshPro));
@@ -76,7 +138,7 @@ namespace Bonanza.Look
                 sgo.transform.SetParent(parent, false);
                 var st = sgo.GetComponent<TextMeshPro>();
                 if (font) st.font = font;
-                if (textMat) st.fontSharedMaterial = textMat;
+                if (_subMat) st.fontSharedMaterial = _subMat;
                 st.fontSize = 10; st.fontStyle = FontStyles.Normal; st.alignment = TextAlignmentOptions.Center;
                 st.textWrappingMode = TextWrappingModes.NoWrap; st.overflowMode = TextOverflowModes.Overflow;
                 st.richText = false; st.raycastTarget = false;
@@ -120,22 +182,26 @@ namespace Bonanza.Look
             it.Pos = pos; it.Color = color; it.Plate = plate; it.HasSub = plate && sub != null;
             it.Go.SetActive(true);
             var t = it.Tmp;
-            Color top, bottom;
-            if (WordGrad.TryGetValue(word, out var g))
+            bool tier = WordGrad.TryGetValue(word, out var g) && _wordMats.ContainsKey(word);
+            if (tier)
             {
-                top = Color.Lerp(g[0], g[1], 0.2f); bottom = g[2];
                 it.Stroke = g[2].linear;
+                t.fontSharedMaterial = _wordMats[word];
+                t.enableVertexGradient = false;
             }
             else
             {
-                top = Color.Lerp(Color.white, color, 0.2f); bottom = color;
+                Color top = Color.Lerp(Color.white, color, 0.2f), bottom = color;
                 it.Stroke = color.linear;
+                if (_textMat) t.fontSharedMaterial = _textMat;
+                t.enableVertexGradient = true;
+                t.colorGradient = new VertexGradient(top, top, bottom, bottom);
             }
             t.text = word;
-            t.colorGradient = new VertexGradient(top, top, bottom, bottom);
             t.color = Color.white;
             t.alpha = 1; it.Alpha = 1;
             t.ForceMeshUpdate();
+            if (tier) MapGradient(t);
             if (!plate)
             {
                 // Scale so the word's line box is `size` world units tall.
@@ -239,6 +305,12 @@ namespace Bonanza.Look
             }
             if (prewarm && plates == 0) _plates.Plate(plates++, new Vector3(0, -500, 0), camRight, camUp, 0.01f, 0.01f, PlateFill, 0.01f, Color.white);
             _plates.Flush(plates);
+        }
+
+        /// Retire every live badge (plate callouts) so two badges never stack on the same spot; plain words are left alone.
+        public void KillBadges()
+        {
+            foreach (var it in _items) if (it.On && it.Plate) { it.On = false; it.Go.SetActive(false); it.SubGo.SetActive(false); }
         }
 
         public void KillAll()

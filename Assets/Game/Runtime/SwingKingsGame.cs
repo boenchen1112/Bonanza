@@ -436,6 +436,7 @@ namespace Bonanza
             string sub = c.IsDemo ? null : grade + (c.HomerFeet > 0 ? $" \u00B7 {c.HomerFeet} FT" : "");
             float life = p.Finale ? 2.4f : c.IsDemo ? 0.7f : Mathf.Min(big ? 1.25f : 0.95f, Mathf.Max(0.55f, gap * 0.8f));
             // Right of the batter, off the incoming pitch's arc (it comes down from the machine on the left).
+            Look.Fx.ClearBadges();
             Look.Fx.Callout(word, sub, Contact + new Vector3(1.15f, 1.75f, 0), tierColor,
                 size: t.Id == TierId.Slam ? 1.75f : big ? 1.05f : 0.8f, life: life, rise: (big ? 1.5f : 0.9f) * (life / (big ? 1.25f : 0.95f)));
 
@@ -463,10 +464,11 @@ namespace Bonanza
             {
                 float retire = Mathf.Max(1.2f, Mathf.Min(1.8f, gap * 0.9f));
                 _outsClear = retire;
+                fx.ClearBadges();
                 fx.Callout("SIDE RETIRED!", "3 OUTS", Contact + new Vector3(1.1f, 1.6f, 0), Hex(0xff4d6a), 1.05f, retire, 0.3f);
                 Look.Rig.Shake(0.08f, new Vector3(0, -1, 0));
             }
-            else fx.Callout(w.Swung ? "WHIFF!" : "STRIKE!", null, Contact + new Vector3(1.0f, 1.3f, 0), w.Swung ? Hex(0xff5d8a) : Hex(0xff8a3c), 0.8f, life, 0.4f);
+            else { fx.ClearBadges(); fx.Callout(w.Swung ? "WHIFF!" : "STRIKE!", null, Contact + new Vector3(1.0f, 1.3f, 0), w.Swung ? Hex(0xff5d8a) : Hex(0xff8a3c), 0.8f, life, 0.4f); }
             _camPush = 0.25f;
         }
 

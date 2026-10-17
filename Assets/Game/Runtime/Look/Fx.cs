@@ -458,6 +458,9 @@ namespace Bonanza.Look
         public void PopWord(string word, Vector3 pos, Color color, float size = 0.5f, float life = 0.78f, float rise = 1.15f, float tilt = 0, float spin = 0)
             => _callouts.Spawn(word, null, pos, color, size, life, rise, tilt, spin, false);
 
+        /// Remove the badges still on screen (a new badge replaces them rather than stacking).
+        public void ClearBadges() => _callouts.KillBadges();
+
         /// A badge callout: a dark rounded plate, a big word and an optional smaller line under it (Swing Kings' tier badge).
         /// `size` is the web sprite scale (0.8 small, 1.05 big, 1.75 grand slam): the plate is 2.93 x size world units wide.
         public void Callout(string word, string sub, Vector3 pos, Color color, float size = 1f, float life = 1.05f, float rise = 1.1f)

@@ -42,12 +42,17 @@ Shader "Bonanza/FxPlate"
                 float aspect = i.prm.x;
                 float2 p = (i.uv - 0.5) * float2(aspect, 1.0);
                 float2 hs = float2(aspect * 0.5, 0.5);
-                float r = 0.28;
+                // Web: a 5 px stroke centred on the roundRect edge, radius 30 px. The quad is the OUTER edge (rect + half a stroke).
+                // Two-line plate (aspect ~3.0): outer 161 px high, radius 32.5 -> 0.202H, stroke 0.031H. One-line (~4.3): outer 113 px,
+                // radius 32.5 -> 0.288H, stroke 0.044H.
+                bool two = aspect < 3.6;
+                float r = two ? 0.202 : 0.288;
+                float sw = two ? 0.029 : 0.042;
                 float2 q = abs(p) - (hs - r);
                 float d = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;   // signed distance, height units
-                float aa = 0.012;
+                float aa = 0.008;
                 float cover = 1.0 - smoothstep(-aa, aa, d);
-                float stroke = smoothstep(-0.045 - aa, -0.045 + aa, d);        // 1 in the outline band
+                float stroke = smoothstep(-sw - aa, -sw + aa, d);        // 1 in the outline band
                 float3 rgb = lerp(Srgb(i.color.rgb), i.prm.yzw, stroke);   // fill arrives as sRGB bytes, stroke as linear floats
                 float a = cover * i.color.a;
                 if (a < 0.004) discard;
