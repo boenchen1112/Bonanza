@@ -18,6 +18,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Bonanza.Core;
+using Bonanza.HudKit;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -58,6 +59,10 @@ namespace Bonanza
         AudioClock _clock;
         Mode _mode = Mode.Gate;
         public bool Autoplay { get; private set; }
+
+        /// The canvas HUD (uGUI + TextMeshPro): score, banners, countdown, results card. Games that set
+        /// Minigame.UseCanvasHud draw on it; the shell screens and the other games still use IMGUI.
+        public GameHud Ui { get; private set; }
         string _autoGame;
         bool _autoParty;
         int _partySeed = -1;   // `party=<n>`: seed the party as if n had been played before
@@ -195,6 +200,7 @@ namespace Bonanza
             Application.runInBackground = true;
 #endif
             _clock = GetComponent<AudioClock>();
+            Ui = GameHud.Create(transform);
             var args = Environment.GetCommandLineArgs();
             string url = Application.absoluteURL ?? "";
             Autoplay = url.Contains("autoplay") || Array.IndexOf(args, "-autoplay") >= 0
@@ -263,6 +269,7 @@ namespace Bonanza
         void Open(Entry e)
         {
             CloseGame();
+            Ui.Clear();
             _entry = e;
             _outcome = null;
             var go = new GameObject(e.Id);
@@ -304,6 +311,7 @@ namespace Bonanza
 
         void CloseGame()
         {
+            Ui.Clear();
             if (_game != null) Destroy(_game.gameObject);
             _game = null;
             AudioListener.pause = false; Time.timeScale = 1;
@@ -333,6 +341,49 @@ namespace Bonanza
                     Debug.Log($"[PARTY-DONE] winners={string.Join(",", _party.Winners.Select(id => _party.Players[id].Name))} "
                               + string.Join(" ", _party.Players.Select(p => $"{p.Name}={p.Points}/{p.Wins}")));
             }
+            ShowResultsCard(o);
+        }
+
+        static readonly Color[] SeatColors = { new Color(1f, 0.85f, 0.24f), new Color(0.3f, 0.84f, 1f), new Color(1f, 0.48f, 0.85f), new Color(0.62f, 0.91f, 0.48f) };
+
+        /// The canvas results card (rank stamp, score count-up, stats, party placings); IMGUI keeps only the click buttons.
+        void ShowResultsCard(Outcome o)
+        {
+            Ui.Clear();
+            var d = new ResultsData
+            {
+                Title = _game.Title, Rank = o.Rank, Score = o.Score, Accuracy = (float)o.Accuracy,
+                Perfect = o.Perfect, Great = o.Great, Good = o.Good, Miss = o.Miss, MaxCombo = o.MaxCombo,
+            };
+            foreach (var kv in o.Extras) d.Extras.Add(kv);
+            // One sticker, the rank first. A first-ever D is a record, not worth a sticker.
+            if ((_newScore || _newRank) && o.Rank != "D" && o.Score > 0) d.Badge = _newRank ? "NEW RANK!" : "NEW BEST!";
+            if (_party != null)
+            {
+                var round = _party.Scores.Count > 0 ? _party.Scores[_party.Scores.Count - 1] : null;
+                if (round != null && round.Game == _entry.Id)
+                {
+                    d.Party = new List<PartyRow>();
+                    foreach (var p in round.Players.OrderBy(p => p.Place))
+                    {
+                        bool tied = round.Players.Count(q => q.Place == p.Place) > 1;
+                        var who = _party.Players[p.Id];
+                        d.Party.Add(new PartyRow
+                        {
+                            Place = (tied ? "T-" : "") + PlaceName[p.Place - 1], Name = who.Name, Points = p.Points,
+                            Color = SeatColors[p.Id % SeatColors.Length], You = !who.IsCpu,
+                        });
+                    }
+                }
+                d.Prompts.Add(new KeyValuePair<string, string>(Autoplay ? "" : "SPACE", Autoplay ? "autoplay" : "standings"));
+            }
+            else if (Autoplay) d.Prompts.Add(new KeyValuePair<string, string>("", "autoplay"));
+            else
+            {
+                d.Prompts.Add(new KeyValuePair<string, string>("SPACE", "play again"));
+                d.Prompts.Add(new KeyValuePair<string, string>("ESC", "menu"));
+            }
+            Ui.Results.Show(d);
         }
 
         /// Seat the roster and shuffle the playlist; the finale always closes it.
@@ -541,6 +592,7 @@ namespace Bonanza
 
                 case Mode.Results:
                     _resultsT += Time.unscaledDeltaTime;
+                    Ui.Results.Reveal(_resultsT);
                     if (!_stung && _resultsT >= StampAt) { _stung = true; RankSting(_outcome.Rank); }
                     if (_resultsT < ResultsLock)
                     {
@@ -718,6 +770,8 @@ namespace Bonanza
 
         void OnGUI()
         {
+            // A canvas-HUD game plays with no IMGUI pass at all.
+            if (_mode == Mode.Playing && _game != null && _game.UseCanvasHud) return;
             Hud.Begin();
             float s = Hud.S;
             switch (_mode)
@@ -810,7 +864,7 @@ namespace Bonanza
                     break;
 
                 case Mode.Paused:
-                    _game.DrawHud(s);
+                    if (!_game.UseCanvasHud) _game.DrawHud(s);
                     if (_resumeLeft > 0)
                     {
                         int n = Mathf.Max(1, Mathf.CeilToInt(_resumeLeft / _resumeSpb));
@@ -830,7 +884,6 @@ namespace Bonanza
                     break;
 
                 case Mode.Results:
-                    _game.DrawHud(s);
                     DrawResults(s);
                     break;
             }
@@ -858,54 +911,16 @@ namespace Bonanza
                 PlayAt(Tones.Blip(Tones.Midi(midi), at == 0.3f ? 0.6f : 0.18f, 8, rank == "S" ? Wave.Square : Wave.Sine), Now + 0.02 + at, 0.18f);
         }
 
+        /// The card is on the canvas (HudKit/ResultsCard); IMGUI keeps the AGAIN / MENU click targets for mouse and touch.
         void DrawResults(float s)
         {
-            var r = _outcome;
-            float t = _resultsT;
-            Hud.Dim(0.65f);
-            Hud.Center(0.1f, _game.Title, Hud.Mid, Color.white, 60);
-            if (t >= StampAt) Hud.Center(0.18f, $"RANK {r.Rank}", Hud.Big, Hud.Gold, 120);
-            float k = Mathf.Clamp01((t - CountAt) / CountS);
-            int shown = Mathf.RoundToInt(r.Score * (1 - Mathf.Pow(1 - k, 3)));
-            var lines = new System.Text.StringBuilder();
-            // One sticker, the rank first. A first-ever D is a record, not worth a sticker.
-            bool sticker = t >= StampAt + 0.25f && (_newScore || _newRank) && r.Rank != "D" && r.Score > 0;
-            lines.Append($"SCORE {shown}   ACCURACY {r.Accuracy * 100:0.0}%{(sticker ? (_newRank ? "   NEW RANK!" : "   NEW BEST!") : "")}\n");
-            if (t >= StatsAt)
-            {
-                lines.Append($"PERFECT {r.Perfect}   GREAT {r.Great}   GOOD {r.Good}   MISS {r.Miss}   MAX COMBO {r.MaxCombo}\n");
-                int n = 0;
-                foreach (var kv in r.Extras)
-                    lines.Append(kv.Key).Append(' ').Append(kv.Value).Append(++n % 3 == 0 ? "\n" : "   ");
-            }
-            Hud.Center(0.36f, lines.ToString(), Hud.Mid, Color.white, 220);
-            if (_party != null)
-            {
-                var round = _party.Scores.Count > 0 ? _party.Scores[_party.Scores.Count - 1] : null;
-                if (round != null && round.Game == _entry.Id && t >= PartyAt)
-                {
-                    var rows = round.Players.OrderBy(p => p.Place).Select(p =>
-                    {
-                        bool tied = round.Players.Count(q => q.Place == p.Place) > 1;
-                        var who = _party.Players[p.Id];
-                        return $"{(tied ? "T-" : "")}{PlaceName[p.Place - 1]} {who.Name}{(who.IsCpu ? "" : " (YOU)")} +{p.Points}";
-                    });
-                    Hud.Center(0.68f, string.Join("     ", rows), Hud.Small, Color.white, 40);
-                }
-                if (t >= ResultsLock) Hud.Center(0.82f, Autoplay ? "(autoplay)" : "SPACE: standings", Hud.Mid, Hud.Gold, 60);
-                return;
-            }
-            if (t < ResultsLock) return;
-            Hud.Center(0.82f, Autoplay ? "(autoplay)" : "SPACE: play again   ESC: menu", Hud.Mid, Hud.Gold, 60);
-            if (!Autoplay)
-            {
-                var again = new Rect(Screen.width * 0.25f, Screen.height * 0.9f, Screen.width * 0.2f, 50 * s);
-                var menu = new Rect(Screen.width * 0.55f, Screen.height * 0.9f, Screen.width * 0.2f, 50 * s);
-                Hud.Box(again, new Color(1, 1, 1, 0.12f)); Hud.Text(again, "AGAIN", Hud.Small, Color.white);
-                Hud.Box(menu, new Color(1, 1, 1, 0.12f)); Hud.Text(menu, "MENU", Hud.Small, Color.white);
-                if (GUI.Button(again, GUIContent.none, GUIStyle.none)) Open(_entry);
-                else if (GUI.Button(menu, GUIContent.none, GUIStyle.none)) { CloseGame(); _mode = Mode.Menu; }
-            }
+            if (_party != null || _resultsT < ResultsLock || Autoplay) return;
+            var again = new Rect(Screen.width * 0.25f, Screen.height * 0.9f, Screen.width * 0.2f, 50 * s);
+            var menu = new Rect(Screen.width * 0.55f, Screen.height * 0.9f, Screen.width * 0.2f, 50 * s);
+            Hud.Box(again, new Color(1, 1, 1, 0.12f)); Hud.Text(again, "AGAIN", Hud.Small, Color.white);
+            Hud.Box(menu, new Color(1, 1, 1, 0.12f)); Hud.Text(menu, "MENU", Hud.Small, Color.white);
+            if (GUI.Button(again, GUIContent.none, GUIStyle.none)) Open(_entry);
+            else if (GUI.Button(menu, GUIContent.none, GUIStyle.none)) { CloseGame(); _mode = Mode.Menu; }
         }
 
         /// One selectable row: label left, value right. Row i sits at y0 + i rows. True if clicked.

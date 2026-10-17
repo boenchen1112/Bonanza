@@ -25,6 +25,7 @@ namespace Bonanza
         public override string Blurb => "One swing. One beat. Send it.";
         public override double SecondsPerBeat => 60 / SwingRules.Bpm;
         protected override bool UseLook => true;
+        public override bool UseCanvasHud => true;
         bool _night;
 
         public override string Controls => "SPACE / click / tap as the ball reaches the plate.\nOn the beat = HOME RUN. Three misses retire the side.";
@@ -54,15 +55,13 @@ namespace Bonanza
         // audio
         double _clickBeat;
 
-        // HUD
-        readonly List<Callout> _callouts = new List<Callout>();   // screen-centre banners only; world words are Fx callouts
-        string _countText;
-        float _countLife;
+        // HUD (canvas: Ui). Presentation only; it ages on real time.
+        float _outsClear;               // seconds until the lamps reset after the side is retired
+        bool _hintHidden;
         float _camPush, _camLift;
 
         sealed class Ball { public GameObject Go; public List<GameObject> Pips = new List<GameObject>(); public int PipCursor; public TrailHandle Trail; }
         sealed class HitBall { public GameObject Go; public Vector3 P, V; public float T, Life, GravMul; public bool Bounce, Slam, Land; public TrailHandle Trail; public Color Color; }
-        sealed class Callout { public string Text; public Vector3 World; public float Life, Age; public Color Color; }
 
         // ------------------------------------------------------------ contract
 
@@ -91,7 +90,12 @@ namespace Bonanza
             _clickBeat = -SwingRules.LeadInBeats;
             _playing = true;
             _now = now;
-            Say("SWING KINGS", 1.4f);
+            // The HUD (web ui.hud + swingKings/hud.js): score block, outs lamps, the one-line instruction, the title card.
+            Ui.ShowScoreboard();
+            Ui.Outs(0);
+            Ui.Hint("<color=#ffe58a>SPACE</color> / tap as the ball reaches the plate \u00B7 on the beat = <color=#ffe58a>HOME RUN</color>");
+            _hintHidden = false;
+            Ui.Banner("SWING KINGS", life: 1.5f);
         }
 
         public override void Press(string action, double time)
@@ -118,6 +122,16 @@ namespace Bonanza
             ScheduleClicks();
             UpdatePitchBalls(beat);
             UpdateCamera(beat, dt);
+            UpdateHud(beat);
+        }
+
+        /// The readouts follow the judge; the instruction bar goes once the teach section is over (web: beat 16).
+        void UpdateHud(double beat)
+        {
+            Ui.Score(Mathf.RoundToInt((float)_round.Points));
+            Ui.Combo(_round.Judge.Stats.Combo);
+            Ui.Accuracy((float)_round.Judge.Accuracy);
+            if (!_hintHidden && beat >= 16) { _hintHidden = true; Ui.HideHint(); }
         }
 
         public override Outcome Result()
@@ -208,13 +222,12 @@ namespace Bonanza
             if (!_playing) Look.BeatPulse = 0;
             UpdateHitBalls(dt);
             UpdateBat(dt);
-            float real = Time.deltaTime;
-            for (int i = _callouts.Count - 1; i >= 0; i--)
+            // "SIDE RETIRED" holds all three lamps, then the count starts over (web _outsClear).
+            if (_outsClear > 0)
             {
-                _callouts[i].Age += real;
-                if (_callouts[i].Age >= _callouts[i].Life) _callouts.RemoveAt(i);
+                _outsClear -= Time.deltaTime;
+                if (_outsClear <= 0) Ui.Outs(0);
             }
-            _countLife -= real;
         }
 
         /// The web's camera: eases to a target that leans in on a hit (camPush), lifts to follow the grand slam up, and
@@ -257,7 +270,12 @@ namespace Bonanza
             }
         }
 
-        void SetCount(string s) { _countText = s; _countLife = 0.44f; }
+        /// web: ui.popup at y 0.26, 1.4x (1.2x and 0.44 s for the last beat, PLAY BALL!).
+        void SetCount(string s)
+        {
+            bool go = s == "PLAY BALL!";
+            Ui.Countdown(s, 0.26f, go ? 1.2f : 1.4f, go ? 0.44f : 0.42f);
+        }
 
         // ------------------------------------------------------------ pitches
 
@@ -432,6 +450,8 @@ namespace Bonanza
         void OnWhiff(WhiffEvent w)
         {
             if (w.Swung) StartSwing();
+            if (_outsClear > 0) { _outsClear = 0; Ui.Outs(0); }   // a new out while SIDE RETIRED still holds the lamps: the new inning starts now
+            Ui.Outs(w.Outs);
             var fx = Look.Fx;
             var o = VerdictOpts.Default;
             o.Combo = 0; o.GroundY = 0; o.Text = false; o.Stage = false;
@@ -442,6 +462,7 @@ namespace Bonanza
             if (w.SideRetired)
             {
                 float retire = Mathf.Max(1.2f, Mathf.Min(1.8f, gap * 0.9f));
+                _outsClear = retire;
                 fx.Callout("SIDE RETIRED!", "3 OUTS", Contact + new Vector3(1.1f, 1.6f, 0), Hex(0xff4d6a), 1.05f, retire, 0.3f);
                 Look.Rig.Shake(0.08f, new Vector3(0, -1, 0));
             }
@@ -493,38 +514,6 @@ namespace Bonanza
             else _batPivot.localRotation = Quaternion.Slerp(_batPivot.localRotation, Quaternion.Euler(0, coiled ? 75 : 60, 0), 1 - Mathf.Exp(-dt * 12));
         }
 
-        // ------------------------------------------------------------ HUD
-
-        void Say(string text, float life, Vector3? world = null, Color? color = null)
-        {
-            _callouts.Add(new Callout
-            {
-                Text = text, Life = life, World = world ?? new Vector3(float.NaN, 0, 0), Color = color ?? Color.white,
-            });
-        }
-
-        public override void DrawHud(float s)
-        {
-            if (_round == null) return;
-            var st = _round.Judge.Stats;
-            string outs = $"{_round.Outs}/3";   // ASCII: the WebGL built-in font has no ●○
-            Hud.Text(new Rect(16 * s, 12 * s, 600 * s, 200 * s),
-                $"SCORE  {Mathf.RoundToInt((float)_round.Points)}\nCOMBO  {st.Combo}\nACC  {_round.Judge.Accuracy * 100:0.0}%\nOUTS  {outs}", Hud.Left, Color.white);
-            if (_playing && _round.BeatAt(_now) < 16)
-                Hud.Text(new Rect(0, Screen.height - 60 * s, Screen.width, 40 * s),
-                    "SPACE / click / tap as the ball reaches the plate - on the beat = HOME RUN", Hud.Small, new Color(1, 1, 1, 0.85f));
-
-            if (_countLife > 0 && _countText != null)
-                Hud.Center(0.12f, _countText, Hud.Big, Hud.Gold);
-
-            var cam = Camera.main;
-            foreach (var c in _callouts)
-            {
-                float a = Mathf.Clamp01((c.Life - c.Age) / 0.2f);
-                var col = new Color(c.Color.r, c.Color.g, c.Color.b, a);
-                if (float.IsNaN(c.World.x)) Hud.Center(0.3f, c.Text, Hud.Big, col, 120);
-                else Hud.AtWorld(cam, c.World + Vector3.up * (c.Age * 0.6f), c.Text, Hud.Mid, col);
-            }
-        }
+        // The HUD is on the canvas (UseCanvasHud): no DrawHud.
     }
 }

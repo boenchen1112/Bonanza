@@ -9,7 +9,8 @@
 //   Press(a, t)     one press, action in {a, left, down, up, right}, at game time t.
 //   Result()        null until the round is over.
 //   TestChart()     the presses a perfect bot makes (action, game time); valid after Begin.
-//   DrawHud(s)      the game's own HUD, from the host's OnGUI. s = Screen.height/720.
+//   DrawHud(s)      the game's own IMGUI HUD, from the host's OnGUI. s = Screen.height/720. A game with
+//                   UseCanvasHud draws on the canvas instead (Ui.Score, Ui.Banner, ...) and DrawHud is not called.
 //
 // Dispose is Destroy(gameObject): everything a game builds hangs under its own
 // transform, and Mat() copies are released in OnDestroy.
@@ -17,6 +18,7 @@
 using System.Collections.Generic;
 using Bonanza.Core;
 using Bonanza.Look;
+using Bonanza.HudKit;
 using UnityEngine;
 
 namespace Bonanza
@@ -39,6 +41,12 @@ namespace Bonanza
         /// The palette this game starts in (a key of Palettes).
         protected virtual string PaletteName => Id;
         protected LookRig Look { get; private set; }
+
+        /// True once a game draws its HUD on the host's canvas (Ui, uGUI + TextMeshPro) instead of in DrawHud (IMGUI).
+        /// The host then skips DrawHud for it. Call Ui.ShowScoreboard() and the other Ui members from Begin and Tick.
+        public virtual bool UseCanvasHud => false;
+        /// The shared canvas HUD (see HudKit/GameHud.cs). Cleared between rounds by the host.
+        protected GameHud Ui => Host.Ui;
 
         public void Bind(GameHost host, uint seed)
         {

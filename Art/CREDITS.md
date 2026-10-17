@@ -21,3 +21,11 @@
 - **Lilita One** (Juan Montoreano, SIL Open Font License 1.1), baked to a static TextMeshPro SDF atlas
   (ASCII) for the Swing Kings hit badges: `Assets/Game/Fonts/LilitaOne-Regular.ttf`, licence text in
   `Assets/Game/Fonts/OFL-LilitaOne.txt`, atlas `Assets/Game/Resources/Look/CalloutFont.asset`.
+
+## HUD display font
+
+- **Titan One** (Rodrigo Fuenzalida, SIL Open Font License 1.1), the closest free match to the web build's
+  heavy, rounded, slightly slanted display face. Baked to a static TextMeshPro SDF atlas (ASCII plus the middle
+  dot) for the canvas HUD, banners, countdown and results card: `Assets/Game/Fonts/TitanOne-Regular.ttf`,
+  licence text in `Assets/Game/Fonts/OFL-TitanOne.txt`, atlas `Assets/Game/Resources/Look/HudFont.asset`
+  (materials `HudFontDisplay` outlined with a hard shadow, `HudFontLabel` plain).
