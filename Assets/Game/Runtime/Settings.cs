@@ -56,7 +56,7 @@ namespace Bonanza
         public static ISettingsStore Store = new PlayerPrefsStore();
 
         /// Camera conducting is not built yet (ticket 16): the value can be chosen and is kept,
-        /// but SwingInputEffective falls back to Tap while this is false.
+        /// but SwingInputEffective falls back to Mouse while this is false.
         public static bool CameraInputAvailable = false;
 
         // ------------------------------------------------------------ pure helpers
@@ -174,10 +174,10 @@ namespace Bonanza
             set { SwingInputOverride = null; Store.SetString(KeySwing, value.ToString().ToLowerInvariant()); Touch(); }
         }
 
-        /// The input Swing Kings should use now: the choice, or Tap when it is not available yet.
+        /// The input Swing Kings should use now: the choice, or Mouse while camera conducting is not available yet.
         public static SwingInput SwingInputEffective
         {
-            get { var c = SwingInputChoice; return c == SwingInput.Camera && !CameraInputAvailable ? SwingInput.Tap : c; }
+            get { var c = SwingInputChoice; return c == SwingInput.Camera && !CameraInputAvailable ? SwingInput.Mouse : c; }
         }
 
         /// Options' defaults (everything but progress).

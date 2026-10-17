@@ -137,11 +137,11 @@ namespace Bonanza.Core.Tests
             Assert.AreEqual(Settings.DefaultSfx, Settings.Sfx);
         }
 
-        [Test] public void Camera_falls_back_to_tap_until_available_but_is_kept()
+        [Test] public void Camera_falls_back_to_mouse_until_available_but_is_kept()
         {
             Settings.SwingInputChoice = SwingInput.Camera;
             Assert.AreEqual(SwingInput.Camera, Settings.SwingInputChoice);
-            Assert.AreEqual(SwingInput.Tap, Settings.SwingInputEffective);
+            Assert.AreEqual(SwingInput.Mouse, Settings.SwingInputEffective);
             Settings.CameraInputAvailable = true;
             Assert.AreEqual(SwingInput.Camera, Settings.SwingInputEffective);
         }

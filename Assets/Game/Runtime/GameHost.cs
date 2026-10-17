@@ -133,6 +133,7 @@ namespace Bonanza
         bool _pointerDown;
         float _pointerY;
         bool _inputLog;
+        public bool InputLogging => _inputLog;
         int _blurSeen;
 
         /// True while the action is down (keys, pad, pointer). Cleared by window blur.
@@ -1413,7 +1414,7 @@ namespace Bonanza
                     else if (_optIndex == (int)Opt.Graphics)
                         Hud.Center(0.8f, $"Now drawing at {RenderQuality.Level.Scale:0.##}x, {RenderQuality.Level.Tier.ToString().ToUpperInvariant()}{(RenderQuality.Auto ? " (auto: " + RenderQuality.Reason + ")" : "")}", Hud.Small, new Color(1, 1, 1, 0.7f), 40);
                     else if (_optIndex == (int)Opt.Swing)
-                        Hud.Center(0.8f, "Tap is the default. Mouse and camera conducting arrive later; until then taps are used.", Hud.Small, new Color(1, 1, 1, 0.7f), 40);
+                        Hud.Center(0.8f, "Tap is the default. Mouse: hold the button as the ball flies, flick the pointer DOWN as it lands.\nCamera conducting is not built yet; until then it conducts with the mouse.", Hud.Small, new Color(1, 1, 1, 0.7f), 80);
                     else if (_optIndex == (int)Opt.Offset)
                         Hud.Center(0.8f, "Negative offset = your presses land late.\nPress late and see GOOD more than PERFECT? Try -20 ms steps.", Hud.Small, new Color(1, 1, 1, 0.7f), 80);
                     Hud.Center(0.9f, "UP/DOWN choose   LEFT/RIGHT adjust   ESC / X back", Hud.Small, new Color(1, 1, 1, 0.7f), 40);

@@ -121,17 +121,61 @@ namespace Bonanza.Core
         /// Flight progress of a pitch at `beat`: 0 at the muzzle, 1 at the plate.
         public static double FlightU(Pitch p, double beat) => (beat - p.LaunchBeat) / p.Lead;
 
-        /// A tap at audio time `time`: one press is one swing.
+        /// A tap at audio time `time`: one press is one swing. A tap has no windup to measure, so the
+        /// swing's power is earned by timing instead.
         public void Press(double time)
         {
+            BeginWindup(time);
+            ReleaseSwing(time);
+        }
+
+        // ---- the conducting path (web beginWindup / releaseSwing): the button goes down (windup), and the
+        // release, or the ictus of a downstroke, swings.
+
+        /// True between BeginWindup and ReleaseSwing.
+        public bool Holding { get; private set; }
+        public double HoldStart { get; private set; }
+        /// The windup length of the last released swing, beats.
+        public double LastHoldBeats { get; private set; }
+        /// The power derived for the last released swing.
+        public double LastPower => _pendingPower;
+
+        public void BeginWindup(double time)
+        {
+            Holding = true;
+            HoldStart = time;
+        }
+
+        /// Windup length so far, beats.
+        public double HoldBeatsAt(double now) => Holding ? Math.Max(0, (now - HoldStart) / Map.Spb) : 0;
+
+        /// The power the held windup would have at `now`, for the live pitch (colours the trace).
+        public double WindupPower(double now)
+        {
             var live = LivePitch();
-            _pendingPower = live != null ? SwingRules.PowerFromTiming(time, TargetTime(live)) : 0;
+            return SwingRules.PowerForHold(HoldBeatsAt(now), live != null ? live.Ideal : 2);
+        }
+
+        /// Swing at audio time `time`. A real hold (more than 0.1 beat) keeps the original design: power is the
+        /// windup length. Otherwise power is earned by timing. False when no windup was held.
+        public bool ReleaseSwing(double time)
+        {
+            if (!Holding) return false;
+            Holding = false;
+            var live = LivePitch();
+            double holdBeats = Math.Max(0, (time - HoldStart) / Map.Spb);
+            LastHoldBeats = holdBeats;
+            bool held = holdBeats > 0.1;
+            _pendingPower = held
+                ? SwingRules.PowerForHold(holdBeats, live != null ? live.Ideal : 2)
+                : live != null ? SwingRules.PowerFromTiming(time, TargetTime(live)) : 0;
 
             _swinging = true;
             var r = Judge.Press("a", time);
             _swinging = false;
 
             if (r == null && !DemoHit(time)) SwingAtNothing?.Invoke(time);
+            return true;
         }
 
         double TargetTime(Pitch p) => p.Note != null ? p.Note.Time : Map.TimeAt(p.TargetBeat);

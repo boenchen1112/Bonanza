@@ -229,3 +229,95 @@ const judge = await load('core/judge.js');
   });
   save('party-headline.txt', heads, ['case', 'seats', 'title', 'note']);
 }
+
+// ---- Swing Kings ictus detector (games/swingKings/gesture.js): every feed of a set of traces, with the event
+// and the detector state after it. `op` is feed or reset. Trace shapes mirror web/tests/gesture.test.mjs, plus
+// irregular pointer timestamps and a conduct with a slow stroke.
+{
+  const g = await load('games/swingKings/gesture.js');
+  const FPS = 60;
+  const conduct = ({ lift = 0.25, strike = 0.12, strikeAt = 1.0, hold = 0.3 } = {}) => {
+    const low = 0.7, high = low - lift;
+    return (t) => {
+      if (t < 0.3) return low;
+      if (t < 0.7) return low - lift * ((t - 0.3) / 0.4);
+      if (t < strikeAt) return high;
+      if (t < strikeAt + strike) { const u = (t - strikeAt) / strike; return high + lift * u * u; }
+      return low;
+    };
+  };
+  let ls = 7;
+  const rnd = () => ((ls = (ls * 1664525 + 1013904223) >>> 0) / 4294967296);
+  const grid = (secs) => Array.from({ length: Math.floor(secs * FPS) + 1 }, (_, i) => i / FPS);
+  // A mouse reports at uneven intervals (4-20 ms): times from a seeded generator.
+  const irregular = (secs) => { const ts = []; let t = 0; while (t <= secs) { ts.push(t); t += 0.004 + rnd() * 0.016; } return ts; };
+  const a = conduct(), b = conduct({ strikeAt: 1.0 });
+  const scenarios = [
+    { name: 'conduct', ts: grid(1.6), y: conduct() },
+    { name: 'conduct-slow', ts: grid(2.2), y: conduct({ strike: 0.3 }) },
+    { name: 'conduct-small-lift', ts: grid(1.6), y: conduct({ lift: 0.07 }) },
+    { name: 'drift', ts: grid(6), y: (t) => 0.6 + 0.1 * Math.sin(t * 1.2) },
+    { name: 'jitter', ts: grid(4), y: () => 0.5 + (rnd() - 0.5) * 0.006 },
+    { name: 'no-lift', ts: grid(1.5), y: (t) => (t < 1 ? 0.3 : t < 1.12 ? 0.3 + 0.3 * ((t - 1) / 0.12) ** 2 : 0.6) },
+    { name: 'two-strokes', ts: grid(3.2), y: (t) => (t < 1.5 ? a(t) : b(t - 1.5)) },
+    { name: 'quick-second', ts: grid(2.6), y: (t) => (t < 1.3 ? a(t) : b(t - 1.3)) },
+    { name: 'irregular', ts: irregular(1.6), y: conduct() },
+    { name: 'irregular-two', ts: irregular(3.2), y: (t) => (t < 1.5 ? a(t) : b(t - 1.5)) },
+    { name: 'reset-midway', ts: grid(1.6), y: conduct(), resetAt: Math.round(0.9 * FPS) },
+  ];
+  const rows = [];
+  for (const sc of scenarios) {
+    const d = g.createIctusDetector();
+    sc.ts.forEach((t, i) => {
+      if (sc.resetAt === i) { d.reset(); rows.push({ scenario: sc.name, op: 'reset', t: 0, y: 0, ev: '-', evT: '-', evY: '-', state: d.state }); }
+      const y = sc.y(t);
+      const e = d.feed(t, y);
+      rows.push({ scenario: sc.name, op: 'feed', t, y, ev: e ? e.type : '-', evT: e ? e.time : '-', evY: e ? e.y : '-', state: d.state });
+    });
+  }
+  // Tunable parameters: a stricter detector on the plain conduct.
+  {
+    const d = g.createIctusDetector({ riseMin: 0.2, vDown: 2, minStroke: 0.2, decel: 0.5, refractory: 0.4 });
+    const y = conduct();
+    for (const t of grid(1.6)) {
+      const e = d.feed(t, y(t));
+      rows.push({ scenario: 'strict', op: 'feed', t, y: y(t), ev: e ? e.type : '-', evT: e ? e.time : '-', evY: e ? e.y : '-', state: d.state });
+    }
+  }
+  save('swing-ictus.txt', rows, ['scenario', 'op', 't', 'y', 'ev', 'evT', 'evY', 'state']);
+
+  // The pointer wrapper in index.js: a still pointer is fed its resting position one frame after its last move
+  // once 40 ms have passed. Steps: m = pointer move at (t,y), u = update at `now`; result = detector events.
+  const mouseRows = [];
+  {
+    const d = g.createIctusDetector();
+    let pointer = null;
+    const sample = (t, y) => d.feed(t, y);
+    const fmt = (e) => (e ? e : null);
+    const log = (op, now, t, y, e) => mouseRows.push({ op, now, t, y, ev: e ? e.type : '-', evT: e ? e.time : '-' });
+    d.reset();
+    // a conduct played as sparse mouse moves: the pointer stops dead at the bottom, no more events
+    const y = conduct();
+    const ts = []; { let t = 0.3; while (t < 1.2) { ts.push(t); t += 0.008 + rnd() * 0.01; } }
+    let now = 0;
+    for (const t of ts) {
+      if (t > 1.0 + 0.12) break;
+      const yy = y(t);
+      pointer = { t, y: yy };
+      const e = sample(t, yy);
+      log('m', t, t, yy, e);
+    }
+    // ...then the frames go by without events
+    for (let n = 0; n < 12; n++) {
+      now = pointer.t + (n + 1) / 60;
+      let e = null;
+      if (pointer && now - pointer.t > 0.04) {
+        const tStill = pointer.t + 1 / 60;
+        pointer.t = tStill;
+        e = sample(tStill, pointer.y);
+      }
+      log('u', now, pointer.t, pointer.y, e);
+    }
+  }
+  save('swing-ictus-pointer.txt', mouseRows, ['op', 'now', 't', 'y', 'ev', 'evT']);
+}

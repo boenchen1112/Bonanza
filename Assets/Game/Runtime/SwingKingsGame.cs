@@ -28,7 +28,25 @@ namespace Bonanza
         public override bool UseCanvasHud => true;
         bool _night;
 
-        public override string Controls => "SPACE / click / tap as the ball reaches the plate.\nOn the beat = HOME RUN. Three misses retire the side.";
+        public override string Controls => Conducting
+            ? "HOLD the mouse (or SPACE) as the ball flies, then flick DOWN as it lands.\nThe stop of the stroke is the swing. On the beat = HOME RUN. Three misses retire the side."
+            : "SPACE / click / tap as the ball reaches the plate.\nOn the beat = HOME RUN. Three misses retire the side.";
+
+        // Mouse conducting (ADR 0004, web swingKings/index.js): the button down is the windup, a downward flick of
+        // the pointer fires the swing at the ictus (the stroke's stop), and releasing the button swings too.
+        // Camera conducting is not built yet, so that option conducts with the mouse. Tap is the default.
+        static bool Conducting => Settings.SwingInputEffective != SwingInput.Tap;
+        bool _mouse;
+        readonly PointerConductor _pointer = new PointerConductor();
+        ConductBot _bot;                 // ?autoplay in mouse mode: a scripted conductor through the same detector
+        ConductTrace _trace;
+        Mesh _traceMesh;
+        Material _traceMat;
+        GameObject _traceGo;
+        float _traceHold;                // seconds the ribbon keeps drawing after the release (the follow-through)
+        Vector3[] _traceVerts;
+        Color[] _traceCols;
+        const float BatLen = 1.1f;
 
         // ------------------------------------------------------------ layout
         // web LAYOUT (x, y, z) -> Unity (x, y, -z)
@@ -77,12 +95,18 @@ namespace Bonanza
             fx.SetFocus(W(-1.6f, 1.6f, 0));
             fx.Prewarm();   // touch every FX material and the callout font now: a first-use shader link mid-round would push a press out of its window
             _round = new SwingRound(Save.OffsetMs);
-            _round.Judged += (v, _) => MusicJudged(v != Verdict.Miss);
+            _round.Judged += (v, err) =>
+            {
+                MusicJudged(v != Verdict.Miss);
+                // The conducting check (Tools/mouse-check.mjs) reads these two lines.
+                if (_mouse) Debug.Log($"[SWING] verdict={v.ToString().ToLowerInvariant()} err={err:F1} power={_round.LastPower:F2} hold={_round.LastHoldBeats:F2} pts={_round.Points:F0}");
+            };
             _round.PitchLaunched += OnLaunched;
             _round.PitchPassed += OnPassed;
             _round.Contact += OnContact;
             _round.Whiff += OnWhiff;
             _round.SwingAtNothing += _ => { StartSwing(); Host.PlaySfx("swoosh", _now); };
+            BuildTrace();
         }
 
         public override void Begin(double now)
@@ -94,22 +118,96 @@ namespace Bonanza
             // The HUD (web ui.hud + swingKings/hud.js): score block, outs lamps, the one-line instruction, the title card.
             Ui.ShowScoreboard();
             Ui.Outs(0);
-            Ui.Hint("<color=#ffe58a>SPACE</color> / tap as the ball reaches the plate \u00B7 on the beat = <color=#ffe58a>HOME RUN</color>");
+            _mouse = Conducting;
+            Ui.Hint(_mouse
+                ? "<color=#ffe58a>HOLD</color> the mouse as the ball flies \u00B7 <color=#ffe58a>SWING DOWN</color> as it lands"
+                : "<color=#ffe58a>SPACE</color> / tap as the ball reaches the plate \u00B7 on the beat = <color=#ffe58a>HOME RUN</color>");
             _hintHidden = false;
-            Ui.Banner("SWING KINGS", life: 1.5f);
+            Ui.Banner("SWING KINGS", life: _mouse ? 2.2f : 1.5f);
+            if (_mouse && Autoplay)
+            {
+                var scored = new List<Pitch>();
+                foreach (var p in _round.Pitches) if (p.Scored) scored.Add(p);
+                var targets = new double[scored.Count];
+                var launches = new double[scored.Count];
+                for (int i = 0; i < scored.Count; i++) { targets[i] = _round.Map.TimeAt(scored[i].TargetBeat); launches[i] = _round.Map.TimeAt(scored[i].LaunchBeat); }
+                _bot = new ConductBot(targets, launches, now);
+            }
         }
 
         public override void Press(string action, double time)
         {
             if (action != "a") return;
-            _round.Press(time);
-            Host.PlaySfx("tick", time, gain: 0.05f);   // web beginWindup: the windup tick on every swing
+            if (!_mouse)
+            {
+                _round.Press(time);
+                Host.PlaySfx("tick", time, gain: 0.05f);   // web beginWindup: the windup tick on every swing
+                return;
+            }
+            if (_bot != null) return;                      // the scripted conductor plays; the host's autoplay taps are not used
+            _pointer.Reset();
+            BeginWindup(time);
         }
+
+        public override void Release(string action, double time)
+        {
+            if (!_mouse || _bot != null || action != "a") return;
+            CatchUp(time);                 // a stall can queue the button-up behind a stroke whose stop is not yet seen
+            ReleaseSwing(time, "button");
+        }
+
+        public override void PointerMove(float y01, double time)
+        {
+            if (!_mouse || _bot != null || !_round.Holding) return;
+            CatchUp(time);
+            if (!_round.Holding) return;
+            if (_pointer.Move(time, y01, out var ev)) OnGesture(ev);
+        }
+
+        /// Feed the resting samples a pointer that stopped moving owes the detector, up to audio time `t`.
+        void CatchUp(double t)
+        {
+            if (!_round.Holding) return;
+            while (_pointer.Update(t, out var ev))
+            {
+                OnGesture(ev);
+                if (!_round.Holding) return;
+            }
+        }
+
+        void OnGesture(GestureEvent ev)
+        {
+            if (_mouse) Debug.Log($"[CONDUCT] {ev.Kind.ToString().ToLowerInvariant()} t={ev.Time:F4} y={ev.Y:F3}");
+            if (ev.Kind == GestureKind.Ictus) ReleaseSwing(ev.Time, "ictus");
+        }
+
+        /// The button went down: the windup begins, and the ribbon starts drawing the gesture.
+        void BeginWindup(double time)
+        {
+            _round.BeginWindup(time);
+            _trace.Begin(BatTip.x, BatTip.y, BatTip.z);
+            _traceHold = 0;
+            Host.PlaySfx("tick", time, gain: 0.05f);       // web beginWindup
+        }
+
+        /// The release, or the ictus of a downstroke: swing. Power is the windup length when it was a real hold.
+        void ReleaseSwing(double time) => ReleaseSwing(time, "bot");
+
+        void ReleaseSwing(double time, string source)
+        {
+            if (!_round.ReleaseSwing(time)) return;
+            Debug.Log($"[RELEASE] src={source} t={time:F4} hold={_round.LastHoldBeats:F2} power={_round.LastPower:F2}");
+            _trace.SetPower(_round.LastPower);
+            _traceHold = 0.26f;    // the release stroke is part of the gesture: keep drawing for a quarter second
+        }
+
+        Vector3 BatTip => _batPivot.TransformPoint(new Vector3(-BatLen, 0, 0));
 
         public override void Tick(double now, float dt)
         {
             double beatBefore = _round.BeatAt(_now);
             _now = now;
+            if (_mouse) ConductStep(now);
             _round.Update(now);
             double beat = _round.BeatAt(now);
             CountIn(beatBefore, beat);
@@ -310,6 +408,7 @@ namespace Bonanza
 
         void OnLaunched(Pitch p)
         {
+            if (_mouse && p.Scored) Debug.Log($"[LAUNCH] id={p.Id} eta={_round.Map.TimeAt(p.TargetBeat) - _now:F4}");
             var b = new Ball { Go = AcquireBall() };
             b.Trail = Look.Fx.Trail(Hex(0xbfeaff), 0.075f);
             // Half-beat markers along the flight path: the ball is the metronome.
@@ -513,6 +612,91 @@ namespace Bonanza
             }
         }
 
+        /// The conducting input, once a frame before the round advances.
+        void ConductStep(double now)
+        {
+            if (_bot != null) _bot.Advance(now, BeginWindup, ReleaseSwing);
+            else if (_round.Holding)
+            {
+                if (Host.InputLogging) Debug.Log($"[CONDUCT] frame now={now:F4} last={_pointer.LastTime:F4} state={_pointer.Detector.Current}");
+                CatchUp(now);
+            }   // a pointer that has stopped sends no events: the detector is fed its resting position
+        }
+
+        // ------------------------------------------------------------ the conducting trace (web trace.js)
+
+        void BuildTrace()
+        {
+            _trace = new ConductTrace();
+            _traceMesh = new Mesh { name = "ConductTrace" };
+            _traceMesh.MarkDynamic();
+            _traceMat = Mat(Color.white, lift: 1f, rim: 0, pulse: 0, bands: 1);
+            _traceGo = MeshObject(PrimitiveType.Cube, _traceMat);
+            _traceGo.name = "ConductTrace";
+            _traceGo.GetComponent<MeshFilter>().sharedMesh = _traceMesh;
+            var mr = _traceGo.GetComponent<MeshRenderer>();
+            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            mr.receiveShadows = false;
+            mr.enabled = false;
+            _traceVerts = new Vector3[ConductTrace.MaxSamples * 2];
+            _traceCols = new Color[ConductTrace.MaxSamples * 2];
+        }
+
+        void UpdateTrace(float dt)
+        {
+            var mr = _traceGo.GetComponent<MeshRenderer>();
+            if (!_mouse) { mr.enabled = false; return; }
+            if (_round.Holding) _trace.Push(dt, BatTip.x, BatTip.y, BatTip.z, _round.WindupPower(_now));
+            else if (_traceHold > 0)
+            {
+                _traceHold -= dt;
+                _trace.Push(dt, BatTip.x, BatTip.y, BatTip.z, _round.LastPower);
+                if (_traceHold <= 0) _trace.Release();
+            }
+            _trace.Update(dt);
+            int n = _trace.Count;
+            if (n < 2 || (!_trace.Live && _trace.Fade <= 0)) { mr.enabled = false; return; }
+
+            var cam = Camera.main;
+            Vector3 camF = cam ? cam.transform.forward : Vector3.forward;
+            for (int i = 0; i < n; i++)
+            {
+                int i0 = Mathf.Max(0, i - 1), i1 = Mathf.Min(n - 1, i + 1);
+                var seg = new Vector3(_trace.X[i1] - _trace.X[i0], _trace.Y[i1] - _trace.Y[i0], _trace.Z[i1] - _trace.Z[i0]);
+                if (seg.sqrMagnitude < 1e-9f) seg = Vector3.up;
+                var perp = Vector3.Cross(seg, camF);
+                if (perp.sqrMagnitude < 1e-9f) perp = Vector3.up;
+                perp.Normalize();
+                float u = n > 1 ? i / (float)(n - 1) : 1f;
+                float hw = (float)_trace.HalfWidth(u);
+                var c = new Vector3(_trace.X[i], _trace.Y[i], _trace.Z[i]);
+                _traceVerts[i * 2] = c + perp * hw;
+                _traceVerts[i * 2 + 1] = c - perp * hw;
+            }
+            var tris = new int[(n - 1) * 12];
+            for (int s = 0; s < n - 1; s++)
+            {
+                int a = s * 2, b = a + 1, c2 = a + 2, d = a + 3, o = s * 12;
+                tris[o] = a; tris[o + 1] = b; tris[o + 2] = c2; tris[o + 3] = b; tris[o + 4] = d; tris[o + 5] = c2;
+                tris[o + 6] = a; tris[o + 7] = c2; tris[o + 8] = b; tris[o + 9] = b; tris[o + 10] = c2; tris[o + 11] = d;   // back faces: the ribbon reads from both sides
+            }
+            _traceMesh.Clear();
+            var verts = new Vector3[n * 2];
+            System.Array.Copy(_traceVerts, verts, n * 2);
+            _traceMesh.vertices = verts;
+            _traceMesh.triangles = tris;
+            _traceMesh.RecalculateBounds();
+            ConductTrace.RampColor(_trace.Power, out float r, out float g, out float bl);
+            _traceMat.SetColor("_BaseColor", new Color(r, g, bl, 1));
+            mr.enabled = true;
+        }
+
+        protected override void OnDestroy()
+        {
+            if (_traceMesh) Destroy(_traceMesh);
+            base.OnDestroy();
+        }
+
         void UpdateBat(float dt)
         {
             if (_swingT < 1) _swingT = Mathf.Min(1, _swingT + dt / 0.28f);
@@ -527,8 +711,12 @@ namespace Bonanza
                     coiled = toGo < _round.Map.Spb * 2 && toGo > -0.2;
                 }
             }
+            float rest = coiled ? 75 : 60;
+            // Conducting: the bat winds back further the longer the button is held, so the ribbon traces the coil.
+            if (_mouse && _round.Holding) rest = 70 + 55 * (float)_round.WindupPower(_now);
             if (_swingT < 1) PoseBat(_swingT);
-            else _batPivot.localRotation = Quaternion.Slerp(_batPivot.localRotation, Quaternion.Euler(0, coiled ? 75 : 60, 0), 1 - Mathf.Exp(-dt * 12));
+            else _batPivot.localRotation = Quaternion.Slerp(_batPivot.localRotation, Quaternion.Euler(0, rest, 0), 1 - Mathf.Exp(-dt * 12));
+            UpdateTrace(dt);
         }
 
         // The HUD is on the canvas (UseCanvasHud): no DrawHud.
