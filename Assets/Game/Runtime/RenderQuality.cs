@@ -6,6 +6,7 @@
 // The crowd / effect budgets and vignette scale are plain readable values for
 // the look, crowd and FX code.
 
+using Bonanza.Core;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
@@ -32,7 +33,13 @@ namespace Bonanza
         static float _origScale; static int _origMsaa; static bool _captured;
         static bool _hooked;
 
-        static string DeviceKey => "rg:gfxLevel:" + SystemInfo.graphicsDeviceName;
+        /// "pending" once Auto has sat at its floor and still missed the budget twice; the title shows it once.
+        public const string KeyPerfHint = "rg:perfHint";
+        static int _floorStrikes;
+
+        // Auto's settled level, per renderer string (web graphicsLevels). A setting, not progress:
+        // RESET PROGRESS leaves it alone.
+        static string DeviceKey => GraphicsPolicy.LevelKey(SystemInfo.graphicsDeviceName);
 
         /// Apply the saved setting (call at startup and when the option changes).
         public static void Apply(GraphicsSetting setting)
@@ -89,7 +96,13 @@ namespace Bonanza
             var d = _governor.Sample(frameSeconds * 1000.0, phase);
             if (!d.HasValue) return;
             Reason = d.Value.Reason;
-            if (d.Value.AtFloorOverBudget) return;
+            if (d.Value.AtFloorOverBudget)
+            {
+                string was = Settings.Store.GetString(KeyPerfHint, "");
+                string now = PerfHint.OnFloorOverBudget(ref _floorStrikes, was);
+                if (now != was) { Settings.Store.SetString(KeyPerfHint, now); Settings.Store.Flush(); Debug.Log("[GFX] perf hint pending"); }
+                return;
+            }
             SetLevel(d.Value.Index);
             Settings.Store.SetFloat(DeviceKey, d.Value.Index);   // remembered per device, like the web
             Settings.Store.Flush();

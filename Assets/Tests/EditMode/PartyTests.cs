@@ -6,7 +6,7 @@ namespace Bonanza.Core.Tests
 {
     public class PartyTests
     {
-        static readonly string[] Ids = { "swing-kings", "chomp-chorus", "drumline-dash", "bounce-brigade", "finale-fever" };
+        static readonly string[] Ids = { "swing-kings", "drumline-dash", "bounce-brigade", "chomp-chorus", "finale-fever" };
 
         [Test]
         public void PlaylistMatchesTheWebBuild()

@@ -95,7 +95,8 @@ const judge = await load('core/judge.js');
 // ---- Party (shell/state.js)
 {
   const st = await load('shell/state.js');
-  const IDS = ['swing-kings', 'chomp-chorus', 'drumline-dash', 'bounce-brigade', 'finale-fever'];
+  // The web registry order (shell/registry.js GAMES); GameHost.Games and the shuffle follow it.
+  const IDS = ['swing-kings', 'drumline-dash', 'bounce-brigade', 'chomp-chorus', 'finale-fever'];
   const lists = [];
   for (const seed of [1, 2, 3, 0xbeef, 0x5eed]) {
     for (const len of [1, 3, 4, 5]) {
@@ -141,4 +142,90 @@ const judge = await load('core/judge.js');
   });
   save('party-session.txt', rows, ['game', 'sim', 'id', 'score', 'rank', 'place', 'points']);
   console.log('party totals', s.players.map((p) => `${p.id}:${p.points}/${p.wins}`).join(' '), 'winners', s.party.winners.join(','));
+}
+
+// ---- Shell flow (shell/nav.js, shell/title.js bestOverall, shell/theme.js fmtScore, shell/party.js headline)
+{
+  const nav = await load('shell/nav.js');
+  const st = await load('shell/state.js');
+  const enc = (v) => String(v).replaceAll(' ', '~');   // cells are space-separated
+  const o = (opts) => ['mode', 'game', 'from'].map((k) => (opts && opts[k] !== undefined ? `${k}:${opts[k]}` : null)).filter(Boolean).join(',') || '-';
+  const routes = [];
+  const add = (fn, args, r) => routes.push({ fn, args: args.map((a) => (a === undefined ? '-' : a)).join(','), view: r.view, opts: o(r.opts) });
+  for (const id of ['party', 'free', 'options']) add('titleMenuRoute', [id], nav.titleMenuRoute(id));
+  for (const m of ['party', 'free']) add('rosterExitRoute', [m], nav.rosterExitRoute(m));
+  for (const inParty of [true, false]) {
+    for (const from of ['freeplay', 'select', 'party', undefined]) {
+      for (const gameId of ['swing-kings', undefined]) {
+        add('exitRoute', [inParty ? 1 : 0, from, gameId], nav.exitRoute({ inParty, from, gameId }));
+      }
+    }
+  }
+  for (const done of [false, true]) add('partyConfirmRoute', [done ? 1 : 0, done ? undefined : 'chomp-chorus'], nav.partyConfirmRoute({ done, gameId: done ? undefined : 'chomp-chorus' }));
+  save('shell-routes.txt', routes, ['fn', 'args', 'view', 'opts']);
+
+  // title.js bestOverall, verbatim, over scripted records (CATALOG order = registry order).
+  const bestOverall = (records, ids) => {
+    const order = ['S', 'A', 'B', 'C', 'D'];
+    const rankIdx = (r) => (order.includes(r) ? order.indexOf(r) : order.length);
+    let best = null;
+    for (const id of ids) {
+      const r = records[id] || { score: 0, rank: null, accuracy: 0, plays: 0 };
+      if (!r.plays) continue;
+      const cand = { name: id, score: r.score, rank: r.rank || '-', acc: r.accuracy || 0 };
+      if (!best || rankIdx(cand.rank) < rankIdx(best.rank)
+        || (rankIdx(cand.rank) === rankIdx(best.rank) && cand.acc > best.acc)) best = cand;
+    }
+    return best;
+  };
+  const IDS2 = ['swing-kings', 'drumline-dash', 'bounce-brigade', 'chomp-chorus', 'finale-fever'];
+  const R = (score, rank, accuracy, plays) => ({ score, rank, accuracy, plays });
+  const cases = [
+    {},
+    { 'swing-kings': R(1234567, 'D', 0.5, 3) },
+    { 'swing-kings': R(99000, 'D', 0.9, 2), 'chomp-chorus': R(400, 'B', 0.7, 1) },
+    { 'swing-kings': R(5000, 'A', 0.91, 1), 'bounce-brigade': R(700, 'A', 0.95, 4), 'finale-fever': R(300, 'A', 0.95, 2) },
+    { 'drumline-dash': R(0, null, 0, 1), 'finale-fever': R(10, 'C', 0.4, 1) },
+    { 'swing-kings': R(12, 'S', 1, 1), 'drumline-dash': R(10, 'S', 1, 1) },
+    { 'chomp-chorus': R(999, 'S', 0.99, 9), 'drumline-dash': R(5, 'S', 0.999, 1) },
+    { 'swing-kings': R(500, 'B', 0.8, 0), 'finale-fever': R(800, 'C', 0.6, 2) },
+  ];
+  // fmtScore from theme.js (imports three, so copied verbatim).
+  const fmtScore = (n) => { n = Math.max(0, Math.round(n || 0)); const s = String(n); let out = ''; for (let i = 0; i < s.length; i++) { if (i > 0 && (s.length - i) % 3 === 0) out += ','; out += s[i]; } return out; };
+  const best = cases.map((c, i) => {
+    const b = bestOverall(c, IDS2);
+    const n = Object.values(c).reduce((a, r) => a + r.plays, 0);
+    return { case: i, rounds: n, best: b ? b.name : '-', rank: b ? b.rank : '-', line1: enc(`${n} ROUND${n === 1 ? '' : 'S'} PLAYED`),
+      line2: enc(b ? `BEST: ${b.name} - ${b.rank} - ${fmtScore(b.score)}` : 'NO RECORDS YET') };
+  });
+  save('shell-best.txt', best, ['case', 'rounds', 'best', 'rank', 'line1', 'line2']);
+  save('shell-score-format.txt', [0, 7, 999, 1000, 12345, 1234567, 100000].map((n) => ({ n, text: fmtScore(n) })), ['n', 'text']);
+
+  // party.js wrap-up headline over scripted standings, through the web session's own standings code.
+  const s = st.session;
+  const heads = [];
+  const lines = [
+    [[8, 1], [0, 0], [5, 0], [11, 3]],
+    [[6, 2], [6, 1], [3, 0], [1, 0]],
+    [[6, 2], [6, 2], [3, 0], [1, 0]],
+    [[4, 1], [4, 1], [4, 1], [0, 0]],
+    [[9, 3], [9, 3], [9, 3], [9, 3]],
+    [[3, 1], [2, 0]],
+    [[5, 2], [5, 1]],
+  ];
+  const names = ['YOU', 'ZIZZ', 'KWARK', 'TUFF'];
+  lines.forEach((pl, i) => {
+    s.setPlayers(pl.map((_, k) => ({ name: names[k], isCpu: k > 0, cpuSkill: 0.5 })));
+    s.players.forEach((p, k) => { p.points = pl[k][0]; p.wins = pl[k][1]; });
+    const standings = s.standings();
+    const places = s.standingPlaces();
+    const wins = standings.filter((p) => places.get(p.id) === 1);
+    const win = wins[0] || standings[0];
+    const title = wins.length > 1 ? `${wins.map((w) => w.name).join(' & ')} SHARE THE CROWN!` : `${win?.name || '???'} WINS!`;
+    const second = standings[1];
+    const note = wins.length === 1 && second && second.points === win.points
+      ? `Level on ${win.points} points - ${win.wins} round wins to ${second.wins} breaks the tie` : '-';
+    heads.push({ case: i, seats: pl.map((x) => x.join('/')).join(','), title: enc(title), note: enc(note) });
+  });
+  save('party-headline.txt', heads, ['case', 'seats', 'title', 'note']);
 }

@@ -79,16 +79,37 @@ namespace Bonanza
             set => Settings.OffsetMs = value;
         }
 
-        /// Parties started, ever: seeds each party's shuffle and CPU rolls.
+        /// Parties started: the career stat (web stats.parties). RESET PROGRESS zeroes it.
         public static int Parties
         {
             get => PlayerPrefs.GetInt(Prefix + "parties", 0);
             set { PlayerPrefs.SetInt(Prefix + "parties", value); PlayerPrefs.Save(); }
         }
 
+        /// Parties started, ever: seeds each party's shuffle and CPU rolls. Not progress, so RESET
+        /// PROGRESS keeps it and the next party never repeats an earlier seed. An older save has only
+        /// "rg:parties", which then supplies the first value.
+        public const string KeyPartySeed = Prefix + "partySeed";
+
+        public static int PartySeed
+        {
+            get => PlayerPrefs.HasKey(KeyPartySeed) ? PlayerPrefs.GetInt(KeyPartySeed, 0) : PlayerPrefs.GetInt(Prefix + "parties", 0);
+            set { PlayerPrefs.SetInt(KeyPartySeed, value); PlayerPrefs.Save(); }
+        }
+
+        /// A party starts: the seed it uses, and both counters move on.
+        public static int BeginParty()
+        {
+            int n = PartySeed;
+            PartySeed = n + 1;
+            Parties = Parties + 1;
+            return n;
+        }
+
         /// Options' RESET PROGRESS: records and career stats. Settings survive it.
         public static void ResetProgress(System.Collections.Generic.IEnumerable<string> gameIds)
         {
+            PartySeed = PartySeed;   // pin the seed counter (an old save still derives it from "parties")
             foreach (var id in gameIds)
                 foreach (var k in RecordKeys) PlayerPrefs.DeleteKey(Prefix + id + k);
             SetStats(default);

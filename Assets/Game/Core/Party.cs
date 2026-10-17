@@ -65,6 +65,16 @@ namespace Bonanza.Core
             return list;
         }
 
+        /// FNV-1a over the game id: the seed a game's chart rolls use. The same in every build
+        /// (string.GetHashCode is not guaranteed to be) and it depends on the id alone, so a
+        /// restarted round plays exactly what the first start did.
+        public static uint GameSeed(string id)
+        {
+            uint h = 2166136261;
+            foreach (char c in id) { h ^= c; h = unchecked(h * 16777619); }
+            return h;
+        }
+
         static double JsRound(double v) => Math.Floor(v + 0.5);
 
         /// A CPU's round on the human's score scale (score grows ~ accuracy squared).
@@ -149,6 +159,24 @@ namespace Bonanza.Core
                 var sp = StandingPlaces();
                 Winners = Standings().Where(p => sp[p.Id] == 1).Select(p => p.Id).ToList();
             }
+        }
+
+        /// The wrap-up card's headline and, when level on points but split on round wins, the
+        /// sentence naming the tiebreak (web party.js). ASCII: the IMGUI font lacks the em dash.
+        public (string Title, string Tiebreak) Headline()
+        {
+            var standings = Standings();
+            var sp = StandingPlaces();
+            var wins = standings.Where(p => sp[p.Id] == 1).ToList();
+            var win = wins.FirstOrDefault();
+            string title = wins.Count > 1
+                ? $"{string.Join(" & ", wins.Select(w => w.Name))} SHARE THE CROWN!"
+                : $"{win?.Name ?? "???"} WINS!";
+            string note = null;
+            var second = standings.Count > 1 ? standings[1] : null;
+            if (wins.Count == 1 && second != null && second.Points == win.Points)
+                note = $"Level on {win.Points} points - {win.Wins} round wins to {second.Wins} breaks the tie";
+            return (title, note);
         }
 
         /// Best first; ties broken by wins, then id (for a stable order only).

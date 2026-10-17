@@ -36,14 +36,14 @@ namespace Bonanza
             public Type Type;
         }
 
-        /// Every playable minigame, in menu order. A game not listed here is
+        /// Every playable minigame, in menu order (the web registry order: tools that walk it rely on it). A game not listed here is
         /// unreachable, including by the autoplay check.
         public static readonly List<Entry> Games = new List<Entry>
         {
             new Entry { Id = "swing-kings", Title = "SWING KINGS", Blurb = "One swing. One beat. Send it.", Type = typeof(SwingKingsGame) },
-            new Entry { Id = "chomp-chorus", Title = "CHOMP CHORUS", Blurb = "Four singers, one of them is you.", Type = typeof(ChompChorusGame) },
             new Entry { Id = "drumline-dash", Title = "DRUMLINE DASH", Blurb = "Hear it. Hit it back.", Type = typeof(DrumlineDashGame) },
             new Entry { Id = "bounce-brigade", Title = "BOUNCE BRIGADE", Blurb = "The platforms are the tune.", Type = typeof(BounceBrigadeGame) },
+            new Entry { Id = "chomp-chorus", Title = "CHOMP CHORUS", Blurb = "Four singers, one of them is you.", Type = typeof(ChompChorusGame) },
             new Entry { Id = "finale-fever", Title = "FINALE FEVER", Blurb = "It only gets faster.", Type = typeof(FinaleFeverGame) },
         };
 
@@ -79,11 +79,14 @@ namespace Bonanza
         int _rosterIndex, _titleIndex, _optIndex;
         bool _confirmReset;
         float _autoWait;
+        bool _perfTip;
 
         /// The party's lineup while a party runs; null in free play.
         public IList<PartyPlayer> Lineup => _party?.Players;
         Minigame _game;
         Entry _entry;
+        /// How the open round was reached: "freeplay" (the list, or a direct `?game=`) or "party".
+        string _from;
         Outcome _outcome;
         bool _newScore, _newRank;
         int _menuIndex;
@@ -404,6 +407,7 @@ namespace Bonanza
             Ui.Clear();
             _entry = e;
             _outcome = null;
+            Debug.Log($"[SHELL] open game={e.Id} from={_from ?? "-"}");
             var go = new GameObject(e.Id);
             _game = (Minigame)go.AddComponent(e.Type);
             _game.Bind(this, Seed(e.Id));
@@ -414,13 +418,7 @@ namespace Bonanza
             _mode = Mode.Rules;
         }
 
-        /// FNV-1a: a seed that is the same in every build (string.GetHashCode is not guaranteed to be).
-        static uint Seed(string id)
-        {
-            uint h = 2166136261;
-            foreach (char c in id) { h ^= c; h = unchecked(h * 16777619); }
-            return h;
-        }
+        static uint Seed(string id) => Party.GameSeed(id);
 
         void Begin()
         {
@@ -523,15 +521,21 @@ namespace Bonanza
             for (int i = 1; i < 4; i++)
                 if (_slotTier[i] < Party.CpuTiers.Length)
                     players.Add(new PartyPlayer { Name = CastNames[i], IsCpu = true, CpuSkill = Party.CpuTiers[_slotTier[i]].skill });
-            int n = _partySeed >= 0 ? _partySeed : Save.Parties;
+            int n = Save.BeginParty();   // the seed counter and the career stat both move on
+            if (_partySeed >= 0) n = _partySeed;
             _partySeed = -1;
-            Save.Parties = Save.Parties + 1;
             var rng = new Rng(unchecked(0x5eedu + (uint)n * 0x9e3779b9u));
             var games = Party.Playlist(Games.Select(e => e.Id).ToList(), PartyLength, rng);
             _party = new PartySession(players, games, (uint)(rng.Next() * 4294967296.0));
             Debug.Log($"[PARTY] start games={string.Join(",", games)} players={string.Join(",", players.Select(p => p.Name))}");
+            EnterHub();
+        }
+
+        void EnterHub()
+        {
             _autoWait = 1.5f;
             _mode = Mode.PartyHub;
+            Debug.Log($"[SHELL] hub index={_party.Index} game={_party.CurrentGame ?? "-"}");
         }
 
         void EndParty()
@@ -541,17 +545,38 @@ namespace Bonanza
             _mode = Mode.Title;
         }
 
-        /// Leave a round for wherever the player came from.
-        void BackOut()
+        /// Leave a round for wherever the player came from (web nav.js exitRoute). In a party that is
+        /// the hub: the round is not recorded, the party goes on and offers the same round again.
+        void LeaveRound()
         {
-            if (_party != null) EndParty();
-            else { CloseGame(); _mode = Mode.Menu; }
+            var r = ShellNav.ExitRoute(_party != null, _from, _entry?.Id);
+            Debug.Log($"[SHELL] leave-round game={_entry?.Id} -> {r.View} party-index={(_party != null ? _party.Index.ToString() : "-")}");
+            CloseGame();
+            _presses.Clear();
+            GoRoute(r);
+        }
+
+        /// Show the screen a Route names.
+        void GoRoute(Route r)
+        {
+            switch (r.View)
+            {
+                case ShellNav.PartyHub: EnterHub(); break;
+                case ShellNav.FreePlay:
+                    if (r.Game != null) { int i = Games.FindIndex(e => e.Id == r.Game); if (i >= 0) _menuIndex = i; }
+                    _mode = Mode.Menu;
+                    break;
+                case ShellNav.Roster: _rosterIndex = 3; _rosterFlash = null; _mode = Mode.Roster; break;
+                case ShellNav.Options: _optIndex = 0; _confirmReset = false; _mode = Mode.Options; break;
+                default: _mode = Mode.Title; break;
+            }
         }
 
         void Pause()
         {
             _pausedAt = _clock.Now;
             _mode = Mode.Paused;
+            Debug.Log($"[SHELL] pause game={_entry.Id}");
             _pauseIndex = 0;
             _resumeLeft = 0;
             AudioListener.pause = true; Time.timeScale = 0;   // freezes visual-only Update() animation
@@ -577,6 +602,7 @@ namespace Bonanza
             _clock.Rebase();
             _pausedTotal += _clock.Now - _pausedAt;
             _mode = Mode.Playing;
+            Debug.Log($"[SHELL] resume game={_entry.Id}");
             _game.OnResume();
             _music.OnResume();
         }
@@ -651,12 +677,24 @@ namespace Bonanza
                     if ((_gatePressed || Autoplay) && _clock.Running)
                     {
                         if (_autoParty) StartParty();
-                        else if (_autoGame != null) Open(Find(_autoGame));
+                        else if (_autoGame != null) { _from = "freeplay"; Open(Find(_autoGame)); }
                         else _mode = Mode.Title;
                     }
                     break;
 
                 case Mode.Title:
+                    if (!_perfTip && PerfHint.ShouldShow(Settings.Store.GetString(RenderQuality.KeyPerfHint, "")))
+                    {
+                        // Shown once: the title marks it shown as it raises it (web title.js).
+                        Settings.Store.SetString(RenderQuality.KeyPerfHint, PerfHint.Shown); Settings.Store.Flush();
+                        _perfTip = true;
+                    }
+                    if (_perfTip)
+                    {
+                        if (_presses.Count > 0) _perfTip = false;   // any key closes it, and is not also a menu press
+                        _presses.Clear();
+                        break;
+                    }
                     while (_presses.Count > 0)
                     {
                         var p = _presses.Dequeue();
@@ -671,9 +709,9 @@ namespace Bonanza
                     while (_presses.Count > 0)
                     {
                         var p = _presses.Dequeue();
-                        if (p.Action == "up" || p.Action == "left") _menuIndex = (_menuIndex + Games.Count - 1) % Games.Count;
-                        else if (p.Action == "down" || p.Action == "right") _menuIndex = (_menuIndex + 1) % Games.Count;
-                        else if (p.Action == "a") { Open(Games[_menuIndex]); break; }
+                        if (p.Action == "up" || p.Action == "left") MenuStep(-1);
+                        else if (p.Action == "down" || p.Action == "right") MenuStep(1);
+                        else if (p.Action == "a") { _from = "freeplay"; Open(Games[_menuIndex]); break; }
                         else if (InputMap.IsBack(p.Action)) { _mode = Mode.Title; break; }
                     }
                     _presses.Clear();
@@ -707,10 +745,11 @@ namespace Bonanza
                         if (p.Action == "up") _rosterIndex = (_rosterIndex + 3) % 4;
                         else if (p.Action == "down") _rosterIndex = (_rosterIndex + 1) % 4;
                         else if ((p.Action == "left" || p.Action == "right") && _rosterIndex < 3) CycleSlot(_rosterIndex + 1, p.Action == "right" ? 1 : -1);
-                        else if (p.Action == "a") { if (_rosterIndex < 3) CycleSlot(_rosterIndex + 1, 1); else { StartParty(); break; } }
+                        else if (p.Action == "a") { if (_rosterIndex < 3) CycleSlot(_rosterIndex + 1, 1); else { TryStartParty(); break; } }
                         else if (InputMap.IsBack(p.Action)) { _mode = Mode.Title; break; }
                     }
                     _presses.Clear();
+                    if (_rosterFlash != null && (_rosterFlashT -= Time.unscaledDeltaTime) <= 0) _rosterFlash = null;
                     break;
 
                 case Mode.PartyHub:
@@ -725,8 +764,9 @@ namespace Bonanza
                     _presses.Clear();
                     if (next && _mode == Mode.PartyHub)
                     {
-                        if (_party.Done) { if (!Autoplay) EndParty(); }
-                        else Open(Find(_party.CurrentGame));
+                        var go = ShellNav.PartyConfirmRoute(_party.Done, _party.CurrentGame);
+                        if (go.View == ShellNav.Title) { if (!Autoplay) EndParty(); }
+                        else { _from = go.From; Open(Find(go.Game)); }
                     }
                     break;
 
@@ -735,7 +775,7 @@ namespace Bonanza
                     while (_presses.Count > 0)
                     {
                         var p = _presses.Dequeue();
-                        if (InputMap.IsBack(p.Action)) { BackOut(); break; }
+                        if (InputMap.IsBack(p.Action)) { LeaveRound(); break; }
                         _startRequested = true;
                     }
                     _presses.Clear();
@@ -808,7 +848,7 @@ namespace Bonanza
                         if (Autoplay) continue;
                         if (_resultsT < RevealEnd && !InputMap.IsBack(p.Action)) { _resultsT = RevealEnd; continue; }
                         if (p.Action == "a") { Open(_entry); break; }                       // again
-                        if (InputMap.IsBack(p.Action) || p.Action == "left") { CloseGame(); _mode = Mode.Menu; break; }
+                        if (InputMap.IsBack(p.Action) || p.Action == "left") { LeaveRound(); break; }
                     }
                     _presses.Clear();
                     break;
@@ -849,35 +889,67 @@ namespace Bonanza
         {
             _presses.Clear();
             CloseGame();
-            _autoWait = 1.5f;
-            _mode = Mode.PartyHub;
+            EnterHub();
         }
 
-        // Pause: in a party there is no restart (it would re-roll a round); quit ends the party.
-        string[] PauseItems => _party != null ? new[] { "RESUME", "QUIT PARTY" } : new[] { "RESUME", "RESTART", "QUIT TO MENU" };
+        // Pause. RESTART is there in a party too: a game's seed is fixed per game id and the CPU rolls are
+        // seeded per party / round index / slot (PartySession.RecordRound), and the index only moves when a
+        // round is recorded, so playing it again re-rolls nothing. QUIT leaves the round unrecorded: in a
+        // party that is back to the hub with the same round offered again, otherwise the Free Play list.
+        string[] PauseItems => _party != null ? new[] { "RESUME", "RESTART", "QUIT TO HUB" } : new[] { "RESUME", "RESTART", "QUIT TO MENU" };
 
         void PauseChoice(int i)
         {
             var item = PauseItems[i];
             if (item == "RESUME") CountBackIn();
-            else if (item == "RESTART") { var e = _entry; CloseGame(); Open(e); }
-            else BackOut();
+            else if (item == "RESTART")
+            {
+                var e = _entry;
+                Debug.Log($"[SHELL] restart game={e.Id} party-index={(_party != null ? _party.Index.ToString() : "-")}");
+                CloseGame(); Open(e);
+            }
+            else LeaveRound();
         }
 
         // ------------------------------------------------------------ title, options, roster
 
         static readonly string[] TitleItems = { "PARTY", "FREE PLAY", "OPTIONS" };
+        static readonly string[] TitleIds = { "party", "free", "options" };
 
         void TitleChoice(int i)
         {
             _titleIndex = i;
-            if (i == 0) { _rosterIndex = 3; _mode = Mode.Roster; }
-            else if (i == 1) _mode = Mode.Menu;
-            else { _optIndex = 0; _confirmReset = false; _mode = Mode.Options; }
+            var r = ShellNav.TitleMenuRoute(TitleIds[i]);
+            if (r.View == ShellNav.Roster && r.Mode == "free") GoRoute(new Route(ShellNav.FreePlay));   // Free Play is solo: no roster
+            else GoRoute(r);
+        }
+
+        /// One step down the Free Play list: clamped at the ends, with a tick where the press goes nowhere.
+        void MenuStep(int dir)
+        {
+            _menuIndex = ShellNav.CarouselStep(_menuIndex, dir, Games.Count, out bool atEnd);
+            if (atEnd) Play(Tones.Blip(660, 0.02f, 40), 0.2f);
+        }
+
+        // The roster miss line. The miss sfx slot belongs to the sfx port (ticket 25); until then a low blip.
+        string _rosterFlash;
+        float _rosterFlashT;
+
+        void TryStartParty()
+        {
+            var problem = RosterRules.Check(_slotTier);
+            if (problem != null)
+            {
+                _rosterFlash = problem; _rosterFlashT = 2f;
+                Play(Tones.Blip(220, 0.12f, 60), 0.3f);   // TODO(ticket 25): the 'miss' voice
+                return;
+            }
+            StartParty();
         }
 
         void CycleSlot(int slot, int dir)
         {
+            if (!RosterRules.CanChange(slot)) return;   // seat 0 is always the human
             int n = Party.CpuTiers.Length + 1;
             _slotTier[slot] = (_slotTier[slot] + dir + n) % n;
         }
@@ -999,10 +1071,13 @@ namespace Bonanza
                         var r = new Rect(Screen.width * 0.25f, Screen.height * 0.26f + i * 80 * s, Screen.width * 0.5f, 70 * s);
                         bool sel = i == _menuIndex;
                         Hud.Box(r, sel ? new Color(1, 0.8f, 0.3f, 0.35f) : new Color(1, 1, 1, 0.08f));
-                        string best = Save.Best(e.Id);
+                        var card = Records.Card(Save.Get(e.Id));
                         Hud.Text(new Rect(r.x + 16 * s, r.y, r.width, r.height * 0.6f), e.Title, Hud.Mid, sel ? Hud.Gold : Color.white, TextAnchor.MiddleLeft);
-                        Hud.Text(new Rect(r.x + 16 * s, r.y + r.height * 0.5f, r.width, r.height * 0.5f), e.Blurb + (best != null ? "   BEST " + best : ""), Hud.Small, new Color(1, 1, 1, 0.8f), TextAnchor.MiddleLeft);
-                        if (GUI.Button(r, GUIContent.none, GUIStyle.none)) { _menuIndex = i; Open(e); }
+                        Hud.Text(new Rect(r.x + 16 * s, r.y + r.height * 0.5f, r.width, r.height * 0.5f), e.Blurb, Hud.Small, new Color(1, 1, 1, 0.8f), TextAnchor.MiddleLeft);
+                        // The record: rank, best score, plays (web freeplay.js card).
+                        Hud.Text(new Rect(r.x, r.y, r.width - 16 * s, r.height * 0.6f), $"RANK {card.Rank}   BEST {card.Best}", Hud.Small, sel ? Hud.Gold : Color.white, TextAnchor.MiddleRight);
+                        Hud.Text(new Rect(r.x, r.y + r.height * 0.5f, r.width - 16 * s, r.height * 0.5f), card.Plays, Hud.Small, new Color(1, 1, 1, 0.6f), TextAnchor.MiddleRight);
+                        if (GUI.Button(r, GUIContent.none, GUIStyle.none)) { _menuIndex = i; _from = "freeplay"; Open(e); }
                     }
                     Hud.Center(0.9f, "UP/DOWN to choose   SPACE / click to play   ESC / X: back", Hud.Small, new Color(1, 1, 1, 0.7f), 40);
                     break;
@@ -1013,9 +1088,17 @@ namespace Bonanza
                     for (int i = 0; i < TitleItems.Length; i++)
                         if (MenuRow(i, 0.4f, TitleItems[i], null, i == _titleIndex, s)) TitleChoice(i);
                     var st = Save.Stats;
+                    var statLines = Records.StatsLines(st.Rounds, Records.BestOverall(Games.Select(e => new KeyValuePair<string, GameRecord>(e.Title, Save.Get(e.Id)))));
+                    Hud.Center(0.74f, statLines[0] + "\n" + statLines[1], Hud.Small, Color.white, 80);
                     if (st.Rounds > 0)
-                        Hud.Center(0.78f, $"{st.Rounds} ROUNDS   {st.Notes} NOTES   {st.Parties} PARTIES   {st.Wins} WINS", Hud.Small, new Color(1, 1, 1, 0.7f), 40);
+                        Hud.Center(0.82f, $"{st.Notes} NOTES   {st.Parties} PARTIES   {st.Wins} WINS", Hud.Small, new Color(1, 1, 1, 0.7f), 40);
                     Hud.Center(0.9f, "UP/DOWN to choose   SPACE / click to select", Hud.Small, new Color(1, 1, 1, 0.7f), 40);
+                    if (_perfTip)
+                    {
+                        Hud.Dim(0.6f);
+                        Hud.Center(0.2f, "RUNNING SLOW ON THIS MACHINE", Hud.Mid, Hud.Gold, 60);
+                        Hud.Center(0.3f, "Graphics are already at their lowest. Try: power mode Best performance,\nplay plugged in, update your graphics driver, and set your browser to\nHigh performance in the system graphics settings.\n\n(any key to close)", Hud.Small, Color.white, 160);
+                    }
                     break;
 
                 case Mode.Options:
@@ -1050,7 +1133,8 @@ namespace Bonanza
                     for (int i = 1; i < 4; i++)
                         if (MenuRow(i - 1, 0.34f + 80 * s / Screen.height, CastNames[i], SlotLabel(_slotTier[i]), _rosterIndex == i - 1, s))
                         { _rosterIndex = i - 1; CycleSlot(i, 1); }
-                    if (MenuRow(3, 0.34f + 80 * s / Screen.height, "START PARTY", null, _rosterIndex == 3, s)) StartParty();
+                    if (MenuRow(3, 0.34f + 80 * s / Screen.height, "START PARTY", null, _rosterIndex == 3, s)) TryStartParty();
+                    if (_rosterFlash != null) Hud.Center(0.82f, _rosterFlash, Hud.Mid, new Color(1, 0.55f, 0.55f), 50);
                     Hud.Center(0.9f, "UP/DOWN choose   LEFT/RIGHT change a rival   ESC / X back", Hud.Small, new Color(1, 1, 1, 0.7f), 40);
                     break;
 
@@ -1128,7 +1212,7 @@ namespace Bonanza
             Hud.Box(again, new Color(1, 1, 1, 0.12f)); Hud.Text(again, "AGAIN", Hud.Small, Color.white);
             Hud.Box(menu, new Color(1, 1, 1, 0.12f)); Hud.Text(menu, "MENU", Hud.Small, Color.white);
             if (GUI.Button(again, GUIContent.none, GUIStyle.none)) Open(_entry);
-            else if (GUI.Button(menu, GUIContent.none, GUIStyle.none)) { CloseGame(); _mode = Mode.Menu; }
+            else if (GUI.Button(menu, GUIContent.none, GUIStyle.none)) LeaveRound();
         }
 
         /// One selectable row: label left, value right. Row i sits at y0 + i rows. True if clicked.
@@ -1154,9 +1238,10 @@ namespace Bonanza
             var last = _party.Scores.Count > 0 ? _party.Scores[_party.Scores.Count - 1] : null;
             if (_party.Done)
             {
-                var wins = _party.Winners.Select(id => _party.Players[id].Name).ToList();
                 Hud.Center(0.04f, "PARTY COMPLETE", Hud.Small, Color.white, 40);
-                Hud.Center(0.1f, wins.Count > 1 ? string.Join(" & ", wins) + " SHARE THE CROWN!" : wins[0] + " WINS!", Hud.Big, Hud.Gold, 100);
+                var head = _party.Headline();
+                Hud.Center(0.1f, head.Title, Hud.Big, Hud.Gold, 100);
+                if (head.Tiebreak != null) Hud.Center(0.25f, head.Tiebreak, Hud.Mid, Color.white, 50);
             }
             else
             {

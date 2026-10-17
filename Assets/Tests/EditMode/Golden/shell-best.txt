@@ -1,0 +1,9 @@
+# case rounds best rank line1 line2
+0 0 - - 0~ROUNDS~PLAYED NO~RECORDS~YET
+1 3 swing-kings D 3~ROUNDS~PLAYED BEST:~swing-kings~-~D~-~1,234,567
+2 3 chomp-chorus B 3~ROUNDS~PLAYED BEST:~chomp-chorus~-~B~-~400
+3 7 bounce-brigade A 7~ROUNDS~PLAYED BEST:~bounce-brigade~-~A~-~700
+4 2 finale-fever C 2~ROUNDS~PLAYED BEST:~finale-fever~-~C~-~10
+5 2 swing-kings S 2~ROUNDS~PLAYED BEST:~swing-kings~-~S~-~12
+6 10 drumline-dash S 10~ROUNDS~PLAYED BEST:~drumline-dash~-~S~-~5
+7 2 finale-fever C 2~ROUNDS~PLAYED BEST:~finale-fever~-~C~-~800

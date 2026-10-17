@@ -55,6 +55,9 @@ namespace Bonanza
                 @"\b(Intel|Iris|UHD Graphics|HD Graphics|SwiftShader|llvmpipe)\b|Radeon\(TM\) Graphics|Radeon Graphics",
                 System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
+        /// Save key of Auto's settled level for one renderer string.
+        public static string LevelKey(string renderer) => "rg:gfxLevel:" + renderer;
+
         /// Auto's starting ladder index: the remembered one for this device, else by GPU class.
         public static int AutoStart(string renderer, int remembered)
         {
