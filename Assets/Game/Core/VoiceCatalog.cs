@@ -35,7 +35,11 @@ namespace Bonanza.Core
 
     public static class VoiceCatalog
     {
-        public static readonly string[] Games = { "drumline-dash", "bounce-brigade", "chomp-chorus", "finale-fever" };
+        public static readonly string[] Games = { "drumline-dash", "bounce-brigade", "chomp-chorus", "finale-fever", "title" };
+
+        /// The title's kick on every beat (web title.js onBeat -> audio.voices.kick), baked at gain 0.5 (the reel's);
+        /// the menu plays it at 0.34 / 0.5. "title" is a shell screen, not a game: it only has this clip.
+        public const string TitleKick = "title_kick";
 
         static int Ms(double seconds) => (int)Math.Floor(seconds * 1000 + 0.5);   // JS Math.round for positives
         static double Spb => 60 / BounceChart.Bpm;
@@ -108,6 +112,7 @@ namespace Bonanza.Core
                 case "bounce-brigade": BounceClips(o); break;
                 case "chomp-chorus": ChompClips(o); break;
                 case "finale-fever": FinaleClips(o); break;
+                case "title": o.Add(TitleKick); break;
             }
             _cache[game] = o = o.Distinct().ToList();
             return o;

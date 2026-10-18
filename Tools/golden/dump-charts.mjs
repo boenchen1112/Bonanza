@@ -3,6 +3,7 @@
 //   node Tools/golden/dump-charts.mjs
 // Source: the web prototype in Reference/web/src (dependency-free chart modules).
 import { writeFileSync, mkdirSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 const OUT = new URL('../../Assets/Tests/EditMode/Golden/', import.meta.url);
 mkdirSync(OUT, { recursive: true });
@@ -366,4 +367,82 @@ const judge = await load('core/judge.js');
   }
   run(['you', 'off', 'off', 'off'], 0x5eed, [4]);   // Free Play: one human, one pick
   save('roster-picks.txt', rows, ['lineup', 'seed', 'humans', 'picks', 'order', 'players']);
+}
+
+// ---- Title attract reel (shell/title.js) and beat (shell/theme.js)
+// title.js imports THREE and the DOM, so it cannot be loaded here. The constants are read from its source
+// (and theme.js's), and the state machine below is a line-for-line transcription of title.js's update()
+// attract block, enterAttract() and input() attract branch, driven by the scripted timeline.
+{
+  const fs = await import('node:fs');
+  const webSrc = process.env.WEB_SRC || fileURLToPath(new URL('../../../Bonanza-web/web/src/', import.meta.url));
+  const titleSrc = fs.readFileSync(webSrc + 'shell/title.js', 'utf8');
+  const themeSrc = fs.readFileSync(webSrc + 'shell/theme.js', 'utf8');
+  const constant = (src, name) => Number(new RegExp(`const ${name} = ([\\d.]+);`).exec(src)[1]);
+  const IDLE_TO_ATTRACT = constant(titleSrc, 'IDLE_TO_ATTRACT');
+  const ATTRACT_HOLD = constant(titleSrc, 'ATTRACT_HOLD');
+  const SHELL_BPM = constant(themeSrc, 'SHELL_BPM');
+  const reg = await load('shell/registry.js');
+  const ids = reg.GAMES.filter((g) => g.kind === 'game').map((g) => g.id);
+  const N = ids.length;
+  const utilm = await load('core/util.js');
+
+  // frame -> action (a press), 'confirm' marks the menu item chosen (S.confirm set), 'unconfirm' clears it.
+  const dt = 1 / 60;
+  const script = new Map([
+    [1500, 'a'],          // inside the reel: leaves it, consumed
+    [2100, 'a'],          // inside the reel again (idle ran out at ~2009): leaves it
+    [2200, 'b'],          // menu: b starts the reel at once
+    [2300, 'pause'],      // inside the reel: leaves it
+    [2400, 'pause'],      // menu: pause starts the reel
+    [2450, 'up'],         // inside the reel: leaves it (consumed, no menu move)
+    [2500, 'left'],       // menu: left is the menu's
+    [2600, 'a'],          // menu: confirm
+    [2601, 'confirm'],
+    [3500, 'b'],          // confirming: ignored
+    [3600, 'unconfirm'],
+  ]);
+  const S = { mode: 'menu', idle: 0, attractT: 0, attractIdx: 0, confirm: false };
+  const rows = [];
+  const log = (frame, kind) => rows.push({ frame, kind, idx: S.attractIdx % N, step: S.attractIdx, mode: S.mode, idle: S.idle, hold: S.attractT });
+  const enterAttract = (frame) => { if (S.mode === 'attract') return; S.mode = 'attract'; S.attractT = 0; S.idle = 0; log(frame, 'enter'); };
+  for (let frame = 0; frame < 6000; frame++) {
+    const act = script.get(frame);
+    if (act === 'confirm') S.confirm = true;
+    else if (act === 'unconfirm') S.confirm = false;
+    else if (act) {
+      S.idle = 0;
+      if (S.mode === 'attract') { S.mode = 'menu'; S.attractT = 0; log(frame, 'leave'); }
+      else if (S.confirm) { log(frame, 'ignored'); }
+      else if (act === 'b' || act === 'pause') enterAttract(frame);
+      else log(frame, 'menu');
+    }
+    S.idle += dt;
+    if (S.mode === 'menu' && S.idle > IDLE_TO_ATTRACT && !S.confirm) enterAttract(frame);
+    if (S.mode === 'attract') {
+      S.attractT += dt;
+      if (S.attractT > ATTRACT_HOLD) { S.attractT = 0; S.attractIdx++; log(frame, 'step'); }
+    }
+  }
+  rows.forEach((r) => { r.idle = r.idle.toPrecision(17); r.hold = r.hold.toPrecision(17); });
+  save('title-reel.txt', rows, ['frame', 'kind', 'idx', 'step', 'mode', 'idle', 'hold']);
+
+  // constants + beat math
+  const pulse = (beat, sharp) => Math.exp(-utilm.beatPhase(beat) * sharp);
+  const consts = [
+    { k: 'IDLE_TO_ATTRACT', v: IDLE_TO_ATTRACT }, { k: 'ATTRACT_HOLD', v: ATTRACT_HOLD }, { k: 'SHELL_BPM', v: SHELL_BPM },
+    { k: 'GAMES', v: N },
+  ];
+  save('title-reel-consts.txt', consts, ['k', 'v']);
+  save('title-reel-games.txt', ids.map((id, i) => ({ i, id })), ['i', 'id']);
+  const beats = [];
+  for (const beat of [0, 0.1, 0.25, 0.5, 0.999, 1, 3.75, 7.3, 12.01, 100.5]) {
+    for (let i = 0; i < 3; i++) {
+      const local = beat - i * 0.055;
+      const p = Math.exp(-utilm.beatPhase(local) * 6.5);
+      beats.push({ beat, i, pulse6: pulse(beat, 6).toPrecision(15), down: pulse(beat / 4, 2.4).toPrecision(15),
+        scale: (1 + p * 0.11).toPrecision(15), lift: (-p * 9).toPrecision(15), tilt: (Math.sin(local * Math.PI * 0.5) * 1.6).toPrecision(15) });
+    }
+  }
+  save('title-beat.txt', beats, ['beat', 'i', 'pulse6', 'down', 'scale', 'lift', 'tilt']);
 }

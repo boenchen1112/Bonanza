@@ -61,6 +61,7 @@ namespace Bonanza
             foreach (var n in new[] { SfxCatalog.Tick, SfxCatalog.Swoosh }) _shell.Add(n);
             foreach (var ctx in new[] { "title", "results" })
                 foreach (var c in SfxCatalog.ClipsOf(ctx)) _shell.Add(c.Name);
+            _shell.Add(VoiceCatalog.TitleKick);   // the title's beat kick
             Prepare(null);
         }
 

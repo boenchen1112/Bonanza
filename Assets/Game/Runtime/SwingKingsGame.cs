@@ -28,15 +28,29 @@ namespace Bonanza
         public override bool UseCanvasHud => true;
         bool _night;
 
-        public override string Controls => Conducting
+        public override string Controls => CameraMode
+            ? "RAISE your hand to the camera as the ball flies, then CONDUCT DOWN as it lands.\nThe stop of the stroke is the swing. On the beat = HOME RUN. Three misses retire the side.\nNo camera? The mouse takes over: HOLD it as the ball flies, then flick DOWN."
+            : Conducting
             ? "HOLD the mouse (or SPACE) as the ball flies, then flick DOWN as it lands.\nThe stop of the stroke is the swing. On the beat = HOME RUN. Three misses retire the side."
             : "SPACE / click / tap as the ball reaches the plate.\nOn the beat = HOME RUN. Three misses retire the side.";
 
         // Mouse conducting (ADR 0004, web swingKings/index.js): the button down is the windup, a downward flick of
         // the pointer fires the swing at the ictus (the stroke's stop), and releasing the button swings too.
-        // Camera conducting is not built yet, so that option conducts with the mouse. Tap is the default.
+        // Camera conducting (ticket 28, web camera.js): the browser tracks the palm and the same detector finds the
+        // stroke: a raise starts the windup, the stop of the downstroke swings. Where the browser has no camera API
+        // (SwingInputEffective) or the camera fails, the mouse conducts instead. Tap is the default.
         static bool Conducting => Settings.SwingInputEffective != SwingInput.Tap;
+        static bool CameraMode => Settings.SwingInputEffective == SwingInput.Camera;
+        const string HintMouse = "<color=#ffe58a>HOLD</color> the mouse as the ball flies \u00B7 <color=#ffe58a>SWING DOWN</color> as it lands";
+        const string HintCamera = "<color=#ffe58a>RAISE</color> your hand as the ball flies \u00B7 <color=#ffe58a>CONDUCT DOWN</color> as it lands";
+        const float CameraLoadGrace = 20f;   // seconds of play to wait for a camera that is still loading or never answered the prompt
         bool _mouse;
+        bool _cam;                           // the camera is the live conducting source (cleared when it falls back to the mouse)
+        bool _camStarted;
+        int _camToken;
+        float _camWaited;
+        readonly CameraConductor _camCond = new CameraConductor();
+        readonly List<BonanzaCamera.Sample> _camBuf = new List<BonanzaCamera.Sample>();
         readonly PointerConductor _pointer = new PointerConductor();
         ConductBot _bot;                 // ?autoplay in mouse mode: a scripted conductor through the same detector
         ConductTrace _trace;
@@ -107,6 +121,14 @@ namespace Bonanza
             _round.Whiff += OnWhiff;
             _round.SwingAtNothing += _ => { StartSwing(); Host.PlaySfx("swoosh", _now); };
             BuildTrace();
+            // The camera is asked for now, while the rules card is up, so the permission prompt and the model load
+            // happen before the first pitch. Never under ?autoplay: the harness conducts with the scripted bot.
+            if (CameraMode && !Autoplay)
+            {
+                _cam = _camStarted = true;
+                _camToken = BonanzaCamera.Start();
+                Debug.Log("[CAMERA] start");
+            }
         }
 
         public override void Begin(double now)
@@ -119,8 +141,8 @@ namespace Bonanza
             Ui.ShowScoreboard();
             Ui.Outs(0);
             _mouse = Conducting;
-            Ui.Hint(_mouse
-                ? "<color=#ffe58a>HOLD</color> the mouse as the ball flies \u00B7 <color=#ffe58a>SWING DOWN</color> as it lands"
+            Ui.Hint(_cam ? HintCamera : _mouse
+                ? HintMouse
                 : "<color=#ffe58a>SPACE</color> / tap as the ball reaches the plate \u00B7 on the beat = <color=#ffe58a>HOME RUN</color>");
             _hintHidden = false;
             Ui.Banner("SWING KINGS", life: _mouse ? 2.2f : 1.5f);
@@ -158,7 +180,7 @@ namespace Bonanza
 
         public override void PointerMove(float y01, double time)
         {
-            if (!_mouse || _bot != null || !_round.Holding) return;
+            if (!_mouse || _cam || _bot != null || !_round.Holding) return;   // the camera, not the pointer, finds the stroke
             CatchUp(time);
             if (!_round.Holding) return;
             if (_pointer.Move(time, y01, out var ev)) OnGesture(ev);
@@ -180,6 +202,60 @@ namespace Bonanza
             if (_mouse) Debug.Log($"[CONDUCT] {ev.Kind.ToString().ToLowerInvariant()} t={ev.Time:F4} y={ev.Y:F3}");
             if (ev.Kind == GestureKind.Ictus) ReleaseSwing(ev.Time, "ictus");
         }
+
+        // ------------------------------------------------------------ camera conducting
+
+        /// Once a frame before the round advances: read what the tracker queued, in order, through the same detector
+        /// path as the mouse. A raise starts the windup (unless one is on), an ictus during a windup swings.
+        void CameraStep(double now)
+        {
+            var st = BonanzaCamera.Status;
+            if (st == CameraStatus.Failed) { CameraFallBack(); return; }
+            if (st == CameraStatus.Loading || st == CameraStatus.Idle)
+            {
+                _camWaited += Time.unscaledDeltaTime;
+                if (_camWaited > CameraLoadGrace) CameraFallBack("no camera answer in " + CameraLoadGrace.ToString("0") + " s");
+                return;
+            }
+            if (st != CameraStatus.Running) return;          // suspended: the page is hidden, the browser has the camera off
+            _camBuf.Clear();
+            BonanzaCamera.Drain(_camBuf);
+            if (_camBuf.Count == 0) return;
+            double perfNow = BonanzaCamera.PerfNow;
+            foreach (var s in _camBuf)
+            {
+                if (s.Lost) { _camCond.Lost(); continue; }   // the hand left the frame: forget the half-made stroke
+                if (_camCond.Feed(now, perfNow, s.PerfMs, s.Y, out var ev)) OnCameraGesture(ev);
+            }
+        }
+
+        void OnCameraGesture(GestureEvent ev)
+        {
+            Debug.Log($"[CONDUCT] {ev.Kind.ToString().ToLowerInvariant()} t={ev.Time:F4} y={ev.Y:F3} src=camera");
+            if (ev.Kind == GestureKind.Raise) { if (!_round.Holding) BeginWindup(ev.Time); }
+            else if (_round.Holding) ReleaseSwing(ev.Time, "camera");
+        }
+
+        /// Permission denied, no device, no GPU for the model, or no answer: conduct with the mouse instead, and say so.
+        void CameraFallBack(string why = null)
+        {
+            if (!_cam) return;
+            _cam = false;
+            Debug.Log("[CAMERA] fallback to mouse: " + (why ?? BonanzaCamera.Reason));
+            StopCamera();
+            Ui.Banner("NO CAMERA", "conduct with the mouse instead", new Color(1f, 0.9f, 0.54f), 1.8f);
+            if (!_hintHidden) Ui.Hint(HintMouse);
+        }
+
+        void StopCamera()
+        {
+            if (!_camStarted) return;
+            _camStarted = false;
+            BonanzaCamera.Stop(_camToken);
+            Debug.Log("[CAMERA] stop");
+        }
+
+        public override void OnResume() { _camCond.Lost(); }
 
         /// The button went down: the windup begins, and the ribbon starts drawing the gesture.
         void BeginWindup(double time)
@@ -207,6 +283,7 @@ namespace Bonanza
         {
             double beatBefore = _round.BeatAt(_now);
             _now = now;
+            if (_cam) CameraStep(now);
             if (_mouse) ConductStep(now);
             _round.Update(now);
             double beat = _round.BeatAt(now);
@@ -241,6 +318,7 @@ namespace Bonanza
         {
             if (!_round.Over) return null;
             _playing = false;
+            StopCamera();
             var r = _round.Result();
             return Outcome.Build(r.Score, r.Accuracy, r.Rank, _round.Judge.Stats, _round.Judge.Bias, null)
                 .Extra("HOME RUNS", r.Homers).Extra("LINE DRIVES", r.Liners).Extra("BUNTS", r.Bunts)
@@ -693,6 +771,7 @@ namespace Bonanza
 
         protected override void OnDestroy()
         {
+            StopCamera();
             if (_traceMesh) Destroy(_traceMesh);
             base.OnDestroy();
         }

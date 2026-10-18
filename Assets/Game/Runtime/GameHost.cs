@@ -348,18 +348,47 @@ namespace Bonanza
         /// The shared count-in tick (web audio sfx 'count'): chord-locked to the game's key. accent 0 is the downbeat.
         public void CountTick(double t, int accent) => PlaySfx("count", t, accent);
 
-        /// The title's tick on every bar (web title.js: `if (b % 4 === 0) sfx(ctx, 'tick', t)`), scheduled on the bar line.
-        double _tickedBar = double.NegativeInfinity;
-        void TitleBarTick()
+        /// What the title screen shows (reel, beat); the host feeds it, the drawing reads it.
+        public TitleState Title { get; } = new TitleState(Games.Select(g => g.Id).ToList());
+        bool _titleWas;
+
+        /// The title's kick on every beat and its tick on every fourth (web title.js onBeat), scheduled ahead on the
+        /// title music's own grid, and the beat the logo bounces on.
+        long _beatDone = long.MinValue;
+        void TitleBeats()
         {
-            if (!_music.ShellClock(out var id, out double zero, out double spb) || id != "title") return;
-            double bar = System.Math.Floor((Now - zero) / spb / 4) + 1;
-            double at = zero + bar * 4 * spb;
-            if (bar != _tickedBar && at - Now < 0.12 && at > Now)
+            if (!_music.ShellClock(out var id, out double zero, out double spb) || id != "title") { Title.SetBeat(0, false); return; }
+            double beat = (Now - zero) / spb;
+            Title.SetBeat(beat, true);
+            long n = (long)System.Math.Floor(beat) + 1;
+            double at = zero + n * spb;
+            if (n >= 0 && n != _beatDone && at - Now < 0.12 && at > Now)
             {
-                _tickedBar = bar;
-                _sfx.Play("title", "tick", 0, at, 0, 0.12f);
+                _beatDone = n;
+                _sfx?.PlayVoice(VoiceCatalog.TitleKick, at, TitleBeat.KickGain(Title.Attract) / TitleBeat.KickReel);
+                if (n % TitleBeat.TickEvery == 0) _sfx?.Play("title", "tick", 0, at, 0, 0.12f);
             }
+        }
+
+        /// One title frame of the reel: its timer, and the ui sound on each change (web title.js update()).
+        void TitleReelFrame()
+        {
+            switch (Title.Reel.Update(Time.unscaledDeltaTime, false))
+            {
+                case ReelEvent.Entered: ShellSfx("ui"); Debug.Log($"[SHELL] reel=enter game={Title.CurrentGameId}"); break;
+                case ReelEvent.Stepped: ShellSfx("ui"); Debug.Log($"[SHELL] reel=step game={Title.CurrentGameId} step={Title.Reel.Step}"); break;
+            }
+        }
+
+        /// A title press through the reel; true when the reel took it (woke it, or started it).
+        bool TitleReelPress(string action)
+        {
+            switch (Title.Reel.Press(action, false))
+            {
+                case ReelPress.Left: ShellSfx("uiBack"); Debug.Log("[SHELL] reel=leave"); return true;
+                case ReelPress.Entered: ShellSfx("ui"); Debug.Log($"[SHELL] reel=enter game={Title.CurrentGameId}"); return true;
+            }
+            return false;
         }
 
         // ------------------------------------------------------------ music
@@ -452,6 +481,7 @@ namespace Bonanza
             BonanzaBlur.Install();
             _blurSeen = BonanzaBlur.Count();
             BonanzaBrowser.Install();
+            Settings.CameraInputAvailable = BonanzaCamera.Supported;   // a camera API (getUserMedia) in this browser; false in the Editor
             BonanzaBrowser.Poll();
             // `?latencySlew=fast` (test harness only): refresh the output latency every 0.1 s instead of 1 s,
             // so the 2 ms/refresh slew converges in seconds. The slew itself (deadband, step) is unchanged.
@@ -820,6 +850,7 @@ namespace Bonanza
             // Only a round wants releases and pointer samples; every screen takes presses.
             if (_mode != Mode.Playing) DropNonPresses();
 
+            if (_mode != Mode.Title) _titleWas = false;
             switch (_mode)
             {
                 case Mode.Gate:
@@ -835,27 +866,25 @@ namespace Bonanza
                     break;
 
                 case Mode.Title:
+                    if (!_titleWas) { _titleWas = true; Title.Reset(); _beatDone = long.MinValue; }
                     if (!_perfTip && PerfHint.ShouldShow(Settings.Store.GetString(RenderQuality.KeyPerfHint, "")))
                     {
                         // Shown once: the title marks it shown as it raises it (web title.js).
                         Settings.Store.SetString(RenderQuality.KeyPerfHint, PerfHint.Shown); Settings.Store.Flush();
                         _perfTip = true;
                     }
-                    if (_perfTip)
-                    {
-                        if (_presses.Count > 0) _perfTip = false;   // any key closes it, and is not also a menu press
-                        _presses.Clear();
-                        break;
-                    }
                     while (_presses.Count > 0)
                     {
                         var p = _presses.Dequeue();
+                        bool tip = _perfTip;
+                        _perfTip = false;                              // any key closes the tip, and is not also a menu press
+                        if (TitleReelPress(p.Action) || tip) continue; // a press that wakes the reel is consumed, never a menu press
                         if (p.Action == "up" || p.Action == "left") { _titleIndex = (_titleIndex + TitleItems.Length - 1) % TitleItems.Length; ShellSfx("ui"); }
                         else if (p.Action == "down" || p.Action == "right") { _titleIndex = (_titleIndex + 1) % TitleItems.Length; ShellSfx("ui"); }
                         else if (p.Action == "a") { TitleChoice(_titleIndex); break; }
                     }
                     _presses.Clear();
-                    TitleBarTick();
+                    if (_mode == Mode.Title) { TitleReelFrame(); TitleBeats(); }
                     break;
 
                 case Mode.Menu:
@@ -1405,9 +1434,15 @@ namespace Bonanza
 
                 case Mode.Title:
                     Hud.Dim(0.85f);
-                    Hud.Center(0.14f, "BONANZA", Hud.Big, Hud.Gold, 120);
+                    // A click wakes the reel and is consumed (never also an item); any other click only resets the idle timer.
+                    if (Event.current.type == EventType.MouseDown)
+                    {
+                        if (Title.Attract) { TitleReelPress("a"); Event.current.Use(); }
+                        else Title.Reel.Press("click", false);
+                    }
+                    DrawTitleLogo(s);
                     for (int i = 0; i < TitleItems.Length; i++)
-                        if (MenuRow(i, 0.4f, TitleItems[i], null, i == _titleIndex, s)) TitleChoice(i);
+                        if (MenuRow(i, 0.4f, TitleItems[i], null, i == _titleIndex, s) && !Title.Attract) TitleChoice(i);
                     var st = Save.Stats;
                     var statLines = Records.StatsLines(st.Rounds, Records.BestOverall(Games.Select(e => new KeyValuePair<string, GameRecord>(e.Title, Save.Get(e.Id)))));
                     Hud.Center(0.74f, statLines[0] + "\n" + statLines[1], Hud.Small, Color.white, 80);
@@ -1420,6 +1455,7 @@ namespace Bonanza
                         Hud.Center(0.2f, "RUNNING SLOW ON THIS MACHINE", Hud.Mid, Hud.Gold, 60);
                         Hud.Center(0.3f, "Graphics are already at their lowest. Try: power mode Best performance,\nplay plugged in, update your graphics driver, and set your browser to\nHigh performance in the system graphics settings.\n\n(any key to close)", Hud.Small, Color.white, 160);
                     }
+                    if (Title.Attract) DrawTitleReel(s);
                     break;
 
                 case Mode.Options:
@@ -1440,7 +1476,7 @@ namespace Bonanza
                     else if (_optIndex == (int)Opt.Graphics)
                         Hud.Center(0.8f, $"Now drawing at {RenderQuality.Level.Scale:0.##}x, {RenderQuality.Level.Tier.ToString().ToUpperInvariant()}{(RenderQuality.Auto ? " (auto: " + RenderQuality.Reason + ")" : "")}", Hud.Small, new Color(1, 1, 1, 0.7f), 40);
                     else if (_optIndex == (int)Opt.Swing)
-                        Hud.Center(0.8f, "Tap is the default. Mouse: hold the button as the ball flies, flick the pointer DOWN as it lands.\nCamera conducting is not built yet; until then it conducts with the mouse.", Hud.Small, new Color(1, 1, 1, 0.7f), 80);
+                        Hud.Center(0.8f, "Tap is the default. Mouse: hold the button as the ball flies, flick the pointer DOWN as it lands.\n" + (Settings.CameraInputAvailable ? "Camera: raise your hand as the ball flies, conduct DOWN as it lands. Asks for your webcam when a round starts; nothing is recorded or sent." : "Camera conducting needs a browser with webcam access; here it conducts with the mouse."), Hud.Small, new Color(1, 1, 1, 0.7f), 80);
                     else if (_optIndex == (int)Opt.Offset)
                         Hud.Center(0.8f, "Negative offset = your presses land late.\nPress late and see GOOD more than PERFECT? Try -20 ms steps.", Hud.Small, new Color(1, 1, 1, 0.7f), 80);
                     Hud.Center(0.9f, "UP/DOWN choose   LEFT/RIGHT adjust   ESC / X back", Hud.Small, new Color(1, 1, 1, 0.7f), 40);
@@ -1581,6 +1617,51 @@ namespace Bonanza
             }
             if (r.Stage == RosterStage.Go && GUI.Button(new Rect(0, 0, Screen.width, Screen.height * 0.26f), GUIContent.none, GUIStyle.none)) RosterPress("a");
             Hud.Center(0.9f, hint, Hud.Small, new Color(1, 1, 1, 0.7f), 40);
+        }
+
+        /// The wordmark: each letter pops on the title music's beat, lagging a little behind its neighbour (web title.js).
+        void DrawTitleLogo(float s)
+        {
+            const string word = "BONANZA";
+            double amp = Settings.ReduceMotion ? 0.35 : 1;
+            double beat = Title.Beat;
+            var widths = new float[word.Length];
+            float total = 0;
+            for (int i = 0; i < word.Length; i++) { widths[i] = Hud.Big.CalcSize(new GUIContent(word[i].ToString())).x + 4 * s; total += widths[i]; }
+            float x = (Screen.width - total) / 2, y = Screen.height * 0.14f, h = 120 * s;
+            var pivot = new Vector2(Screen.width / 2f, y + h / 2);
+            var saved = GUI.matrix;
+            float logo = (float)TitleBeat.LogoScale(beat, amp);
+            GUIUtility.ScaleAroundPivot(new Vector2(logo, logo), pivot);
+            var outer = GUI.matrix;
+            for (int i = 0; i < word.Length; i++)
+            {
+                TitleBeat.Letter(beat, i, amp, out double sc, out double lift, out double tilt);
+                var r = new Rect(x, y + (float)lift * s, widths[i], h);
+                var c = new Vector2(r.center.x, r.center.y);
+                GUI.matrix = outer;
+                GUIUtility.ScaleAroundPivot(new Vector2((float)sc, (float)sc), c);
+                GUIUtility.RotateAroundPivot((float)tilt, c);
+                Hud.Text(r, word[i].ToString(), Hud.Big, Hud.Gold);
+                x += widths[i];
+            }
+            GUI.matrix = saved;
+        }
+
+        /// Placeholder attract card: the game on show, how far through its hold, and the way out. The visual phase draws
+        /// the real card from Title.CurrentGameId and Title.StepProgress.
+        void DrawTitleReel(float s)
+        {
+            var e = Find(Title.CurrentGameId);
+            if (e == null) return;
+            Hud.Dim(0.55f);
+            float pulse = Title.BeatPulse;
+            Hud.Center(0.34f, e.Title, Hud.Big, Hud.Gold, 120);
+            Hud.Center(0.48f, e.Blurb, Hud.Mid, Color.white, 60);
+            var bar = new Rect(Screen.width * 0.3f, Screen.height * 0.6f, Screen.width * 0.4f, 10 * s);
+            Hud.Box(bar, new Color(1, 1, 1, 0.2f));
+            Hud.Box(new Rect(bar.x, bar.y, bar.width * Title.StepProgress, bar.height), Hud.Gold);
+            Hud.Center(0.9f, "PRESS ANY BUTTON", Hud.Mid, new Color(1, 1, 1, 0.45f + 0.55f * pulse), 60);
         }
 
         bool MenuRow(int i, float y0, string label, string value, bool sel, float s, float pitch = 80, float height = 66, bool grey = false, float width = 0.44f)

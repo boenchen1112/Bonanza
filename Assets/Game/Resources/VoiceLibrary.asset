@@ -527,3 +527,5 @@ MonoBehaviour:
     clip: {fileID: 8300000, guid: 1e6437754215e4abfb169ce7853702e7, type: 3}
   - id: ff_rim
     clip: {fileID: 8300000, guid: f8a4bea2f69804b7c99d87f58797fe05, type: 3}
+  - id: title_kick
+    clip: {fileID: 8300000, guid: 80d7a82b962c540f29959d6da6a9a1c3, type: 3}

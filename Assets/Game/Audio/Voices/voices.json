@@ -1802,7 +1802,14 @@
    "seconds": 1.176,
    "peak": 0.7814,
    "bytes": 16581
+  },
+  {
+   "name": "title_kick",
+   "game": "title",
+   "seconds": 0.131,
+   "peak": 0.5396,
+   "bytes": 5212
   }
  ],
- "totalBytes": 4316271
+ "totalBytes": 4321483
 }

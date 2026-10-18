@@ -19,6 +19,7 @@
 // the finale's x1.25) is the same clip scaled at playback.
 //
 // Names (Core/VoiceCatalog.cs builds the same):
+//   title_kick (the title screen's beat kick)
 //   dd_call_<k> dd_callhat dd_handoff dd_crash dd_fumble dd_snare dd_stumble_<i>
 //   bb_note_<p|g|o>_<midi>_<ms> bb_hold_<midi>_<ms> bb_rise_<ms> bb_release_<midi>_<0|1> bb_kick bb_bigcrash bb_thud bb_splash
 //   cc_sing_<lane>_<deg> cc_bell_<lane>_<deg> cc_fsing_<lane>_<deg> cc_sour_<lane>_<deg> cc_bed_<lane>_<deg> cc_gulp_<lane> cc_gulpbig_<lane>
@@ -100,6 +101,10 @@ const rendered = await page.evaluate(async ({ base, SR, AT, listOnly }) => {
     for (let i = 1; i <= 3; i++) add(`dd_stumble_${i}`, 'drumline-dash', [        // CPU racer stumbles :672, i = racer index
       ['tom', 0, { freq: 96, gain: 0.24, decay: 0.3, pan: (i - 2) * 0.3, rev: 0.3, dest: SFX }]]);
   }
+
+  // ========================================================================= Title (shell/title.js onBeat)
+  // kick(ctx, t, gain) = audio.voices.kick(t, { gain }) on the loose bus, no dest. Baked at the reel's 0.5; the menu's 0.34 is a playback scale.
+  add('title_kick', 'title', [['kick', 0, { gain: 0.5 }]]);
 
   // ========================================================================= Bounce Brigade (games/bounceBrigade/index.js)
   {

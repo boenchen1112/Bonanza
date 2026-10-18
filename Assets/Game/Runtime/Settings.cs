@@ -55,8 +55,9 @@ namespace Bonanza
         /// Swapped by tests.
         public static ISettingsStore Store = new PlayerPrefsStore();
 
-        /// Camera conducting is not built yet (ticket 16): the value can be chosen and is kept,
-        /// but SwingInputEffective falls back to Mouse while this is false.
+        /// Whether this browser can conduct with a camera (getUserMedia and WebAssembly; set by GameHost at startup,
+        /// false in the Editor and in tests). The choice is kept either way, but SwingInputEffective falls back to
+        /// Mouse while this is false. A camera that is refused or missing at play time falls back inside the game.
         public static bool CameraInputAvailable = false;
 
         // ------------------------------------------------------------ pure helpers
