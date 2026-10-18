@@ -1,46 +1,45 @@
-// Chomp Chorus in grey boxes: four singers on pedestals, one of them yours.
-// Rules live in Bonanza.Core (ChompRound); this is stage, telegraph, sound
-// and HUD only. Web source: games/chompChorus/index.js + props.js.
+// Chomp Chorus on the shared look kit: four singers on pedestals, one of them yours.
+// Rules live in Bonanza.Core (ChompRound); this is stage, telegraph, sound and HUD only.
+// Web source: games/chompChorus/index.js + props.js. The set and the singers are in ChompChorusSet.cs.
 //
 // The twist is AUDIBLE: every bar each live voice sustains its own chord tone,
 // panned to its own place; a voice that misses drops out, leaving a hole at a
 // specific pitch in a specific ear, until it lands a note again.
 //
-// Telegraph, per lane: the singer's head inflates as it gulps (0..1 across the
-// note's lead), a meter beside the pedestal fills, and the breath ball above
-// the head grows. The human's lane has a white ring and the label "YOU".
+// Telegraph, per lane (web props.js): a breath ring converging on the head, an air pipe filling beside the
+// pedestal, the singer inflating as it gulps (0..1 across the note's lead), the key glyph on the player's
+// pedestal, and a bridge linking the pedestals of lanes that fire together. The player's lane has a white
+// ring, the glyph and the YOU tag.
 
 using System.Collections.Generic;
 using Bonanza.Core;
+using Bonanza.Look;
 using UnityEngine;
 
 namespace Bonanza
 {
-    public sealed class ChompChorusGame : Minigame
+    public sealed partial class ChompChorusGame : Minigame
     {
         public override string Id => "chomp-chorus";
         public override string Title => "CHOMP CHORUS";
         public override string Blurb => "Four singers, one of them is you.";
         public override double SecondsPerBeat => 60 / ChompChart.Bpm;
         public override string Controls => "When your singer (ringed) gulps on the offbeat, press ON the beat.\nAny arrow, WASD, SPACE, click or tap. Miss and you will hear the hole in the chord.";
+        protected override bool UseLook => true;
+        public override bool UseCanvasHud => true;
 
         const int N = 4;
         static readonly uint[] LaneHex = { 0x35c8f0, 0xff5d3a, 0x9ee87a, 0xffc32b };   // lagoon, ember, lime, sunburst
-        static readonly float[] BuildW = { 0.95f, 1.25f, 0.75f, 0.6f };               // round, wide, tall, small
-        static readonly float[] BuildH = { 0.95f, 0.7f, 1.35f, 0.65f };
+        /// Every singer's eye line is parked near this height so the row reads as a line (web HEAD_LINE).
         const float HeadLine = 1.6f;
+        static readonly Color CountColor = new Color(1f, 0.914f, 0.659f);   // web #ffe9a8
 
         ChompRound _round;
-        readonly Callouts _say = new Callouts();
         double _now;
         bool _playing;
 
         sealed class Lane
         {
-            public Transform Body, Head, Breath, Meter;
-            public Material BodyMat, HeadMat;
-            public Color Color;
-            public float HeadY, PedTop;
             public float Sing, Flinch, AliveT = 1, Gulp, Armed;
             public int Cursor;
             public readonly List<Tele> List = new List<Tele>();
@@ -58,6 +57,7 @@ namespace Bonanza
         public int FinaleHeldFrames { get; private set; }
         public double FinaleSustain => FinaleFrames > 0 ? (double)FinaleHeldFrames / FinaleFrames : 0;
         double _lastBeat = -99;
+        float _time;
 
         // ------------------------------------------------------------ contract
 
@@ -69,32 +69,19 @@ namespace Bonanza
             // In a party the lineup's CPUs sing the other voices; free play is lane 0 and 0.8 CPUs.
             _round = ChompRound.ForLineup(Host.Lineup, 0xc40f, Save.OffsetMs);
             _round.LaneJudged += OnJudged;
+            for (int i = 0; i < N; i++) _lanes[i] = new Lane();
 
-            var cam = Camera.main;
-            cam.transform.position = new Vector3(0, 2.2f, -6.9f);
-            cam.transform.LookAt(new Vector3(0, 1.05f, 0));
-            cam.fieldOfView = 48;
+            // web: rig.frame({ target: [0, 1.05, 0], distance: 6.9, height: 1.15, fov: 48, lambda: 2.6 }), snapped.
+            Look.Rig.Frame(new Vector3(0, 1.05f, 0), 6.9f, 1.15f, 0, 48, 2.6f, immediate: true);
+            Look.Rig.SetPushGain(0.75f);
+            Look.ShadowFocus(new Vector3(0, 0, 0.2f), 5.6f);   // the four singers and their pads
+            BuildStage();
+            for (int i = 0; i < N; i++) Cast(_singers[i].Root.gameObject);   // their shadows fall on the pedestal caps
 
-            Prim(PrimitiveType.Plane, new Vector3(0, 0, 2), new Vector3(2.4f, 1, 1.2f), new Color(0.26f, 0.22f, 0.36f));
-            for (int i = 0; i < N; i++)
-            {
-                var l = _lanes[i] = new Lane { Color = Hex(LaneHex[i]) };
-                float x = ChompChart.X[i];
-                float bodyH = BuildH[i] * 1.2f;
-                // Pedestals put four very different builds' HEADS on one line;
-                // the tall one stands a head above it (up is up).
-                l.PedTop = Mathf.Clamp(HeadLine - bodyH - 0.3f, 0.1f, 1.05f);
-                l.HeadY = l.PedTop + bodyH + 0.3f;
-                Prim(PrimitiveType.Cylinder, new Vector3(x, l.PedTop / 2, 0), new Vector3(1.1f, l.PedTop / 2, 1.1f), new Color(0.55f, 0.52f, 0.6f));
-                if (i == _round.Human)
-                    Prim(PrimitiveType.Cylinder, new Vector3(x, 0.01f, 0), new Vector3(1.6f, 0.01f, 1.6f), Color.white);
-                l.BodyMat = Mat(l.Color);
-                l.HeadMat = Mat(Color.Lerp(l.Color, Color.white, 0.35f));
-                l.Body = Prim(PrimitiveType.Capsule, new Vector3(x, l.PedTop + bodyH / 2, 0), new Vector3(BuildW[i] * 0.6f, bodyH / 2, BuildW[i] * 0.6f), l.BodyMat).transform;
-                l.Head = Prim(PrimitiveType.Sphere, new Vector3(x, l.HeadY, 0), Vector3.one * 0.55f * Mathf.Max(0.8f, BuildW[i]), l.HeadMat).transform;
-                l.Breath = Prim(PrimitiveType.Sphere, new Vector3(x, l.HeadY + 0.7f, 0), Vector3.zero, Mat(new Color(1, 1, 1, 1))).transform;
-                l.Meter = Prim(PrimitiveType.Cube, new Vector3(x + 0.75f, 0, -0.2f), new Vector3(0.12f, 0, 0.12f), l.BodyMat).transform;
-            }
+            var fx = Look.Fx;
+            fx.SetGroundY(0);
+            fx.SetFocus(new Vector3(0, 1.5f, 0));
+            fx.Prewarm();   // every FX material and the callout font now: a first-use shader link mid-round would push a press out of its window
         }
 
         public override void Begin(double now)
@@ -129,7 +116,12 @@ namespace Bonanza
             _cues.Sort((a, b) => a.Beat.CompareTo(b.Beat));
             foreach (var c in _cues) c.Time = map.TimeAt(c.Beat);
 
-            _say.Banner(Title, 1.8f, "You sing the ringed voice. Any arrow or Space.");
+            // HUD (web ui.hud + _mountVoiceDots): score block, the four voice dots, the title.
+            Ui.ShowScoreboard();
+            var dots = new Color[N];
+            for (int i = 0; i < N; i++) dots[i] = Hex(LaneHex[i]);
+            Ui.Voices(dots, _round.Human);
+            Ui.Banner(Title, "You sing the ringed voice. Any arrow or Space.", null, 1.8f);
         }
 
         public override void Press(string action, double time)
@@ -151,7 +143,7 @@ namespace Bonanza
             for (int b = (int)System.Math.Floor(_lastBeat) + 1; b <= System.Math.Floor(beat); b++)
             {
                 string s = Core.CountIn.TextFor(b, ChompChart.LeadBeats);
-                if (s != null) _say.Count(s);
+                if (s != null) Ui.Banner(s, null, CountColor, 0.52f);   // web countIn: a centred banner
                 if (b < 0 && b >= -ChompChart.LeadBeats) Host.CountTick(_round.Map.TimeAt(b), Core.CountIn.Accent(b));
             }
             _lastBeat = beat;
@@ -160,6 +152,16 @@ namespace Bonanza
             PumpCues(now);
             Telegraph(dt, beat);
             Finale(beat);
+
+            // The look: beat flash on the audio clock, the set pulses on every whole beat.
+            Look.BeatPulse = beat < 0 ? 0 : Mathf.Exp(-5f * Phase(beat));
+            Look.TickBeat(beat);
+            UpdateCrowd(beat);
+            UpdateCamera(beat, dt);
+
+            Ui.Score(Mathf.RoundToInt((float)(1000 * _round.Points / System.Math.Max(1, _round.MaxPoints))));
+            Ui.Combo(_round.Judge.Stats.Combo);
+            Ui.Accuracy((float)_round.Judge.Accuracy);
         }
 
         public override Outcome Result()
@@ -178,6 +180,7 @@ namespace Bonanza
 
         double _lastVerdictAt = -99;
         bool _finaleArmed;
+        int _curtainBeat = int.MinValue;
 
         void OnJudged(int i, Verdict v, double errMs, ChompNote note, bool cpu)
         {
@@ -188,22 +191,54 @@ namespace Bonanza
                 Debug.Log($"[MISS] game={Id} beat={note.Beat} now={_round.BeatAt(_now):F3} dt={Time.unscaledDeltaTime:F3}");
             bool wasAlive = l.AliveT > 0.5f;
             double at = System.Math.Max(_round.Map.TimeAt(note.Beat) + errMs / 1000, _now + 0.004);
-            // Web: CPU voices judge in the same frame as the player's; only the player's note sounds its verdict.
+            // Web: CPU voices judge in the same frame as the player's; only the player's note sounds its verdict,
+            // and camera, flash and the world callout belong to the player's note, or a chord reads as one white flash.
             bool dense = cpu || _now - _lastVerdictAt < 0.055;
             if (!cpu) _lastVerdictAt = _now;
             if (!dense) Host.PlaySfx(SfxTheory.VerdictSfx(v), at);
+            var fx = Look.Fx;
+            var head = new Vector3(ChompChart.X[i], _headY[i], 0);
+            var laneC = Hex(LaneHex[i]);
             if (hit)
             {
                 l.Sing = 1;
                 Sing(i, v, at, note.Finale);
-                if (!wasAlive && !cpu) _say.Say("BACK!", new Vector3(ChompChart.X[i], l.HeadY + 0.9f, 0), l.Color, 0.6f);
+                if (!wasAlive)
+                {
+                    // A voice coming back is a moment: it is the thing the player was trying to fix.
+                    fx.Flare(head + Vector3.up * 0.5f, laneC, 0.9f, 0.3f, 0.35f, 2.6f);
+                    fx.Ring(head, laneC, 0.45f, 0.3f, 2.2f, 0.2f, 0.02f);
+                    if (!cpu) fx.PopWord("BACK!", head + new Vector3(0, 0.95f, -0.2f), laneC, 0.45f, 0.7f, 0.8f);
+                }
             }
             else
             {
                 l.Sing = 0;
                 if (wasAlive) Sour(i, at);
+                // Grey smoke where a bright note should have been.
+                fx.Burst(head + new Vector3(0, 0, -0.1f), 10, Hex(0x8d7fa6), 2.6f, 0.12f, 0.55f);
             }
-            _say.Verdict(v, new Vector3(ChompChart.X[i], l.HeadY + 0.6f, 0), cpu ? 0.5f : 1);
+
+            int combo = cpu ? 0 : _round.Judge.Stats.Combo;
+            var o = VerdictOpts.Default;
+            o.Dir = new Vector3(ChompChart.X[i] * 0.09f, 1, -0.15f);
+            o.Combo = combo;
+            o.Scale = (note.Finale ? 1.35f : cpu ? 0.7f : dense ? 0.82f : 1) * 0.8f;   // the singer stands in the burst: keep its rings off the neighbours
+            o.Stage = !dense; o.Text = !dense;
+            o.GroundY = _pedTop[i];
+            fx.PlayVerdict(v, new Vector3(ChompChart.X[i], _headY[i] + 0.12f, -0.05f), o);
+            if (cpu) return;
+
+            var f = Feel.ForCombo(v, combo);
+            Look.Hitstop(note.Finale ? Feel.FinaleHitstop : Feel.HitstopFor(f.Hitstop, _round.Judge.Notes, _round.Map.TimeAt(note.Beat)));
+            var crowd = _env?.Crowd;
+            if (hit)
+            {
+                _youPulse = 1;
+                _camPush = v == Verdict.Perfect ? 1 : 0.5f;
+                if (Feel.IsMilestone(combo)) crowd?.Hype(0.6f + Feel.ComboTier(combo) * 0.08f);
+            }
+            else crowd?.Deflate(0.8f);
         }
 
         // ------------------------------------------------------------ sound (baked web voices, VoiceCatalog)
@@ -253,10 +288,11 @@ namespace Bonanza
             }
         }
 
-        // ------------------------------------------------------------ telegraph + stage
+        // ------------------------------------------------------------ telegraph
 
         void Telegraph(float dt, double beat)
         {
+            double minBeat = double.PositiveInfinity;
             for (int i = 0; i < N; i++)
             {
                 var l = _lanes[i];
@@ -268,7 +304,7 @@ namespace Bonanza
                     {
                         if (beat >= e.Beat)
                         {
-                            if (!e.Fired) { e.Fired = true; l.Sing = 1; Sing(i, Verdict.Great, System.Math.Max(_round.Map.TimeAt(e.Beat), _now + 0.004), false); }
+                            if (!e.Fired) DemoSing(i, e);
                             c++; continue;
                         }
                         break;
@@ -284,42 +320,102 @@ namespace Bonanza
                 {
                     var e = l.List[c];
                     double d = e.Beat - beat;
-                    if (d <= e.Lead && d > -0.4) { armed = 1; g = Mathf.Clamp01((float)(1 - d / e.Lead)); }
+                    if (d <= e.Lead && d > -0.4)
+                    {
+                        armed = 1; g = Mathf.Clamp01((float)(1 - d / e.Lead));
+                        if (e.Beat < minBeat) minBeat = e.Beat;
+                    }
                 }
                 l.Armed = Damp(l.Armed, armed, 22, dt);
                 l.Gulp = g;
             }
+            // The pending chord: the lanes whose next note is the earliest armed one (web _telegraph chordFlag).
+            _chordN = 0;
+            for (int i = 0; i < N; i++)
+            {
+                var l = _lanes[i];
+                bool on = l.Armed > 0.01f && l.Cursor < l.List.Count && System.Math.Abs(l.List[l.Cursor].Beat - minBeat) < 1e-6;
+                _chordFlag[i] = on ? 1 : 0;
+                _chordN += _chordFlag[i];
+            }
         }
 
+        /// Lead-in demo: an unscored gulp-and-sing so the mechanic is shown, not told.
+        void DemoSing(int lane, Tele e)
+        {
+            e.Fired = true;
+            _lanes[lane].Sing = 1;
+            Sing(lane, Verdict.Great, System.Math.Max(_round.Map.TimeAt(e.Beat), _now + 0.004), false);
+            Look.Fx.Ring(new Vector3(ChompChart.X[lane], _headY[lane], 0), Hex(LaneHex[lane]), 0.4f, 0.3f, 1.8f, 0.18f, 0.02f);
+        }
+
+        /// The scripted last bar.
         void Finale(double beat)
         {
             if (!_finaleBanner && beat >= ChompChart.FinaleBeat - 3.2)
             {
                 _finaleBanner = true;
-                _say.Banner("ALL FOUR!", 1.3f, "big note - hold it");
+                Ui.Banner("ALL FOUR!", "big note - hold it", CountColor, 1.3f);
                 Host.PlaySfx("swoosh", _now);
+                Look.SetPalette("chomp-chorus-finale", 1.6f);
+                _env?.Crowd?.SetEnergy(0.95f);
             }
             // Once the late half of the claim window is out, a finale that was hit at all lands with an impact (web _finale).
             if (!_finaleArmed && beat >= ChompChart.FinaleBeat + 0.45 && beat <= ChompChart.FinaleEnd + 0.5)
             {
                 _finaleArmed = true;
-                if (_round.FinaleHits > 0) Host.PlaySfx("impact", _now);
+                int h = _round.FinaleHits;
+                if (h > 0)
+                {
+                    Host.PlaySfx("impact", _now);
+                    var rig = Look.Rig;
+                    rig.PunchZoom(1.14f);
+                    rig.Shake(Feel.FinaleShake * (h / 4f), Vector3.up);
+                    rig.DoFlash(Feel.FinaleFlash * (h / 4f), Hex(0xfff6d8));
+                    Look.Fx.Confetti(new Vector3(0, 2.2f, 0), 120, null, 8.5f, 1.2f);
+                    _env?.Crowd?.Cheer(1.2f);
+                }
             }
             if (!_finaleDone && beat >= ChompChart.FinaleEnd)
             {
                 _finaleDone = true;
                 Host.MusicStop(1.1f);   // web chompChorus: the track fades out under the last note
                 int h = _round.FinaleHits;
-                _say.Banner(h == N ? "FULL CHORD!" : h >= 2 ? "NICE CHORUS" : "ROUGH NIGHT", 1.8f);
+                Ui.Banner(h == N ? "FULL CHORD!" : h >= 2 ? "NICE CHORUS" : "ROUGH NIGHT", null, CountColor, 1.8f);
+                if (h == N) { Look.Fx.Confetti(new Vector3(0, 2.6f, 0), 160, null, 9, 1.3f); _env?.Crowd?.Cheer(1.4f); }
+                else if (h < 2) _env?.Crowd?.Deflate(0.7f);
             }
         }
 
+        /// The crowd's energy climbs with the round and the player's streak; the finale holds it high and waves.
+        void UpdateCrowd(double beat)
+        {
+            var crowd = _env?.Crowd;
+            if (crowd == null) return;
+            float prog = Mathf.Clamp01((float)(beat / ChompChart.FinaleBeat));
+            float streak = Mathf.Clamp01(_round.Judge.Stats.Combo / 24f) * 0.2f;
+            float alive = 0; for (int i = 0; i < N; i++) alive += _round.Alive[i] ? 0.25f : 0;
+            if (beat < ChompChart.FinaleBeat - 3.2) crowd.SetEnergy(Mathf.Clamp01(0.3f + prog * 0.45f + streak - (1 - alive) * 0.2f));
+            int whole = (int)System.Math.Floor(beat);
+            if (beat >= ChompChart.FinaleBeat && whole != _curtainBeat)
+            {
+                _curtainBeat = whole;
+                if (whole % 2 == 0) crowd.Wave(0.8f, 1.8f);
+                // The held chord rains confetti on every beat of the last bar (while anyone landed it).
+                if (beat < ChompChart.FinaleEnd + 1 && _round.FinaleHits > 0 && !Settings.ReduceMotion)
+                    Look.Fx.Confetti(new Vector3(((whole * 7) % 5 - 2) * 1.4f, 4.2f, 0.4f), 26 + 8 * _round.FinaleHits, null, 3.5f, 0.3f);
+            }
+        }
+
+        // ------------------------------------------------------------ presentation (runs on through results)
+
         void Update()
         {
-            float dt = Time.deltaTime;
-            _say.Update(dt);
-            if (_round == null) return;
-            double beat = _playing ? _round.BeatAt(_now) : 0;
+            if (_round == null || _singers[0] == null) return;
+            float dt = LookRig.VisualDt(Time.deltaTime);
+            _time += dt;
+            if (!_playing) Look.BeatPulse = 0;
+            double beat = _playing ? _round.BeatAt(_now) : ChompChart.EndBeat;
             bool finaleHold = beat >= ChompChart.FinaleBeat + 0.45 && beat <= ChompChart.FinaleEnd + 0.5;
             if (_playing && finaleHold)
             {
@@ -332,47 +428,15 @@ namespace Bonanza
             for (int i = 0; i < N; i++)
             {
                 var l = _lanes[i];
+                // Sustain: hold the beams and the voices up through the last bar.
                 if (finaleHold && _round.Alive[i]) l.Sing = Mathf.Max(l.Sing, 0.55f + 0.45f * Mathf.Abs(Mathf.Sin((float)beat * Mathf.PI)));
                 l.Sing = Damp(l.Sing, 0, 4.2f, dt);
                 l.Flinch = Damp(l.Flinch, 0, 9, dt);
                 l.AliveT = Damp(l.AliveT, _round.Alive[i] ? 1 : 0, 7, dt);
-
-                float puff = l.Gulp * l.Armed;
-                float wob = l.Flinch * Mathf.Sin(Time.time * 46) * 0.06f;
-                float baseS = 0.55f * Mathf.Max(0.8f, BuildW[i]);
-                l.Head.localScale = new Vector3(baseS * (1 + puff * 0.3f + wob + l.Sing * 0.12f), baseS * (1 + puff * 0.24f - wob + l.Sing * 0.2f), baseS * (1 + puff * 0.3f));
-                l.Breath.localScale = Vector3.one * (0.35f * puff);
-                l.Meter.localScale = new Vector3(0.12f, Mathf.Max(0.001f, puff * 1.2f), 0.12f);
-                l.Meter.localPosition = new Vector3(ChompChart.X[i] + 0.75f, puff * 0.6f, -0.2f);
-                // A dead voice literally dims.
-                var col = Color.Lerp(new Color(0.35f, 0.33f, 0.4f), l.Color, l.AliveT);
-                l.BodyMat.SetColor("_BaseColor", col);
-                l.HeadMat.SetColor("_BaseColor", Color.Lerp(col, Color.white, 0.35f + l.Sing * 0.4f));
+                UpdateSinger(i, dt, _time, beat, finaleHold);
+                Ui.Voice(i, l.AliveT, Mathf.Clamp01(l.Sing));
             }
-        }
-
-        // ------------------------------------------------------------ HUD
-
-        public override void DrawHud(float s)
-        {
-            if (_round == null) return;
-            var st = _round.Judge.Stats;
-            double score = 1000 * _round.Points / System.Math.Max(1, _round.MaxPoints);
-            Hud.Text(new Rect(16 * s, 12 * s, 600 * s, 200 * s),
-                $"SCORE  {System.Math.Round(score)}\nCOMBO  {st.Combo}\nACC  {_round.Judge.Accuracy * 100:0.0}%", Hud.Left, Color.white);
-
-            // Voice dots: the twist is learned by ear, but the same fact is shown quietly.
-            float d = 26 * s, gap = 18 * s, x0 = Screen.width / 2f - (N * d + (N - 1) * gap) / 2;
-            for (int i = 0; i < N; i++)
-            {
-                var l = _lanes[i];
-                var r = new Rect(x0 + i * (d + gap), Screen.height - 50 * s, d, d);
-                if (i == _round.Human) Hud.Box(new Rect(r.x - 4 * s, r.y - 4 * s, r.width + 8 * s, r.height + 8 * s), Color.white);
-                Hud.Box(r, new Color(l.Color.r, l.Color.g, l.Color.b, 0.18f + 0.82f * l.AliveT));
-            }
-            var cam = Camera.main;
-            Hud.AtWorld(cam, new Vector3(ChompChart.X[_round.Human], -0.15f, -0.5f), "YOU", Hud.Small, Color.white, 200, 40);
-            _say.Draw();
+            UpdateProps(dt, beat, _time);
         }
     }
 }

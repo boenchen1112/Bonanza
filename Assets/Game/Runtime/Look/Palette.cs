@@ -179,7 +179,7 @@ namespace Bonanza.Look
             _all["chomp-chorus"] = Make(_base, p => p
                 .Set(PC.SkyTop, 0x110226).Set(PC.SkyMid, 0x3f0e5e).Set(PC.SkyBot, 0xb03bb0)
                 .Set(PC.Sun, 0xff9ae0).Set(PD.SunDir, 0.1f, -0.08f, -1).Set(PF.SunStrength, 0.8f).Set(PF.SunSize, 0.3f)
-                .Set(PC.Ground, 0x220a3a).Set(PC.GroundAlt, 0x31104f).Set(PC.GroundRim, 0x9ee87a)
+                .Set(PC.Ground, 0x341457).Set(PC.GroundAlt, 0x3d1660).Set(PC.GroundRim, 0x9ee87a)
                 .Set(PC.Band, 0x45126a).Set(PC.BandAlt, 0x6d1f9c)
                 .Set(PC.Accent, 0x9ee87a).Set(PC.Accent2, 0xff5d73).Set(PC.Accent3, 0x6fd0ff)
                 .SetCrowd(0x9ee87a, 0xff5d73, 0x6fd0ff, 0xffd93d, 0xffffff)
@@ -188,6 +188,12 @@ namespace Bonanza.Look
                 .Set(PC.Rim, 0x9ee87a).Set(PF.RimStrength, 1.0f).Set(PF.RimPower, 2.2f)
                 .Set(PC.Fog, 0x3a0d58).Set(PF.FogNear, 14).Set(PF.FogFar, 58)
                 .Set(PF.Bloom, 1.0f).Set(PF.BloomThreshold, 1.05f));
+
+            // Chomp Chorus' last bar: "ALL FOUR!" warms the house up, a pinker horizon, a hotter key, more bloom.
+            _all["chomp-chorus-finale"] = Make(_all["chomp-chorus"], p => p
+                .Set(PC.SkyMid, 0x5e1470).Set(PC.SkyBot, 0xff6fae).Set(PC.Sun, 0xffd0f0).Set(PF.SunStrength, 1.05f)
+                .Set(PC.Key, 0xfff0f6).Set(PF.KeyIntensity, 2.75f).Set(PC.Rim, 0xffd93d)
+                .Set(PC.Fog, 0x4a1068).Set(PF.Bloom, 1.2f).Set(PF.Exposure, 1.06f));
 
             // Finale Fever: crimson and gold, fireworks over a dark house.
             _all["finale-fever"] = Make(_base, p => p

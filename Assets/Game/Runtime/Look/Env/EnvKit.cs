@@ -160,7 +160,7 @@ namespace Bonanza.Look
     /// Shared resources: the env materials and value maps, loaded once from Resources.
     public static class EnvKit
     {
-        static Material _toonEnv, _crowd, _beam, _glow, _net;
+        static Material _toonEnv, _crowd, _beam, _glow, _net, _glowAdd;
         public static Material ToonEnv => _toonEnv ? _toonEnv : _toonEnv = Resources.Load<Material>("Look/ToonEnv");
         public static Material CrowdMat => _crowd ? _crowd : _crowd = Resources.Load<Material>("Look/Crowd");
         public static Material BeamMat => _beam ? _beam : _beam = Resources.Load<Material>("Look/Beam");
@@ -168,6 +168,8 @@ namespace Bonanza.Look
         public static Material GlowMat => _glow ? _glow : _glow = Resources.Load<Material>("Look/Glow");
         /// Procedural chain-link net (Bonanza/Net), alpha blended.
         public static Material NetMat => _net ? _net : _net = Resources.Load<Material>("Look/Net");
+        /// Additive unlit glow with per-vertex tint (Bonanza/GlowAdd): MeshBatch families of neon tubes, shafts, panes.
+        public static Material GlowAddMat => _glowAdd ? _glowAdd : _glowAdd = Resources.Load<Material>("Look/GlowAdd");
 
         static readonly Dictionary<string, Texture2D> _tex = new Dictionary<string, Texture2D>();
 

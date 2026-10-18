@@ -14,7 +14,7 @@ namespace Bonanza.Look
         {
             public float Radius = 13, Thickness = 0.9f, Y = 0;
             public int Confetti = 90;
-            public bool Rings = true, EdgeRing = true;
+            public bool Rings = false, EdgeRing = true;   // Rings: the inner accent ring (off by default: it read as a stray cyan hoop)
             public string Map = "arena";
             /// Tiles of the value map across the disc's diameter (1 = the map spans the whole disc).
             public float MapTiles = 1;

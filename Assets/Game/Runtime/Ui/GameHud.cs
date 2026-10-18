@@ -10,6 +10,7 @@
 //   Ui.Banner(text, sub, color, life)    big centred title ("SWING KINGS", "GAME!")
 //   Ui.Countdown(text, ...)              a count-in beat ("3", "2", "1", "PLAY BALL!")
 //   Ui.Popup(text, color, x, y, ...)     a word at a screen position (x, y in 0..1 from the top left)
+//   Ui.Voices(colors, human) / Voice(i, alive, sing)   a row of voice dots at the bottom (Chomp Chorus)
 //   Ui.PopupAt(cam, world, ...)          the same, anchored to a world point
 //   Ui.Clear()                           everything away (between rounds)
 //
@@ -63,6 +64,12 @@ namespace Bonanza.HudKit
         CanvasGroup _hintGroup;
         float _hintFade = 1; bool _hintHiding;
 
+        // voice dots (Chomp Chorus: one per singer, dark when that voice has dropped out)
+        RectTransform _voicesRt;
+        CanvasGroup _voicesGroup;
+        readonly List<VoiceDot> _voices = new List<VoiceDot>();
+        sealed class VoiceDot { public RectTransform Rt; public Image Fill, Glow, Ring, Shadow; public Color Color; }
+
         // transient layers
         RectTransform _popLayer;
         readonly List<Pop> _pops = new List<Pop>();
@@ -109,6 +116,9 @@ namespace Bonanza.HudKit
             BuildBoard();
             BuildOuts();
             BuildHint();
+            _voicesRt = UiKit.Rect("Voices", _root);
+            UiKit.Place(_voicesRt, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0, RefH * 0.032f), new Vector2(200, 26));
+            _voicesGroup = _voicesRt.gameObject.AddComponent<CanvasGroup>();
             _popLayer = UiKit.Rect("Popups", _root); UiKit.Stretch(_popLayer);
             for (int i = 0; i < 8; i++) _pops.Add(MakePop());
             _banner = MakeBanner();
@@ -269,6 +279,7 @@ namespace Bonanza.HudKit
             _comboGroup.alpha = 0;
             _outsGroup.alpha = 0; _outsShown = 0; ApplyLamps();
             _hintGroup.alpha = 0; _hintHiding = false; _hintFade = 1;
+            _voicesGroup.alpha = 0;
             foreach (var p in _pops) { p.Live = false; p.Rt.gameObject.SetActive(false); }
             _banner.Live = false; _banner.Rt.gameObject.SetActive(false);
             if (_results != null) _results.Hide();
@@ -422,6 +433,52 @@ namespace Bonanza.HudKit
             if (vp.z < 0) return false;
             Popup(text, color, vp.x, 1 - vp.y, scale, life);
             return true;
+        }
+
+        // ------------------------------------------------------------ voice dots
+
+        /// A row of voice dots at the bottom centre (web chompChorus _mountVoiceDots): one per colour, the human's
+        /// with a white outline. Drive each with Voice() every frame.
+        public void Voices(Color[] colors, int human)
+        {
+            foreach (var d in _voices) if (d.Rt) Destroy(d.Rt.gameObject);
+            _voices.Clear();
+            const float D = 26, Gap = 18;
+            float w = colors.Length * D + (colors.Length - 1) * Gap;
+            _voicesRt.sizeDelta = new Vector2(w, D);
+            for (int i = 0; i < colors.Length; i++)
+            {
+                var rt = UiKit.Rect("Voice" + i, _voicesRt);
+                rt.anchorMin = rt.anchorMax = new Vector2(0, 0.5f); rt.pivot = new Vector2(0.5f, 0.5f);
+                rt.sizeDelta = new Vector2(D, D); rt.anchoredPosition = new Vector2(D / 2 + i * (D + Gap), 0);
+                var c = colors[i];
+                var glow = UiKit.Box(rt, "Glow", new Color(c.r, c.g, c.b, 0.6f), UiKit.Soft);
+                glow.rectTransform.anchorMin = glow.rectTransform.anchorMax = new Vector2(0.5f, 0.5f); glow.rectTransform.sizeDelta = new Vector2(D * 2.2f, D * 2.2f);
+                var shadow = UiKit.Box(rt, "Shadow", new Color(0, 0, 0, 0.5f), UiKit.Disc);
+                UiKit.Stretch(shadow.rectTransform); shadow.rectTransform.anchoredPosition = new Vector2(0, -2);
+                var fill = UiKit.Box(rt, "Fill", c, UiKit.Disc); UiKit.Stretch(fill.rectTransform);
+                Image ring = null;
+                if (i == human)
+                {
+                    ring = UiKit.Box(rt, "Ring", Color.white, UiKit.Ring);
+                    ring.rectTransform.anchorMin = ring.rectTransform.anchorMax = new Vector2(0.5f, 0.5f); ring.rectTransform.sizeDelta = new Vector2(D + 14, D + 14);
+                }
+                _voices.Add(new VoiceDot { Rt = rt, Fill = fill, Glow = glow, Ring = ring, Shadow = shadow, Color = c });
+            }
+            _voicesGroup.alpha = 1;
+        }
+
+        /// One voice's state: alive 0..1 (fades and shrinks the dot), sing 0..1 (a pop as the note is sung).
+        public void Voice(int i, float alive, float sing)
+        {
+            if (i < 0 || i >= _voices.Count) return;
+            var d = _voices[i];
+            float a = 0.18f + 0.82f * alive;
+            float s = (0.72f + 0.28f * alive) * (1 + (Settings.ReduceMotion ? 0 : sing * 0.5f));
+            d.Fill.rectTransform.localScale = d.Shadow.rectTransform.localScale = d.Glow.rectTransform.localScale = Vector3.one * s;
+            d.Fill.color = new Color(d.Color.r, d.Color.g, d.Color.b, a);
+            d.Shadow.color = new Color(0, 0, 0, 0.5f * a);
+            d.Glow.color = new Color(d.Color.r, d.Color.g, d.Color.b, 0.55f * alive * (0.6f + 0.4f * sing));
         }
 
         // ------------------------------------------------------------ results

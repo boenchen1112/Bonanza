@@ -14,6 +14,8 @@ Shader "Bonanza/ToonEnv"
         _Rim ("Rim multiplier", Float) = 1
         _Pulse ("Beat pulse", Float) = 0.12
         _Lift ("Emissive lift", Float) = 0
+        _Desat ("Desaturate", Range(0, 1)) = 0
+        _ShadowRecv ("Receive the key's shadow", Range(0, 1)) = 1
         _FogMul ("Fog", Range(0, 1)) = 1
         [Enum(UnityEngine.Rendering.CullMode)] _Cull ("Cull", Float) = 2
     }
@@ -39,7 +41,7 @@ Shader "Bonanza/ToonEnv"
             CBUFFER_START(UnityPerMaterial)
                 half4 _BaseColor;
                 float4 _BaseMap_ST;
-                float _MapStrength, _Bands, _Softness, _Rim, _Pulse, _Lift, _FogMul, _Cull;
+                float _MapStrength, _Bands, _Softness, _Rim, _Pulse, _Lift, _FogMul, _Cull, _Desat, _ShadowRecv;
             CBUFFER_END
 
             struct Attributes { float4 positionOS : POSITION; float3 normalOS : NORMAL; float4 color : COLOR; float2 uv : TEXCOORD0; };
@@ -66,8 +68,11 @@ Shader "Bonanza/ToonEnv"
                 float3 n = normalize(i.normalWS);
                 if (_Cull < 0.5 && !front) n = -n;   // two-sided cloth and shells light their back faces too
                 half3 map = SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, i.uv).rgb;
-                float3 albedo = _BaseColor.rgb * i.color.rgb * lerp(1.0, map, _MapStrength);
-                float3 c = BonToon(albedo, n, i.positionWS, _Bands, _Softness, _Rim, _Pulse, _Lift);
+                float3 albedo = i.color.rgb * lerp(1.0, map, _MapStrength);
+                // A drained, greyed surface (a singer whose voice is out): toward its own luminance before the tint.
+                albedo = lerp(albedo, dot(albedo, float3(0.2126, 0.7152, 0.0722)).xxx, _Desat);
+                albedo *= _BaseColor.rgb;
+                float3 c = BonToonS(albedo, n, i.positionWS, _Bands, _Softness, _Rim, _Pulse, _Lift, _ShadowRecv);
                 c = lerp(c, _BonFogColor.rgb, BonFog(i.viewDepth) * _FogMul);
                 return half4(c, 1);
             }

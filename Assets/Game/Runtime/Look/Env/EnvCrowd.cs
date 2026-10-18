@@ -37,6 +37,8 @@ namespace Bonanza.Look
             public float Energy = 0.45f;
             // Risers (Stands = Risers): open shells per row behind the figures.
             public float RiserY = -0.9f;
+            /// Risers: a lit strip along each step's lip in the palette accent, pulsing with the beat.
+            public bool RiserLights = true;
             // Bowl (Stands = Bowl): a sloped seat shell, a front wall and a roof ring (the ballpark).
             public float BowlTop = 18.4f, BowlBottom = 11f, BowlHeight = 3.9f, BowlY = 2.55f, BowlArc = Mathf.PI * 1.02f;
             public float WallRadius = 11f, WallHeight = 1.35f, WallY = 0.28f;
@@ -59,7 +61,7 @@ namespace Bonanza.Look
         public readonly Options O;
         public int Count { get; }
         readonly Mesh _mesh;
-        readonly Material _mat, _stand, _roof;
+        readonly Material _mat, _stand, _roof, _nose;
         readonly int _indexPerFigure;
         float _energy, _energyTarget, _hype, _sag, _sagGoal, _cap = 1, _waveT = -1, _waveSpeed = 1.6f, _waveAmt, _glow;
         int _shownFigures = -1;
@@ -83,15 +85,39 @@ namespace Bonanza.Look
             // ---- stands
             if (o.Stands == StandStyle.Risers)
             {
-                _stand = EnvKit.Surface(env, Color.white, null, null, rim: 0.55f, pulse: 0.05f, bands: 2, twoSided: true);
+                _stand = EnvKit.Surface(env, Color.white, o.SeatMap, new Vector2(18, 1), rim: 0.55f, pulse: 0.05f, bands: 2, twoSided: true, mapStrength: 0.35f);
                 var b = new MeshBuilder();
+                var nose = new MeshBuilder();
                 for (int r = 0; r < o.Rows; r++)
                 {
                     float rad = o.Radius - 0.6f + r * o.RowDepth, h = 1.5f + r * 1.5f;
+                    float cy = o.RiserY + h / 2 - 0.4f + r * 0.9f, top = cy + h / 2;
+                    // The riser face (a shade darker toward the floor: the tiers read as steps, not a wall).
+                    int s0 = b.Count;
                     b.Shell(rad, rad, h, 56, -o.Arc / 2, o.Arc,
-                        Matrix4x4.Translate(new Vector3(o.Center.x, o.RiserY + h / 2 - 0.4f + r * 0.9f, o.Center.z)), Color.white, Vector2.one, inward: true);
+                        Matrix4x4.Translate(new Vector3(o.Center.x, cy, o.Center.z)), Color.white, Vector2.one, inward: true);
+                    for (int v = s0; v < b.Count; v++) { float kk = Mathf.InverseLerp(cy - h / 2, top, b.P[v].y); b.C[v] = Color.white * Mathf.Lerp(0.55f, 1f, kk); }
+                    // The tread the row stands on: a flat band from this face back to the next one, a little lighter.
+                    float depth = o.RowDepth;
+                    b.Surface(56, 1, (u, vv) =>
+                    {
+                        float a = -o.Arc / 2 + u * o.Arc, rr = rad + vv * depth;
+                        return (new Vector3(Mathf.Sin(a) * rr, 0, Mathf.Cos(a) * rr), Vector3.up);
+                    }, Matrix4x4.Translate(new Vector3(o.Center.x, top, o.Center.z)), new Color(1.25f, 1.25f, 1.3f, 1), new Vector2(18, 1));
+                    // The nosing: a lit strip along the step's lip (the rows read at a glance, and it pulses on the beat).
+                    if (o.RiserLights)
+                        nose.Torus(rad - 0.02f, 0.035f, 4, 72, o.Arc, Matrix4x4.TRS(new Vector3(o.Center.x, top + 0.01f, o.Center.z), Quaternion.Euler(90, 0, 0), Vector3.one),
+                            Color.white, Mathf.PI / 2 - o.Arc / 2);
                 }
                 EnvKit.Static(env, "Risers", t, b, _stand).receiveShadows = false;
+                if (nose.Count > 0)
+                {
+                    _nose = env.Mat(EnvKit.GlowAddMat);
+                    _nose.SetFloat("_Intensity", 0.55f);
+                    _nose.SetFloat("_Facing", 0.6f);
+                    _nose.SetFloat("_FogMul", 0.5f);
+                    EnvKit.Static(env, "RiserLights", t, nose, _nose).receiveShadows = false;
+                }
             }
             else if (o.Stands == StandStyle.Bowl)
             {
@@ -211,19 +237,39 @@ namespace Bonanza.Look
                 b.Sphere(0.026f, 5, 3, Matrix4x4.Translate(new Vector3(sx * 0.052f, 0.655f, 0.148f)), eye, new Vector3(1, 1, 0.6f));
         }
 
-        /// env/crowd.js crowdFigureGeometry: a teardrop blob with two dark eye lenses that shade like decals.
+        /// The kit's spectator (web env/crowd.js crowdFigureGeometry, reshaped): a jelly bean standing on end, wider at
+        /// the hip than the crown, with two dark eye lenses that shade like decals and two stubby arm nubs. A bean,
+        /// not a ball with a face: the silhouette has a top and a bottom, so a row of them reads as people.
         static void BlobTemplate(MeshBuilder b)
         {
-            const float A = 0.42f, B = 0.42f * 1.25f;
-            b.Sphere(A, 8, 6, Matrix4x4.Translate(new Vector3(0, B, 0)), Color.white, new Vector3(1, 1.25f, 1));
-            const float ex = 0.14f, ey = 0.17f;
-            float ez = A * Mathf.Sqrt(1 - (ex / A) * (ex / A) - (ey / B) * (ey / B));
+            const float A = 0.36f, H = 0.98f;
+            // Lathe: radius over height, a soft taper toward the crown.
+            b.Surface(10, 8, (u, v) =>
+            {
+                float a = u * Mathf.PI * 2, s = Mathf.Lerp(0.03f, 0.97f, v);
+                float y = H * (1 - Mathf.Cos(Mathf.PI * s)) * 0.5f;
+                float r = A * Mathf.Pow(Mathf.Sin(Mathf.PI * s), 0.75f) * (1.08f - 0.2f * s);
+                // normal from the profile slope
+                float s2 = s + 0.01f, y2 = H * (1 - Mathf.Cos(Mathf.PI * s2)) * 0.5f;
+                float r2 = A * Mathf.Pow(Mathf.Sin(Mathf.PI * s2), 0.75f) * (1.08f - 0.2f * s2);
+                var tn = new Vector2(r2 - r, y2 - y).normalized;   // tangent in (r, y)
+                var d = new Vector3(Mathf.Sin(a), 0, Mathf.Cos(a));
+                var n = d * tn.y - Vector3.up * tn.x;
+                return (d * r + Vector3.up * y, n.normalized);
+            }, Matrix4x4.identity, Color.white, Vector2.one);
+            b.Disc(A * 0.3f, 10, Matrix4x4.TRS(new Vector3(0, H * 0.006f, 0), Quaternion.Euler(180, 0, 0), Vector3.one), Color.white);
+            for (int sx = -1; sx <= 1; sx += 2)
+                b.Sphere(0.075f, 5, 4, Matrix4x4.TRS(new Vector3(sx * A * 1.0f, H * 0.42f, 0.02f), Quaternion.Euler(0, 0, sx * 35), Vector3.one), Color.white, new Vector3(0.8f, 1.5f, 0.8f));
+            const float ex = 0.11f, ey = 0.68f;
             var eye = new Color(0.03f, 0.03f, 0.03f, 1);
             for (int sx = -1; sx <= 1; sx += 2)
             {
-                var n = new Vector3(sx * ex / (A * A), ey / (B * B), ez / (A * A)).normalized;
+                float s = Mathf.Acos(1 - 2 * ey) / Mathf.PI;
+                float rr = A * Mathf.Pow(Mathf.Sin(Mathf.PI * s), 0.75f) * (1.08f - 0.2f * s);
+                float ez = Mathf.Sqrt(Mathf.Max(0.001f, rr * rr - ex * ex));
+                var n = new Vector3(sx * ex, 0.15f, ez).normalized;
                 int start = b.Count;
-                b.Sphere(0.075f, 6, 4, Matrix4x4.TRS(new Vector3(sx * ex, B + ey, ez), Quaternion.FromToRotation(Vector3.forward, n), Vector3.one), eye, new Vector3(1, 1.15f, 0.45f));
+                b.Sphere(0.06f, 6, 4, Matrix4x4.TRS(new Vector3(sx * ex, H * ey, ez - 0.01f), Quaternion.FromToRotation(Vector3.forward, n), Vector3.one), eye, new Vector3(1, 1.3f, 0.45f));
                 for (int i = start; i < b.Count; i++) b.N[i] = n;   // decal shading: the toon terminator never cuts the dot
             }
         }
@@ -303,6 +349,11 @@ namespace Bonanza.Look
             var cr = pal.Crowd;
             if (cr != null && cr.Length > 0)
                 for (int i = 0; i < IdSlot.Length; i++) _mat.SetColor(IdSlot[i], cr[i % cr.Length]);
+            if (_nose)
+            {
+                var nc = pal[PC.Accent].linear * (0.7f + _glow * 0.9f + e * 0.3f);
+                _nose.SetColor("_Color", new Color(nc.r, nc.g, nc.b, 1));
+            }
             if (_stand)
             {
                 if (O.Stands == StandStyle.Risers) _stand.SetColor("_BaseColor", EnvKit.Mix(pal[PC.Band], pal[PC.Fog], 0.2f));

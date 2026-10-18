@@ -7,7 +7,7 @@
 
 #include "BonanzaLook.hlsl"
 
-float3 BonToon(float3 albedo, float3 n, float3 positionWS, float bands, float softness, float rimMul, float pulseMul, float lift)
+float3 BonToonS(float3 albedo, float3 n, float3 positionWS, float bands, float softness, float rimMul, float pulseMul, float lift, float shadowMul)
 {
     float pulse = _BonRimParams.z;
     const float invPi = 0.31830989;
@@ -19,7 +19,7 @@ float3 BonToon(float3 albedo, float3 n, float3 positionWS, float bands, float so
         if (_BonShadowFocus.w > 0.0)
         {
             float inFocus = 1.0 - smoothstep(_BonShadowFocus.w * 0.82, _BonShadowFocus.w, distance(positionWS.xz, _BonShadowFocus.xz));
-            shadow = lerp(1.0, MainLightRealtimeShadow(TransformWorldToShadowCoord(positionWS)), inFocus);
+            shadow = lerp(1.0, MainLightRealtimeShadow(TransformWorldToShadowCoord(positionWS)), inFocus * shadowMul);
         }
     #endif
     float kickR = BonRamp(dot(n, _BonKickDir.xyz) * 0.5 + 0.5, bands, softness);
@@ -36,6 +36,12 @@ float3 BonToon(float3 albedo, float3 n, float3 positionWS, float bands, float so
     c *= 1.0 + pulse * pulseMul;
     c += albedo * lift * (0.55 + 0.45 * pulse);
     return c;
+}
+
+// The house surface; a surface that casts but must not receive (a curved character body) calls BonToonS with 0.
+float3 BonToon(float3 albedo, float3 n, float3 positionWS, float bands, float softness, float rimMul, float pulseMul, float lift)
+{
+    return BonToonS(albedo, n, positionWS, bands, softness, rimMul, pulseMul, lift, 1.0);
 }
 
 #endif
