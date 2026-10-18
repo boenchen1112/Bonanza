@@ -9,9 +9,10 @@
 // blobs. A scene can ask for the key's REAL shadow inside a focus circle
 // (ShadowFocus; the scene's directional Light carries it, High/Medium tiers).
 //
-// The rig also owns the camera rig (Rig), the pooled effects (Fx) and the
-// post-chain inputs (bloom, chroma, flash), driven in one LateUpdate so the
-// order is fixed: camera, then sky, globals, effects.
+// The rig also owns the camera rig (Rig), the pooled effects (Fx), the game's
+// environment set (Env, built with CreateEnv from Look/Env and pulsed on every
+// beat TickBeat sees) and the post-chain inputs (bloom, chroma, flash), driven
+// in one LateUpdate so the order is fixed: camera, then sky, globals, set, effects.
 
 using System.Collections.Generic;
 using UnityEngine;
@@ -85,14 +86,56 @@ namespace Bonanza.Look
 
         int _lastBeat = int.MinValue;
 
-        /// Call once a frame with the audio beat: the camera pushes in a few millimetres on every beat.
+        /// Call once a frame with the audio beat: the camera pushes in a few millimetres on every beat, and the
+        /// environment (if any) pulses: downbeats harder than the beats between (web stage.js trackBeat).
         public void TickBeat(double beat)
         {
+            TrackEnvBeat(beat);
             if (beat < 0) { _lastBeat = int.MinValue; return; }
             int whole = (int)System.Math.Floor(beat);
             if (whole == _lastBeat) return;
-            if (_lastBeat != int.MinValue || whole >= 0) Rig?.Beat(((whole % 4) + 4) % 4);
+            int index = ((whole % 4) + 4) % 4;
+            if (_lastBeat != int.MinValue || whole >= 0) Rig?.Beat(index);
             _lastBeat = whole;
+            Env?.Pulse(index == 0 ? 1.25f : 0.8f, index);
+        }
+
+        // ------------------------------------------------------------ environment kit
+
+        /// The set this game built with CreateEnv (null if none).
+        public Env Env { get; private set; }
+        double _envBeat, _tickBeat; float _tickTime = -1, _bps = 2, _envTime; int _tickFrame = -1;
+
+        /// Build the game's environment set from a preset (Look/Env). `configure` adjusts the per-piece options
+        /// before anything is built. Call from Load(): every mesh and material is made here, never mid-round.
+        public Env CreateEnv(EnvPreset preset, System.Action<EnvOptions> configure = null, uint seed = 0xba5e)
+        {
+            Env?.Destroy();
+            var o = new EnvOptions();
+            configure?.Invoke(o);
+            Env = new Env(this, transform, seed);
+            Env.Build(preset, o);
+            Env.Update(0, 0, 0);
+            return Env;
+        }
+
+        /// The env's beat follows TickBeat while the game ticks, and runs on at the last tempo after (results).
+        void TrackEnvBeat(double beat)
+        {
+            float now = Time.unscaledTime;
+            if (_tickTime >= 0 && now > _tickTime + 1e-4f && beat > _tickBeat)
+                _bps = Mathf.Lerp(_bps, (float)((beat - _tickBeat) / (now - _tickTime)), 0.2f);
+            _tickBeat = beat; _tickTime = now; _tickFrame = Time.frameCount;
+            _envBeat = beat;
+        }
+
+        void UpdateEnv(float sceneDt)
+        {
+            if (Env == null) return;
+            if (_tickFrame != Time.frameCount) _envBeat += sceneDt * _bps;
+            _envTime += sceneDt;   // scene time: a pause freezes the set
+            Env.OnQuality();
+            Env.Update(sceneDt, _envBeat, _envTime);
         }
 
         /// A visual-only freeze (hitstop). Animation and FX age on VisualDt() and stand still; judging never reads it.
@@ -174,6 +217,8 @@ namespace Bonanza.Look
             if (_camSaved && _cam) { _cam.clearFlags = _flags; _cam.backgroundColor = _bg; }
             Rig?.Restore();
             Fx?.Destroy();
+            Env?.Destroy();
+            Env = null;
             RestoreShadow();
             Shader.SetGlobalVector("_BonShadowFocus", Vector4.zero);
             VisualClock.Clear();
@@ -219,6 +264,7 @@ namespace Bonanza.Look
             Rig?.Update(sceneDt);
             if (_cam && _sky) _sky.position = _cam.transform.position;
             Push();
+            UpdateEnv(sceneDt);
             Fx?.Update(VisualClock.Dt(sceneDt), sceneDt, _cam);
             _blobs?.Update();
             UpdateShadow();
