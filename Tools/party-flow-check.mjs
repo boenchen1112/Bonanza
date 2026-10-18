@@ -130,6 +130,98 @@ await key('Space');
 op = await waitLine('[SHELL] open', mark);
 check(!!op && game(op.line) === g1 && /from=party/.test(op.line), 'SPACE on the hub opens that round again: ' + op?.line);
 
+// ---- the roster and its character-pick stage (web roster.js), real keys, no autoplay
+const CAST_IDS = ['bopp', 'zizz', 'kwark', 'tuff', 'mimo', 'nibb', 'glub', 'fizz'];
+async function openTitle(query = '') {
+  const m = lines.length;
+  await page.goto(`http://127.0.0.1:${PORT}/${query}`, { waitUntil: 'load' });
+  await page.waitForFunction(() => getComputedStyle(document.querySelector('#unity-loading-container')).display === 'none', null, { timeout: 60000 });
+  await wait(1.5);
+  await page.mouse.click(480, 300);   // the audio gate
+  await waitLine('[SHELL] screen=title', m, 20);
+  await wait(1);
+}
+const stageOf = (l) => /stage=(\w+)/.exec(l ?? '')?.[1];
+const charOf = (l) => /char=(\w+)/.exec(l ?? '')?.[1];
+let cursor = 0;   // the grid cursor, mirrored from the keys we send (it starts on the first character)
+const goTo = async (idx) => { while (cursor !== idx) { await key('ArrowRight'); cursor = (cursor + 1) % 8; } };
+
+await openTitle();
+mark = lines.length;
+await key('Space');                   // PARTY
+let r0 = await waitLine('[SHELL] roster mode=', mark, 10);
+check(!!r0 && /mode=party/.test(r0.line) && stageOf(r0.line) === 'lineup', 'PARTY opens the roster on the lineup stage: ' + r0?.line);
+mark = lines.length;
+await key('ArrowLeft');
+const miss = await waitLine('[SHELL] roster miss', mark, 5);
+check(!!miss && /P1 IS YOU/.test(miss.line), 'seat P1 cannot be changed (miss + flash): ' + miss?.line);
+await key('ArrowDown'); await key('ArrowRight');                  // P2: normal -> hard
+await key('ArrowDown'); await key('ArrowDown'); await key('ArrowRight');   // P4: off -> easy
+await page.screenshot({ path: `${OUT}-roster-lineup.png` });
+mark = lines.length;
+await key('Space');                   // continue to the character pick
+const r1 = await waitLine('[SHELL] roster stage=', mark, 5);
+check(stageOf(r1?.line) === 'chars', 'SPACE moves on to the character grid: ' + r1?.line);
+await goTo(5);
+await page.screenshot({ path: `${OUT}-roster-chars.png` });
+mark = lines.length;
+await key('Space');                   // P1 locks in NIBB
+let pk = await waitLine('[SHELL] roster pick seat=0', mark, 5);
+check(!!pk && charOf(pk.line) === 'nibb', 'P1 locks in the highlighted character: ' + pk?.line);
+const rg = await waitLine('[SHELL] roster stage=go', mark, 12);
+check(!!rg, 'with every seat filled the roster reads LINEUP SET');
+const cpu = lines.slice(mark).filter((l) => l.startsWith('[SHELL] roster pick seat=') && / cpu/.test(l));
+const held = [charOf(pk?.line), ...cpu.map(charOf)];
+check(cpu.length === 3 && new Set(held).size === 4, 'three CPUs each pick, and nobody shares a character: ' + held.join(','));
+await page.screenshot({ path: `${OUT}-roster-go.png` });
+mark = lines.length;
+await key('KeyX');                    // B: undo P1's pick
+const un = await waitLine('[SHELL] roster unpick seat=0', mark, 5);
+check(!!un, 'X undoes the last human pick: ' + un?.line);
+mark = lines.length;
+await goTo(CAST_IDS.indexOf(held[1]));   // a character a CPU holds
+await key('Space');
+const tk = await waitLine('[SHELL] roster taken', mark, 5);
+check(!!tk && charOf(tk.line) === held[1], 'a character a CPU already holds cannot be picked again: ' + tk?.line);
+const free = CAST_IDS.findIndex((id) => !held.includes(id));
+mark = lines.length;
+await goTo(free);
+await key('Space');
+pk = await waitLine('[SHELL] roster pick seat=0', mark, 5);
+check(!!pk && charOf(pk.line) === CAST_IDS[free], 'a free character locks in after the refusal: ' + pk?.line);
+await wait(0.5);
+mark = lines.length;
+await key('Space');                   // START PARTY (the lineup is still full: the CPUs kept their picks)
+const ps0 = await waitLine('[PARTY] start', mark, 10);
+check(!!ps0 && new RegExp(`players=${CAST_IDS[free].toUpperCase()},\\w+,\\w+,\\w+`).test(ps0.line), 'the party starts with the picked characters as the players: ' + ps0?.line);
+
+// Free Play: one human, one pick, then the list
+await openTitle();
+mark = lines.length;
+await key('ArrowDown'); await key('Space');   // FREE PLAY
+r0 = await waitLine('[SHELL] roster mode=', mark, 10);
+check(!!r0 && /mode=free/.test(r0.line) && stageOf(r0.line) === 'chars', 'FREE PLAY opens the roster straight on the character grid: ' + r0?.line);
+await page.screenshot({ path: `${OUT}-roster-free.png` });
+mark = lines.length;
+await key('Space');
+pk = await waitLine('[SHELL] roster pick seat=0', mark, 5);
+check(!!pk && charOf(pk.line) === 'bopp', 'Free Play locks in one character: ' + pk?.line);
+const rg2 = await waitLine('[SHELL] roster stage=go', mark, 5);
+check(!!rg2, 'no rivals to wait for: straight to READY');
+mark = lines.length;
+await key('Space');
+const fc = await waitLine('[SHELL] freecast', mark, 5);
+const mn = await waitLine('[SHELL] screen=menu', mark, 5);
+check(!!fc && /name=BOPP/.test(fc.line) && !!mn, 'SPACE leaves for the Free Play list as BOPP: ' + fc?.line);
+await openTitle();
+mark = lines.length;
+await key('ArrowDown'); await key('Space');
+await waitLine('[SHELL] roster mode=free', mark, 10);
+mark = lines.length;
+await key('KeyX');
+const tt = await waitLine('[SHELL] screen=title', mark, 5);
+check(!!tt, 'X on an empty pick leaves the roster for the title');
+
 console.log('errors:', errors.length ? errors.join('\n') : 'none');
 if (fail || errors.length) process.exitCode = 1;
 await browser.close();

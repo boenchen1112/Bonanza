@@ -92,12 +92,13 @@ namespace Bonanza
         // ------------------------------------------------------------ party
 
         const int PartyLength = 4;   // web DEFAULT_OPTIONS.partyLength
-        static readonly string[] CastNames = { "YOU", "ZIZZ", "KWARK", "TUFF" };
-        /// Roster slots 1..3: index into Party.CpuTiers, or CpuTiers.Length for OFF.
-        /// The web roster's party default: two NORMAL rivals and the last seat empty.
-        readonly int[] _slotTier = { 0, 1, 1, 3 };
         PartySession _party;
-        int _rosterIndex, _titleIndex, _optIndex;
+        int _titleIndex, _optIndex;
+        /// The open roster screen (null elsewhere), and its rng (web: the scene's makeRng(opts.seed ?? 0x5eed)).
+        RosterState _roster;
+        Rng _rosterRng;
+        /// Free Play's solo pick (web session.players for mode 'free'); null until a roster step ran.
+        public IList<PartyPlayer> FreeCast { get; private set; }
         bool _confirmReset;
         float _autoWait;
         bool _perfTip;
@@ -642,12 +643,10 @@ namespace Bonanza
         }
 
         /// Seat the roster and shuffle the playlist; the finale always closes it.
-        void StartParty()
+        void StartParty(List<PartyPlayer> players = null)
         {
-            var players = new List<PartyPlayer> { new PartyPlayer { Name = CastNames[0] } };
-            for (int i = 1; i < 4; i++)
-                if (_slotTier[i] < Party.CpuTiers.Length)
-                    players.Add(new PartyPlayer { Name = CastNames[i], IsCpu = true, CpuSkill = Party.CpuTiers[_slotTier[i]].skill });
+            // No roster step (autoplay, `?scene=party`, `?party=<n>`): the default lineup picks for itself.
+            players ??= RosterState.Auto("party", new Rng(_seedOverride ?? RosterState.DefaultSeed)).BuildPlayers(Save.HumanName);
             int n = Save.BeginParty();   // the seed counter and the career stat both move on
             if (_partySeed >= 0) n = _partySeed;
             _partySeed = -1;
@@ -694,7 +693,13 @@ namespace Bonanza
                     if (r.Game != null) { int i = Games.FindIndex(e => e.Id == r.Game); if (i >= 0) _menuIndex = i; }
                     _mode = Mode.Menu;
                     break;
-                case ShellNav.Roster: _rosterIndex = 3; _rosterFlash = null; _mode = Mode.Roster; break;
+                case ShellNav.Roster:
+                    _roster = new RosterState(r.Mode);
+                    _rosterRng = new Rng(_seedOverride ?? RosterState.DefaultSeed);
+                    _rosterFlash = null;
+                    _mode = Mode.Roster;
+                    Debug.Log($"[SHELL] roster mode={_roster.Mode} stage={_roster.Stage.ToString().ToLowerInvariant()}");
+                    break;
                 case ShellNav.Options: _optIndex = 0; _confirmReset = false; _mode = Mode.Options; break;
                 default: _mode = Mode.Title; break;
             }
@@ -888,17 +893,16 @@ namespace Bonanza
                     break;
 
                 case Mode.Roster:
-                    while (_presses.Count > 0)
+                    while (_presses.Count > 0 && _mode == Mode.Roster)
                     {
                         var p = _presses.Dequeue();
-                        if (p.Action == "up") { _rosterIndex = (_rosterIndex + 3) % 4; ShellSfx("ui"); }
-                        else if (p.Action == "down") { _rosterIndex = (_rosterIndex + 1) % 4; ShellSfx("ui"); }
-                        else if ((p.Action == "left" || p.Action == "right") && _rosterIndex < 3) CycleSlot(_rosterIndex + 1, p.Action == "right" ? 1 : -1);
-                        else if (p.Action == "a") { if (_rosterIndex < 3) CycleSlot(_rosterIndex + 1, 1); else { TryStartParty(); break; } }
-                        else if (InputMap.IsBack(p.Action)) { ShellSfx("uiBack"); _mode = Mode.Title; break; }
+                        string act = InputMap.IsBack(p.Action) ? "b" : p.Action;
+                        RosterPress(act);
                     }
                     _presses.Clear();
+                    if (_mode == Mode.Roster && _roster != null) ApplyRoster(_roster.Update(Time.unscaledDeltaTime, _rosterRng));
                     if (_rosterFlash != null && (_rosterFlashT -= Time.unscaledDeltaTime) <= 0) _rosterFlash = null;
+                    if (_rosterShakeT > 0) _rosterShakeT -= Time.unscaledDeltaTime;
                     break;
 
                 case Mode.PartyHub:
@@ -1072,8 +1076,7 @@ namespace Bonanza
             _titleIndex = i;
             ShellSfx("fanfare");
             var r = ShellNav.TitleMenuRoute(TitleIds[i]);
-            if (r.View == ShellNav.Roster && r.Mode == "free") GoRoute(new Route(ShellNav.FreePlay));   // Free Play is solo: no roster
-            else GoRoute(r);
+            GoRoute(r);
         }
 
         /// One step down the Free Play list: clamped at the ends, with a tick where the press goes nowhere.
@@ -1083,33 +1086,56 @@ namespace Bonanza
             ShellSfx(atEnd ? "tick" : "ui");   // web freeplay.js: a press at the end of the rail still ticks
         }
 
-        // The roster miss line. The miss sfx slot belongs to the sfx port (ticket 25); until then a low blip.
+        // The roster screen (web roster.js). The rules live in Core/Roster.cs; this maps its outcome to
+        // sound, the flash line and the way out.
         string _rosterFlash;
-        float _rosterFlashT;
+        float _rosterFlashT, _rosterShakeT;
+        int _rosterShakeCard = -1;
+        string _rosterLoggedStage;
 
-        void TryStartParty()
+        void RosterPress(string act)
         {
-            var problem = RosterRules.Check(_slotTier);
-            if (problem != null)
+            var o = _roster.Input(act);
+            if (o.Event == RosterEvent.Miss && o.Flash == null && act == "a")
             {
-                _rosterFlash = problem; _rosterFlashT = 2f;
-                ShellSfx("miss");   // web roster.js: 'SEAT AT LEAST ONE RIVAL'
-                return;
+                _rosterShakeT = 0.16f; _rosterShakeCard = _roster.Cursor;   // a taken card shakes
+                Debug.Log($"[SHELL] roster taken char={Cast.All[_roster.Cursor].Id}");
             }
-            ShellSfx("fanfare");
-            StartParty();
+            ApplyRoster(o);
         }
 
-        void CycleSlot(int slot, int dir)
+        void ApplyRoster(RosterOutcome o)
         {
-            if (!RosterRules.CanChange(slot)) return;   // seat 0 is always the human
-            int n = Party.CpuTiers.Length + 1;
-            _slotTier[slot] = (_slotTier[slot] + dir + n) % n;
-            // Seating a rival locks it in (web roster.js lockIn: a CPU is a 'great'); emptying the seat unlocks it.
-            ShellSfx(_slotTier[slot] < Party.CpuTiers.Length ? "great" : "uiBack");
+            switch (o.Event)
+            {
+                case RosterEvent.Tick: ShellSfx("ui"); break;
+                case RosterEvent.Miss: ShellSfx("miss"); if (o.Flash != null) Debug.Log($"[SHELL] roster miss flash={o.Flash}"); break;
+                case RosterEvent.Lock: ShellSfx("perfect"); Debug.Log($"[SHELL] roster pick seat={o.Seat} char={_roster.Picks[o.Seat]}"); break;
+                case RosterEvent.CpuLock: ShellSfx("great"); Debug.Log($"[SHELL] roster pick seat={o.Seat} char={_roster.Picks[o.Seat]} cpu"); break;
+                case RosterEvent.Unlock: ShellSfx("uiBack"); Debug.Log($"[SHELL] roster unpick seat={o.Seat}"); break;
+                case RosterEvent.Leave: ShellSfx("uiBack"); _roster = null; _mode = Mode.Title; return;
+                case RosterEvent.Start: StartFromRoster(); return;
+            }
+            if (o.Flash != null) { _rosterFlash = o.Flash; _rosterFlashT = 0.9f; }
+            string st = _roster.Stage.ToString().ToLowerInvariant();
+            if (st != _rosterLoggedStage) { _rosterLoggedStage = st; Debug.Log($"[SHELL] roster stage={st}"); }
         }
 
-        static string SlotLabel(int tier) => tier < Party.CpuTiers.Length ? "CPU " + Party.CpuTiers[tier].label : "OFF";
+        /// web roster.js startRun: seat the players, then leave for the party hub or the Free Play list.
+        void StartFromRoster()
+        {
+            var players = _roster.BuildPlayers(Save.HumanName);
+            var route = _roster.ExitRoute;
+            ShellSfx("fanfare");
+            bool party = _roster.Mode == "party";
+            _roster = null;
+            _rosterLoggedStage = null;
+            if (party) StartParty(players);
+            else { FreeCast = players; Debug.Log($"[SHELL] freecast char={players[0].Char} name={players[0].Name}"); GoRoute(route); }
+        }
+
+        static readonly string[] SeatKinds = { "CPU easy", "CPU normal", "CPU hard", "EMPTY" };
+        static string SeatLabel(RosterState r, int seat) => r.Seat[seat] == RosterState.You ? "YOU" : SeatKinds[r.Seat[seat]];
 
         // The web options.js rows, in its order.
         enum Opt { Music, Sfx, Offset, Reduce, Graphics, Swing, Reset, Back }
@@ -1420,18 +1446,7 @@ namespace Bonanza
                     Hud.Center(0.9f, "UP/DOWN choose   LEFT/RIGHT adjust   ESC / X back", Hud.Small, new Color(1, 1, 1, 0.7f), 40);
                     break;
 
-                case Mode.Roster:
-                    Hud.Dim(0.85f);
-                    Hud.Center(0.08f, "PARTY", Hud.Big, Hud.Gold, 100);
-                    Hud.Center(0.2f, $"{PartyLength} rounds, the finale last. 3 / 2 / 1 / 0 points by place.", Hud.Small, Color.white, 40);
-                    MenuRow(-1, 0.34f + 80 * s / Screen.height, CastNames[0], "HUMAN", false, s);
-                    for (int i = 1; i < 4; i++)
-                        if (MenuRow(i - 1, 0.34f + 80 * s / Screen.height, CastNames[i], SlotLabel(_slotTier[i]), _rosterIndex == i - 1, s))
-                        { _rosterIndex = i - 1; CycleSlot(i, 1); }
-                    if (MenuRow(3, 0.34f + 80 * s / Screen.height, "START PARTY", null, _rosterIndex == 3, s)) TryStartParty();
-                    if (_rosterFlash != null) Hud.Center(0.82f, _rosterFlash, Hud.Mid, new Color(1, 0.55f, 0.55f), 50);
-                    Hud.Center(0.9f, "UP/DOWN choose   LEFT/RIGHT change a rival   ESC / X back", Hud.Small, new Color(1, 1, 1, 0.7f), 40);
-                    break;
+                case Mode.Roster: DrawRoster(s); break;
 
                 case Mode.PartyHub:
                     Hud.Dim(0.88f);
@@ -1500,6 +1515,74 @@ namespace Bonanza
         }
 
         /// One selectable row: label left, value right. Row i sits at y0 + i rows. True if clicked.
+        // The roster screen, IMGUI placeholders until the visual phase: a header, the 4x2 character grid,
+        // the four seats, a hint. Same stages and wording as the web.
+        void DrawRoster(float s)
+        {
+            if (_roster == null) return;
+            var r = _roster;
+            Hud.Dim(0.85f);
+            string head, sub, hint;
+            switch (r.Stage)
+            {
+                case RosterStage.Lineup: head = "PICK YOUR RIVALS"; sub = "you are P1 - UP/DOWN pick a seat - LEFT/RIGHT CPU easy / normal / hard / off"; hint = "LEFT/RIGHT seat type   SPACE continue   X back"; break;
+                case RosterStage.Chars: head = "CHOOSE YOUR CHARACTER"; sub = "move with the arrows - SPACE to lock in - X to go back"; hint = "ARROWS choose   SPACE lock in   X back"; break;
+                case RosterStage.Cpu: head = "CPU IS CHOOSING..."; sub = "they always take the good one"; hint = "CPU choosing..."; break;
+                default:
+                    head = r.Mode == "party" ? "LINEUP SET - PRESS SPACE" : "READY - PRESS SPACE";
+                    sub = r.Mode == "party" ? "four games, one crown" : "pick a minigame next";
+                    hint = r.Mode == "party" ? "SPACE start the party   X back" : "SPACE pick a game   X back"; break;
+            }
+            Hud.Center(0.04f, head, Hud.Big, Hud.Gold, 100);
+            if (_rosterFlash != null) Hud.Center(0.17f, _rosterFlash, Hud.Small, new Color(1, 0.45f, 0.4f), 40);
+            else Hud.Center(0.17f, sub, Hud.Small, new Color(1, 1, 1, 0.8f), 40);
+
+            // character grid: 4 columns, 2 rows
+            bool gridOn = r.Stage == RosterStage.Chars;
+            float cw = 190 * s, ch = 84 * s, gap = 12 * s;
+            float gx = Screen.width * 0.5f - (4 * cw + 3 * gap) / 2, gy = Screen.height * 0.26f;
+            for (int i = 0; i < Cast.All.Count; i++)
+            {
+                var c = Cast.All[i];
+                var rect = new Rect(gx + (i % RosterState.Cols) * (cw + gap) + (i == _rosterShakeCard && _rosterShakeT > 0 ? Mathf.Sin(_rosterShakeT * 90f) * 6 * s : 0), gy + (i / RosterState.Cols) * (ch + gap), cw, ch);
+                var col = new Color(((c.Color >> 16) & 255) / 255f, ((c.Color >> 8) & 255) / 255f, (c.Color & 255) / 255f);
+                bool taken = r.Taken(i), on = gridOn && i == r.Cursor;
+                float dim = gridOn ? (taken ? 0.3f : 1f) : 0.45f;
+                Hud.Box(new Rect(rect.x - (on ? 4 * s : 0), rect.y - (on ? 4 * s : 0), rect.width + (on ? 8 * s : 0), rect.height + (on ? 8 * s : 0)), on ? new Color(1, 1, 1, 0.9f) : new Color(1, 1, 1, 0.1f));
+                Hud.Box(rect, new Color(col.r * dim * 0.8f, col.g * dim * 0.8f, col.b * dim * 0.8f, 1));
+                Hud.Text(rect, c.Name, Hud.Mid, new Color(1, 1, 1, taken ? 0.5f : 1f), TextAnchor.MiddleCenter);
+                if (taken) Hud.Text(new Rect(rect.x, rect.y + rect.height * 0.62f, rect.width, rect.height * 0.38f), "P" + (r.TakenBy(i) + 1), Hud.Small, Hud.Gold, TextAnchor.MiddleCenter);
+                if (GUI.Button(rect, GUIContent.none, GUIStyle.none) && r.Stage == RosterStage.Chars) { r.Cursor = i; RosterPress("a"); }
+            }
+            if (gridOn) Hud.Center(0.62f, Cast.All[r.Cursor].Name + " - " + Cast.All[r.Cursor].Trait, Hud.Small, Color.white, 40);
+
+            // the four seats
+            float sw = 220 * s, sh = 72 * s, sy = Screen.height * 0.7f;
+            float sx = Screen.width * 0.5f - (4 * sw + 3 * gap) / 2;
+            for (int i = 0; i < RosterRules.Seats; i++)
+            {
+                if (r.Mode == "free" && i > 0) continue;   // Free Play is solo: no rival seats to show
+                var rect = new Rect(sx + i * (sw + gap), sy, sw, sh);
+                bool off = r.Seat[i] == RosterState.Off;
+                bool active = (r.Stage == RosterStage.Lineup && i == r.SeatSel) || (r.Stage == RosterStage.Chars && i == r.Active);
+                Hud.Box(rect, active ? new Color(1, 0.8f, 0.3f, 0.35f) : new Color(1, 1, 1, off ? 0.04f : 0.1f));
+                Hud.Text(new Rect(rect.x + 10 * s, rect.y + 4 * s, rect.width, rect.height * 0.5f), "P" + (i + 1) + "  " + (r.Picks[i] != null ? Cast.ById(r.Picks[i]).Name : "-"), Hud.Small, off ? new Color(1, 1, 1, 0.4f) : Color.white, TextAnchor.MiddleLeft);
+                Hud.Text(new Rect(rect.x + 10 * s, rect.y + rect.height * 0.5f, rect.width, rect.height * 0.45f), SeatLabel(r, i) + (r.Picks[i] != null ? "  READY!" : ""), Hud.Small, new Color(1, 1, 1, 0.7f), TextAnchor.MiddleLeft);
+                if (r.Picks[i] != null)
+                {
+                    var c = Cast.ById(r.Picks[i]);
+                    Hud.Box(new Rect(rect.xMax - 12 * s, rect.y, 12 * s, rect.height), new Color(((c.Color >> 16) & 255) / 255f, ((c.Color >> 8) & 255) / 255f, (c.Color & 255) / 255f));
+                }
+                if (GUI.Button(rect, GUIContent.none, GUIStyle.none) && r.Stage == RosterStage.Lineup)
+                {
+                    r.SeatSel = i;
+                    if (i > 0) RosterPress("right"); else RosterPress("left");
+                }
+            }
+            if (r.Stage == RosterStage.Go && GUI.Button(new Rect(0, 0, Screen.width, Screen.height * 0.26f), GUIContent.none, GUIStyle.none)) RosterPress("a");
+            Hud.Center(0.9f, hint, Hud.Small, new Color(1, 1, 1, 0.7f), 40);
+        }
+
         bool MenuRow(int i, float y0, string label, string value, bool sel, float s, float pitch = 80, float height = 66, bool grey = false, float width = 0.44f)
         {
             var r = new Rect(Screen.width * (0.5f - width / 2), Screen.height * y0 + i * pitch * s, Screen.width * width, height * s);

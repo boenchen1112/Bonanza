@@ -1,0 +1,22 @@
+# lineup seed humans picks order players
+you,cpu-norm,cpu-norm,off 24301 0 bopp,nibb,kwark,- 1,2 0:BOPP:bopp:16767293:0:0,1:NIBB:nibb:16752453:1:0.63,2:KWARK:kwark:16735603:1:0.63
+you,cpu-norm,cpu-norm,off 24301 1 zizz,nibb,kwark,- 1,2 0:ZIZZ:zizz:5101311:0:0,1:NIBB:nibb:16752453:1:0.63,2:KWARK:kwark:16735603:1:0.63
+you,cpu-norm,cpu-norm,off 24301 2 kwark,nibb,zizz,- 1,2 0:KWARK:kwark:16735603:0:0,1:NIBB:nibb:16752453:1:0.63,2:ZIZZ:zizz:5101311:1:0.63
+you,cpu-norm,cpu-norm,off 24301 3 tuff,nibb,zizz,- 1,2 0:TUFF:tuff:10414202:0:0,1:NIBB:nibb:16752453:1:0.63,2:ZIZZ:zizz:5101311:1:0.63
+you,cpu-norm,cpu-norm,off 24301 4 mimo,nibb,zizz,- 1,2 0:MIMO:mimo:12619007:0:0,1:NIBB:nibb:16752453:1:0.63,2:ZIZZ:zizz:5101311:1:0.63
+you,cpu-norm,cpu-norm,off 24301 5 nibb,mimo,zizz,- 1,2 0:NIBB:nibb:16752453:0:0,1:MIMO:mimo:12619007:1:0.63,2:ZIZZ:zizz:5101311:1:0.63
+you,cpu-norm,cpu-norm,off 24301 6 glub,mimo,zizz,- 1,2 0:GLUB:glub:3790004:0:0,1:MIMO:mimo:12619007:1:0.63,2:ZIZZ:zizz:5101311:1:0.63
+you,cpu-norm,cpu-norm,off 24301 7 fizz,mimo,zizz,- 1,2 0:FIZZ:fizz:16743129:0:0,1:MIMO:mimo:12619007:1:0.63,2:ZIZZ:zizz:5101311:1:0.63
+you,cpu-easy,cpu-hard,off 0 3 tuff,zizz,bopp,- 1,2 0:TUFF:tuff:10414202:0:0,1:ZIZZ:zizz:5101311:1:0.4,2:BOPP:bopp:16767293:1:0.86
+you,off,off,cpu-hard 0 7 fizz,-,-,zizz 3 0:FIZZ:fizz:16743129:0:0,3:ZIZZ:zizz:5101311:1:0.86
+you,cpu-norm,cpu-norm,cpu-norm 0 0 bopp,kwark,zizz,mimo 1,2,3 0:BOPP:bopp:16767293:0:0,1:KWARK:kwark:16735603:1:0.63,2:ZIZZ:zizz:5101311:1:0.63,3:MIMO:mimo:12619007:1:0.63
+you,cpu-easy,cpu-hard,off 1 3 tuff,nibb,bopp,- 1,2 0:TUFF:tuff:10414202:0:0,1:NIBB:nibb:16752453:1:0.4,2:BOPP:bopp:16767293:1:0.86
+you,off,off,cpu-hard 1 7 fizz,-,-,mimo 3 0:FIZZ:fizz:16743129:0:0,3:MIMO:mimo:12619007:1:0.86
+you,cpu-norm,cpu-norm,cpu-norm 1 0 bopp,nibb,zizz,mimo 1,2,3 0:BOPP:bopp:16767293:0:0,1:NIBB:nibb:16752453:1:0.63,2:ZIZZ:zizz:5101311:1:0.63,3:MIMO:mimo:12619007:1:0.63
+you,cpu-easy,cpu-hard,off 12345 3 tuff,fizz,zizz,- 1,2 0:TUFF:tuff:10414202:0:0,1:FIZZ:fizz:16743129:1:0.4,2:ZIZZ:zizz:5101311:1:0.86
+you,off,off,cpu-hard 12345 7 fizz,-,-,glub 3 0:FIZZ:fizz:16743129:0:0,3:GLUB:glub:3790004:1:0.86
+you,cpu-norm,cpu-norm,cpu-norm 12345 0 bopp,fizz,kwark,mimo 1,2,3 0:BOPP:bopp:16767293:0:0,1:FIZZ:fizz:16743129:1:0.63,2:KWARK:kwark:16735603:1:0.63,3:MIMO:mimo:12619007:1:0.63
+you,cpu-easy,cpu-hard,off 3735928559 3 tuff,fizz,zizz,- 1,2 0:TUFF:tuff:10414202:0:0,1:FIZZ:fizz:16743129:1:0.4,2:ZIZZ:zizz:5101311:1:0.86
+you,off,off,cpu-hard 3735928559 7 fizz,-,-,glub 3 0:FIZZ:fizz:16743129:0:0,3:GLUB:glub:3790004:1:0.86
+you,cpu-norm,cpu-norm,cpu-norm 3735928559 0 bopp,fizz,kwark,nibb 1,2,3 0:BOPP:bopp:16767293:0:0,1:FIZZ:fizz:16743129:1:0.63,2:KWARK:kwark:16735603:1:0.63,3:NIBB:nibb:16752453:1:0.63
+you,off,off,off 24301 4 mimo,-,-,- - 0:MIMO:mimo:12619007:0:0

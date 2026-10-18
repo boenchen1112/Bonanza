@@ -321,3 +321,49 @@ const judge = await load('core/judge.js');
   }
   save('swing-ictus-pointer.txt', mouseRows, ['op', 'now', 't', 'y', 'ev', 'evT']);
 }
+
+// ---- Roster (shell/castData.js CAST; shell/roster.js CPU pick order and player build)
+{
+  const cd = await load('shell/castData.js');
+  save('cast.txt', cd.CAST.map((c, i) => ({ index: i, id: c.id, name: c.name, color: c.color, accent: c.accent, shape: c.shape, crest: c.crest, trait: c.trait.replaceAll(' ', '~') })),
+    ['index', 'id', 'name', 'color', 'accent', 'shape', 'crest', 'trait']);
+
+  // roster.js update(), stage 'cpu': each CPU seat in seat order takes a uniform pick among the free
+  // characters (`free[Math.floor(rng() * free.length)] || CHARS[0]`); the rng is the scene's
+  // makeRng(opts.seed ?? 0x5eed). The human has already locked in `human` (an index into CAST).
+  const CHARS = cd.CAST;
+  const rows = [];
+  const run = (lineup, seed, humans) => {
+    const rng = util.makeRng(seed);
+    const picks = [null, null, null, null];
+    // humans: the cast index each human seat locks in, in seat order
+    let h = 0;
+    lineup.forEach((t, i) => { if (t === 'you') picks[i] = CHARS[humans[h++]].id; });
+    const order = [];
+    for (;;) {
+      const next = lineup.findIndex((t, i) => t.startsWith('cpu') && !picks[i]);
+      if (next < 0) break;
+      const free = CHARS.filter((c) => !picks.includes(c.id));
+      picks[next] = (free[Math.floor(rng() * free.length)] || CHARS[0]).id;
+      order.push(next);
+    }
+    // startRun(): the players
+    const players = [];
+    const SKILL = { 'cpu-easy': 0.40, 'cpu-norm': 0.63, 'cpu-hard': 0.86 };
+    for (let i = 0; i < 4; i++) {
+      if (lineup[i] === 'off') continue;
+      const def = CHARS.find((c) => c.id === (picks[i] || CHARS[i % CHARS.length].id)) || CHARS[0];
+      players.push(`${i}:${def.name}:${def.id}:${def.color}:${lineup[i] === 'you' ? 0 : 1}:${lineup[i] === 'you' ? 0 : SKILL[lineup[i]]}`);
+    }
+    rows.push({ lineup: lineup.join(','), seed, humans: humans.join(','), picks: picks.map((p) => p || '-').join(','), order: order.join(',') || '-', players: players.join(',') });
+  };
+  const party = ['you', 'cpu-norm', 'cpu-norm', 'off'];
+  for (let k = 0; k < CHARS.length; k++) run(party, 0x5eed, [k]);
+  for (const seed of [0, 1, 12345, 0xdeadbeef]) {
+    run(['you', 'cpu-easy', 'cpu-hard', 'off'], seed, [3]);
+    run(['you', 'off', 'off', 'cpu-hard'], seed, [7]);
+    run(['you', 'cpu-norm', 'cpu-norm', 'cpu-norm'], seed, [0]);
+  }
+  run(['you', 'off', 'off', 'off'], 0x5eed, [4]);   // Free Play: one human, one pick
+  save('roster-picks.txt', rows, ['lineup', 'seed', 'humans', 'picks', 'order', 'players']);
+}

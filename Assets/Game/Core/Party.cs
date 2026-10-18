@@ -20,6 +20,9 @@ namespace Bonanza.Core
         public bool IsCpu;
         public double CpuSkill;
         public int Points, Wins;
+        /// Cast id (Cast.All), its colour, and the roster seat it was picked in. Cosmetic: the rolls ignore them.
+        public string Char;
+        public int Palette, Slot;
     }
 
     public sealed class PartyPost

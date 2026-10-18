@@ -1,0 +1,9 @@
+# index id name color accent shape crest trait
+0 bopp BOPP 16767293 16752453 round antenna All~rhythm,~no~brakes.
+1 zizz ZIZZ 5101311 8038143 spike bolt Runs~on~static~and~spite.
+2 kwark KWARK 16735603 16752453 beak plume Beak~first,~ask~later.
+3 tuff TUFF 10414202 3790004 block horns Built~like~a~downbeat.
+4 mimo MIMO 12619007 16743129 tall cap Two~beats~ahead,~always.
+5 nibb NIBB 16752453 16767293 tiny antenna Small.~Loud.~Everywhere.
+6 glub GLUB 3790004 5101311 blob fin Wobbles~exactly~on~time.
+7 fizz FIZZ 16743129 12619007 star plume Sparkles~on~the~offbeat.

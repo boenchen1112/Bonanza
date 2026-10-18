@@ -106,6 +106,10 @@ namespace Bonanza
             return n;
         }
 
+        /// The name a player set for roster seat `slot` (web profile.names), or null for the default "P<n>".
+        /// Nothing in the game sets one yet; the roster falls back to the character's name.
+        public static string HumanName(int slot) => PlayerPrefs.GetString(Prefix + "name" + slot, null);
+
         /// Options' RESET PROGRESS: records and career stats. Settings survive it.
         public static void ResetProgress(System.Collections.Generic.IEnumerable<string> gameIds)
         {
