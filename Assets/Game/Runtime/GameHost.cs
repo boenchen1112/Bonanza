@@ -1410,6 +1410,8 @@ namespace Bonanza
                     Hud.Dim(0.85f);
                     Hud.Center(0.3f, "BONANZA", Hud.Big, Hud.Gold, 120);
                     Hud.Center(0.55f, "CLICK / TAP / SPACE TO START", Hud.Mid, Color.white);
+                    if (_gatePressed && !_clock.Running)
+                        Hud.Center(0.68f, "INPUT OK - WAITING FOR THE AUDIO CLOCK (is sound output available?)", Hud.Mid, Hud.Gold);
                     break;
 
                 case Mode.Menu:
