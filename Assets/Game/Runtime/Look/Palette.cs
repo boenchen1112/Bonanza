@@ -129,7 +129,7 @@ namespace Bonanza.Look
                 .Set(PC.Key, 0xfff6e0).Set(PD.KeyDir, -0.5f, 0.82f, 0.35f).Set(PF.KeyIntensity, 2.7f)
                 .Set(PC.FillSky, 0x9dc6ff).Set(PC.FillGround, 0x123f2c).Set(PF.FillIntensity, 1.2f)
                 .Set(PC.Rim, 0xffe9a8).Set(PD.RimDir, 0.6f, 0.3f, -0.75f).Set(PF.RimStrength, 0.95f)
-                .Set(PC.Fog, 0x1b3a72).Set(PF.FogNear, 20).Set(PF.FogFar, 78)
+                .Set(PC.Fog, 0x1b3a72).Set(PF.FogNear, 15).Set(PF.FogFar, 74)   // (web 20/78) a little more air on the far stands and skyline
                 .Set(PF.Bloom, 0.8f).Set(PF.BloomThreshold, 1.35f).Set(PF.Exposure, 1.08f));
 
             // Late innings: the sun is gone and the stadium lights carry the frame.
@@ -141,7 +141,7 @@ namespace Bonanza.Look
                 .Set(PC.Accent, 0xffe066).Set(PC.Accent2, 0x7fe7ff).Set(PC.Accent3, 0xff5d7a)
                 .SetCrowd(0xffe066, 0x7fe7ff, 0xff5d7a, 0xffffff, 0xb28cff)
                 .Set(PC.Key, 0xfff0d6).Set(PD.KeyDir, -0.35f, 0.9f, 0.3f).Set(PF.KeyIntensity, 3.0f)
-                .Set(PC.FillSky, 0x3f5aa6).Set(PC.FillGround, 0x0b2a1c).Set(PF.FillIntensity, 0.72f)
+                .Set(PC.FillSky, 0x3f5aa6).Set(PC.FillGround, 0x0b2a1c).Set(PF.FillIntensity, 0.58f)   // (web 0.72) the floods, not the sky, light the night
                 .Set(PC.Rim, 0xbfe6ff).Set(PD.RimDir, 0.6f, 0.35f, -0.75f).Set(PF.RimStrength, 1.1f)
                 .Set(PC.Fog, 0x0a1638).Set(PF.FogNear, 22).Set(PF.FogFar, 80)
                 .Set(PF.Bloom, 0.9f).Set(PF.BloomThreshold, 1.5f).Set(PF.Exposure, 1.0f).Set(PF.Saturation, 1.2f)

@@ -20,7 +20,7 @@ using UnityEngine;
 
 namespace Bonanza
 {
-    public sealed class SwingKingsGame : Minigame
+    public sealed partial class SwingKingsGame : Minigame
     {
         public override string Id => "swing-kings";
         public override string Title => "SWING KINGS";
@@ -84,7 +84,7 @@ namespace Bonanza
         readonly Dictionary<Pitch, Ball> _pitchBalls = new Dictionary<Pitch, Ball>();
         readonly List<HitBall> _hitBalls = new List<HitBall>();
         readonly Stack<GameObject> _ballPool = new Stack<GameObject>();
-        Material _ballMat, _pipMat;
+        Material _ballMat;
 
         // audio
         double _clickBeat;
@@ -95,7 +95,7 @@ namespace Bonanza
         bool _hintHidden;
         float _camPush, _camLift;
 
-        sealed class Ball { public GameObject Go; public List<GameObject> Pips = new List<GameObject>(); public int PipCursor; public TrailHandle Trail; }
+        sealed class Ball { public GameObject Go; public int PipCursor; public TrailHandle Trail; }
         sealed class HitBall { public GameObject Go; public Vector3 P, V; public float T, Life, GravMul; public bool Bounce, Slam, Land; public TrailHandle Trail; public Color Color; }
 
         // ------------------------------------------------------------ contract
@@ -301,6 +301,7 @@ namespace Bonanza
                 SetNight(night);
             }
             UpdateCrowd(beat);
+            UpdateArming(beat);
             ScheduleClicks();
             // The song ends on a word, on the last bar's downbeat (web: GAME! and the fanfare).
             if (!_finishShown && beat >= SwingRules.EndBeat - 4) { _finishShown = true; Host.PlaySfx("fanfare", now); _env?.Crowd?.Wave(1, 2); }
@@ -359,32 +360,18 @@ namespace Bonanza
 
         void BuildStage()
         {
-            // web rig: target (-1.9, 1.95, 0), distance 12.6, yaw 0.055, fov 45; the height keeps the lowered
-            // stand-in framing (2.15 - 0.9) so the set sits where it has been. The rig owns the camera from here.
-            Look.Rig.Frame(W(-1.9f, 1.95f, 0), 12.6f, 2.15f - 0.9f, 0.055f, 45, 2.4f, immediate: true);
+            // web rig: target (-1.9, 1.95, 0), distance 12.6, height 2.15, yaw 0.055, fov 45. The rig owns the camera from here.
+            Look.Rig.Frame(W(-1.9f, 1.95f, 0), 12.6f, 2.15f, 0.055f, 45, 2.4f, immediate: true);
             // The key's real shadow: the plate, the batter and the machine, inside a focus circle (web setShadowFocus).
             Look.ShadowFocus(W(-1.5f, 0, 0.1f), 9.2f);   // wider than the web's (-2.3, 6.8): the shadow now lies out to the side and must not fade before it ends
 
             BuildSet();
-            var plateMat = Mat(Color.white, rim: 0.4f); Look.Track(plateMat, PC.Plate);
-            Cast(Prim(PrimitiveType.Cube, PlatePos, new Vector3(0.5f, 0.02f, 0.5f), plateMat));
-            var metalMat = Mat(Color.white); Look.Track(metalMat, PC.Metal);
-            var machine = Cast(Prim(PrimitiveType.Cube, MachinePos, new Vector3(1.2f, 1.2f, 1.0f), metalMat));
-            // Pads top out at y~0.02: lay the blobs just above them. Both bodies sit on their pad, so
-            // heightOffset is the body centre's height and they get full strength.
-            Look.Blob(machine.transform, 1.0f, 0.55f, groundY: 0.15f, heightOffset: MachinePos.y - 0.15f);   // on the mound top (y 0.14)
-            var batterMat = Mat(Color.white); Look.Track(batterMat, PC.Batter);
-            var batter = Cast(Prim(PrimitiveType.Capsule, BatterPos + Vector3.up * 0.9f, new Vector3(0.6f, 0.9f, 0.6f), batterMat));
-            Look.Blob(batter.transform, 0.85f, 0.7f, groundY: 0.03f, heightOffset: 0.87f);
-
-            _batPivot = new GameObject("BatPivot").transform;
-            _batPivot.SetParent(transform, false);
-            _batPivot.position = BatterPos + new Vector3(-0.2f, 1.25f, 0);
-            Cast(Prim(PrimitiveType.Cube, new Vector3(-0.55f, 0, 0), new Vector3(1.1f, 0.07f, 0.07f), new Color(0.8f, 0.7f, 0.5f), _batPivot));
-            PoseBat(1);
-
-            _ballMat = Mat(Color.white, lift: 0.35f, rim: 1.2f, pulse: 0.3f);
-            _pipMat = Mat(new Color(0.75f, 0.92f, 1f), lift: 0.6f);
+            BuildInfield();
+            BuildMachine();
+            BuildBatter();
+            BuildPips();
+            _ballMat = Mat(Hex(0xfffaf0), lift: 0.55f, rim: 1.2f, pulse: 0.3f);
+            SetNight(false);
         }
 
         // The ballpark (web swingKings/world.js createWorld): the env kit's 'stage' preset (grass ground, arches,
@@ -399,32 +386,32 @@ namespace Bonanza
             _env = Look.CreateEnv(EnvPreset.Stage, o =>
             {
                 o.Ground.Confetti = 0; o.Ground.Rings = false;          // a ballpark, not a stage
-                o.Ground.Map = "grass"; o.Ground.MapTiles = 7; o.Ground.Stripes = 24; o.Ground.StripeContrast = 0.2f;
+                o.Ground.Map = "grass"; o.Ground.MapTiles = 7; o.Ground.Stripes = 16; o.Ground.StripeContrast = 0.3f;   // broad mow bands, like the web's
                 o.Backdrop.Arches = 4; o.Backdrop.Radius = 24; o.Backdrop.Spacing = 7.5f; o.Backdrop.Z = 30;
                 o.Backdrop.SkylineMesh = "sk-skyline";
-                // Fewer, smaller and up in the sky: full-size floaters hung in front of the stands as crystals.
-                o.Spotlights.Base = 0.08f; o.Spotlights.Flare = 0.22f;   // the beams fall across the stands: keep them from milking the crowd
-                o.Floaters.Count = 10; o.Floaters.InnerR = 26; o.Floaters.OuterR = 36; o.Floaters.MinY = 7; o.Floaters.MaxY = 16; o.Floaters.Size = 0.6f;
+                // Pale, bloomed hoops (the web's read white-gold in its bloom; the palette accent alone is mustard).
+                o.Backdrop.ArchWhiten = 0.25f; o.Backdrop.Glow = 2.2f; o.Backdrop.SunSide = 1.2f;
+                // Floodlights: the cones hang from the light-tower heads and sweep the field, not the stands.
+                o.Spotlights.Count = 4; o.Spotlights.Height = 17; o.Spotlights.Radius = 2.4f; o.Spotlights.Base = 0.035f; o.Spotlights.Flare = 0.05f;
+                o.Spotlights.Anchors = new[] { TowerAt[0] + Vector3.up * BankY, TowerAt[0] + Vector3.up * BankY, TowerAt[1] + Vector3.up * BankY, TowerAt[1] + Vector3.up * BankY };
+                o.Spotlights.Targets = new[] { new Vector3(PlatePos.x, 0, PlatePos.z), new Vector3(-1.5f, 0, -1.5f), new Vector3(MachinePos.x, 0, MachinePos.z), new Vector3(0, 0, 3) };
+                o.Spotlights.Tint = Hex(0xfff0d6);
+                // No floaters: a lone crystal in the sky over a ballpark read as a bug.
+                o.Floaters.Count = 0;
             });
-            _env.AddBanners(new EnvBanners.Options { Count = 30, Radius = 13.5f, Y = 7.6f, Z = 3 });
+            // Calmer blade noise and a touch of lift: the web's turf reads as bright, clean bands.
+            var turf = _env.Ground?.Top ? _env.Ground.Top.sharedMaterial : null;
+            if (turf) { turf.SetFloat("_MapStrength", 0.55f); turf.SetFloat("_Lift", 0.06f); }
+            _env.AddBanners(new EnvBanners.Options { Count = 30, Radius = 13.5f, Y = 7.6f, Z = 3, Glow = 2.2f, Whiten = 0.12f, LineRadius = 0.018f, SizeJitter = 0.2f });
             _env.AddCrowd(new EnvCrowd.Options
             {
                 Style = EnvCrowd.FigureStyle.Figure, Stands = EnvCrowd.StandStyle.Bowl,
                 Rows = 6, PerRow = 30, RowGrow = 3, Radius = 11.6f, RowDepth = 1.2f, RowRise = 0.634f,
                 Arc = StandArc * 0.94f, BowlArc = StandArc, Center = new Vector3(0, 0.95f, 3), Scale = 1.22f, Seed = 0x5147,
                 PaletteMix = 0.1f, BrightMin = 0.55f, BrightMax = 0.85f, Deepen = 1.35f, StandColor = Hex(0x5474ad), Energy = 0.28f,
+                RoofTube = 0, Poses = true, Rim = 0.9f, FrontRowScale = 0.88f,
             });
             _env.AddMesh("sk-setedge", Color.white, rim: 0.5f, pulse: 0.06f);
-
-            // Infield dirt: the cut-out around the plate and the mound under the machine.
-            var dirtMat = EnvKit.Surface(_env, Color.white, "dirt", new Vector2(2, 2), rim: 0.3f, pulse: 0.06f);
-            Look.Track(dirtMat, PC.Dirt);
-            var b = new MeshBuilder();
-            b.Disc(2.7f, 48, Matrix4x4.Translate(PlatePos + new Vector3(-0.2f, 0, 0)), Color.white, 1);
-            var mound = MachinePos + new Vector3(0.3f, -MachinePos.y, 0);
-            b.Shell(1.45f, 1.95f, 0.16f, 40, 0, Mathf.PI * 2, Matrix4x4.Translate(mound + new Vector3(0, 0.06f, 0)), Color.white, new Vector2(4, 0.2f));
-            b.Disc(1.45f, 40, Matrix4x4.Translate(mound + new Vector3(0, 0.14f, 0)), Color.white, 0.6f);
-            EnvKit.Static(_env, "Infield", transform, b, dirtMat);
 
             // Light towers frame the open (machine-side) edge the stands do not cover; their banks light at night.
             var towerMat = EnvKit.Surface(_env, Hex(0x262d3f), null, null, rim: 0.6f, pulse: 0.04f);
@@ -434,11 +421,13 @@ namespace Bonanza
             {
                 var at = W(-13, 0, tz);
                 shafts.Shell(0.18f, 0.32f, 8.6f, 8, 0, Mathf.PI * 2, Matrix4x4.Translate(at + new Vector3(0, 4.3f, 0)), Color.white, Vector2.one);
-                banks.Box(Matrix4x4.TRS(at + new Vector3(0, 8.5f, 0), Quaternion.Euler(0, 90, 0), new Vector3(1.7f, 1.0f, 0.28f)), Color.white);
+                // The bank faces the field (yaw toward the plate), so the lit face is what the camera sees at night.
+                var face = Quaternion.LookRotation((new Vector3(PlatePos.x, 0, PlatePos.z) - at).normalized);
+                banks.Box(Matrix4x4.TRS(at + new Vector3(0, BankY, 0), face, new Vector3(1.7f, 1.0f, 0.28f)), Color.white);
+                shafts.Box(Matrix4x4.TRS(at + new Vector3(0, BankY - 0.62f, 0), face, new Vector3(1.9f, 0.08f, 0.5f)), Color.white);   // catwalk
             }
             EnvKit.Static(_env, "TowerShafts", transform, shafts, towerMat);
             EnvKit.Static(_env, "TowerBanks", transform, banks, _bankMat);
-            SetNight(false);
         }
 
         /// Dark steel banks by day, a lit glow at night: "later in the set" changes the set, not just the grade.
@@ -447,6 +436,7 @@ namespace Bonanza
             if (!_bankMat) return;
             _bankMat.SetColor("_BaseColor", on ? Hex(0xfff3d0) : Hex(0x33302a));
             _bankMat.SetFloat("_Lift", on ? 2.6f : 0);
+            _nightGoal = on ? 1 : 0;
         }
 
         /// 0 = coiled back, 1 = follow-through done (and back to rest).
@@ -456,7 +446,7 @@ namespace Bonanza
             _batPivot.localRotation = Quaternion.Euler(0, a, 0);
         }
 
-        void StartSwing() => _swingT = 0;
+        void StartSwing() { _swingT = 0; StartSwingArc(); Cue(BatterCue.Swing); }
 
         /// The count-in ticks over the lead-in (the web has no click after it; the
         /// music carries the beat), scheduled a little ahead on the audio clock itself.
@@ -481,6 +471,7 @@ namespace Bonanza
             if (!_playing) Look.BeatPulse = 0;
             UpdateHitBalls(dt);
             UpdateBat(dt);
+            UpdateSet(dt, _round != null ? _round.BeatAt(_now) : 0);
             // "SIDE RETIRED" holds all three lamps, then the count starts over (web _outsClear).
             if (_outsClear > 0)
             {
@@ -508,7 +499,7 @@ namespace Bonanza
             Look.Rig.Frame(
                 W(-1.9f + _camPush * 0.9f, 1.95f + _camPush * 0.15f + _camLift * 0.42f, 0),
                 (slamHold ? 12.2f : night ? 12.0f : 12.6f) - _camPush * 0.5f + _camLift * 0.7f,
-                2.15f - 0.9f, 0.055f + Mathf.Sin((float)beat * 0.11f) * 0.012f, 45, 2.4f);
+                2.15f, 0.055f + Mathf.Sin((float)beat * 0.11f) * 0.012f, 45, 2.4f);
         }
 
         /// Seconds from this pitch's target to the next pitch's (the space its feedback has).
@@ -553,7 +544,7 @@ namespace Bonanza
             if (go == null)
             {
                 go = Cast(MeshObject(PrimitiveType.Sphere, _ballMat));
-                go.transform.localScale = Vector3.one * 0.24f;
+                go.transform.localScale = Vector3.one * 0.34f;   // web: radius 0.2
                 Look.Blob(go.transform, 0.2f, 0.5f);
             }
             go.SetActive(true);
@@ -566,36 +557,27 @@ namespace Bonanza
         {
             if (_mouse && p.Scored) Debug.Log($"[LAUNCH] id={p.Id} eta={_round.Map.TimeAt(p.TargetBeat) - _now:F4}");
             var b = new Ball { Go = AcquireBall() };
+            b.Go.transform.position = Muzzle;
             b.Trail = Look.Fx.Trail(Hex(0xbfeaff), 0.075f);
             // Half-beat markers along the flight path: the ball is the metronome.
-            int steps = Mathf.Max(2, (int)System.Math.Round(p.Lead * 2));
-            for (int i = 1; i <= steps; i++)
-            {
-                var pip = MeshObject(PrimitiveType.Sphere, _pipMat);
-                pip.transform.position = Sample(p, (double)i / steps);
-                pip.transform.localScale = Vector3.one * (i == steps ? 0.16f : 0.09f);
-                b.Pips.Add(pip);
-            }
+            SetPips(p);
             _pitchBalls[p] = b;
+            FireMachine();
             // The machine's launch tick, and the demo swing's windup tick with it (web update(): tick 0.16, beginWindup 0.05).
             Host.PlaySfx("tick", _now, gain: 0.16f);
             if (p.Kind == PitchKind.Demo) Host.PlaySfx("tick", _now, gain: 0.05f);
         }
 
-        void ClearPips(Ball b)
-        {
-            foreach (var pip in b.Pips) if (pip) Destroy(pip);
-            b.Pips.Clear();
-        }
 
         void OnPassed(Pitch p)
         {
             if (!_pitchBalls.TryGetValue(p, out var b)) return;
             // Sailed past into the backstop net, with a puff.
             Look.Fx.Burst(b.Go.transform.position, 8, Hex(0x9fd8ff), 3, life: 0.4f);
+            _netHit = 1;
             b.Trail?.Release();
             FreeBall(b.Go);
-            ClearPips(b);
+            ClearPips(p);
             _pitchBalls.Remove(p);
         }
 
@@ -608,11 +590,12 @@ namespace Bonanza
                 var pos = Sample(p, System.Math.Min(u, 1.6));
                 if (u > 1) pos.y = Mathf.Max(0.16f, pos.y - (float)(u - 1) * 1.4f);
                 b.Go.transform.position = pos;
+                b.Go.transform.localRotation = Quaternion.Euler((float)beat * 400f, 0, (float)beat * 250f);
                 b.Trail?.Set(pos);
-                int steps = b.Pips.Count;
+                int steps = Mathf.Min(PipMax, Mathf.Max(2, (int)System.Math.Round(p.Lead * 2)));
                 while (b.PipCursor < steps && u >= (double)(b.PipCursor + 1) / steps - 0.02)
                 {
-                    if (b.Pips[b.PipCursor]) b.Pips[b.PipCursor].SetActive(false);
+                    PopPip(b.PipCursor, p);
                     b.PipCursor++;
                 }
             }
@@ -625,8 +608,9 @@ namespace Bonanza
             StartSwing();
             var p = c.Pitch;
             GameObject go; TrailHandle trail = null;
-            if (_pitchBalls.TryGetValue(p, out var pb)) { go = pb.Go; trail = pb.Trail; ClearPips(pb); _pitchBalls.Remove(p); }
+            if (_pitchBalls.TryGetValue(p, out var pb)) { go = pb.Go; trail = pb.Trail; _pitchBalls.Remove(p); }
             else go = AcquireBall();
+            ClearPips(p);
 
             // web connect(): the ball leaves the bat
             var t = c.Tier;
@@ -646,6 +630,8 @@ namespace Bonanza
                 land = T2;
             }
             bool big = t.Id == TierId.Homer || t.Id == TierId.Slam;
+            Cue(p.Finale ? BatterCue.Finale : big ? BatterCue.BigHit : BatterCue.Contact, t.Id);
+            if (big) _flinch = 1;   // PITCH-O watches it go
             var tierColor = Hex(t.Color);
             if (trail == null) trail = Look.Fx.Trail(tierColor, big ? 0.15f : 0.09f);
             else { trail.SetColor(tierColor); trail.SetWidth(big ? 0.15f : 0.09f); }
@@ -722,6 +708,7 @@ namespace Bonanza
         void OnWhiff(WhiffEvent w)
         {
             if (w.Swung) StartSwing();
+            Cue(w.SideRetired ? BatterCue.SideRetired : w.Swung ? BatterCue.Whiff : BatterCue.Strike);
             if (_outsClear > 0) { _outsClear = 0; Ui.Outs(0); }   // a new out while SIDE RETIRED still holds the lamps: the new inning starts now
             Ui.Outs(w.Outs);
             Host.PlaySfx("miss", _now);
@@ -858,6 +845,8 @@ namespace Bonanza
             base.OnDestroy();
         }
 
+        bool _wasCoiled;
+
         void UpdateBat(float dt)
         {
             if (_swingT < 1) _swingT = Mathf.Min(1, _swingT + dt / 0.28f);
@@ -872,6 +861,8 @@ namespace Bonanza
                     coiled = toGo < _round.Map.Spb * 2 && toGo > -0.2;
                 }
             }
+            if (coiled && !_wasCoiled) Cue(BatterCue.Coil);
+            _wasCoiled = coiled;
             float rest = coiled ? 75 : 60;
             // Conducting: the bat winds back further the longer the button is held, so the ribbon traces the coil.
             if (_mouse && _round.Holding) rest = 70 + 55 * (float)_round.WindupPower(_now);

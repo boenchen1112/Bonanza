@@ -35,6 +35,21 @@ namespace Bonanza.Look
             return m;
         }
 
+        /// Just the vertex positions of an authored mesh (the uploaded Mesh is not CPU-readable): for placing
+        /// dressing on it at load, e.g. lights on the skyline's roofs. Null if missing.
+        public static Vector3[] Positions(string name)
+        {
+            var ta = Resources.Load<TextAsset>("Env/" + name);
+            if (ta == null) return null;
+            var d = ta.bytes;
+            if (d.Length < 12 || d[0] != 'B' || d[1] != 'N' || d[2] != 'Z' || d[3] != 'M') return null;
+            int v = System.BitConverter.ToInt32(d, 4);
+            var p = new Vector3[v];
+            for (int i = 0, o = 12; i < v; i++, o += 12) p[i] = new Vector3(F(d, o), F(d, o + 4), F(d, o + 8));
+            Resources.UnloadAsset(ta);
+            return p;
+        }
+
         static float F(byte[] d, int o) => System.BitConverter.ToSingle(d, o);
     }
 }

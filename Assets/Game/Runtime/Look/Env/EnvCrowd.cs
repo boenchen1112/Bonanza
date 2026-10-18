@@ -45,6 +45,13 @@ namespace Bonanza.Look
             public Color RoofColor = new Color(0.11f, 0.14f, 0.21f);
             public string SeatMap = "seats";
             public uint Seed = 0xc0ffee;
+            /// Figures only: give each spectator one of three arm poses (low V that swings, arms up that pump, a
+            /// clap overhead), animated in the vertex shader. Off = every figure in the authored low V.
+            public bool Poses;
+            /// Rim multiplier override for the figures (null = the style's default).
+            public float? Rim;
+            /// Scale of the front row relative to the rest (the row nearest the camera reads oversized).
+            public float FrontRowScale = 1;
         }
 
         static readonly uint[] Pastel = { 0xff7a5c, 0x6fc9e8, 0xd98ae0, 0xa9d98a, 0xffc86a, 0x8a95e0, 0xff9ab5, 0x9aa6bd, 0xffe08a, 0x7fe0c8 };
@@ -61,7 +68,7 @@ namespace Bonanza.Look
         static readonly int IdBeat = Shader.PropertyToID("_Beat"), IdEighths = Shader.PropertyToID("_Eighths"),
             IdJump = Shader.PropertyToID("_JumpH"), IdLean = Shader.PropertyToID("_LeanA"), IdSag = Shader.PropertyToID("_Sag"),
             IdWaveT = Shader.PropertyToID("_WaveT"), IdWaveAmt = Shader.PropertyToID("_WaveAmt"), IdGlow = Shader.PropertyToID("_Glow"),
-            IdMix = Shader.PropertyToID("_PalMix");
+            IdMix = Shader.PropertyToID("_PalMix"), IdArms = Shader.PropertyToID("_Arms");
         static readonly int[] IdSlot = { Shader.PropertyToID("_C0"), Shader.PropertyToID("_C1"), Shader.PropertyToID("_C2"), Shader.PropertyToID("_C3"), Shader.PropertyToID("_C4") };
 
         public EnvCrowd(Env env, Options o)
@@ -95,16 +102,21 @@ namespace Bonanza.Look
                 b.Shell(o.WallRadius, o.WallRadius, o.WallHeight, 56, -o.BowlArc / 2, o.BowlArc,
                     Matrix4x4.Translate(new Vector3(0, o.WallY, o.Center.z)), new Color(0.82f, 0.82f, 0.86f, 1), new Vector2(24, 0.12f), inward: true);
                 EnvKit.Static(env, "Stands", t, b, _stand).receiveShadows = false;
-                _roof = EnvKit.Surface(env, o.RoofColor, null, null, rim: 0.8f, pulse: 0.05f, bands: 2);
-                b = new MeshBuilder();
-                b.Torus(o.RoofRadius, o.RoofTube, 8, 64, o.BowlArc, Matrix4x4.TRS(new Vector3(0, o.RoofY, o.Center.z), Quaternion.Euler(90, 0, 0), Vector3.one),
-                    Color.white, Mathf.PI / 2 - o.BowlArc / 2);
-                EnvKit.Static(env, "Roof", t, b, _roof).receiveShadows = false;
+                if (o.RoofTube > 0)   // 0 = no roof ring (a truss over the far stands reads as a bar across the horizon)
+                {
+                    _roof = EnvKit.Surface(env, o.RoofColor, null, null, rim: 0.8f, pulse: 0.05f, bands: 2);
+                    b = new MeshBuilder();
+                    b.Torus(o.RoofRadius, o.RoofTube, 8, 64, o.BowlArc, Matrix4x4.TRS(new Vector3(0, o.RoofY, o.Center.z), Quaternion.Euler(90, 0, 0), Vector3.one),
+                        Color.white, Mathf.PI / 2 - o.BowlArc / 2);
+                    EnvKit.Static(env, "Roof", t, b, _roof).receiveShadows = false;
+                }
             }
 
             // ---- the figures
             var tpl = new MeshBuilder();
-            if (o.Style == FigureStyle.Figure) FigureTemplate(tpl); else BlobTemplate(tpl);
+            var armSide = new System.Collections.Generic.List<float>();
+            if (o.Style == FigureStyle.Figure) FigureTemplate(tpl, armSide); else BlobTemplate(tpl);
+            bool poses = o.Poses && o.Style == FigureStyle.Figure;
             int n = 0;
             for (int r = 0; r < o.Rows; r++) n += o.PerRow + r * o.RowGrow;
             Count = n;
@@ -125,13 +137,16 @@ namespace Bonanza.Look
                     root[k] = new Vector4(o.Center.x + Mathf.Sin(a) * rr, y + (rng.Next() - 0.5f) * 0.06f, o.Center.z + Mathf.Cos(a) * rr, yaw);
                     // Phase: mostly on the beat (a crowd claps together), a few stragglers, plus the optional sweep.
                     float ph = (rng.Next() - 0.5f) * 0.17f + (rng.Next() < 0.08f ? rng.Next() * 0.6f : 0) + u * o.Sweep + r * o.Sweep * 0.1f;
-                    prm[k] = new Vector4(ph, u, (0.86f + rng.Next() * 0.34f) * o.Scale, 0.7f + rng.Next() * 0.6f);
+                    prm[k] = new Vector4(ph, u, (0.86f + rng.Next() * 0.34f) * o.Scale * (r == 0 ? o.FrontRowScale : 1), 0.7f + rng.Next() * 0.6f);
                     float dim = 1 - r * 0.055f;
                     float bright = Mathf.Lerp(o.BrightMin, o.BrightMax, rng.Next()) * dim;
+                    // Pose: 0 low V (most), 1 arms up, 2 clapping overhead. Drawn after the colour so the rng stream
+                    // (and so every figure's colour and place) is the same with poses on or off.
                     slot[k] = new Vector4((k * 7) % 5, bright, 0, 0);
                     var pc = Palette.Hex(Pastel[(int)(rng.Next() * Pastel.Length) % Pastel.Length]).linear;
                     // Deepen the pastel a little (gamma on linear): small bodies at a distance read washed out otherwise.
                     tint[k] = new Color(Mathf.Pow(pc.r, o.Deepen), Mathf.Pow(pc.g, o.Deepen), Mathf.Pow(pc.b, o.Deepen), 1);
+                    if (poses) { float pr = Hash01((uint)k * 2654435761u ^ o.Seed); slot[k].z = pr < 0.55f ? 0 : pr < 0.8f ? 1 : 2; }
                 }
             }
             var order = new int[n];
@@ -150,7 +165,9 @@ namespace Bonanza.Look
                     var shade = tpl.C[v].r;   // template colour: 1 on the body, dark on the eyes
                     var c = tint[f]; c.a = shade;
                     mb.C.Add(c);
-                    mb.UV0x.Add(root[f]); mb.UV1x.Add(prm[f]); mb.UV2x.Add(slot[f]);
+                    var sl = slot[f];
+                    sl.w = poses && v < armSide.Count ? armSide[v] : 0;
+                    mb.UV0x.Add(root[f]); mb.UV1x.Add(prm[f]); mb.UV2x.Add(sl);
                 }
                 for (int i = 0; i < tpl.T.Count; i++) mb.T.Add(tpl.T[i] + baseV);
             }
@@ -168,6 +185,7 @@ namespace Bonanza.Look
             // Lambert crowd, so 200 small bodies read as rounded people rather than flat stickers.
             if (o.Style == FigureStyle.Blob) { _mat.SetFloat("_Rim", 1.6f); _mat.SetFloat("_Bands", 2); _mat.SetFloat("_Lift", 0.04f); }
             else { _mat.SetFloat("_Rim", 0.55f); _mat.SetFloat("_Bands", 3); _mat.SetFloat("_Softness", 0.5f); _mat.SetFloat("_Lift", 0); }
+            if (o.Rim.HasValue) _mat.SetFloat("_Rim", o.Rim.Value);
             _glowBase = o.Style == FigureStyle.Blob ? 0.12f : 0.03f;
             EnvKit.Renderer("CrowdFigures", t, _mesh, _mat).receiveShadows = false;
             OnQuality();
@@ -176,13 +194,18 @@ namespace Bonanza.Look
         // ------------------------------------------------------------ templates (feet at y = 0, facing +z)
 
         /// chars/crowd.js figureGeometry: body, head, two stubby arms in a low V, two dark eye bumps. ~190 tris.
-        static void FigureTemplate(MeshBuilder b)
+        /// `armSide` gets one entry per vertex: -1 / +1 on the left / right arm, 0 elsewhere (the pose channel).
+        static void FigureTemplate(MeshBuilder b, System.Collections.Generic.List<float> armSide)
         {
             var white = Color.white;
             b.Capsule(0.17f, 0.30f, 2, 7, Matrix4x4.Translate(new Vector3(0, 0.30f, 0)), white);
             b.Sphere(0.155f, 8, 5, Matrix4x4.Translate(new Vector3(0, 0.62f, 0)), white, Vector3.one);
+            while (armSide.Count < b.Count) armSide.Add(0);
             for (int sx = -1; sx <= 1; sx += 2)
+            {
                 b.Capsule(0.055f, 0.26f, 1, 4, Matrix4x4.TRS(new Vector3(sx * 0.20f, 0.42f, 0), Quaternion.Euler(0, 0, sx * 0.72f * Mathf.Rad2Deg), Vector3.one), white);
+                while (armSide.Count < b.Count) armSide.Add(sx);
+            }
             var eye = new Color(0.12f, 0.12f, 0.12f, 1);
             for (int sx = -1; sx <= 1; sx += 2)
                 b.Sphere(0.026f, 5, 3, Matrix4x4.Translate(new Vector3(sx * 0.052f, 0.655f, 0.148f)), eye, new Vector3(1, 1, 0.6f));
@@ -276,6 +299,7 @@ namespace Bonanza.Look
             _mat.SetFloat(IdWaveT, _waveT);
             _mat.SetFloat(IdWaveAmt, _waveAmt);
             _mat.SetFloat(IdGlow, _glowBase + _glow * 0.25f);
+            _mat.SetFloat(IdArms, calm ? 0.35f : Mathf.Clamp01(e * 1.25f + _hype * 0.5f) * (1 - _sag));
             var cr = pal.Crowd;
             if (cr != null && cr.Length > 0)
                 for (int i = 0; i < IdSlot.Length; i++) _mat.SetColor(IdSlot[i], cr[i % cr.Length]);
@@ -285,6 +309,11 @@ namespace Bonanza.Look
                 else _stand.SetColor("_BaseColor", O.StandColor ?? EnvKit.Mix(pal[PC.BandAlt], pal[PC.Band], 0.4f));
             }
         }
+
+        /// A night or mood grade on the whole crowd (linear multiplier on the figures' colour; white = as lit).
+        public void SetTint(Color c) => _mat.SetColor("_BaseColor", c);
+
+        static float Hash01(uint x) { x ^= x >> 16; x *= 0x7feb352d; x ^= x >> 15; x *= 0x846ca68b; x ^= x >> 16; return (x & 0xffffff) / 16777216f; }
 
         static float Smootherstep(float t) { t = Mathf.Clamp01(t); return t * t * t * (t * (t * 6 - 15) + 10); }
     }

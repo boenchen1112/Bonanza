@@ -15,13 +15,19 @@ namespace Bonanza.Look
             public float Radius = 12.5f, Y = 7.2f, Sag = 1.6f, Size = 1.05f, Z = 2, Span = Mathf.PI * 1.3f;
             public string Map = "cloth";
             public float Glow = 0.8f;
+            /// Push the flag colours toward white (linear mix): backlit cloth against a low sun reads pale and lit.
+            public float Whiten = 0;
+            /// Line radius (thickness) of the cable the flags hang from.
+            public float LineRadius = 0.03f;
+            /// Random per-flag size spread (0 = all the same).
+            public float SizeJitter = 0;
         }
 
         readonly Options O;
         readonly MeshBatch _flags;
         readonly Material _line;
         readonly Vector3[] _pos;
-        readonly float[] _phase, _speed, _face, _pop;
+        readonly float[] _phase, _speed, _face, _pop, _size;
         readonly int[] _hue;
 
         public EnvBanners(Env env, Options o)
@@ -31,7 +37,7 @@ namespace Bonanza.Look
             Root.transform.SetParent(env.Root, false);
             var t = Root.transform;
             int n = o.Count;
-            _pos = new Vector3[n]; _phase = new float[n]; _speed = new float[n]; _face = new float[n]; _pop = new float[n]; _hue = new int[n];
+            _pos = new Vector3[n]; _phase = new float[n]; _speed = new float[n]; _face = new float[n]; _pop = new float[n]; _hue = new int[n]; _size = new float[n];
             var line = new Vector3[n * 3 + 1];
             for (int i = 0; i < n; i++)
             {
@@ -42,6 +48,7 @@ namespace Bonanza.Look
                 _speed[i] = 1.4f + env.Rand() * 0.8f;
                 _face[i] = a;
                 _hue[i] = i % 3;
+                _size[i] = 1 + (env.Rand() - 0.5f) * 2 * o.SizeJitter;
             }
             // The line: a thin tube through the flag tops (the web's flat torus did not follow the sag).
             for (int i = 0; i < line.Length; i++)
@@ -52,7 +59,7 @@ namespace Bonanza.Look
             }
             _line = EnvKit.Surface(env, Color.white, null, null, rim: 0, pulse: 0, bands: 1);
             var b = new MeshBuilder();
-            b.Tube(line, 0.03f, 5, Matrix4x4.identity, Color.white);
+            b.Tube(line, o.LineRadius, 5, Matrix4x4.identity, Color.white);
             EnvKit.Static(env, "BuntingLine", t, b, _line).receiveShadows = false;
 
             var tpl = new MeshBuilder();
@@ -78,9 +85,11 @@ namespace Bonanza.Look
                 float swing = (Mathf.Sin(time * _speed[i] + _phase[i]) * 0.28f + _pop[i] * 0.35f) * calm;
                 // Face the stage (local -z toward the centre), swing about the line (x) and twist a little (z).
                 var q = Quaternion.Euler(0, _face[i] * Mathf.Rad2Deg, 0) * Quaternion.Euler(swing * 0.5f * Mathf.Rad2Deg, 0, swing * Mathf.Rad2Deg);
-                float sc = 1 + _pop[i] * 0.25f * calm;
+                float sc = (1 + _pop[i] * 0.25f * calm) * _size[i];
                 _flags.Matrix[i] = Matrix4x4.TRS(_pos[i], q, new Vector3(sc, sc, sc));
-                var col = (_hue[i] == 0 ? a : _hue[i] == 1 ? b2 : c3) * (0.8f + _pop[i] * 0.8f);
+                var hue = _hue[i] == 0 ? a : _hue[i] == 1 ? b2 : c3;
+                if (O.Whiten > 0) hue = Color.Lerp(hue, Color.white, O.Whiten);
+                var col = hue * (0.8f + _pop[i] * 0.8f);
                 col.a = 1;
                 _flags.Tint[i] = col;
             }
@@ -97,6 +106,13 @@ namespace Bonanza.Look
         {
             public int Count = 4;
             public float Height = 13, Spread = 9, Radius = 2.6f, Z = 6, Base = 0.16f, Flare = 0.30f;
+            /// Optional lamp positions (env-local): each cone hangs from its anchor and aims at the matching Target,
+            /// sweeping a little around it, instead of hanging in the sky in a row. Height is then the cone length.
+            public Vector3[] Anchors, Targets;
+            /// Sweep amplitude, radians (anchored cones).
+            public float Sweep = 0.08f;
+            /// One colour for every cone (floodlights) instead of the palette accents.
+            public Color? Tint;
         }
 
         readonly Options O;
@@ -115,6 +131,7 @@ namespace Bonanza.Look
             _swing = new float[n]; _phase = new float[n]; _tilt = new float[n]; _pop = new float[n];
             var b = new MeshBuilder();
             b.Cone(o.Radius, o.Height, 22, Matrix4x4.identity, Color.white);
+            // (anchored cones: Height is the throw from the lamp to the floor)
             var mesh = env.Own(b.ToMesh("Beam"));
             for (int i = 0; i < n; i++)
             {
@@ -123,7 +140,7 @@ namespace Bonanza.Look
                 r.receiveShadows = false;
                 float k = n == 1 ? 0.5f : i / (float)(n - 1);
                 _cone[i] = r.transform;
-                _cone[i].localPosition = new Vector3((k - 0.5f) * o.Spread * 2, o.Height, o.Z);
+                _cone[i].localPosition = o.Anchors != null ? o.Anchors[i % o.Anchors.Length] : new Vector3((k - 0.5f) * o.Spread * 2, o.Height, o.Z);
                 _swing[i] = 0.5f + env.Rand() * 0.5f;
                 _phase[i] = env.Rand() * Mathf.PI * 2;
                 _tilt[i] = (k - 0.5f) * 0.5f;
@@ -136,6 +153,9 @@ namespace Bonanza.Look
                 if ((i + beatIndex) % 2 == 0) _pop[i] = Mathf.Max(_pop[i], strength);
         }
 
+        /// Retune the rig at runtime (a game's night switch): resting intensity and the beat flare.
+        public void SetLevel(float baseIntensity, float flare) { O.Base = baseIntensity; O.Flare = flare; }
+
         public override void Update(float dt, double beat, float time, Palette pal)
         {
             bool calm = Settings.ReduceMotion;
@@ -143,12 +163,22 @@ namespace Bonanza.Look
             {
                 _pop[i] = EnvKit.Damp(_pop[i], 0, 6, dt);
                 float sw = calm ? 0.35f : 1;
+                if (O.Anchors != null)
+                {
+                    var dir = (O.Targets[i % O.Targets.Length] - _cone[i].localPosition).normalized;
+                    float s1 = Mathf.Sin(time * 0.31f * _swing[i] * sw + _phase[i]) * O.Sweep * sw;
+                    float s2 = Mathf.Sin(time * 0.19f * _swing[i] * sw + _phase[i] * 1.3f) * O.Sweep * 0.6f * sw;
+                    _cone[i].localRotation = Quaternion.Euler(s2 * Mathf.Rad2Deg, s1 * Mathf.Rad2Deg, 0) * Quaternion.FromToRotation(Vector3.down, dir);
+                }
+                else
+                {
                 float rz = Mathf.Sin(time * 0.35f * _swing[i] * sw + _phase[i]) * 0.26f + _tilt[i];
                 float rx = -(Mathf.Sin(time * 0.22f * _swing[i] * sw + _phase[i] * 0.7f) * 0.14f + 0.1f);   // web +x tilt, z mirrored
                 _cone[i].localRotation = Quaternion.Euler(rx * Mathf.Rad2Deg, 0, rz * Mathf.Rad2Deg);
+                }
                 int hue = i % 3;
                 var c = hue == 0 ? pal[PC.Accent] : hue == 1 ? pal[PC.Rim] : pal[PC.Accent2];
-                _mat[i].SetColor(IdColor, EnvKit.Mix(c, Color.white, 0.35f));
+                _mat[i].SetColor(IdColor, O.Tint ?? EnvKit.Mix(c, Color.white, 0.35f));
                 _mat[i].SetFloat(IdIntensity, O.Base + _pop[i] * O.Flare * (calm ? 0.3f : 1));
             }
         }
