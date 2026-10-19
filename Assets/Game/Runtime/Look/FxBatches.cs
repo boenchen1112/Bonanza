@@ -128,7 +128,7 @@ namespace Bonanza.Look
     }
 
     /// Camera axes for this frame's billboards.
-    struct CamAxes { public Vector3 R, U, F; }
+    struct CamAxes { public Vector3 R, U, F, P; }
 
     // ------------------------------------------------------------------ particles
 
@@ -294,11 +294,24 @@ namespace Bonanza.Look
                 {
                     case PMode.Tumble:
                     {
+                        // Confetti: shrink and fade over the last 40% of its life; melt away when it drifts close to the
+                        // lens and never fill more than a sliver of the frame (a piece falling past the camera read as a
+                        // huge brown card).
+                        if (t > 0.6f) { float kf = (t - 0.6f) / 0.4f; sc *= 1 - kf * 0.65f; a *= 1 - kf * kf; }
+                        float depth = Vector3.Dot(pos - cam.P, cam.F);
+                        a *= Mathf.Clamp01((depth - 1.8f) / 2.7f);
+                        sc = Mathf.Min(sc, Mathf.Max(0, depth) * 0.032f);
                         float cx = Mathf.Cos(ax[i]), sx = Mathf.Sin(ax[i]), cy = Mathf.Cos(ay[i]), sy = Mathf.Sin(ay[i]), cz = Mathf.Cos(az[i]), sz = Mathf.Sin(az[i]);
                         float w = sc * aspect[i], h = sc;
                         axv = new Vector3(cz * cy, sz * cy, -sy) * w;
                         ayv = new Vector3(cz * sy * sx - sz * cx, sz * sy * sx + cz * cx, cy * sx) * h;
-                        break;
+                        // Two-sided "lit" paper: a face turned to the camera catches the light, an edge-on one dims.
+                        var nrm = Vector3.Cross(axv, ayv);
+                        float nl = nrm.magnitude;
+                        float face = nl > 1e-8f ? Mathf.Abs(Vector3.Dot(nrm, cam.F)) / nl : 1;
+                        float lit = 0.62f + 0.38f * face;
+                        _mesh.Quad(q++, pos, axv, ayv, FxColor.C32(r[i] * lit, g[i] * lit, b[i] * lit, a), _rect, Vector4.zero);
+                        continue;
                     }
                     case PMode.Ground:
                     {

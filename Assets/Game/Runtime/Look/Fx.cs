@@ -26,6 +26,8 @@ namespace Bonanza.Look
         public Color? Color;          // override the verdict colour
         public float GroundY;         // floor height for the decal and ground wave (NaN = derive)
         public bool Text, Stage, Rings;
+        public Color? MilestoneColor;  // combo-milestone waves in this colour instead of the combo white (opt-in per game)
+        public float MilestoneLift;    // extra height for the "xN" word, so it sits clear of a big hit's flash
         public static VerdictOpts Default => new VerdictOpts { Scale = 1, GroundY = float.NaN, Text = true, Stage = true, Rings = true };
     }
 
@@ -111,12 +113,15 @@ namespace Bonanza.Look
             var font = Resources.Load<TMP_FontAsset>("Look/CalloutFont");
             if (font == null) Debug.LogError("Fx: Resources/Look/CalloutFont missing");
             var text = font != null ? font.material : null;
-            _mats = new[] { add, alpha, ring, ringO };
 
             System.Func<FxSprites.Cell_, Vector4> rect = FxSprites.Rect;
             int cap = 1;   // (capacities are the web's)
-            _confetti = new ParticleBatch("Confetti", _root, alpha, rect(FxSprites.Cell_.Confetti), PMode.Tumble, 320 * cap, _rng, 10, e =>
-            { e.Grav = -7.5f; e.Drag = 1.1f; e.Turb = 2.6f; e.Size = 0.17f; e.SizeVar = 0.3f; e.Aspect = 1.6f; e.Life = 1.5f; e.LifeVar = 0.35f; e.S0 = 1; e.S1 = 1; e.Fade = PFade.Linear; e.Tumble = 11; });
+            // Confetti gets its own alpha material with a little gain: vivid, lightly self-lit paper, not grey cards.
+            var paper = Make("FxSprite", 5, 10, 4, 3000);
+            if (paper) paper.SetFloat("_Gain", 1.3f);
+            _mats = new[] { add, alpha, ring, ringO, paper };
+            _confetti = new ParticleBatch("Confetti", _root, paper, rect(FxSprites.Cell_.Confetti), PMode.Tumble, 320 * cap, _rng, 10, e =>
+            { e.Grav = -7.5f; e.Drag = 1.1f; e.Turb = 2.6f; e.Size = 0.17f; e.SizeVar = 0.3f; e.Aspect = 1.6f; e.Life = 1.25f; e.LifeVar = 0.3f; e.S0 = 1; e.S1 = 1; e.Fade = PFade.Linear; e.Tumble = 11; });
             _decals = new ParticleBatch("Decals", _root, add, rect(FxSprites.Cell_.Scorch), PMode.Ground, 48, _rng, 11, e =>
             { e.Grav = 0; e.Drag = 0; e.Speed = 0; e.SpeedVar = 0; e.SpinVar = 0.4f; e.Size = 1.5f; e.SizeVar = 0.15f; e.S0 = 0.5f; e.S1 = 1.35f; e.Life = 0.95f; e.LifeVar = 0.1f; e.Alpha = 0.5f; e.Fade = PFade.Hold; });
             _smoke = new ParticleBatch("Smoke", _root, add, rect(FxSprites.Cell_.Smoke), PMode.Billboard, 128, _rng, 12, e =>
@@ -276,7 +281,7 @@ namespace Bonanza.Look
                 case L.MilestoneWave:
                 {
                     int k = r.K;
-                    _overlayRings.Spawn(r.Pos, Feel.Hex(Feel.Combo), 0.5f + k * 0.08f, 0.3f + k * 0.5f, 2.4f + k * 1.5f, 0.16f - k * 0.03f, 0.02f, 0.012f + k * 0.003f, 0.85f - k * 0.2f, null, 0);
+                    _overlayRings.Spawn(r.Pos, r.Color, 0.5f + k * 0.08f, 0.3f + k * 0.5f, 2.4f + k * 1.5f, 0.16f - k * 0.03f, 0.02f, 0.012f + k * 0.003f, 0.85f - k * 0.2f, null, 0);
                     var e = _flare.Begin();
                     e.Pos(r.Pos).Color(Feel.Hex(Feel.Hot));
                     e.Size = (0.45f + k * 0.25f) * sc; e.Life = 0.22f + k * 0.05f; e.S0 = 0.4f; e.S1 = 2.0f + k * 0.4f;
@@ -344,21 +349,21 @@ namespace Bonanza.Look
                 _rig.Shake(f.Shake, new Vector3(rec.Dir.x, rec.Dir.y * 0.5f, 0));
                 if (f.Flash > 0) _rig.DoFlash(f.Flash, rec.Color);
             }
-            if (verdict != Verdict.Miss && Feel.IsMilestone(_combo)) Milestone(_combo, pos);
+            if (verdict != Verdict.Miss && Feel.IsMilestone(_combo)) Milestone(_combo, pos, o.MilestoneColor, o.MilestoneLift);
         }
 
         /// The combo-milestone flourish: three ring waves, a flare, a confetti shower, a word.
-        public void Milestone(int combo, Vector3 pos)
+        public void Milestone(int combo, Vector3 pos, Color? color = null, float lift = 0)
         {
             int tier = Feel.ComboTier(combo);
             var rec = _v;
-            rec.V = Verdict.Perfect; rec.Pos = pos; rec.Color = Feel.Hex(Feel.Combo);
+            rec.V = Verdict.Perfect; rec.Pos = pos; rec.Color = color ?? Feel.Hex(Feel.Combo);
             rec.Scale = 1 + tier * 0.06f; rec.Size = 1 + tier * 0.08f; rec.Count = 1 + tier * 0.22f;
             rec.Gy = _groundY ?? pos.y - 1.6f; rec.Dir = Vector3.up;
             float[] delays = { 0, 0.075f, 0.15f };
             for (int i = 0; i < delays.Length; i++) Schedule(L.MilestoneWave, delays[i], rec, i);
             Schedule(L.Confetti, 0.06f, rec, 1);
-            _callouts.Spawn("x" + combo, null, pos + new Vector3(-0.45f, 0.85f, 0), Feel.Hex(Feel.Combo), 0.5f + tier * 0.045f, 0.95f, 0.4f, 0, 0, false);
+            _callouts.Spawn("x" + combo, null, pos + new Vector3(-0.45f, 0.85f + lift, 0), Feel.Hex(Feel.Combo), 0.5f + tier * 0.045f, 0.95f, 0.4f, 0, 0, false);
             if (_rig != null) { _rig.Shake(Feel.MilestoneShake * (1 + tier * 0.08f), Vector3.up); _rig.DoFlash(Feel.MilestoneFlash); }
         }
 
@@ -382,22 +387,26 @@ namespace Bonanza.Look
             => (overlay ? _overlayRings : _rings).Spawn(pos, color, life, from, to, thick0, thick1, wobble, alpha, normal, spin);
 
         /// Tumbling confetti.
-        public void Confetti(Vector3 pos, int count = 60, Color[] colors = null, float speed = 7.5f, float up = 1)
+        /// `size` is the piece size in world units; `life` > 0 overrides the family's (a slow shower far off in the sky
+        /// needs bigger, longer-lived pieces with less gravity than a pop at the plate).
+        public void Confetti(Vector3 pos, int count = 60, Color[] colors = null, float speed = 7.5f, float up = 1, float size = 0.17f, float life = 0)
         {
             int total = Mathf.Max(1, Mathf.RoundToInt(count * Mul * ConfettiMul));
-            ConfettiAt(pos, total, colors, speed, new Vector3(0, up, 0), 0.17f);
+            ConfettiAt(pos, total, colors, speed, new Vector3(0, up, 0), size, life);
         }
 
-        void ConfettiAt(Vector3 pos, int total, Color[] colors, float speed, Vector3 dir, float size)
+        void ConfettiAt(Vector3 pos, int total, Color[] colors, float speed, Vector3 dir, float size, float life = 0)
         {
             int n = colors != null ? colors.Length : Feel.Party.Length;
             int per = Mathf.Max(1, Mathf.RoundToInt(total / (float)n));
             var e = _confetti.Begin();
             e.Pos(pos).Dir(dir);
             e.Jitter = 0.2f; e.Cone = 0.62f; e.Speed = speed; e.Size = size;
+            if (life > 0) { e.Life = life; e.Grav = -7.5f * Mathf.Min(1, 1.25f / life); e.Jitter = 1.2f; e.Cone = 1; }
             for (int i = 0; i < n; i++)
             {
-                e.Color(colors != null ? colors[i] : Feel.Hex(Feel.Party[i]));
+                // Linear: the shader writes linear light, so a gamma hex read as linear washes out to pastel.
+                e.Color((colors != null ? colors[i] : Feel.Hex(Feel.Party[i])).linear);
                 _confetti.Emit(per);
             }
         }
@@ -482,7 +491,7 @@ namespace Bonanza.Look
                 Fire(r);
             }
             var tr = cam.transform;
-            _axes = new CamAxes { R = tr.right, U = tr.up, F = tr.forward };
+            _axes = new CamAxes { R = tr.right, U = tr.up, F = tr.forward, P = tr.position };
             bool pw = _prewarm > 0;
             if (pw) _prewarm--;
             _confetti.Update(dt, _axes, _time, pw);

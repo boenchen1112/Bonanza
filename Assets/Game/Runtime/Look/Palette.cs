@@ -129,22 +129,22 @@ namespace Bonanza.Look
                 .Set(PC.Key, 0xfff6e0).Set(PD.KeyDir, -0.5f, 0.82f, 0.35f).Set(PF.KeyIntensity, 2.7f)
                 .Set(PC.FillSky, 0x9dc6ff).Set(PC.FillGround, 0x123f2c).Set(PF.FillIntensity, 1.2f)
                 .Set(PC.Rim, 0xffe9a8).Set(PD.RimDir, 0.6f, 0.3f, -0.75f).Set(PF.RimStrength, 0.95f)
-                .Set(PC.Fog, 0x1b3a72).Set(PF.FogNear, 15).Set(PF.FogFar, 74)   // (web 20/78) a little more air on the far stands and skyline
+                .Set(PC.Fog, 0x6a5a8e).Set(PF.FogNear, 12).Set(PF.FogFar, 60)   // sky-tinted dusk haze: the far bowl takes ~25%, the near stands none
                 .Set(PF.Bloom, 0.8f).Set(PF.BloomThreshold, 1.35f).Set(PF.Exposure, 1.08f));
 
             // Late innings: the sun is gone and the stadium lights carry the frame.
             _all["swing-kings-night"] = Make(_base, p => p
-                .Set(PC.SkyTop, 0x040a24).Set(PC.SkyMid, 0x0f2258).Set(PC.SkyBot, 0x5b3a8c)
+                .Set(PC.SkyTop, 0x030820).Set(PC.SkyMid, 0x0a1a48).Set(PC.SkyBot, 0x3a2a70)
                 .Set(PC.Sun, 0xb8d4ff).Set(PD.SunDir, 0.35f, -0.08f, -1).Set(PF.SunStrength, 0.14f).Set(PF.SunSize, 0.18f)
-                .Set(PC.Ground, 0x176a3a).Set(PC.GroundAlt, 0x1d7a44).Set(PC.GroundRim, 0xd8f0ff)
+                .Set(PC.Ground, 0x136049).Set(PC.GroundAlt, 0x186e52).Set(PC.GroundRim, 0xd8f0ff)   // turf toward blue-green under the floods
                 .Set(PC.Band, 0x0e2458).Set(PC.BandAlt, 0x2346a0)
                 .Set(PC.Accent, 0xffe066).Set(PC.Accent2, 0x7fe7ff).Set(PC.Accent3, 0xff5d7a)
                 .SetCrowd(0xffe066, 0x7fe7ff, 0xff5d7a, 0xffffff, 0xb28cff)
                 .Set(PC.Key, 0xfff0d6).Set(PD.KeyDir, -0.35f, 0.9f, 0.3f).Set(PF.KeyIntensity, 3.0f)
-                .Set(PC.FillSky, 0x3f5aa6).Set(PC.FillGround, 0x0b2a1c).Set(PF.FillIntensity, 0.58f)   // (web 0.72) the floods, not the sky, light the night
-                .Set(PC.Rim, 0xbfe6ff).Set(PD.RimDir, 0.6f, 0.35f, -0.75f).Set(PF.RimStrength, 1.1f)
-                .Set(PC.Fog, 0x0a1638).Set(PF.FogNear, 22).Set(PF.FogFar, 80)
-                .Set(PF.Bloom, 0.9f).Set(PF.BloomThreshold, 1.5f).Set(PF.Exposure, 1.0f).Set(PF.Saturation, 1.2f)
+                .Set(PC.FillSky, 0x3f5aa6).Set(PC.FillGround, 0x0b2a1c).Set(PF.FillIntensity, 0.3f)   // (web 0.72) the floods, not the sky, light the night
+                .Set(PC.Rim, 0xbfe6ff).Set(PD.RimDir, 0.6f, 0.35f, -0.75f).Set(PF.RimStrength, 1.45f)   // backlit crowd and set edges
+                .Set(PC.Fog, 0x1a2858).Set(PF.FogNear, 14).Set(PF.FogFar, 66)
+                .Set(PF.Bloom, 0.9f).Set(PF.BloomThreshold, 1.5f).Set(PF.Exposure, 1.0f).Set(PF.Saturation, 1.2f).Set(PF.Vignette, 0.6f)
                 .Set(PC.Metal, 0x585a72).Set(PC.Batter, 0x6c7090));   // Dirt and Plate stay as in the base: the grade alone darkens them at night
 
             // Drumline Dash: hot night parade. Magenta and ember.

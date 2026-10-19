@@ -12,6 +12,7 @@ Shader "Bonanza/Fx"
         [Enum(UnityEngine.Rendering.BlendMode)] _SrcBlend ("Src", Float) = 5
         [Enum(UnityEngine.Rendering.BlendMode)] _DstBlend ("Dst", Float) = 1
         [Enum(UnityEngine.Rendering.CompareFunction)] _ZTest ("ZTest", Float) = 4
+        _Gain ("Gain", Float) = 1
     }
     SubShader
     {
@@ -32,6 +33,7 @@ Shader "Bonanza/Fx"
             TEXTURE2D(_MainTex); SAMPLER(sampler_MainTex);
             CBUFFER_START(UnityPerMaterial)
                 float4 _MainTex_ST;
+                float _Gain;
             CBUFFER_END
 
             struct Attributes { float3 positionOS : POSITION; float4 color : COLOR; float2 uv : TEXCOORD0; };
@@ -51,7 +53,7 @@ Shader "Bonanza/Fx"
                 half4 t = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.uv);
                 half a = t.a * i.color.a;
                 if (a < 0.004) discard;
-                return half4(t.rgb * i.color.rgb, a);
+                return half4(t.rgb * i.color.rgb * _Gain, a);
             }
             ENDHLSL
         }

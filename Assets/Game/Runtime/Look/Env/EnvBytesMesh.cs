@@ -50,6 +50,26 @@ namespace Bonanza.Look
             return p;
         }
 
+        /// Positions, normals and the index list of an authored mesh (CPU side): for building dressing that follows
+        /// its faces at load, e.g. window grids on the skyline's camera-facing facades. False if missing.
+        public static bool Read(string name, out Vector3[] p, out Vector3[] n, out int[] idx)
+        {
+            p = n = null; idx = null;
+            var ta = Resources.Load<TextAsset>("Env/" + name);
+            if (ta == null) return false;
+            var d = ta.bytes;
+            if (d.Length < 12 || d[0] != 'B' || d[1] != 'N' || d[2] != 'Z' || d[3] != 'M') return false;
+            int v = System.BitConverter.ToInt32(d, 4), ni = System.BitConverter.ToInt32(d, 8);
+            int o = 12;
+            p = new Vector3[v]; n = new Vector3[v]; idx = new int[ni];
+            for (int i = 0; i < v; i++, o += 12) p[i] = new Vector3(F(d, o), F(d, o + 4), F(d, o + 8));
+            for (int i = 0; i < v; i++, o += 12) n[i] = new Vector3(F(d, o), F(d, o + 4), F(d, o + 8));
+            o += 12 * v;   // colours
+            for (int i = 0; i < ni; i++, o += 4) idx[i] = System.BitConverter.ToInt32(d, o);
+            Resources.UnloadAsset(ta);
+            return true;
+        }
+
         static float F(byte[] d, int o) => System.BitConverter.ToSingle(d, o);
     }
 }

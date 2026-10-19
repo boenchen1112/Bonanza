@@ -116,7 +116,7 @@ namespace Bonanza.Look
                                 // sheen band: darker rgb, still opaque, so a tumbling face catches "light"
                                 float t = Mathf.Clamp01(((x + w / 2) / w + (y + h / 2) / h) / 2);
                                 float band = t < 0.45f ? t / 0.45f * 0.85f : t < 0.62f ? 0.85f * (1 - (t - 0.45f) / 0.17f) : 0;
-                                shade = 1 - band * (1 - 90 / 255f);
+                                shade = 1 - band * (1 - 196 / 255f);   // a soft sheen, not a grey half
                                 break;
                             }
                             case Cell_.Shard:

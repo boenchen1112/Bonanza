@@ -84,7 +84,7 @@ namespace Bonanza
         readonly Dictionary<Pitch, Ball> _pitchBalls = new Dictionary<Pitch, Ball>();
         readonly List<HitBall> _hitBalls = new List<HitBall>();
         readonly Stack<GameObject> _ballPool = new Stack<GameObject>();
-        Material _ballMat;
+        Material _ballMat, _ballOutlineMat;
 
         // audio
         double _clickBeat;
@@ -141,6 +141,7 @@ namespace Bonanza
             _now = now;
             // The HUD (web ui.hud + swingKings/hud.js): score block, outs lamps, the one-line instruction, the title card.
             Ui.ShowScoreboard();
+            Ui.CornerScrims(true);   // the arches and bunting run into both top corners
             Ui.Outs(0);
             _mouse = Conducting;
             Ui.Hint(_cam ? HintCamera : _mouse
@@ -371,6 +372,12 @@ namespace Bonanza
             BuildBatter();
             BuildPips();
             _ballMat = Mat(Hex(0xfffaf0), lift: 0.55f, rim: 1.2f, pulse: 0.3f);
+            _ballOutlineMat = EnvKit.Surface(_env, Hex(0x1a1238), null, null, rim: 0, pulse: 0, bands: 1);
+            _ballOutlineMat.SetFloat("_Cull", (float)UnityEngine.Rendering.CullMode.Front);
+            _ballOutlineMat.SetFloat("_ShadowRecv", 0);
+            // Prewarm the pool (and the outline's program): three balls drawn once at load, then parked.
+            var warm = new[] { AcquireBall(), AcquireBall(), AcquireBall() };
+            foreach (var g in warm) { g.transform.position = new Vector3(0, -50, 0); FreeBall(g); }
             SetNight(false);
         }
 
@@ -385,12 +392,12 @@ namespace Bonanza
         {
             _env = Look.CreateEnv(EnvPreset.Stage, o =>
             {
-                o.Ground.Confetti = 0; o.Ground.Rings = false;          // a ballpark, not a stage
+                o.Ground.Confetti = 0; o.Ground.Rings = false; o.Ground.EdgeRing = false;   // the track edge is SwingKingsSet's padded wall          // a ballpark, not a stage
                 o.Ground.Map = "grass"; o.Ground.MapTiles = 7; o.Ground.Stripes = 16; o.Ground.StripeContrast = 0.3f;   // broad mow bands, like the web's
                 o.Backdrop.Arches = 4; o.Backdrop.Radius = 24; o.Backdrop.Spacing = 7.5f; o.Backdrop.Z = 30;
                 o.Backdrop.SkylineMesh = "sk-skyline";
                 // Pale, bloomed hoops (the web's read white-gold in its bloom; the palette accent alone is mustard).
-                o.Backdrop.ArchWhiten = 0.25f; o.Backdrop.Glow = 2.2f; o.Backdrop.SunSide = 1.2f;
+                o.Backdrop.ArchWhiten = 0.25f; o.Backdrop.Glow = 1.8f; o.Backdrop.SunSide = 0.35f;   // no bloom blow-out behind ACCURACY / OUTS
                 // Floodlights: the cones hang from the light-tower heads and sweep the field, not the stands.
                 o.Spotlights.Count = 4; o.Spotlights.Height = 17; o.Spotlights.Radius = 2.4f; o.Spotlights.Base = 0.035f; o.Spotlights.Flare = 0.05f;
                 o.Spotlights.Anchors = new[] { TowerAt[0] + Vector3.up * BankY, TowerAt[0] + Vector3.up * BankY, TowerAt[1] + Vector3.up * BankY, TowerAt[1] + Vector3.up * BankY };
@@ -401,8 +408,8 @@ namespace Bonanza
             });
             // Calmer blade noise and a touch of lift: the web's turf reads as bright, clean bands.
             var turf = _env.Ground?.Top ? _env.Ground.Top.sharedMaterial : null;
-            if (turf) { turf.SetFloat("_MapStrength", 0.55f); turf.SetFloat("_Lift", 0.06f); }
-            _env.AddBanners(new EnvBanners.Options { Count = 30, Radius = 13.5f, Y = 7.6f, Z = 3, Glow = 2.2f, Whiten = 0.12f, LineRadius = 0.018f, SizeJitter = 0.2f });
+            if (turf) { turf.SetFloat("_MapStrength", 0.62f); turf.SetFloat("_Lift", 0.06f); }   // the map carries the turf's breakup patches
+            _env.AddBanners(new EnvBanners.Options { Count = 24, Radius = 13.5f, Y = 7.6f, Z = 3, Glow = 2.2f, Whiten = 0.12f, LineRadius = 0.018f, SizeJitter = 0.2f, Span = Mathf.PI * 0.95f });   // ends kept out of the HUD corners
             _env.AddCrowd(new EnvCrowd.Options
             {
                 Style = EnvCrowd.FigureStyle.Figure, Stands = EnvCrowd.StandStyle.Bowl,
@@ -470,6 +477,7 @@ namespace Bonanza
             float dt = LookRig.VisualDt(Time.deltaTime);
             if (!_playing) Look.BeatPulse = 0;
             UpdateHitBalls(dt);
+            UpdateFinaleShow(dt);
             UpdateBat(dt);
             UpdateSet(dt, _round != null ? _round.BeatAt(_now) : 0);
             // "SIDE RETIRED" holds all three lamps, then the count starts over (web _outsClear).
@@ -545,7 +553,14 @@ namespace Bonanza
             {
                 go = Cast(MeshObject(PrimitiveType.Sphere, _ballMat));
                 go.transform.localScale = Vector3.one * 0.34f;   // web: radius 0.2
-                Look.Blob(go.transform, 0.2f, 0.5f);
+                // A thin dark outline (inverted hull) so the white ball separates from a pale sky, cream stands and chalk.
+                var hull = MeshObject(PrimitiveType.Sphere, _ballOutlineMat);
+                hull.name = "Outline";
+                hull.transform.SetParent(go.transform, false);
+                hull.transform.localScale = Vector3.one * 1.16f;
+                var hr = hull.GetComponent<MeshRenderer>();
+                hr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off; hr.receiveShadows = false;
+                Look.Blob(go.transform, 0.3f, 0.85f, 0, 0.6f);   // a firm shadow that stays readable at flight height
             }
             go.SetActive(true);
             return go;
@@ -558,7 +573,8 @@ namespace Bonanza
             if (_mouse && p.Scored) Debug.Log($"[LAUNCH] id={p.Id} eta={_round.Map.TimeAt(p.TargetBeat) - _now:F4}");
             var b = new Ball { Go = AcquireBall() };
             b.Go.transform.position = Muzzle;
-            b.Trail = Look.Fx.Trail(Hex(0xbfeaff), 0.075f);
+            b.Go.transform.localScale = Vector3.one * 0.34f;
+            b.Trail = Look.Fx.Trail(Hex(0x7fdcff) * 1.25f, 0.13f);   // a saturated cyan comet tail: the ball reads against sky and stands
             // Half-beat markers along the flight path: the ball is the metronome.
             SetPips(p);
             _pitchBalls[p] = b;
@@ -590,6 +606,7 @@ namespace Bonanza
                 var pos = Sample(p, System.Math.Min(u, 1.6));
                 if (u > 1) pos.y = Mathf.Max(0.16f, pos.y - (float)(u - 1) * 1.4f);
                 b.Go.transform.position = pos;
+                b.Go.transform.localScale = Vector3.one * (0.34f * (1 + 0.22f * Mathf.Clamp01((float)u)));   // swells a little on approach
                 b.Go.transform.localRotation = Quaternion.Euler((float)beat * 400f, 0, (float)beat * 250f);
                 b.Trail?.Set(pos);
                 int steps = Mathf.Min(PipMax, Mathf.Max(2, (int)System.Math.Round(p.Lead * 2)));
@@ -653,12 +670,18 @@ namespace Bonanza
             // off, and so is the FX layer's own flash (it washed the frame milky): the game shakes the camera itself.
             var o = VerdictOpts.Default;
             o.Dir = dirV; o.Combo = c.Combo; o.Scale = scale; o.GroundY = 0; o.Text = false; o.Stage = false; o.Rings = false;
+            o.MilestoneColor = Hex(0xffb347); o.MilestoneLift = 0.75f;   // gold waves; "xN" above the flash
             var fx = Look.Fx;
             fx.PlayVerdict(c.Verdict, Contact, o);
             fx.Impact(Contact, dirV, tierColor, big ? 24 : 12, 13, scale: scale);
             if (big && !c.IsDemo)
             {
                 fx.SpeedLines(Contact, tierColor, roomy ? 16 : 8, 3.0f);
+                // The home-run burst: ONE thick gold-orange shock ring out and gone in a quarter second, a hot
+                // starburst flare on the bat, and short rays all round (the cone above carries the aim).
+                fx.Ring(Contact, Hex(0xff8a1a), 0.25f, 0.25f * scale, 2.1f * scale, 0.55f, 0.12f, wobble: 0.002f, overlay: true);
+                fx.Flare(Contact, Hex(0xffc860), 0.8f * scale, 0.18f, 0.4f, 2.2f);
+                fx.Impact(Contact, Vector3.up, Hex(0xfff0c0), roomy ? 18 : 10, 17, 0.2f, 1f, scale * 0.8f);
                 // The grand slam's shockwave and its echo reach well below the bat: overlay rings the field can't slice flat.
                 if (p.Finale)
                 {
@@ -683,7 +706,7 @@ namespace Bonanza
                 float hs = Mathf.Min(Feel.HitstopMax * 1.6f, f.Hitstop * (big ? 1.5f : 1f) * (p.Finale ? 2.6f : 1f));
                 // The freeze ends well before the next unjudged note arrives, and is visual only.
                 Look.Hitstop(Feel.HitstopFor(hs, _round.Judge.Notes, _round.Map.TimeAt(p.TargetBeat)));
-                rig.PunchZoom(1 + (big ? 0.07f : 0.03f) * (p.Finale ? 2.4f : 1f));
+                rig.PunchZoom(1 + (big ? 0.1f : 0.03f) * (p.Finale ? 2.0f : 1f));   // a real FOV kick on a home run
             }
             _camPush = big ? 1 : 0.45f;
 
@@ -702,6 +725,7 @@ namespace Bonanza
                 rig.DoFlash(Feel.FinaleFlash, Hex(0xfff3cf));
                 rig.Shake(Feel.FinaleShake, new Vector3(-1, 0.5f, 0));
                 fx.Confetti(Contact + new Vector3(2, 2, 0), 140, null, 9, 1);
+                _finaleShow = 0;   // and the sky over the stands fills with fireworks and a slow confetti shower
             }
         }
 
@@ -751,6 +775,7 @@ namespace Bonanza
                         // Caught in the stands: a pop of confetti.
                         Look.Fx.Confetti(h.P + Vector3.up * 0.3f, 36, null, 5, 1);
                         Look.Fx.Burst(h.P, 10, h.Color, 4, life: 0.45f);
+                        if (_nightK > 0.5f) Firework(h.P);
                     }
                     h.Trail?.Release();
                     FreeBall(h.Go);
@@ -758,6 +783,44 @@ namespace Bonanza
                 }
             }
         }
+
+        /// Late innings: a home run that lands sets off a firework over the stands (web t70: the sky full of colour).
+        void Firework(Vector3 landing)
+        {
+            var fx = Look.Fx;
+            var at = new Vector3(landing.x * 0.6f + 2, 8.5f + (_fireworks % 3) * 0.7f, landing.z + 4);
+            var col = Hex(Feel.Party[_fireworks % Feel.Party.Length]);
+            _fireworks++;
+            fx.Burst(at, 60, col, 11f, 0.42f, 1.1f, -2.5f);
+            fx.Ring(at, col, 0.7f, 0.6f, 6.5f, 0.16f, 0.025f, 0.01f, 0.85f);
+            fx.Flare(at, col, 2.4f, 0.25f);
+            fx.Confetti(at, 60, null, 6.5f, 0.2f);
+        }
+        int _fireworks;
+
+        /// After the grand slam: fireworks over the stands every ~0.6 s and big confetti drifting down in the sky,
+        /// through the curtain call (web: the late frame full of colour).
+        void UpdateFinaleShow(float dt)
+        {
+            if (_finaleShow < 0) return;
+            float before = _finaleShow;
+            _finaleShow += dt;
+            for (int i = 0; i < FinaleShots.Length; i++)
+            {
+                float t = FinaleShots[i];
+                if (before >= t || _finaleShow < t) continue;
+                var at = new Vector3(-7 + (i * 5.3f) % 15, 8 + (i % 3) * 1.1f, 10 + (i % 2) * 4);
+                var col = Hex(Feel.Party[i % Feel.Party.Length]);
+                var fx = Look.Fx;
+                fx.Burst(at, 60, col, 11f, 0.42f, 1.1f, -2.5f);
+                fx.Ring(at, col, 0.7f, 0.6f, 6f, 0.16f, 0.025f, 0.01f, 0.85f);
+                fx.Flare(at, col, 2.4f, 0.25f);
+                fx.Confetti(at + Vector3.up * 2, 50, null, 3.5f, 0.6f, 0.5f, 3.2f);
+            }
+            if (_finaleShow > FinaleShots[FinaleShots.Length - 1] + 0.1f) _finaleShow = -1;
+        }
+        float _finaleShow = -1;
+        static readonly float[] FinaleShots = { 0.35f, 0.9f, 1.5f, 2.1f, 2.8f, 3.4f, 4.1f, 4.8f, 5.6f, 6.4f };
 
         /// The conducting input, once a frame before the round advances.
         void ConductStep(double now)

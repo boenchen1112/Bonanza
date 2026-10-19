@@ -3,12 +3,15 @@
 //   PITCH-O   the pitching machine with a face. Its wheels spin up a beat before it fires (the telegraph before the
 //             telegraph), it squints while armed, blinks and kicks back on the shot with a muzzle flash, and its
 //             eyes follow the ball.
-//   pips      half-beat markers laid along the pitch's own flight path: the arc IS the metronome. A pip flashes as
-//             the ball reaches it, then recedes to half size.
+//   pips      half-beat markers as flat diamonds on the turf under the pitch's flight path (the ball's shadow runs
+//             over them: the path IS the metronome), and a reticle ring on the ground at the plate for the strike zone.
+//             A pip flashes as the ball passes over it, then recedes to half size.
 //   infield   dirt cut-out, mound with a rubber, home plate, chalk foul lines and batter's boxes, a chain-link
 //             backstop (Bonanza/Net) that sways and bulges where a ball hits it.
 //   towers    light towers whose banks, flares, floodlight cones and turf pools come on with the night palette.
-//   stands    an ad-board fascia, a rail and aisles on the bowl (the env kit draws the bowl and the crowd).
+//   stands    an ad-board fascia, a rail and aisles on the bowl, seat-row bands, a facade lip, the padded track edge
+//             with LED segments (the env kit draws the bowl and the crowd).
+//   skyline   lit window grids, a sun-side wash and beacons built from the authored skyline's faces; a haze band.
 //   batter    a NEUTRAL stand-in (capsule + helmet) holding a real bat with a swing arc. The character work plugs in
 //             through BatterCue (below); nothing here is the main character.
 //
@@ -33,7 +36,8 @@ namespace Bonanza
         // ------------------------------------------------------------ machine state
         Transform _mHead, _mBrow, _muzzle;
         readonly Transform[] _mWheels = new Transform[2], _mEyes = new Transform[2], _mPupils = new Transform[2];
-        Material _muzzleMat;
+        Material _muzzleMat, _muzzleRingMat;
+        const float MachineRootY = 0.33f;
         float _wheelSpin, _wheelSpinT, _muzzleFlash, _recoil, _flinch;
         bool[] _armed;
 
@@ -42,16 +46,25 @@ namespace Bonanza
         MeshBatch _pips;
         readonly float[] _pipBase = new float[PipMax], _pipPop = new float[PipMax];
         readonly Vector3[] _pipPos = new Vector3[PipMax];
+        readonly Quaternion[] _pipRot = new Quaternion[PipMax];
+        Transform _reticle;
+        Material _reticleMat;
+        float _reticleOn, _reticleGoal, _reticlePop;
         int _pipCount;
         Pitch _pipOwner;
         static readonly Color PipCol = new Color(1f, 0.784f, 0.239f);
+        static readonly Color MuzzleRingCol = new Color(1f, 0.74f, 0.25f);
+        static readonly Color StandDay = new Color(0x54 / 255f, 0x74 / 255f, 0xad / 255f), StandNight = new Color(0.2f, 0.27f, 0.45f);
+        static readonly Color HazeDay = new Color(1f, 0.62f, 0.45f) * 0.16f, HazeNight = new Color(0.25f, 0.33f, 0.62f) * 0.05f;
+        static readonly Color LedDay = new Color(1f, 0.62f, 0.25f) * 0.55f, LedNight = new Color(1f, 0.7f, 0.35f) * 0.85f;
 
         // net, night, batter
         Material _netMat;
         float _netHit;
-        Material[] _flareMats, _poolMats, _blinkMats;
+        Material[] _flareMats, _poolMats, _blinkMats, _winMats;
+        int _skyWindowCount;
         Renderer[] _blinkers;
-        Material _glareMat;
+        Material _glareMat, _ledMat;
         float _nightK, _nightGoal;
         Transform _batter;
         float _batterHop, _batterSlump;
@@ -63,7 +76,10 @@ namespace Bonanza
             IdSwayTime = Shader.PropertyToID("_SwayTime"), IdHit = Shader.PropertyToID("_Hit"), IdSway = Shader.PropertyToID("_Sway");
 
         static readonly Vector3[] TowerAt = { W(-13, 0, 3.5f), W(-13, 0, -9.5f) };
-        const float BankY = 8.5f;
+        const float BankY = 8.5f, BankYRight = 10.5f;
+        static readonly Vector3[] TowerRight = { new Vector3(13.5f, 0, 17.5f) };
+        Material _hazeMat, _rowsMat;
+        Material[] _flareMatsR;
 
         // ------------------------------------------------------------ helpers
 
@@ -126,6 +142,14 @@ namespace Bonanza
             }
         }
 
+        const float MoundR = 1.95f, MoundH = 0.32f;
+        static float Smooth01(float k) => k * k * (3 - 2 * k);
+        /// Worn grass: the turf colour pulled toward a dry, sandy green (as a ratio over the dirt material).
+        static Color Worn(Color toGrass) => Color.Lerp(toGrass, new Color(0.78f, 0.82f, 0.62f), 0.5f);
+        /// The thin lighter lip on a dirt cut's edge.
+        static void Lip(MeshBuilder b, Vector3 centre, float r, float y, int seg) =>
+            FeatherRing(b, centre, r - 0.06f, r + 0.07f, y + 0.002f, new Color(1.35f, 1.3f, 1.2f), new Color(1.2f, 1.15f, 1.05f), seg);
+
         // ------------------------------------------------------------ build
 
         /// Infield, backstop, towers' lights, stands dressing. Called from BuildSet once the env exists.
@@ -141,11 +165,44 @@ namespace Bonanza
             var b = new MeshBuilder();
             var cut = PlatePos + new Vector3(-0.2f, 0, 0); cut.y = 0;
             b.Disc(2.55f, 56, Matrix4x4.Translate(cut + Vector3.up * 0.02f), Color.white, 2.2f);
-            FeatherRing(b, cut, 2.55f, 3.0f, 0.02f, Color.white, toGrass, 56);
+            // A crisp cut edge with a thin lighter lip, then worn, yellowed grass fading out into the turf.
+            Lip(b, cut, 2.55f, 0.021f, 56);
+            FeatherRing(b, cut, 2.62f, 3.5f, 0.02f, Worn(toGrass), toGrass, 56);
+            // Wear down the baselines: a scuffed strip beside each foul line for the first few metres from the plate.
+            foreach (var sgn in new[] { -1f, 1f })
+            {
+                var from = new Vector3(PlatePos.x - 0.25f, 0, PlatePos.z);
+                var dir = new Vector3(-Mathf.Cos(Mathf.PI / 4), 0, sgn * Mathf.Sin(Mathf.PI / 4));
+                var side = new Vector3(-dir.z, 0, dir.x);
+                int s0 = b.Count;
+                b.Surface(12, 2, (u, v) => (from + dir * (2.4f + u * 5.5f) + side * ((v - 0.5f) * 0.7f) + Vector3.up * 0.018f, Vector3.up), Matrix4x4.identity, Color.white, new Vector2(3, 0.3f));
+                for (int i = s0; i < b.Count; i++)
+                {
+                    var q = b.P[i] - from; float along = Vector3.Dot(q, dir), across = Mathf.Abs(Vector3.Dot(q, side));
+                    float k = Mathf.Clamp01((along - 2.4f) / 5.5f);
+                    float w = Mathf.Clamp01(across / 0.35f);
+                    b.C[i] = Color.Lerp(Worn(toGrass), toGrass, Mathf.Max(k * k, w));
+                }
+            }
             var mound = new Vector3(MachinePos.x + 0.3f, 0, MachinePos.z);
-            b.Shell(1.45f, 1.95f, 0.16f, 40, 0, Mathf.PI * 2, Matrix4x4.Translate(mound + new Vector3(0, 0.06f, 0)), Color.white, new Vector2(4, 0.2f));
-            b.Disc(1.45f, 40, Matrix4x4.Translate(mound + new Vector3(0, 0.14f, 0)), Color.white, 1.2f);
-            FeatherRing(b, mound, 1.9f, 2.35f, 0.012f, new Color(0.9f, 0.9f, 0.9f), toGrass, 40);
+            // A raised dome (flat-ish top for the cart) so PITCH-O stands ON a mound, darker where it is packed.
+            int moundStart = b.Count;
+            b.Surface(40, 10, (u, v) =>
+            {
+                float a = u * Mathf.PI * 2, r = (1 - v) * MoundR;
+                float h = MoundH * Smooth01(Mathf.InverseLerp(MoundR, 0.85f, r));
+                float dh = MoundH * 1.6f / MoundR;   // rough slope for the normal on the flank
+                var nrm = r > 0.85f && r < MoundR ? new Vector3(Mathf.Cos(a) * dh * 0.5f, 1, Mathf.Sin(a) * dh * 0.5f).normalized : Vector3.up;
+                return (new Vector3(Mathf.Cos(a) * r, h, Mathf.Sin(a) * r), nrm);
+            }, Matrix4x4.Translate(mound + Vector3.up * 0.015f), Color.white, new Vector2(4, 1.2f));
+            for (int i = moundStart; i < b.Count; i++)   // the flank a shade darker than the packed top: reads as a dome
+            {
+                float r = new Vector2(b.P[i].x - mound.x, b.P[i].z - mound.z).magnitude;
+                float k = Mathf.InverseLerp(0.85f, MoundR, r);
+                b.C[i] = Color.white * Mathf.Lerp(1.08f, 0.78f, k);
+            }
+            Lip(b, mound, MoundR, 0.016f, 40);
+            FeatherRing(b, mound, MoundR + 0.07f, MoundR + 0.75f, 0.012f, Worn(toGrass), toGrass, 40);
             EnvKit.Static(_env, "Infield", transform, b, dirtMat);
 
             // Chalk and the plate: one draw, a near-flat bright white (web MeshBasic 0xf6f1e4, below the bloom cut).
@@ -234,50 +291,313 @@ namespace Bonanza
                         Matrix4x4.Translate(new Vector3(0, crowdO.BowlY, crowdO.Center.z)), aisle, Vector2.one, inward: true);
                 }
                 EnvKit.Static(_env, "StandRail", transform, b, steel).receiveShadows = false;
+                BuildTrack(crowdO);
+                BuildStandsDetail(crowdO);
             }
 
             // Night lights: tower-head flares, turf pools under the floods (both on at zero from Load: prewarmed).
             _flareMats = new Material[TowerAt.Length];
             for (int i = 0; i < TowerAt.Length; i++)
-                _flareMats[i] = Glow("TowerFlare" + i, transform, TowerAt[i] + new Vector3(0.25f, BankY, 0), 4.2f, Hex(0xfff3d0), true, null, 2.6f);
+                _flareMats[i] = Glow("TowerFlare" + i, transform, TowerAt[i] + new Vector3(0.25f, BankY, 0), 3.2f, Hex(0xfff3d0), true, null, 2.6f);
             var flat = Quaternion.Euler(90, 0, 0);
             _poolMats = new[]
             {
-                Glow("PoolPlate", transform, new Vector3(PlatePos.x - 0.3f, 0.06f, PlatePos.z), 9f, Hex(0xfff0d6), false, flat, 0.5f),
-                Glow("PoolMound", transform, new Vector3(MachinePos.x + 0.3f, 0.2f, MachinePos.z), 6.5f, Hex(0xfff0d6), false, flat, 0.5f),
+                Glow("PoolPlate", transform, new Vector3(PlatePos.x - 0.3f, 0.06f, PlatePos.z), 11f, Hex(0xfff0d6), false, flat, 0.5f),
+                Glow("PoolMound", transform, new Vector3(MachinePos.x + 0.3f, 0.36f, MachinePos.z), 8f, Hex(0xfff0d6), false, flat, 0.5f),
             };
             // The low sun behind the skyline (day): a wide soft glare the bloom carries into the arches.
             _glareMat = Glow("SunGlare", transform, new Vector3(30, 7, 92), 70, Hex(0xffc98a), true, null, 1.2f);
-            BuildBlinkers();
+            BuildSkylineDressing();
+            BuildAtmosphere();
         }
 
-        /// Red aviation lights on the tallest skyline roofs, blinking at night (two phases, one material each).
-        void BuildBlinkers()
+        /// The bowl gets rows: a dark riser band and a pale seat nosing under every row of fans, lighter step nosings
+        /// up each aisle, a facade with a roof lip along the top, and a tone that falls off from the near-left stand
+        /// (brightest, most saturated) to the far bowl. Overlays just inside the bowl's surface plus a recolour of the
+        /// env kit's bowl mesh: EnvCrowd itself is unchanged.
+        void BuildStandsDetail(EnvCrowd.Options o)
         {
+            float a0 = -o.BowlArc / 2, arc = o.BowlArc, cz = o.Center.z;
+            float H = o.BowlHeight, y0 = o.BowlY - H / 2;
+            float YAt(float r) => y0 + (r - o.BowlBottom) / (o.BowlTop - o.BowlBottom) * H;
+            float Tone(float a) { float k = Mathf.Clamp01((a - a0) / arc); return Mathf.Lerp(1.12f, 0.8f, Smooth01(Mathf.Clamp01(k * 1.6f))); }
+
+            // recolour the kit's bowl by angle (the wall below keeps its own shade, scaled the same way)
+            var stands = _env.Crowd.Root.transform.Find("Stands");
+            var mf = stands ? stands.GetComponent<MeshFilter>() : null;
+            if (mf && mf.sharedMesh && mf.sharedMesh.isReadable)
+            {
+                var m = mf.sharedMesh; var vs = m.vertices; var cs = m.colors;
+                if (cs.Length == vs.Length)
+                {
+                    for (int i = 0; i < vs.Length; i++)
+                    {
+                        float a = Mathf.Atan2(vs[i].x, vs[i].z - cz);
+                        float t = Tone(a);
+                        cs[i] = new Color(cs[i].r * t, cs[i].g * t, cs[i].b * Mathf.Lerp(1, t, 0.7f), 1);
+                    }
+                    m.colors = cs;
+                }
+            }
+
+            var mat = _rowsMat = EnvKit.Surface(_env, Hex(0x5474ad), null, null, rim: 0.35f, pulse: 0.04f, bands: 3, twoSided: true);
+            var b = new MeshBuilder();
+            void Band(float r0, float r1, float inset, float c0, float aA, float aArc, int seg)
+            {
+                int s0 = b.Count;
+                b.Shell(r1 - inset, r0 - inset, YAt(r1) - YAt(r0), seg, aA, aArc, Matrix4x4.Translate(new Vector3(0, (YAt(r0) + YAt(r1)) / 2, cz)), Color.white, Vector2.one, inward: true);
+                for (int i = s0; i < b.Count; i++)
+                {
+                    float a = Mathf.Atan2(b.P[i].x, b.P[i].z - cz), t = Tone(a) * c0;
+                    b.C[i] = new Color(t, t, t * 1.04f, 1);
+                }
+            }
+            for (int k = 0; ; k++)
+            {
+                float r = o.Radius + k * o.RowDepth;
+                if (r > o.BowlTop - 0.3f) break;
+                Band(r - 0.55f, r - 0.22f, 0.05f, 0.6f, a0, arc, 56);    // riser shadow
+                Band(r - 0.22f, r - 0.12f, 0.06f, 1.45f, a0, arc, 56);   // seat nosing
+                for (int i = 1; i < 10; i++)                             // aisle step nosings
+                {
+                    float a = a0 + arc * i / 10f;
+                    for (int st = 0; st < 2; st++)
+                    {
+                        float rs = r - 0.55f + st * 0.6f;
+                        Band(rs, rs + 0.07f, 0.07f, 1.7f, a - 0.012f, 0.024f, 1);
+                    }
+                }
+            }
+            // facade along the top of the bowl, a pale lip on it
+            float topY = YAt(o.BowlTop);
+            int f0 = b.Count;
+            b.Shell(o.BowlTop + 0.05f, o.BowlTop + 0.05f, 1.0f, 56, a0, arc, Matrix4x4.Translate(new Vector3(0, topY + 0.4f, cz)), Color.white, Vector2.one, inward: true);
+            for (int i = f0; i < b.Count; i++) { float t = Tone(Mathf.Atan2(b.P[i].x, b.P[i].z - cz)) * 0.42f; b.C[i] = new Color(t, t, t * 1.1f, 1); }
+            var lip = new Vector3[57];
+            for (int i = 0; i < lip.Length; i++)
+            {
+                float a = a0 + arc * i / (lip.Length - 1);
+                lip[i] = new Vector3(Mathf.Sin(a) * (o.BowlTop - 0.05f), topY + 0.92f, cz + Mathf.Cos(a) * (o.BowlTop - 0.05f));
+            }
+            b.Tube(lip, 0.11f, 6, Matrix4x4.identity, new Color(1.7f, 1.7f, 1.75f));
+            var r0r = EnvKit.Static(_env, "StandRows", transform, b, mat);
+            r0r.receiveShadows = false;
+        }
+
+        /// The warning track's edge (replaces the env kit's full-circle glow ring): a padded navy bumper at the foot of
+        /// the wall with a run of warm LED segments in it, and a padded cap with a thin warm trim on top of the wall.
+        /// Both stop behind the backstop net instead of running on round the field.
+        void BuildTrack(EnvCrowd.Options o)
+        {
+            const float A1 = 55 * Mathf.Deg2Rad;   // the right end, hidden behind the net
+            float a0 = -o.BowlArc / 2, arc = A1 - a0;
+            float rWall = o.WallRadius - 0.06f, wallTop = o.WallY + o.WallHeight / 2;
+            var cz = o.Center.z;
+            Vector3 At(float a, float r, float y) => new Vector3(Mathf.Sin(a) * r, y, cz + Mathf.Cos(a) * r);
+
+            var pad = EnvKit.Surface(_env, Hex(0x1d2a5c), null, null, rim: 0.7f, pulse: 0.05f, bands: 3);
+            var b = new MeshBuilder();
+            const int N = 64;
+            var foot = new Vector3[N + 1]; var cap = new Vector3[N + 1];
+            for (int i = 0; i <= N; i++)
+            {
+                float a = a0 + arc * i / N;
+                foot[i] = At(a, rWall - 0.16f, 0.16f);
+                cap[i] = At(a, rWall - 0.04f, wallTop + 0.47f);
+            }
+            b.Tube(foot, 0.17f, 8, Matrix4x4.identity, Color.white);
+            b.Tube(cap, 0.07f, 6, Matrix4x4.identity, new Color(0.8f, 0.82f, 0.9f));
+            EnvKit.Static(_env, "TrackPad", transform, b, pad).receiveShadows = false;
+
+            // LED segments: short warm bars on the bumper's face, gaps between them, below the bloom threshold.
+            _ledMat = EnvKit.Surface(_env, Color.white, null, null, rim: 0f, pulse: 0.35f, lift: 1.1f, bands: 1);
+            _ledMat.SetFloat("_ShadowRecv", 0);
+            b = new MeshBuilder();
+            float len = arc * (rWall - 0.33f);
+            int segs = Mathf.RoundToInt(len / 0.62f);
+            for (int i = 0; i < segs; i++)
+            {
+                float a = a0 + arc * (i + 0.5f) / segs;
+                var p = At(a, rWall - 0.33f, 0.17f);
+                var inward = (new Vector3(0, 0.17f, cz) - p); inward.y = 0;
+                b.Box(Matrix4x4.TRS(p, Quaternion.LookRotation(-inward.normalized), new Vector3(0.42f, 0.07f, 0.02f)), Color.white);
+            }
+            // the cap's trim: a thin warm line just under the padded cap
+            var trim = new Vector3[N + 1];
+            for (int i = 0; i <= N; i++) trim[i] = At(a0 + arc * i / N, rWall - 0.11f, wallTop + 0.38f);
+            b.Tube(trim, 0.018f, 4, Matrix4x4.identity, new Color(0.7f, 0.7f, 0.7f));
+            EnvKit.Static(_env, "TrackLeds", transform, b, _ledMat).receiveShadows = false;
+        }
+
+        /// A warm additive copy of one skyline triangle (the sun wash): `edge` brightens it toward its right edge and top.
+        static void AddWash(MeshBuilder w, Vector3[] P, int a, int b, int c, Vector3 n, float gain, bool edge)
+        {
+            float xmin = Mathf.Min(P[a].x, Mathf.Min(P[b].x, P[c].x)), xmax = Mathf.Max(P[a].x, Mathf.Max(P[b].x, P[c].x));
+            int o = w.Count;
+            foreach (int k in new[] { a, b, c })
+            {
+                float hk = Mathf.Clamp01(P[k].y / 27f);
+                float ek = edge ? Mathf.InverseLerp(xmin, xmax + 0.01f, P[k].x) : 1;
+                w.P.Add(P[k] + n * 0.03f); w.N.Add(n); w.UV.Add(Vector2.zero);
+                float g = gain * (0.12f + 0.88f * ek * ek) * (0.35f + 0.65f * hk);
+                w.C.Add(new Color(1f, 0.55f, 0.28f) * g);
+            }
+            w.T.Add(o); w.T.Add(o + 1); w.T.Add(o + 2);
+        }
+
+        /// Air between the bowl and the city: a wide, flat additive haze band low over the far stands (sky-tinted,
+        /// warm at dusk, cool at night), so the skyline sits back. And the right-hand light towers behind the bowl,
+        /// so the night has lit floodlight heads on both sides.
+        void BuildAtmosphere()
+        {
+            var hz = _env.Mat(EnvKit.GlowMat);
+            hz.SetColor(IdColor, Color.white); hz.SetFloat(IdIntensity, 0); hz.SetFloat("_Billboard", 0); hz.SetFloat("_Core", 0.9f);
+            var r = EnvKit.Renderer("HazeBand", transform, GlowQuad(), hz);
+            r.receiveShadows = false;
+            r.transform.localPosition = new Vector3(0, 5.2f, 27);
+            r.transform.localScale = new Vector3(120, 13, 1);
+            _hazeMat = hz;
+
+            var towerMat = EnvKit.Surface(_env, Hex(0x262d3f), null, null, rim: 0.6f, pulse: 0.04f);
+            var shafts = new MeshBuilder(); var banks = new MeshBuilder();
+            foreach (var at in TowerRight)
+            {
+                shafts.Shell(0.18f, 0.32f, BankYRight, 8, 0, Mathf.PI * 2, Matrix4x4.Translate(at + new Vector3(0, BankYRight / 2, 0)), Color.white, Vector2.one);
+                var face = Quaternion.LookRotation((new Vector3(PlatePos.x, 0, PlatePos.z) - at).normalized);
+                banks.Box(Matrix4x4.TRS(at + new Vector3(0, BankYRight, 0), face, new Vector3(1.7f, 1.0f, 0.28f)), Color.white);
+                shafts.Box(Matrix4x4.TRS(at + new Vector3(0, BankYRight - 0.62f, 0), face, new Vector3(1.9f, 0.08f, 0.5f)), Color.white);
+            }
+            EnvKit.Static(_env, "TowerShaftsR", transform, shafts, towerMat);
+            EnvKit.Static(_env, "TowerBanksR", transform, banks, _bankMat);
+            _flareMatsR = new Material[TowerRight.Length];
+            for (int i = 0; i < TowerRight.Length; i++)
+                _flareMatsR[i] = Glow("TowerFlareR" + i, transform, TowerRight[i] + new Vector3(0, BankYRight, -0.3f), 3.2f, Hex(0xfff3d0), true, null, 2.8f);
+        }
+
+        /// The authored skyline's dressing, built from its own faces at load:
+        ///   windows   grids of lit panes on every camera-facing facade, in two additive draws: a sparse set that is
+        ///             on at dusk, and the rest that fills in, warm and dense, at night;
+        ///   sun wash  a warm additive copy of the facades that face the low sun (+x) and the roofs: a rim light at
+        ///             dusk that goes out with the sun;
+        ///   beacons   three red aviation lights on the tallest roofs, blinking day and night (brighter at night).
+        void BuildSkylineDressing()
+        {
+            _winMats = new Material[3];
+            for (int i = 0; i < 3; i++)
+            {
+                var m = _winMats[i] = _env.Mat(EnvKit.GlowAddMat);
+                m.SetColor(IdColor, Color.white); m.SetFloat(IdIntensity, 0); m.SetFloat("_FogMul", 0.3f);
+            }
             _blinkMats = new[] { _env.Mat(EnvKit.GlowMat), _env.Mat(EnvKit.GlowMat) };
             foreach (var m in _blinkMats) { m.SetColor(IdColor, Hex(0xff3b30)); m.SetFloat(IdIntensity, 0); m.SetFloat("_Billboard", 1); m.SetFloat("_Core", 3); }
-            var verts = EnvBytesMesh.Positions("sk-skyline");
             var sky = _env.Backdrop?.Root ? _env.Backdrop.Root.transform.Find("Skyline") : null;
-            if (verts == null || sky == null) { _blinkers = new Renderer[0]; return; }
-            const int Bins = 9;
-            var best = new Vector3[Bins];
-            for (int i = 0; i < Bins; i++) best[i] = new Vector3(0, float.MinValue, 0);
-            float minX = float.MaxValue, maxX = float.MinValue;
-            foreach (var v0 in verts) { minX = Mathf.Min(minX, v0.x); maxX = Mathf.Max(maxX, v0.x); }
-            foreach (var v0 in verts)
+            if (sky == null || !EnvBytesMesh.Read("sk-skyline", out var P, out var N, out var I)) { _blinkers = new Renderer[0]; return; }
+
+            // Facades that face the camera (the towers stand at angles, so many face it diagonally), grouped by plane;
+            // panes are laid out on each plane in its own (across, up) coordinates.
+            var planes = new System.Collections.Generic.Dictionary<long, System.Collections.Generic.List<int>>();
+            var sparse = new MeshBuilder(); var dense = new MeshBuilder(); var wash = new MeshBuilder();
+            for (int t = 0; t < I.Length; t += 3)
             {
-                var v = sky.TransformPoint(v0);
-                int bin = Mathf.Clamp((int)((v0.x - minX) / Mathf.Max(0.01f, maxX - minX) * Bins), 0, Bins - 1);
-                if (v.y > best[bin].y) best[bin] = v;
+                int a = I[t], b = I[t + 1], c = I[t + 2];
+                var nn = (N[a] + N[b] + N[c]).normalized;
+                if (Mathf.Abs(nn.y) > 0.3f) { if (nn.y > 0.9f) AddWash(wash, P, a, b, c, nn, 0.3f, false); continue; }
+                if (nn.z < -0.35f)
+                {
+                    long key = ((long)Mathf.RoundToInt(nn.x * 50) * 1000 + Mathf.RoundToInt(nn.z * 50)) * 1000003L + Mathf.RoundToInt(Vector3.Dot(nn, P[a]) * 20);
+                    if (!planes.TryGetValue(key, out var l)) planes[key] = l = new System.Collections.Generic.List<int>();
+                    l.Add(t);
+                    // the faces turned toward the low sun's side (+x): a warm rim wash, strongest up top and on the right edge
+                    if (nn.x > 0.5f) AddWash(wash, P, a, b, c, nn, 1f, true);
+                }
+            }
+            var rng = new System.Random(0x5c1e);
+            const float CW = 1.15f, RH = 1.35f, PW = 0.62f, PH = 0.8f, M = 0.25f;
+            Color warm = new Color(1f, 0.6f, 0.26f), cool = new Color(0.55f, 0.75f, 1f);
+            foreach (var kv in planes)
+            {
+                var tris = kv.Value;
+                var n0 = (N[I[tris[0]]] + N[I[tris[0] + 1]] + N[I[tris[0] + 2]]).normalized; n0.y = 0; n0.Normalize();
+                var right = Vector3.Cross(Vector3.up, n0).normalized;   // across the facade
+                var o0 = P[I[tris[0]]];
+                float S(Vector3 q) => Vector3.Dot(q - o0, right);
+                float smin = float.MaxValue, smax = float.MinValue, ymin = float.MaxValue, ymax = float.MinValue;
+                foreach (int t in tris) for (int k = 0; k < 3; k++) { var q = P[I[t + k]]; smin = Mathf.Min(smin, S(q)); smax = Mathf.Max(smax, S(q)); ymin = Mathf.Min(ymin, q.y); ymax = Mathf.Max(ymax, q.y); }
+                bool On(float sx, float sy)
+                {
+                    foreach (int t in tris)
+                    {
+                        Vector2 A = new Vector2(S(P[I[t]]), P[I[t]].y), B = new Vector2(S(P[I[t + 1]]), P[I[t + 1]].y), C = new Vector2(S(P[I[t + 2]]), P[I[t + 2]].y);
+                        float d1 = (sx - B.x) * (A.y - B.y) - (A.x - B.x) * (sy - B.y);
+                        float d2 = (sx - C.x) * (B.y - C.y) - (B.x - C.x) * (sy - C.y);
+                        float d3 = (sx - A.x) * (C.y - A.y) - (C.x - A.x) * (sy - A.y);
+                        if (!((d1 < 0 || d2 < 0 || d3 < 0) && (d1 > 0 || d2 > 0 || d3 > 0))) return true;
+                    }
+                    return false;
+                }
+                int cols = Mathf.FloorToInt((smax - smin - 2 * M) / CW);
+                if (cols < 1) continue;
+                float s0 = (smin + smax) / 2 - (cols - 1) * CW / 2;
+                float density = 0.45f + (float)rng.NextDouble() * 0.35f;
+                bool coolBlock = rng.NextDouble() < 0.25;
+                // rows: scan up the facade and take a row wherever a pane fits (the authored towers have recessed
+                // floor bands, so a fixed grid would miss most floors)
+                const float MY = 0.1f;
+                bool Fits(float sx, float y) =>
+                    On(sx - PW / 2 - M * 0.5f, y - PH / 2 - MY) && On(sx + PW / 2 + M * 0.5f, y - PH / 2 - MY) &&
+                    On(sx - PW / 2 - M * 0.5f, y + PH / 2 + MY) && On(sx + PW / 2 + M * 0.5f, y + PH / 2 + MY);
+                for (float y = Mathf.Max(ymin, 0) + 1.6f; y < ymax - 0.5f; )
+                {
+                    bool row = false;
+                    for (int ci = 0; ci < cols; ci++)
+                    {
+                        float sx = s0 + ci * CW;
+                        if (!Fits(sx, y)) continue;
+                        row = true;
+                        double r = rng.NextDouble();
+                        if (r > density) continue;
+                        var mb = r < density * 0.4 ? sparse : dense;
+                        float k = 0.7f + (float)rng.NextDouble() * 0.5f;
+                        var col = ((coolBlock ^ rng.NextDouble() < 0.12) ? cool : warm) * k;
+                        var c0 = o0 + right * sx + Vector3.up * (y - o0.y) + n0 * 0.04f;
+                        var hx = right * (PW / 2); var hy = Vector3.up * (PH / 2);
+                        int o = mb.Count;
+                        mb.P.Add(c0 - hx - hy); mb.P.Add(c0 - hx + hy); mb.P.Add(c0 + hx + hy); mb.P.Add(c0 + hx - hy);
+                        for (int v = 0; v < 4; v++) { mb.N.Add(n0); mb.C.Add(col); mb.UV.Add(Vector2.zero); }
+                        mb.T.Add(o); mb.T.Add(o + 1); mb.T.Add(o + 2); mb.T.Add(o); mb.T.Add(o + 2); mb.T.Add(o + 3);
+                    }
+                    y += row ? RH : 0.2f;
+                }
+            }
+            var builders = new[] { sparse, dense, wash };
+            string[] names = { "SkyWindowsDusk", "SkyWindowsNight", "SkySunWash" };
+            for (int i = 0; i < 3; i++)
+                if (builders[i].Count > 0)
+                {
+                    var r = EnvKit.Static(_env, names[i], sky, builders[i], _winMats[i]);
+                    r.receiveShadows = false;
+                }
+            _skyWindowCount = sparse.Count / 4 + dense.Count / 4;
+
+            // beacons: the three tallest roofs, far enough apart
+            var tops = new System.Collections.Generic.List<Vector3>();
+            var order = new System.Collections.Generic.List<Vector3>(P);
+            order.Sort((u, v) => v.y.CompareTo(u.y));
+            foreach (var v in order)
+            {
+                bool near = false;
+                foreach (var t0 in tops) if (Mathf.Abs(t0.x - v.x) < 14) { near = true; break; }
+                if (near) continue;
+                tops.Add(v);
+                if (tops.Count == 3) break;
             }
             var list = new System.Collections.Generic.List<Renderer>();
-            for (int i = 0; i < Bins; i++)
+            for (int i = 0; i < tops.Count; i++)
             {
-                if (best[i].y < 6) continue;
-                var r = EnvKit.Renderer("Blinker" + i, transform, GlowQuad(), _blinkMats[i % 2]);
+                var r = EnvKit.Renderer("Beacon" + i, transform, GlowQuad(), _blinkMats[i % 2]);
                 r.receiveShadows = false;
-                r.transform.position = best[i] + Vector3.up * 0.4f;
-                r.transform.localScale = Vector3.one * 2.4f;
+                r.transform.position = sky.TransformPoint(tops[i]) + Vector3.up * 0.4f;
+                r.transform.localScale = Vector3.one * 2.2f;
                 list.Add(r);
             }
             _blinkers = list.ToArray();
@@ -290,9 +610,10 @@ namespace Bonanza
         {
             var root = new GameObject("PitchO").transform;
             root.SetParent(transform, false);
-            root.localPosition = new Vector3(MachinePos.x, 0.14f, MachinePos.z);   // on the mound top
+            root.localPosition = new Vector3(MachinePos.x, MachineRootY, MachinePos.z);   // on the mound's dome
             Color shell = Lin(0xe8563f), dark = Lin(0x2b2350), trim = Lin(0xd8c7a6), cream = Lin(0xfffaf0), yellow = Lin(0xffd93d), hub = Lin(0x8a8fa8);
-            var mat = EnvKit.Surface(_env, Color.white, null, null, rim: 1.0f, pulse: 0.1f, bands: 3);
+            Color hood = Lin(0x6a52c0);   // the barrel: the web's purple hood, lighter than the cart so it reads on the dark stands
+            var mat = EnvKit.Surface(_env, Color.white, null, null, rim: 1.5f, pulse: 0.1f, bands: 3);
 
             // Cart: a squat dark box on four tyres, with a cream bumper strip.
             var b = new MeshBuilder();
@@ -309,7 +630,7 @@ namespace Bonanza
 
             _mHead = new GameObject("PitchO.Head").transform;
             _mHead.SetParent(root, false);
-            _mHead.localPosition = new Vector3(0, MachinePos.y - 0.14f, 0);
+            _mHead.localPosition = new Vector3(0, MachinePos.y - MachineRootY, 0);
             b = new MeshBuilder();
             var alongX = Quaternion.Euler(0, 0, 90);
             b.Capsule(0.52f, 0.55f, 6, 18, Matrix4x4.TRS(Vector3.zero, alongX, Vector3.one), shell);
@@ -318,9 +639,10 @@ namespace Bonanza
             var aim = new Vector3(Mathf.Cos(0.3f), Mathf.Sin(0.3f), 0);
             var bq = Quaternion.FromToRotation(Vector3.up, aim);
             var bcen = new Vector3(0.68f, 0.24f, 0);
-            b.Shell(0.34f, 0.24f, 0.8f, 18, 0, Mathf.PI * 2, Matrix4x4.TRS(bcen, bq, Vector3.one), dark, Vector2.one);
+            b.Shell(0.34f, 0.24f, 0.8f, 18, 0, Mathf.PI * 2, Matrix4x4.TRS(bcen, bq, Vector3.one), hood, Vector2.one);
             b.Shell(0.32f, 0.22f, 0.8f, 18, 0, Mathf.PI * 2, Matrix4x4.TRS(bcen, bq, Vector3.one), Lin(0x120c22), Vector2.one, inward: true);
-            b.Torus(0.33f, 0.045f, 6, 22, Mathf.PI * 2, Matrix4x4.TRS(bcen + aim * 0.4f, Quaternion.FromToRotation(Vector3.forward, aim), Vector3.one), trim);
+            // a pale band round the barrel's waist: a spec-like highlight line on the purple
+            b.Shell(0.315f, 0.30f, 0.07f, 18, 0, Mathf.PI * 2, Matrix4x4.TRS(bcen - aim * 0.12f, bq, Vector3.one), Lin(0xb8a8ff), Vector2.one);
             // Hopper (the chute) with spare balls waiting in it.
             b.Shell(0.42f, 0.2f, 0.5f, 16, 0, Mathf.PI * 2, Matrix4x4.Translate(new Vector3(-0.2f, 0.72f, 0)), trim, Vector2.one);
             b.Shell(0.40f, 0.18f, 0.5f, 16, 0, Mathf.PI * 2, Matrix4x4.Translate(new Vector3(-0.2f, 0.72f, 0)), Lin(0x6b5d4a), Vector2.one, inward: true);
@@ -330,6 +652,13 @@ namespace Bonanza
             b.Tube(new[] { new Vector3(-0.62f, 0.3f, 0), new Vector3(-0.78f, 0.82f, 0.05f) }, 0.02f, 5, Matrix4x4.identity, dark);
             b.Sphere(0.06f, 8, 6, Matrix4x4.Translate(new Vector3(-0.78f, 0.86f, 0.05f)), yellow, Vector3.one);
             Part("PitchO.Body", _mHead, b, mat, Vector3.zero, cast: true);
+
+            // The muzzle ring: a lit lip on the barrel's mouth that warms as the wheels spin up and flares on the shot.
+            b = new MeshBuilder();
+            b.Torus(0.33f, 0.05f, 6, 22, Mathf.PI * 2, Matrix4x4.TRS(bcen + aim * 0.4f, Quaternion.FromToRotation(Vector3.forward, aim), Vector3.one), Color.white);
+            _muzzleRingMat = EnvKit.Surface(_env, Color.white, null, null, rim: 0.5f, pulse: 0.3f, lift: 1.2f, bands: 1);
+            _muzzleRingMat.SetFloat("_ShadowRecv", 0);
+            Part("PitchO.MuzzleRing", _mHead, b, _muzzleRingMat, Vector3.zero).receiveShadows = false;
 
             // Wheels: yellow rings with dark spokes, so the spin-up reads (a plain torus spinning looks still).
             b = new MeshBuilder();
@@ -375,7 +704,7 @@ namespace Bonanza
             _muzzleMat = Glow("PitchO.Muzzle", _mHead, new Vector3(1.06f, 0.36f, -0.05f), 1.5f, Hex(0xfff2c0), true);
             _muzzle = _mHead.Find("PitchO.Muzzle");
 
-            Look.Blob(root, 1.15f, 0.5f, groundY: 0.16f, heightOffset: 0.3f);
+            Look.Blob(root, 1.15f, 0.5f, groundY: MachineRootY + 0.02f, heightOffset: 0);
         }
 
         /// The stand-in batter (neutral capsule + batting helmet) and a real bat: tapered barrel, knob, tip.
@@ -411,15 +740,39 @@ namespace Bonanza
             PoseBat(1);
         }
 
+        /// Beat pips as flat diamonds on the turf under the flight path (the ball's shadow runs over them), and the
+        /// strike zone as a reticle ring on the ground at the plate: nothing round floats in the air but the ball.
         void BuildPips()
         {
             var tpl = new MeshBuilder();
-            tpl.Sphere(0.09f, 16, 12, Matrix4x4.identity, Color.white, Vector3.one);
-            var m = EnvKit.Surface(_env, Color.white, null, null, rim: 0.4f, pulse: 0.2f, lift: 2.2f, bands: 1);
+            // A diamond along +x, bright centre to a deeper edge (four triangles round the centre vertex).
+            Vector3[] rim = { new Vector3(0.5f, 0, 0), new Vector3(0, 0, 0.3f), new Vector3(-0.5f, 0, 0), new Vector3(0, 0, -0.3f) };
+            int c0 = tpl.Count;
+            tpl.P.Add(Vector3.zero); tpl.N.Add(Vector3.up); tpl.C.Add(Color.white); tpl.UV.Add(Vector2.zero);
+            foreach (var v in rim) { tpl.P.Add(v * 0.7f); tpl.N.Add(Vector3.up); tpl.C.Add(new Color(0.5f, 0.42f, 0.3f)); tpl.UV.Add(Vector2.zero); }
+            for (int k = 0; k < 4; k++) tpl.Tri(c0, c0 + 1 + (k + 1) % 4, c0 + 1 + k);
+            var m = EnvKit.Surface(_env, Color.white, null, null, rim: 0f, pulse: 0.2f, lift: 1.6f, bands: 1);
+            m.SetFloat("_ShadowRecv", 0);
             _pips = new MeshBatch("Pips", transform, tpl, PipMax, m);
             _pips.Renderer.receiveShadows = false;
             for (int i = 0; i < PipMax; i++) _pips.Matrix[i] = Matrix4x4.Scale(Vector3.zero);
             _pips.Flush();
+
+            // Reticle: a flat ring with four ticks pointing in, lying on the ground under the contact point.
+            var b = new MeshBuilder();
+            b.Torus(0.5f, 0.035f, 4, 40, Mathf.PI * 2, Matrix4x4.Rotate(Quaternion.Euler(90, 0, 0)), Color.white);
+            for (int k = 0; k < 4; k++)
+            {
+                float a = k * Mathf.PI / 2 + Mathf.PI / 4;
+                var at = new Vector3(Mathf.Cos(a), 0, Mathf.Sin(a)) * 0.5f;
+                b.FloorQuad(0.05f, 0.22f, Matrix4x4.TRS(at * 0.86f, Quaternion.LookRotation(at.normalized), Vector3.one), Color.white);
+            }
+            _reticleMat = EnvKit.Surface(_env, Color.white, null, null, rim: 0f, pulse: 0.1f, lift: 1.4f, bands: 1);
+            _reticleMat.SetFloat("_ShadowRecv", 0);
+            _reticleMat.SetColor("_BaseColor", Color.black);
+            var r = Part("StrikeReticle", transform, b, _reticleMat, new Vector3(Contact.x, 0.05f, Contact.z));
+            r.receiveShadows = false;
+            _reticle = r.transform;
         }
 
         // ------------------------------------------------------------ machine and pips (web armMachine / fireMachine / setPips)
@@ -459,20 +812,26 @@ namespace Bonanza
             int steps = Mathf.Min(PipMax, Mathf.Max(2, (int)System.Math.Round(p.Lead * 2)));
             for (int i = 0; i < PipMax; i++)
             {
-                if (i >= steps) { _pipBase[i] = 0; continue; }
+                // The last step lands on the plate: the reticle marks it, not a pip.
+                if (i >= steps - 1) { _pipBase[i] = 0; continue; }
                 double u = (i + 1) / (double)steps;
                 double off = u * p.Lead;
                 bool whole = System.Math.Abs(off - System.Math.Round(off)) < 0.08;
-                _pipPos[i] = Sample(p, u);
-                _pipBase[i] = whole ? 2.0f : 1.35f;   // big enough to read as the beat across the room; whole beats bigger
+                var at = Sample(p, u);
+                var ahead = Sample(p, u + 0.02) - at; ahead.y = 0;
+                _pipPos[i] = new Vector3(at.x, 0.035f, at.z);
+                _pipRot[i] = Quaternion.LookRotation(ahead.sqrMagnitude > 1e-6f ? ahead.normalized : Vector3.right) * Quaternion.Euler(0, -90, 0);
+                _pipBase[i] = whole ? 1.35f : 0.9f;   // whole beats bigger
                 _pipPop[i] = 0;
             }
             _pipCount = steps;
+            _reticleGoal = 1;
         }
 
         void PopPip(int i, Pitch p)
         {
             if (p != _pipOwner || i < 0 || i >= _pipCount) return;
+            if (i == _pipCount - 1) { _reticlePop = 1; return; }
             _pipPop[i] = 1; _pipBase[i] *= 0.5f;   // flash, then recede: passed markers do not hang as glowing discs
         }
 
@@ -480,6 +839,7 @@ namespace Bonanza
         {
             if (p != _pipOwner) return;
             _pipOwner = null;
+            _reticleGoal = 0;
             if (_pipCount == 0) return;
             _pipCount = 0;
             for (int i = 0; i < PipMax; i++) _pips.Matrix[i] = Matrix4x4.Scale(Vector3.zero);
@@ -513,13 +873,18 @@ namespace Bonanza
             _muzzleFlash = Damp(_muzzleFlash, 0, 9, dt);
             _recoil = Damp(_recoil, 0, 7, dt);
             _flinch = Damp(_flinch, 0, 4, dt);
-            float bob = _playing ? Mathf.Sin((float)beat * Mathf.PI) * 0.022f : 0;
-            float kick = _recoil * (calm ? 0.04f : 0.14f);
-            _mHead.localPosition = new Vector3(-kick, MachinePos.y - 0.14f + _recoil * 0.03f, 0);
-            _mHead.localRotation = Quaternion.Euler(0, _flinch * 10, (bob + _recoil * 0.12f - _flinch * 0.1f) * Mathf.Rad2Deg);
-            float sq = 1 + _recoil * 0.06f;
+            // idle: a nod on the beat and a little hop off the downbeat (a toy that keeps time)
+            float bob = _playing && !calm ? Mathf.Sin((float)beat * Mathf.PI) * 0.05f : 0;
+            float hopY = _playing && !calm ? Mathf.Abs(Mathf.Sin((float)beat * Mathf.PI)) * 0.045f : 0;
+            float kick = _recoil * (calm ? 0.04f : 0.18f);
+            _mHead.localPosition = new Vector3(-kick, MachinePos.y - MachineRootY + _recoil * 0.03f + hopY, 0);
+            _mHead.localRotation = Quaternion.Euler(0, _flinch * 10, (bob + _recoil * 0.14f - _flinch * 0.1f) * Mathf.Rad2Deg);
+            // recoil squash: short and fat on the shot, then a stretch back (anticipation while armed: a slight crouch)
+            float arm = Mathf.Clamp01(_wheelSpinT / 26);
+            float sq = 1 - _recoil * 0.16f - arm * 0.04f + Look.BeatPulse * (calm ? 0 : 0.025f);
             _mHead.localScale = new Vector3(1 / Mathf.Sqrt(sq), sq, 1 / Mathf.Sqrt(sq));
             _muzzleMat.SetFloat(IdIntensity, _muzzleFlash * 1.6f);
+            _muzzleRingMat.SetColor("_BaseColor", MuzzleRingCol * (0.55f + arm * 0.9f + _muzzleFlash * 2.2f));
             _muzzle.localScale = Vector3.one * 1.5f * (1 + _muzzleFlash * 0.8f);
 
             // face: squint while the wheels spin up, blink shut on the shot, eyes wide on a big hit; pupils on the ball
@@ -545,11 +910,23 @@ namespace Bonanza
                 {
                     _pipPop[i] = Damp(_pipPop[i], 0, 7, dt);
                     float s = _pipBase[i] * (1 + _pipPop[i] * 1.2f);
-                    _pips.Matrix[i] = Matrix4x4.TRS(_pipPos[i], Quaternion.identity, new Vector3(s, s, s));
-                    float glow = 1 + _pipPop[i] * 2.5f + (_pipBase[i] >= 1.9f ? 0.4f : 0);
+                    _pips.Matrix[i] = Matrix4x4.TRS(_pipPos[i], _pipRot[i], new Vector3(s, 1, s));
+                    float glow = 1 + _pipPop[i] * 2.5f + (_pipBase[i] >= 1.3f ? 0.35f : 0);
                     _pips.Tint[i] = PipCol.linear * glow;
                 }
                 _pips.Flush();
+            }
+
+            // strike-zone reticle: fades in while a pitch is live, flashes and swells as the ball arrives
+            _reticleOn = Damp(_reticleOn, _reticleGoal, 6, dt);
+            _reticlePop = Damp(_reticlePop, 0, 6, dt);
+            if (_reticleOn < 0.01f && _reticlePop < 0.01f) { if (_reticle.gameObject.activeSelf) _reticle.gameObject.SetActive(false); }
+            else
+            {
+                if (!_reticle.gameObject.activeSelf) _reticle.gameObject.SetActive(true);
+                float rs = (0.8f + _reticleOn * 0.2f) * (1 + _reticlePop * 0.35f) * (1 + Look.BeatPulse * 0.05f);
+                _reticle.localScale = new Vector3(rs, 1, rs);
+                _reticleMat.SetColor("_BaseColor", PipCol.linear * (_reticleOn * 0.75f + _reticlePop * 1.3f));
             }
 
             // backstop net: breeze + the bulge where a ball went in
@@ -562,19 +939,30 @@ namespace Bonanza
             _nightK = Damp(_nightK, _nightGoal, 1.4f, dt);
             float n = _nightK;
             float flicker = 1 + Mathf.Sin(Time.time * 23f) * 0.015f;
-            for (int i = 0; i < _flareMats.Length; i++) _flareMats[i].SetFloat(IdIntensity, n * 2.6f * flicker + Look.BeatPulse * n * 0.4f);
-            for (int i = 0; i < _poolMats.Length; i++) _poolMats[i].SetFloat(IdIntensity, n * 0.2f);
+            for (int i = 0; i < _flareMats.Length; i++) _flareMats[i].SetFloat(IdIntensity, n * 2.0f * flicker + Look.BeatPulse * n * 0.4f);
+            for (int i = 0; i < _flareMatsR.Length; i++) _flareMatsR[i].SetFloat(IdIntensity, n * 2.2f * flicker + Look.BeatPulse * n * 0.3f);
+            // the floods carry the night: warm pools on the plate and the mound
+            for (int i = 0; i < _poolMats.Length; i++) _poolMats[i].SetFloat(IdIntensity, n * 0.42f);
             _glareMat.SetFloat(IdIntensity, (1 - n) * 0.22f);
-            bool blinkOn = n > 0.5f;
-            for (int i = 0; i < _blinkers.Length; i++) _blinkers[i].enabled = blinkOn;
-            if (blinkOn)
             {
-                float t = Time.time * 0.8f;
-                _blinkMats[0].SetFloat(IdIntensity, (t % 1f) < 0.35f ? 1.6f : 0.05f);
-                _blinkMats[1].SetFloat(IdIntensity, ((t + 0.5f) % 1f) < 0.35f ? 1.6f : 0.05f);
+                // beacons blink day and night (two phases), a touch brighter in the dark
+                float t = Time.time * 0.8f, on = Mathf.Lerp(0.9f, 1.7f, n);
+                _blinkMats[0].SetFloat(IdIntensity, (t % 1f) < 0.35f ? on : 0.04f);
+                _blinkMats[1].SetFloat(IdIntensity, ((t + 0.5f) % 1f) < 0.35f ? on : 0.04f);
             }
-            _env?.Spotlights?.SetLevel(Mathf.Lerp(0.03f, 0.075f, n), Mathf.Lerp(0.04f, 0.1f, n));
-            _env?.Crowd?.SetTint(Color.Lerp(Color.white, new Color(0.7f, 0.74f, 0.9f), n));
+            // windows: a sparse scatter at dusk, the whole city lit warm at night; the sun wash leaves with the sun
+            float winBeat = 1 + Look.BeatPulse * 0.12f;
+            _winMats[0].SetFloat(IdIntensity, Mathf.Lerp(2.8f, 2.2f, n) * winBeat);
+            _winMats[1].SetFloat(IdIntensity, n * 2.0f * winBeat);
+            _winMats[2].SetFloat(IdIntensity, (1 - n) * 1.3f);
+            _hazeMat.SetColor(IdColor, Color.Lerp(HazeDay, HazeNight, n));
+            _hazeMat.SetFloat(IdIntensity, 1);
+            if (_ledMat) _ledMat.SetColor("_BaseColor", Color.Lerp(LedDay, LedNight, n) * (1 + Look.BeatPulse * 0.25f));
+            _env?.Spotlights?.SetLevel(Mathf.Lerp(0.03f, 0.05f, n), Mathf.Lerp(0.04f, 0.09f, n));   // the cones stay a hint; the pools carry the light
+            // the bowl falls dark toward the walls at night; the floods and the rim light carry the crowd
+            if (_env?.Crowd != null) _env.Crowd.O.StandColor = Color.Lerp(StandDay, StandNight, n);
+            if (_rowsMat) _rowsMat.SetColor("_BaseColor", Color.Lerp(StandDay, StandNight, n));
+            _env?.Crowd?.SetTint(Color.Lerp(Color.white, new Color(0.6f, 0.65f, 0.86f), n));
 
             // stand-in: hop on a hit, slump on a miss (the character replaces this; the cues stay)
             _batterHop = Damp(_batterHop, 0, 5, dt);

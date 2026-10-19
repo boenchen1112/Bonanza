@@ -39,6 +39,7 @@ namespace Bonanza.HudKit
 
         // scoreboard
         CanvasGroup _board;
+        readonly Image[] _scrims = new Image[2];
         TextMeshProUGUI _scoreLabel, _score, _combo, _comboLabel, _accLabel, _acc;
         RectTransform _comboRt;
         CanvasGroup _comboGroup;
@@ -132,6 +133,19 @@ namespace Bonanza.HudKit
         {
             var rt = UiKit.Rect("Scoreboard", _root); UiKit.Stretch(rt);
             _board = rt.gameObject.AddComponent<CanvasGroup>();
+
+            // Corner scrims (opt-in per game, CornerScrims): soft dark pools behind the two top corners, so the
+            // readouts sit on a calm patch even when a busy, bloomed set runs into the corners.
+            for (int i = 0; i < 2; i++)
+            {
+                var sc = UiKit.Box(rt, i == 0 ? "ScrimL" : "ScrimR", new Color(0.03f, 0.02f, 0.1f, 0.72f), UiKit.Soft);
+                var srt = sc.rectTransform;
+                srt.anchorMin = srt.anchorMax = new Vector2(i, 1); srt.pivot = new Vector2(0.5f, 0.5f);
+                srt.anchoredPosition = new Vector2(i == 0 ? 80 : -80, -50); srt.sizeDelta = new Vector2(620, 380);
+                sc.raycastTarget = false;
+                sc.gameObject.SetActive(false);
+                _scrims[i] = sc;
+            }
 
             _scoreLabel = Label(rt, "ScoreLabel", "SCORE", 10.65f, UiKit.LabelInk, TextAlignmentOptions.TopLeft, 14f);
             TopLeft(_scoreLabel.rectTransform, PadL, PadT - 1.5f, 200, 14);
@@ -275,6 +289,7 @@ namespace Bonanza.HudKit
         {
             _boardOn = false;
             _board.alpha = 0;
+            CornerScrims(false);
             _scoreTarget = -1; _scoreDrawn = -1; _scoreShown = 0; _comboDrawn = -1; _accDrawn = -1; _comboValue = 0;
             _comboGroup.alpha = 0;
             _outsGroup.alpha = 0; _outsShown = 0; ApplyLamps();
@@ -283,6 +298,12 @@ namespace Bonanza.HudKit
             foreach (var p in _pops) { p.Live = false; p.Rt.gameObject.SetActive(false); }
             _banner.Live = false; _banner.Rt.gameObject.SetActive(false);
             if (_results != null) _results.Hide();
+        }
+
+        /// Soft dark scrims behind the top-left and top-right readouts (off by default; Clear turns them off).
+        public void CornerScrims(bool on)
+        {
+            foreach (var sc in _scrims) if (sc) sc.gameObject.SetActive(on);
         }
 
         /// Show the score, combo and accuracy block (hidden until a game asks for it).
