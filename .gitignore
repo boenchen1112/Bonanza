@@ -132,3 +132,5 @@ InitTestScene*.unity*
 /Mixamo/
 # npm installs for Tools/ and Reference/web/
 node_modules/
+/Tools/core-tests/bin/
+/Tools/core-tests/obj/
