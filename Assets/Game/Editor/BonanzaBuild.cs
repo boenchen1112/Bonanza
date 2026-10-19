@@ -58,6 +58,38 @@ public static class BonanzaBuild
             throw new Exception("WebGL build " + sum.result + " (" + sum.totalErrors + " errors).");
     }
 
+    // Static-host build (GitHub Pages): a host that cannot send Content-Encoding for .br files needs
+    // Unity's decompression fallback, which the gates' build deliberately keeps off. The stored
+    // PlayerSettings are restored afterwards. args: -outputPath <dir> (default Builds/Pages)
+    public static void BuildWebGLPages()
+    {
+        var was = PlayerSettings.WebGL.decompressionFallback;
+        try
+        {
+            PlayerSettings.WebGL.decompressionFallback = true;
+            var outDir = Arg("-outputPath", Path.Combine(ProjectRoot, "Builds", "Pages"));
+            var scenes = Array.FindAll(EditorBuildSettings.scenes, s => s.enabled);
+            if (scenes.Length == 0) throw new Exception("No enabled scenes in EditorBuildSettings.");
+            var opts = new BuildPlayerOptions
+            {
+                scenes = Array.ConvertAll(scenes, s => s.path),
+                locationPathName = outDir,
+                target = BuildTarget.WebGL,
+                targetGroup = BuildTargetGroup.WebGL,
+                options = BuildOptions.None,
+            };
+            var sum = BuildPipeline.BuildPlayer(opts).summary;
+            Debug.Log("[BonanzaBuild] pages result=" + sum.result + " size=" + sum.totalSize + " -> " + outDir);
+            if (sum.result != BuildResult.Succeeded)
+                throw new Exception("WebGL pages build " + sum.result + " (" + sum.totalErrors + " errors).");
+        }
+        finally
+        {
+            PlayerSettings.WebGL.decompressionFallback = was;
+            AssetDatabase.SaveAssets();
+        }
+    }
+
     // ---- import -----------------------------------------------------------------
 
     public static void Import()
