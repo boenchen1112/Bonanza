@@ -68,11 +68,16 @@ namespace Bonanza
         {
             // In a party the lineup's CPUs sing the other voices; free play is lane 0 and 0.8 CPUs.
             _round = ChompRound.ForLineup(Host.Lineup, 0xc40f, Save.OffsetMs);
+#if UNITY_EDITOR
+            // Editor-only check hook: BONANZA_CHOMP_LANE=n sings lane n (the shell always seats the human at P1, lane 0).
+            if (int.TryParse(System.Environment.GetEnvironmentVariable("BONANZA_CHOMP_LANE"), out int devLane) && devLane > 0 && devLane < N)
+                _round = new ChompRound(devLane, null, 0xc40f, Save.OffsetMs);
+#endif
             _round.LaneJudged += OnJudged;
             for (int i = 0; i < N; i++) _lanes[i] = new Lane();
 
-            // web: rig.frame({ target: [0, 1.05, 0], distance: 6.9, height: 1.15, fov: 48, lambda: 2.6 }), snapped.
-            Look.Rig.Frame(new Vector3(0, 1.05f, 0), 6.9f, 1.15f, 0, 48, 2.6f, immediate: true);
+            // web: rig.frame({ target: [0, 1.05, 0], distance: 6.9, height: 1.15, fov: 48 }), reframed (see UpdateCamera), snapped.
+            Look.Rig.Frame(CamTarget, CamDist, CamHeight, 0, CamFov, 2.6f, immediate: true);
             Look.Rig.SetPushGain(0.75f);
             Look.ShadowFocus(new Vector3(0, 0, 0.2f), 5.6f);   // the four singers and their pads
             BuildStage();
@@ -80,6 +85,7 @@ namespace Bonanza
 
             var fx = Look.Fx;
             fx.SetGroundY(0);
+            fx.SetConfettiLanding(true);   // paper settles flat on the boards instead of slicing through them edge-on
             fx.SetFocus(new Vector3(0, 1.5f, 0));
             fx.Prewarm();   // every FX material and the callout font now: a first-use shader link mid-round would push a press out of its window
         }
@@ -207,7 +213,7 @@ namespace Bonanza
                 {
                     // A voice coming back is a moment: it is the thing the player was trying to fix.
                     fx.Flare(head + Vector3.up * 0.5f, laneC, 0.9f, 0.3f, 0.35f, 2.6f);
-                    fx.Ring(head, laneC, 0.45f, 0.3f, 2.2f, 0.2f, 0.02f);
+                    Halo(i, laneC, 1.25f);
                     if (!cpu) fx.PopWord("BACK!", head + new Vector3(0, 0.95f, -0.2f), laneC, 0.45f, 0.7f, 0.8f);
                 }
             }
@@ -219,8 +225,20 @@ namespace Bonanza
                 fx.Burst(head + new Vector3(0, 0, -0.1f), 10, Hex(0x8d7fa6), 2.6f, 0.12f, 0.55f);
             }
 
+            if (hit)
+            {
+                Halo(i, laneC, 1);
+                // A chord of three or more voices landing together is a stage moment.
+                if (!note.Finale)
+                {
+                    if (note.Beat != _chordBeat) { _chordBeat = note.Beat; _chordHits = 0; }
+                    if (++_chordHits == 3) ChordMoment();
+                }
+            }
+
             int combo = cpu ? 0 : _round.Judge.Stats.Combo;
             var o = VerdictOpts.Default;
+            o.NoLoops = true;   // no thin loops over the faces: the halo on the cap and the breath ring carry the hit
             o.Dir = new Vector3(ChompChart.X[i] * 0.09f, 1, -0.15f);
             o.Combo = combo;
             o.Scale = (note.Finale ? 1.35f : cpu ? 0.7f : dense ? 0.82f : 1) * 0.8f;   // the singer stands in the burst: keep its rings off the neighbours
@@ -346,7 +364,34 @@ namespace Bonanza
             e.Fired = true;
             _lanes[lane].Sing = 1;
             Sing(lane, Verdict.Great, System.Math.Max(_round.Map.TimeAt(e.Beat), _now + 0.004), false);
-            Look.Fx.Ring(new Vector3(ChompChart.X[lane], _headY[lane], 0), Hex(LaneHex[lane]), 0.4f, 0.3f, 1.8f, 0.18f, 0.02f);
+            Halo(lane, Hex(LaneHex[lane]), 1);
+        }
+
+        /// A clean, thick ring of light washing out across the singer's cap (lies flat, depth-tested: the singer stands
+        /// in it), the hit's halo instead of a loop over the face.
+        void Halo(int lane, Color c, float size)
+        {
+            Look.Fx.Ring(new Vector3(ChompChart.X[lane], _pedTop[lane] + 0.06f, 0), c, 0.42f * size, 0.7f, 1.0f + 0.5f * size, 0.22f, 0.04f, 0, 0.9f, Vector3.up);
+        }
+
+        double _chordBeat = double.NaN;
+        int _chordHits;
+
+        /// Three or four voices on one beat: paper from the stands, a punch-in, the house jumps, the rig sweeps.
+        /// No screen flash (the beams already peak here): total light stays capped.
+        void ChordMoment()
+        {
+            _chordFx = 1;
+            bool calm = Settings.ReduceMotion;
+            var fx = Look.Fx;
+            int n = calm ? 14 : 40;
+            fx.Confetti(new Vector3(-7.5f, 5.5f, 15), n, null, 6.5f, 1.2f, 0.34f, 2.0f);
+            fx.Confetti(new Vector3(7.5f, 5.5f, 15), n, null, 6.5f, 1.2f, 0.34f, 2.0f);
+            fx.Confetti(new Vector3(0, 6.5f, 17), n, null, 6.5f, 1.2f, 0.34f, 2.0f);
+            Look.Rig.PunchZoom(1.05f);
+            Look.Rig.Shake(0.05f, Vector3.up);
+            _env?.Crowd?.Cheer(1.1f);
+            _env?.Spotlights?.Chase(6f, 0.07f);
         }
 
         /// The scripted last bar.
@@ -355,7 +400,7 @@ namespace Bonanza
             if (!_finaleBanner && beat >= ChompChart.FinaleBeat - 3.2)
             {
                 _finaleBanner = true;
-                Ui.Banner("ALL FOUR!", "big note - hold it", CountColor, 1.3f);
+                Ui.Banner("ALL FOUR!", "hold it!", CountColor, 2.4f, plate: true, y: 0.16f);   // over the house, clear of the four faces
                 Host.PlaySfx("swoosh", _now);
                 Look.SetPalette("chomp-chorus-finale", 1.6f);
                 _env?.Crowd?.SetEnergy(0.95f);
@@ -381,7 +426,7 @@ namespace Bonanza
                 _finaleDone = true;
                 Host.MusicStop(1.1f);   // web chompChorus: the track fades out under the last note
                 int h = _round.FinaleHits;
-                Ui.Banner(h == N ? "FULL CHORD!" : h >= 2 ? "NICE CHORUS" : "ROUGH NIGHT", null, CountColor, 1.8f);
+                Ui.Banner(h == N ? "FULL CHORD!" : h >= 2 ? "NICE CHORUS" : "ROUGH NIGHT", null, CountColor, 1.8f, plate: true);
                 if (h == N) { Look.Fx.Confetti(new Vector3(0, 2.6f, 0), 160, null, 9, 1.3f); _env?.Crowd?.Cheer(1.4f); }
                 else if (h < 2) _env?.Crowd?.Deflate(0.7f);
             }
@@ -436,7 +481,7 @@ namespace Bonanza
                 UpdateSinger(i, dt, _time, beat, finaleHold);
                 Ui.Voice(i, l.AliveT, Mathf.Clamp01(l.Sing));
             }
-            UpdateProps(dt, beat, _time);
+            UpdateProps(dt, beat, _time, finaleHold);
         }
     }
 }

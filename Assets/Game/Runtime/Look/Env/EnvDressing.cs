@@ -153,15 +153,25 @@ namespace Bonanza.Look
                 if ((i + beatIndex) % 2 == 0) _pop[i] = Mathf.Max(_pop[i], strength);
         }
 
+        float _chaseT = -1, _chaseStep, _chaseAmt;
+
+        /// A light sweep: every cone flares in turn, left to right, `step` seconds apart (a big moment).
+        public void Chase(float strength, float step = 0.07f) { _chaseT = 0; _chaseStep = step; _chaseAmt = strength; }
+
         /// Retune the rig at runtime (a game's night switch): resting intensity and the beat flare.
         public void SetLevel(float baseIntensity, float flare) { O.Base = baseIntensity; O.Flare = flare; }
 
         public override void Update(float dt, double beat, float time, Palette pal)
         {
             bool calm = Settings.ReduceMotion;
+            float chase0 = _chaseT;
+            if (_chaseT >= 0) { _chaseT += dt; if (_chaseT > _chaseStep * (_cone.Length + 1)) _chaseT = -1; }
             for (int i = 0; i < _cone.Length; i++)
             {
                 _pop[i] = EnvKit.Damp(_pop[i], 0, 6, dt);
+                float at = i * _chaseStep;
+                bool crossed = chase0 >= 0 && chase0 <= at && (_chaseT > at || _chaseT < 0);   // the sweep passed this cone this frame
+                if (crossed) _pop[i] = Mathf.Max(_pop[i], _chaseAmt);
                 float sw = calm ? 0.35f : 1;
                 if (O.Anchors != null)
                 {

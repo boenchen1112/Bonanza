@@ -178,6 +178,9 @@ namespace Bonanza.Look
         int _freeCount, _aliveCount;
 
         public int Alive => _aliveCount;
+        /// Tumble only: a piece that falls below this height lands (lies flat, stops, fades within half a second).
+        /// -inf = no floor (the default).
+        public float Floor = float.NegativeInfinity;
 
         public ParticleBatch(string name, Transform parent, Material mat, Vector4 rect, PMode mode, int max, FxRng rng, int order, System.Action<EmitParams> defaults)
         {
@@ -283,6 +286,13 @@ namespace Bonanza.Look
                     x[i] += vx[i] * dt; y[i] += vy[i] * dt; z[i] += vz[i] * dt;
                     rot[i] += spin[i] * dt;
                     if (_mode == PMode.Tumble) { ax[i] += wx[i] * dt; ay[i] += wy[i] * dt; az[i] += wz[i] * dt; }
+                    if (_mode == PMode.Tumble && y[i] < Floor && grav[i] != 0)
+                    {
+                        // Landed: flat on the boards (ax = 90 deg, az = 0 puts both quad axes in XZ), still, gone soon.
+                        y[i] = Floor; vx[i] = vy[i] = vz[i] = 0; grav[i] = 0; turb[i] = 0;
+                        wx[i] = wy[i] = wz[i] = 0; ax[i] = Mathf.PI * 0.5f; az[i] = 0;
+                        maxLife[i] = Mathf.Min(maxLife[i], life[i] + 0.45f);
+                    }
                 }
 
                 float t = life[i] / maxLife[i];

@@ -8,7 +8,7 @@
 //   COLOR      rgb = this figure's tint x the baked eye darkness, a = row dim
 //   TEXCOORD0  xyz = root (object space), w = facing yaw (radians, Unity's Euler(0, yaw, 0))
 //   TEXCOORD1  x = beat phase offset, y = 0..1 along the arc (the wave), z = size, w = bounce amount
-//   TEXCOORD2  x = palette crowd slot (0..4), y = brightness, z = arm pose (0 low V, 1 arms up, 2 clap),
+//   TEXCOORD2  x = palette crowd slot (0..4), y = brightness, z = arm pose (0 low V, 1 arms up, 2 clap, 3 one fist pumping),
 //              w = which arm this vertex belongs to (-1 left, +1 right, 0 body: never posed)
 // Colour = lerp(pastel, palette crowd slot, _PalMix) x brightness x shade (the eyes stay dark on every body).
 Shader "Bonanza/Crowd"
@@ -31,6 +31,7 @@ Shader "Bonanza/Crowd"
         _Glow ("Cheer glow", Float) = 0
         _PalMix ("Palette mix", Range(0, 1)) = 1
         _Arms ("Arm energy", Float) = 0
+        _FogMul ("Fog multiplier", Float) = 1
         _C0 ("Crowd 0", Color) = (1, 1, 1, 1)
         _C1 ("Crowd 1", Color) = (1, 1, 1, 1)
         _C2 ("Crowd 2", Color) = (1, 1, 1, 1)
@@ -55,7 +56,7 @@ Shader "Bonanza/Crowd"
             CBUFFER_START(UnityPerMaterial)
                 half4 _BaseColor;
                 float _Bands, _Softness, _Rim, _Pulse, _Lift;
-                float _Beat, _Eighths, _JumpH, _LeanA, _Sag, _WaveT, _WaveAmt, _Glow, _PalMix, _Arms;
+                float _Beat, _Eighths, _JumpH, _LeanA, _Sag, _WaveT, _WaveAmt, _Glow, _PalMix, _Arms, _FogMul;
                 half4 _C0, _C1, _C2, _C3, _C4;
             CBUFFER_END
 
@@ -95,7 +96,9 @@ Shader "Bonanza/Crowd"
                     float ang;
                     if (pose < 0.5) ang = sin(b * PI * 2.0) * 0.14 * e;
                     else if (pose < 1.5) ang = 1.7 * lerp(0.45, 1.0, e) + h1 * 0.28 * e;
-                    else ang = lerp(1.2, 2.25 - 0.4 * h1, e);
+                    else if (pose < 2.5) ang = lerp(1.2, 2.25 - 0.4 * h1, e);
+                    // 3: one fist pumping high on the beat, the other arm swinging low (a figure that is not mirrored)
+                    else ang = sx > 0.0 ? lerp(1.5, 2.55 - 0.55 * h1, e) : sin(b * PI * 2.0 + 1.0) * 0.3 * e;
                     ang = lerp(ang, 1.75, saturate(crest * 1.4));   // the wave throws every arm up as it passes
                     ang *= sx;
                     float2 piv = float2(sx * 0.078, 0.559);
@@ -142,7 +145,7 @@ Shader "Bonanza/Crowd"
                 // A figure at the top of its hop catches a little more light (web: hop lifts the instance colour).
                 float lift = _Lift + i.hop * _Glow;
                 float3 c = BonToon(albedo, normalize(i.normalWS), i.positionWS, _Bands, _Softness, _Rim, _Pulse, lift);
-                c = lerp(c, _BonFogColor.rgb, BonFog(i.viewDepth));
+                c = lerp(c, _BonFogColor.rgb, BonFog(i.viewDepth) * _FogMul);
                 return half4(c, 1);
             }
             ENDHLSL

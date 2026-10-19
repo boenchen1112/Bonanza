@@ -88,7 +88,8 @@ namespace Bonanza.HudKit
         sealed class BannerView
         {
             public RectTransform Rt; public TextMeshProUGUI Main, Sub; public CanvasGroup Group;
-            public bool Live; public float Age, Life;
+            public Image Plate, PlateRim; public float SubSize;
+            public bool Live, Held; public float Age, Life;
         }
 
         // ------------------------------------------------------------ build
@@ -261,8 +262,19 @@ namespace Bonanza.HudKit
             sub.rectTransform.anchorMin = sub.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
             sub.rectTransform.pivot = new Vector2(0.5f, 1f); sub.rectTransform.sizeDelta = new Vector2(1000, 24);
             sub.rectTransform.anchoredPosition = new Vector2(0, -44);
+            // The optional plate (Banner(..., plate: true)): a dark rounded slab with a cream rim behind the words, so a
+            // call-out over a bright, busy set stays a solid read. Off unless asked for.
+            var rim = UiKit.Box(rt, "PlateRim", new Color(1, 229 / 255f, 138 / 255f, 0.85f), UiKit.PillRing(2.4f * 24f / 30f), true, 30f);
+            var plate = UiKit.Box(rt, "Plate", new Color(12 / 255f, 8 / 255f, 32 / 255f, 0.86f), UiKit.Pill, true, 30f);
+            foreach (var im in new[] { plate, rim })
+            {
+                var r = im.rectTransform; r.anchorMin = r.anchorMax = r.pivot = new Vector2(0.5f, 0.5f);
+                im.transform.SetAsFirstSibling();
+                im.gameObject.SetActive(false);
+            }
+            plate.transform.SetAsFirstSibling();
             rt.gameObject.SetActive(false);
-            return new BannerView { Rt = rt, Main = main, Sub = sub, Group = g };
+            return new BannerView { Rt = rt, Main = main, Sub = sub, Group = g, Plate = plate, PlateRim = rim, SubSize = sub.fontSize };
         }
 
         // ------------------------------------------------------------ text helpers
@@ -410,14 +422,33 @@ namespace Bonanza.HudKit
         public void HideHint() { _hintHiding = true; }
 
         /// Big centred title. `life` seconds, popping in and shrinking out (web banner()).
-        public void Banner(string text, string sub = null, Color? color = null, float life = 1.6f)
+        /// `plate`: a dark backing slab, the sub line twice the size in gold, and the words held at full strength until
+        /// the last 12% (an instruction the player must read mid-round, over a bright set). Off = the web's banner.
+        /// `y`: the banner's centre, 0..1 from the top (0.5 = the middle, as the web).
+        public void Banner(string text, string sub = null, Color? color = null, float life = 1.6f, bool plate = false, float y = 0.5f)
         {
             var b = _banner;
-            b.Live = true; b.Age = 0; b.Life = Mathf.Max(0.05f, life);
+            b.Live = true; b.Age = 0; b.Life = Mathf.Max(0.05f, life); b.Held = plate;
             UiKit.SetFill(b.Main, color ?? Color.white);
             b.Main.text = text;
             b.Sub.text = sub ?? "";
-            b.Sub.gameObject.SetActive(!string.IsNullOrEmpty(sub));
+            bool hasSub = !string.IsNullOrEmpty(sub);
+            b.Sub.gameObject.SetActive(hasSub);
+            b.Sub.fontSize = plate ? b.SubSize * 2.1f : b.SubSize;
+            b.Sub.color = plate ? UiKit.Gold : UiKit.BannerSub;
+            b.Sub.rectTransform.anchoredPosition = new Vector2(0, plate ? -50 : -44);
+            b.Plate.gameObject.SetActive(plate); b.PlateRim.gameObject.SetActive(plate);
+            if (plate)
+            {
+                b.Main.ForceMeshUpdate();
+                float w = b.Main.preferredWidth, sw = 0;
+                if (hasSub) { b.Sub.ForceMeshUpdate(); sw = b.Sub.preferredWidth; }
+                var size = new Vector2(Mathf.Max(w, sw) + 96, hasSub ? 172 : 124);
+                var c = new Vector2(0, hasSub ? -20 : 0);
+                b.Plate.rectTransform.sizeDelta = size; b.Plate.rectTransform.anchoredPosition = c;
+                b.PlateRim.rectTransform.sizeDelta = size; b.PlateRim.rectTransform.anchoredPosition = c;
+            }
+            b.Rt.anchoredPosition = new Vector2(0, (0.5f - y) * RefH);
             b.Rt.gameObject.SetActive(true);
             ApplyBanner(b);
         }
@@ -568,7 +599,8 @@ namespace Bonanza.HudKit
         void ApplyBanner(BannerView b)
         {
             float t = Mathf.Clamp01(b.Age / b.Life);
-            float inT = Mathf.Clamp01(t / 0.18f), outT = Mathf.Clamp01((t - 0.78f) / 0.22f);
+            float hold = b.Held ? 0.88f : 0.78f;
+            float inT = Mathf.Clamp01(t / (b.Held ? 0.1f : 0.18f)), outT = Mathf.Clamp01((t - hold) / (1 - hold));
             bool calm = Settings.ReduceMotion;
             float s = calm ? 1 : UiKit.BackOut(inT) * (1 - outT * 0.2f);
             b.Rt.localScale = Vector3.one * s;

@@ -28,6 +28,10 @@ namespace Bonanza.Look
         public bool Text, Stage, Rings;
         public Color? MilestoneColor;  // combo-milestone waves in this colour instead of the combo white (opt-in per game)
         public float MilestoneLift;    // extra height for the "xN" word, so it sits clear of a big hit's flash
+        /// No thin loops at all: also drops the inner ring, the miss's sagging ring and the milestone's ring waves (their
+        /// flare stays). For a subject whose FACE is the impact point (Chomp Chorus' singers): a 1-px loop over a face
+        /// reads as a scribble. Off by default.
+        public bool NoLoops;
         public static VerdictOpts Default => new VerdictOpts { Scale = 1, GroundY = float.NaN, Text = true, Stage = true, Rings = true };
     }
 
@@ -55,7 +59,7 @@ namespace Bonanza.Look
         sealed class Rec
         {
             public bool On; public float T; public L Layer; public int K; public Verdict V;
-            public Vector3 Pos, Dir; public Color Color; public float Scale, Size, Count, Gy; public bool HasRings;
+            public Vector3 Pos, Dir; public Color Color; public float Scale, Size, Count, Gy; public bool HasRings, NoRing;
         }
 
         const int Pending = 160;
@@ -146,6 +150,9 @@ namespace Bonanza.Look
 
         public void SetFocus(Vector3 p) => _focus = p;
         public void SetGroundY(float y) => _groundY = y;
+        /// Confetti that reaches the ground (SetGroundY) lands: it lies flat and fades out instead of falling through
+        /// the floor edge-on. Off by default.
+        public void SetConfettiLanding(bool on) => _confetti.Floor = on && _groundY.HasValue ? _groundY.Value + 0.012f : float.NegativeInfinity;
         public void SetCombo(int c) => _combo = c;
 
         /// Touch every material and the callout font once (a frame or two) so no shader link or font upload
@@ -281,7 +288,7 @@ namespace Bonanza.Look
                 case L.MilestoneWave:
                 {
                     int k = r.K;
-                    _overlayRings.Spawn(r.Pos, r.Color, 0.5f + k * 0.08f, 0.3f + k * 0.5f, 2.4f + k * 1.5f, 0.16f - k * 0.03f, 0.02f, 0.012f + k * 0.003f, 0.85f - k * 0.2f, null, 0);
+                    if (!r.NoRing) _overlayRings.Spawn(r.Pos, r.Color, 0.5f + k * 0.08f, 0.3f + k * 0.5f, 2.4f + k * 1.5f, 0.16f - k * 0.03f, 0.02f, 0.012f + k * 0.003f, 0.85f - k * 0.2f, null, 0);
                     var e = _flare.Begin();
                     e.Pos(r.Pos).Color(Feel.Hex(Feel.Hot));
                     e.Size = (0.45f + k * 0.25f) * sc; e.Life = 0.22f + k * 0.05f; e.S0 = 0.4f; e.S1 = 2.0f + k * 0.4f;
@@ -306,7 +313,7 @@ namespace Bonanza.Look
 
         static void Copy(Rec r, Rec s, L layer, int k)
         {
-            r.Layer = layer; r.K = k; r.V = s.V; r.Pos = s.Pos; r.Dir = s.Dir; r.Color = s.Color; r.Scale = s.Scale; r.Size = s.Size; r.Count = s.Count; r.Gy = s.Gy;
+            r.Layer = layer; r.K = k; r.V = s.V; r.Pos = s.Pos; r.Dir = s.Dir; r.Color = s.Color; r.Scale = s.Scale; r.Size = s.Size; r.Count = s.Count; r.Gy = s.Gy; r.NoRing = false;
         }
 
         // ------------------------------------------------------------- verdict
@@ -333,6 +340,7 @@ namespace Bonanza.Look
                 // `Rings = false`: the big outward wave and its echo. In a game whose subject stands AT the impact
                 // point they draw wobbly loops through the character; the core flash and shards still sell the hit.
                 if (!o.Rings && (layer.Id == L.RingOut || layer.Id == L.Echo)) continue;
+                if (o.NoLoops && (layer.Id == L.RingOut || layer.Id == L.Echo || layer.Id == L.RingIn || layer.Id == L.SagRing)) continue;
                 if (layer.Delay <= 0)
                 {
                     // Act 1 fires INLINE, on the same frame as the press: queuing it would cost a frame of latency.
@@ -342,15 +350,17 @@ namespace Bonanza.Look
                 else Schedule(layer.Id, layer.Delay, rec, 0);
             }
             // Combo escalation adds PHYSICAL layers: extra shockwaves trailing the first, each wider, later and fainter.
-            for (int k = 1; o.Rings && k <= f.ExtraRings; k++) Schedule(L.RingOut, 0.09f + k * 0.055f, rec, k);
+            for (int k = 1; o.Rings && !o.NoLoops && k <= f.ExtraRings; k++) Schedule(L.RingOut, 0.09f + k * 0.055f, rec, k);
 
             if (o.Stage && _rig != null)
             {
                 _rig.Shake(f.Shake, new Vector3(rec.Dir.x, rec.Dir.y * 0.5f, 0));
                 if (f.Flash > 0) _rig.DoFlash(f.Flash, rec.Color);
             }
-            if (verdict != Verdict.Miss && Feel.IsMilestone(_combo)) Milestone(_combo, pos, o.MilestoneColor, o.MilestoneLift);
+            if (verdict != Verdict.Miss && Feel.IsMilestone(_combo)) { _noWaves = o.NoLoops; Milestone(_combo, pos, o.MilestoneColor, o.MilestoneLift); _noWaves = false; }
         }
+
+        bool _noWaves;
 
         /// The combo-milestone flourish: three ring waves, a flare, a confetti shower, a word.
         public void Milestone(int combo, Vector3 pos, Color? color = null, float lift = 0)
@@ -361,7 +371,7 @@ namespace Bonanza.Look
             rec.Scale = 1 + tier * 0.06f; rec.Size = 1 + tier * 0.08f; rec.Count = 1 + tier * 0.22f;
             rec.Gy = _groundY ?? pos.y - 1.6f; rec.Dir = Vector3.up;
             float[] delays = { 0, 0.075f, 0.15f };
-            for (int i = 0; i < delays.Length; i++) Schedule(L.MilestoneWave, delays[i], rec, i);
+            for (int i = 0; i < delays.Length; i++) Schedule(L.MilestoneWave, delays[i], rec, i).NoRing = _noWaves;
             Schedule(L.Confetti, 0.06f, rec, 1);
             _callouts.Spawn("x" + combo, null, pos + new Vector3(-0.45f, 0.85f + lift, 0), Feel.Hex(Feel.Combo), 0.5f + tier * 0.045f, 0.95f, 0.4f, 0, 0, false);
             if (_rig != null) { _rig.Shake(Feel.MilestoneShake * (1 + tier * 0.08f), Vector3.up); _rig.DoFlash(Feel.MilestoneFlash); }

@@ -187,7 +187,7 @@ namespace Bonanza.Look
                 .Set(PC.FillSky, 0xb98cff).Set(PC.FillGround, 0x2a0b40).Set(PF.FillIntensity, 1.05f)
                 .Set(PC.Rim, 0x9ee87a).Set(PF.RimStrength, 1.0f).Set(PF.RimPower, 2.2f)
                 .Set(PC.Fog, 0x3a0d58).Set(PF.FogNear, 14).Set(PF.FogFar, 58)
-                .Set(PF.Bloom, 1.0f).Set(PF.BloomThreshold, 1.05f));
+                .Set(PF.Bloom, 1.0f).Set(PF.BloomThreshold, 1.3f));   // beams and rings glow without washing the faces out
 
             // Chomp Chorus' last bar: "ALL FOUR!" warms the house up, a pinker horizon, a hotter key, more bloom.
             _all["chomp-chorus-finale"] = Make(_all["chomp-chorus"], p => p

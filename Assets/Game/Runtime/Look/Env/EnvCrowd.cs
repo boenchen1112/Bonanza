@@ -54,6 +54,13 @@ namespace Bonanza.Look
             public float? Rim;
             /// Scale of the front row relative to the rest (the row nearest the camera reads oversized).
             public float FrontRowScale = 1;
+            /// Poses: how many arm poses to deal (3 = low V, arms up, clap; 4 adds a one-fist pump).
+            public int PoseKinds = 3;
+            /// Distance fog on the figures (1 = the palette's; less keeps a far crowd's colour).
+            public float FogMul = 1;
+            /// Risers: build each step to the height its row stands at (Center.y + r * RowRise), so the lit nosing runs
+            /// along the row's feet instead of through the faces when RowRise differs from the stock 2.4 per step.
+            public bool RisersFollowRows;
         }
 
         static readonly uint[] Pastel = { 0xff7a5c, 0x6fc9e8, 0xd98ae0, 0xa9d98a, 0xffc86a, 0x8a95e0, 0xff9ab5, 0x9aa6bd, 0xffe08a, 0x7fe0c8 };
@@ -92,6 +99,7 @@ namespace Bonanza.Look
                 {
                     float rad = o.Radius - 0.6f + r * o.RowDepth, h = 1.5f + r * 1.5f;
                     float cy = o.RiserY + h / 2 - 0.4f + r * 0.9f, top = cy + h / 2;
+                    if (o.RisersFollowRows) { top = o.Center.y + r * o.RowRise - 0.03f; h = top - o.RiserY; cy = o.RiserY + h / 2; }
                     // The riser face (a shade darker toward the floor: the tiers read as steps, not a wall).
                     int s0 = b.Count;
                     b.Shell(rad, rad, h, 56, -o.Arc / 2, o.Arc,
@@ -172,7 +180,11 @@ namespace Bonanza.Look
                     var pc = Palette.Hex(Pastel[(int)(rng.Next() * Pastel.Length) % Pastel.Length]).linear;
                     // Deepen the pastel a little (gamma on linear): small bodies at a distance read washed out otherwise.
                     tint[k] = new Color(Mathf.Pow(pc.r, o.Deepen), Mathf.Pow(pc.g, o.Deepen), Mathf.Pow(pc.b, o.Deepen), 1);
-                    if (poses) { float pr = Hash01((uint)k * 2654435761u ^ o.Seed); slot[k].z = pr < 0.55f ? 0 : pr < 0.8f ? 1 : 2; }
+                    if (poses)
+                    {
+                        float pr = Hash01((uint)k * 2654435761u ^ o.Seed);
+                        slot[k].z = o.PoseKinds >= 4 ? (pr < 0.38f ? 0 : pr < 0.6f ? 1 : pr < 0.8f ? 2 : 3) : (pr < 0.55f ? 0 : pr < 0.8f ? 1 : 2);
+                    }
                 }
             }
             var order = new int[n];
@@ -212,6 +224,7 @@ namespace Bonanza.Look
             if (o.Style == FigureStyle.Blob) { _mat.SetFloat("_Rim", 1.6f); _mat.SetFloat("_Bands", 2); _mat.SetFloat("_Lift", 0.04f); }
             else { _mat.SetFloat("_Rim", 0.55f); _mat.SetFloat("_Bands", 3); _mat.SetFloat("_Softness", 0.5f); _mat.SetFloat("_Lift", 0); }
             if (o.Rim.HasValue) _mat.SetFloat("_Rim", o.Rim.Value);
+            _mat.SetFloat("_FogMul", o.FogMul);
             _glowBase = o.Style == FigureStyle.Blob ? 0.12f : 0.03f;
             EnvKit.Renderer("CrowdFigures", t, _mesh, _mat).receiveShadows = false;
             OnQuality();
