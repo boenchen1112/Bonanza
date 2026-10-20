@@ -426,6 +426,19 @@ namespace Bonanza.Look
             ConfettiAt(pos, total, colors, speed, new Vector3(0, up, 0), size, life);
         }
 
+        /// A confetti cannon: a tight cone of paper fired along `dir` (e.g. down and in from over the stage).
+        public void ConfettiCannon(Vector3 pos, Vector3 dir, int count, float speed = 8, float size = 0.2f, float life = 1.6f, float cone = 0.4f)
+        {
+            int total = Mathf.Max(1, Mathf.RoundToInt(count * Mul * ConfettiMul));
+            int n = Feel.Party.Length;
+            int per = Mathf.Max(1, Mathf.RoundToInt(total / (float)n));
+            var e = _confetti.Begin();
+            e.Pos(pos).Dir(dir.normalized);
+            e.Jitter = 0.35f; e.Cone = Mathf.Clamp01(cone); e.Speed = speed; e.Size = size;
+            if (life > 0) { e.Life = life; e.Grav = -7.5f * Mathf.Min(1, 1.25f / life); }
+            for (int i = 0; i < n; i++) { e.Color(Feel.Hex(Feel.Party[i]).linear); _confetti.Emit(per); }
+        }
+
         void ConfettiAt(Vector3 pos, int total, Color[] colors, float speed, Vector3 dir, float size, float life = 0)
         {
             int n = colors != null ? colors.Length : Feel.Party.Length;
@@ -512,9 +525,13 @@ namespace Bonanza.Look
         /// A ribbon trail: feed it `Set(pos)` each frame and `Release()` when the object stops. Null when all are busy.
         public TrailHandle Trail(Color color, float width = 0.16f) => _trails.Acquire(color, width);
 
-        /// A word in the world (the web's popText): outlined, no plate.
-        public void PopWord(string word, Vector3 pos, Color color, float size = 0.5f, float life = 0.78f, float rise = 1.15f, float tilt = 0, float spin = 0)
+        /// A word in the world (the web's popText): outlined, no plate. Returns a handle for KillWord.
+        public int PopWord(string word, Vector3 pos, Color color, float size = 0.5f, float life = 0.78f, float rise = 1.15f, float tilt = 0, float spin = 0)
             => _callouts.Spawn(word, null, pos, color, size, life, rise, tilt, spin, false);
+
+        /// Retire a word PopWord returned, if it is still on screen (a game that keeps one word per slot: the new one
+        /// replaces the old instead of stacking on it).
+        public void KillWord(int handle) => _callouts.Kill(handle);
 
         /// Remove the badges still on screen (a new badge replaces them rather than stacking).
         public void ClearBadges() => _callouts.KillBadges();

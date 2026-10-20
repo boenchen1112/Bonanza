@@ -214,7 +214,7 @@ namespace Bonanza
                     // A voice coming back is a moment: it is the thing the player was trying to fix.
                     fx.Flare(head + Vector3.up * 0.5f, laneC, 0.9f, 0.3f, 0.35f, 2.6f);
                     Halo(i, laneC, 1.25f);
-                    if (!cpu) fx.PopWord("BACK!", head + new Vector3(0, 0.95f, -0.2f), laneC, 0.45f, 0.7f, 0.8f);
+                    if (!cpu) LaneWord(i, "BACK!", laneC, 0.4f, 0.75f);
                 }
             }
             else
@@ -242,10 +242,19 @@ namespace Bonanza
             o.Dir = new Vector3(ChompChart.X[i] * 0.09f, 1, -0.15f);
             o.Combo = combo;
             o.Scale = (note.Finale ? 1.35f : cpu ? 0.7f : dense ? 0.82f : 1) * 0.8f;   // the singer stands in the burst: keep its rings off the neighbours
-            o.Stage = !dense; o.Text = !dense;
+            o.Stage = !dense;
+            // The verdict word is the lane's own (LaneWord): one per lane, a new hit replaces it with a pop instead of
+            // stacking a second word on it; the combo's "xN" gets its own slot beside it, toward the stage centre.
+            o.Text = false;
             o.GroundY = _pedTop[i];
-            fx.PlayVerdict(v, new Vector3(ChompChart.X[i], _headY[i] + 0.12f, -0.05f), o);
+            var at0 = new Vector3(ChompChart.X[i], _headY[i] + 0.12f, -0.05f);
+            float side = ChompChart.X[i] < 0 ? 1 : -1;
+            o.MilestoneOffset = new Vector3(side * 2.0f, WordY(i) - at0.y + 0.02f, -0.35f);
+            fx.PlayVerdict(v, at0, o);
             if (cpu) return;
+            if (!(hit && !wasAlive)) LaneWord(   // a voice coming back already said BACK!
+                i, Feel.Label(v), fx.VerdictColor != null ? fx.VerdictColor(v) : Feel.Hex(Feel.BaseColor(v)),
+                v == Verdict.Perfect ? 0.44f : v == Verdict.Miss ? 0.36f : 0.4f, v == Verdict.Miss ? 0.9f : 0.8f);
 
             var f = Feel.ForCombo(v, combo);
             Look.Hitstop(note.Finale ? Feel.FinaleHitstop : Feel.HitstopFor(f.Hitstop, _round.Judge.Notes, _round.Map.TimeAt(note.Beat)));
@@ -257,6 +266,17 @@ namespace Bonanza
                 if (Feel.IsMilestone(combo)) crowd?.Hype(0.6f + Feel.ComboTier(combo) * 0.08f);
             }
             else crowd?.Deflate(0.8f);
+        }
+
+        readonly int[] _laneWord = { -1, -1, -1, -1 };
+
+        /// The lane's word slot, under the YOU marker and over the singer's head: the old word goes, the new one pops in
+        /// at the same spot (barely rising, so it never climbs into the marker).
+        void LaneWord(int lane, string word, Color c, float size, float life)
+        {
+            var fx = Look.Fx;
+            fx.KillWord(_laneWord[lane]);
+            _laneWord[lane] = fx.PopWord(word, new Vector3(ChompChart.X[lane], WordY(lane), -0.4f), c, size, life, 0.12f);
         }
 
         // ------------------------------------------------------------ sound (baked web voices, VoiceCatalog)
@@ -382,6 +402,7 @@ namespace Bonanza
         void ChordMoment()
         {
             _chordFx = 1;
+            _column = Mathf.Max(_column, 0.55f);   // the singing beams stretch up out of the frame for a moment
             bool calm = Settings.ReduceMotion;
             var fx = Look.Fx;
             int n = calm ? 14 : 40;
@@ -418,7 +439,18 @@ namespace Bonanza
                     rig.Shake(Feel.FinaleShake * (h / 4f), Vector3.up);
                     rig.DoFlash(Feel.FinaleFlash * (h / 4f), Hex(0xfff6d8));
                     Look.Fx.Confetti(new Vector3(0, 2.2f, 0), 120, null, 8.5f, 1.2f);
-                    _env?.Crowd?.Cheer(1.2f);
+                    // The payoff: every voice that landed throws a full-height column of its colour (~1 s, capped under
+                    // the bloom knee), confetti cannons fire down and in from over both wings, the house jumps.
+                    _column = 1;
+                    if (!Settings.ReduceMotion)
+                    {
+                        var fx = Look.Fx;
+                        fx.ConfettiCannon(new Vector3(-5.6f, 5.4f, 0.6f), new Vector3(0.75f, -0.35f, -0.2f), 90, 9.5f, 0.24f, 2.2f, 0.35f);
+                        fx.ConfettiCannon(new Vector3(5.6f, 5.4f, 0.6f), new Vector3(-0.75f, -0.35f, -0.2f), 90, 9.5f, 0.24f, 2.2f, 0.35f);
+                        fx.ConfettiCannon(new Vector3(0, 6.2f, 0.8f), new Vector3(0, -1, -0.15f), 70, 5.5f, 0.24f, 2.4f, 0.6f);
+                    }
+                    _env?.Crowd?.Cheer(1.5f);
+                    _env?.Spotlights?.Chase(8f, 0.09f);
                 }
             }
             if (!_finaleDone && beat >= ChompChart.FinaleEnd)
@@ -426,7 +458,8 @@ namespace Bonanza
                 _finaleDone = true;
                 Host.MusicStop(1.1f);   // web chompChorus: the track fades out under the last note
                 int h = _round.FinaleHits;
-                Ui.Banner(h == N ? "FULL CHORD!" : h >= 2 ? "NICE CHORUS" : "ROUGH NIGHT", null, CountColor, 1.8f, plate: true);
+                // In the ALL FOUR slot over the house, so the four cheering singers stay in view under it.
+                Ui.Banner(h == N ? "FULL CHORD!" : h >= 2 ? "NICE CHORUS" : "ROUGH NIGHT", null, CountColor, 1.8f, plate: true, y: 0.16f);
                 if (h == N) { Look.Fx.Confetti(new Vector3(0, 2.6f, 0), 160, null, 9, 1.3f); _env?.Crowd?.Cheer(1.4f); }
                 else if (h < 2) _env?.Crowd?.Deflate(0.7f);
             }
@@ -470,6 +503,7 @@ namespace Bonanza
                 foreach (var a in ChompChart.Actions) held |= Host.IsHeld(a);
                 if (held) FinaleHeldFrames++;
             }
+            if (_finaleDone && _round.FinaleHits >= 2) _curtain = Damp(_curtain, 1, 3.5f, dt);
             for (int i = 0; i < N; i++)
             {
                 var l = _lanes[i];

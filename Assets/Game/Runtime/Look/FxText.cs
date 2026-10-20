@@ -18,6 +18,7 @@ namespace Bonanza.Look
             public bool On; public float Age, Life, Rise, Size, Tilt, Spin, PlateW, PlateH, Unit = 1;
             public float Em, SubEm, MainY, SubY, Alpha = 1, SubAlpha = 1;   // badge layout (web makeWordTexture), world units at scale 1
             public bool HasSub;
+            public int Gen;
             public Vector3 Pos; public Color Color, Stroke; public bool Plate;
         }
 
@@ -175,9 +176,13 @@ namespace Bonanza.Look
 
         /// `sub` (smaller second line) may be null. Plate badges: `size` is the web sprite scale (0.8 / 1.05 / 1.75). Plain words
         /// (PopWord): `size` is the world height of the word's line box.
-        public void Spawn(string word, string sub, Vector3 pos, Color color, float size, float life, float rise, float tilt, float spin, bool plate)
+        /// Returns a handle for Kill (slot index plus a generation, so a recycled slot is never killed by a stale handle).
+        public int Spawn(string word, string sub, Vector3 pos, Color color, float size, float life, float rise, float tilt, float spin, bool plate)
         {
-            var it = _items[Slot()];
+            int slot = Slot();
+            var it = _items[slot];
+            it.Gen = (it.Gen + 1) & 0xffffff;
+            int handle = slot | (it.Gen << 7);
             it.On = true; it.Age = 0; it.Life = Mathf.Max(0.05f, life); it.Rise = rise; it.Size = size; it.Tilt = tilt; it.Spin = spin;
             it.Pos = pos; it.Color = color; it.Plate = plate; it.HasSub = plate && sub != null;
             it.Go.SetActive(true);
@@ -208,7 +213,7 @@ namespace Bonanza.Look
                 var li = t.textInfo.lineInfo[0];
                 it.Unit = Mathf.Max(0.01f, li.ascender - li.descender);
                 it.SubGo.SetActive(false);
-                return;
+                return handle;
             }
             // Badge: fixed plate, em from the web's pixel sizes; the word shrinks only if it would overrun the plate.
             float w1 = Mathf.Max(0.01f, t.textBounds.size.x);   // word width at em = 1 world unit (fontSize 10)
@@ -227,6 +232,17 @@ namespace Bonanza.Look
                 it.SubGo.SetActive(true);
             }
             else it.SubGo.SetActive(false);
+            return handle;
+        }
+
+        /// Retire the callout `handle` names if it is still the one in that slot (no-op otherwise).
+        public void Kill(int handle)
+        {
+            int slot = handle & 0x7f;
+            if (handle < 0 || slot >= _items.Length) return;
+            var it = _items[slot];
+            if (!it.On || it.Gen != (handle >> 7)) return;
+            it.On = false; it.Go.SetActive(false); it.SubGo.SetActive(false);
         }
 
         /// Vertex-alpha fade without a relayout (TMP's alpha setter rebuilds the mesh).

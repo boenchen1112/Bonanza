@@ -2,15 +2,15 @@
 //
 //   riser     one stage joining the four pedestals (web: a bench), an art-deco front, a lit lip and footlights.
 //   pedestals deco drums in each lane's colour that put four very different builds' HEADS on one line (the tall
-//             one stands above it: up is up), each with an LED band that breathes with its voice.
+//             one stands above it: up is up), each with an air gauge window across its front whose rails breathe with its voice.
 //   singers   four procedural jelly-bean singers (round, wide, tall, small: the builds carry the lane mapping),
 //             with eyes, brows, cheeks and a mouth. They INFLATE as they gulp (volume-preserving squash), open
 //             an O while gulping and sing wide, raise their arms on the note, and go dim and droopy when their
 //             voice has dropped out of the chord.
 //   telegraph the web's five channels: a breath ring CONVERGING on the head (radius = time to the note), an air
-//             pipe FILLING beside the pedestal (a bar chart), the singer inflating, colour + position + the key
+//             gauge FILLING across the pedestal's front (a bar chart), the singer inflating, colour + position + the key
 //             glyph on the player's pedestal, and a chord BRIDGE linking the pedestals of lanes that fire together.
-//   beams     a cone of light leaving the head when a note is sung, a faint halo while the voice is alive.
+//   beams     a column of light leaving the head when a note is sung (full height on a chord), faint while alive.
 //
 // Built once in Load (no physics, no Shader.Find; materials are copies of the Look templates in Resources, owned
 // by the env). The glow families are MeshBatches drawn from Load on at black (black is free transparency in an
@@ -126,7 +126,7 @@ namespace Bonanza
                 o.Crowd.Deepen = 1.25f; o.Crowd.Energy = 0.35f; o.Crowd.Rim = 1.0f; o.Crowd.Center = new Vector3(0, 0.08f, 3); o.Crowd.Seed = 0xc40f;
                 // Saturated, close-feeling house: less fog on the figures, a fourth pose, and steps built to each row's
                 // feet so the lit nosings run under the rows instead of through their faces.
-                o.Crowd.FogMul = 0.55f; o.Crowd.PoseKinds = 4; o.Crowd.RisersFollowRows = true; o.Crowd.BrightMin = 0.66f; o.Crowd.BrightMax = 0.9f;
+                o.Crowd.FogMul = 0.55f; o.Crowd.PoseKinds = 4; o.Crowd.RisersFollowRows = true; o.Crowd.BrightMin = 0.56f; o.Crowd.BrightMax = 0.78f; o.Crowd.Rim = 0.75f;   // a shade darker than the singers: they read first
                 o.Floaters.Count = 0;   // orbiting solids only ever showed as clipped shapes in the top corners
             });
             // Concert spots: one soft cone from the rig above each singer, the beat flares half of them.
@@ -143,6 +143,12 @@ namespace Bonanza
                 float faceY = BodyH[i] * FaceK;
                 _pedTop[i] = Mathf.Clamp(HeadLine - faceY, 0.5f, 1.0f) + HeadLift[i];
                 _headY[i] = _pedTop[i] + faceY;
+            }
+            for (int i = 0; i < N; i++)
+            {
+                _bridgeY = Mathf.Max(_bridgeY, SingerTop(i) + 0.12f);
+                var c = _laneLin[i]; float m = Mathf.Max(0.05f, Mathf.Max(c.r, Mathf.Max(c.g, c.b)));
+                _beamHue[i] = new Color(Mathf.Pow(c.r / m, 1.8f), Mathf.Pow(c.g / m, 1.8f), Mathf.Pow(c.b / m, 1.8f));
             }
             BuildRiser();
             BuildPedestals();
@@ -267,17 +273,26 @@ namespace Bonanza
                 b.Torus(CapR - 0.05f, 0.05f, 6, 48, Mathf.PI * 2, Matrix4x4.TRS(new Vector3(x, top + 0.02f, 0), Quaternion.Euler(90, 0, 0), Vector3.one), rimC);
                 b.Disc(CapR - 0.05f, 40, Matrix4x4.Translate(new Vector3(x, top + 0.02f, 0)), cap, 0.4f);
                 b.Disc(0.7f, 40, Matrix4x4.Translate(new Vector3(x, top + 0.024f, 0)), Color.Lerp(cap, Color.white, 0.12f) * 0.9f, 0.3f);
+                // the air gauge's track: a dark glass window across the drum's front, under the collar
+                float y0 = GaugeY0(i), r0 = GaugeR(i);
+                var ink = c * 0.07f + new Color(0.012f, 0.008f, 0.025f); ink.a = 1;
+                b.Shell(r0 + 0.004f, r0 + 0.004f, GaugeH, 28, Mathf.PI - GaugeArc, GaugeArc * 2, Matrix4x4.Translate(new Vector3(x, y0 + GaugeH / 2, 0)), ink, new Vector2(0.01f, 0.01f));
             }
             Part("Pedestals", transform, b, mat, Vector3.zero, cast: false);
-            band.Torus(1.0f, 0.032f, 5, 64, Mathf.PI * 2, Matrix4x4.Rotate(Quaternion.Euler(90, 0, 0)), Color.white);
-            _bands = new MeshBatch("PedestalBands", transform, band, N, GlowAdd(0.6f, 0));
+            // The gauge's two rails (top and bottom edge of the window), lit in the lane colour: the old LED band's job
+            // (alive, the beat, the note) on the frame of the gauge.
+            foreach (var y in new[] { -0.012f, GaugeH + 0.012f })
+            {
+                var pts = new Vector3[25];
+                for (int k = 0; k < pts.Length; k++) { float a = Mathf.Lerp(-GaugeArc, GaugeArc, k / (pts.Length - 1f)); pts[k] = new Vector3(Mathf.Sin(a) * 1.012f, y, -Mathf.Cos(a) * 1.012f); }
+                band.Tube(pts, 0.017f, 5, Matrix4x4.identity, Color.white);
+            }
+            _bands = new MeshBatch("GaugeRails", transform, band, N, GlowAdd(0.6f, 0));
             _bands.Renderer.receiveShadows = false;
             for (int i = 0; i < N; i++)
             {
-                // on the drum, just under the collar
-                float h = Mathf.Max(0.14f, _pedTop[i] - RiserTop), y = _pedTop[i] - 0.2f;
-                float r = Mathf.Lerp(DrumBotR, DrumTopR, Mathf.Clamp01((y - RiserTop) / h)) + 0.012f;
-                _bands.Matrix[i] = Matrix4x4.TRS(new Vector3(ChompChart.X[i], y, 0), Quaternion.identity, new Vector3(r, 1, r));
+                float r = GaugeR(i);
+                _bands.Matrix[i] = Matrix4x4.TRS(new Vector3(ChompChart.X[i], GaugeY0(i), 0), Quaternion.identity, new Vector3(r, 1, r));
                 _bands.Tint[i] = Color.black;
             }
             _bands.Flush();
@@ -298,9 +313,9 @@ namespace Bonanza
             // the screen: a raised darker panel on the face, and two little feet
             b.Box(Matrix4x4.TRS(c0 + n * (SignD / 2 + 0.008f), q, new Vector3(SignW - 0.1f, SignH - 0.1f, 0.016f)), new Color(0.02f, 0.016f, 0.04f));
             foreach (var sx in new[] { -1f, 1f })
-                b.Box(Matrix4x4.TRS(new Vector3(hx + sx * (SignW / 2 - 0.12f), 0.03f, c0.z + 0.04f), Quaternion.identity, new Vector3(0.16f, 0.06f, 0.36f)), new Color(0.05f, 0.04f, 0.08f));
+                b.Box(Matrix4x4.TRS(new Vector3(c0.x + sx * (SignW / 2 - 0.12f), 0.03f, c0.z + 0.06f), Quaternion.identity, new Vector3(0.14f, 0.06f, 0.3f)), new Color(0.05f, 0.04f, 0.08f));
             // the glyph's backing: the same arrow, larger and near-black, so the lit arrow keeps a crisp edge under bloom
-            Arrow(b, hu, SignPoint(hu, 0.18f) + n * 0.02f, GlyphSize * 1.28f, q, new Color(0.01f, 0.008f, 0.02f));
+            Arrow(b, hu, SignPoint(hu, 0.08f) + n * 0.02f, GlyphSize * 1.28f, q, new Color(0.01f, 0.008f, 0.02f));
             var topL = c0 + q * new Vector3(-SignW / 2 + 0.03f, SignH / 2, -SignD / 2);
             var topR = c0 + q * new Vector3(SignW / 2 - 0.03f, SignH / 2, -SignD / 2);
             strip.Tube(new[] { topL, topR }, 0.026f, 5, Matrix4x4.identity, _laneLin[hu] * 1.6f);
@@ -310,7 +325,7 @@ namespace Bonanza
 
             _glyphMat = GlowAdd(0, 0);
             b = new MeshBuilder();
-            Arrow(b, hu, SignPoint(hu, 0.18f) + n * 0.035f, GlyphSize, q, Color.white);
+            Arrow(b, hu, SignPoint(hu, 0.08f) + n * 0.035f, GlyphSize, q, Color.white);
             Part("KeyGlyph", transform, b, _glyphMat, Vector3.zero).receiveShadows = false;
             _youMat = GlowAdd(0.5f, 0);
             b = new MeshBuilder();
@@ -320,12 +335,12 @@ namespace Bonanza
             var font = Resources.Load<TMP_FontAsset>("Look/CalloutFont");
             var go = new GameObject("YouTag", typeof(TextMeshPro));
             go.transform.SetParent(transform, false);
-            go.transform.localPosition = SignPoint(hu, -0.27f) + n * 0.03f;
+            go.transform.localPosition = SignPoint(hu, -0.14f) + n * 0.03f;
             go.transform.localRotation = q;
             var t = go.GetComponent<TextMeshPro>();
             if (font) t.font = font;
             t.text = "YOU";
-            t.fontSize = 1.75f;
+            t.fontSize = 1.3f;
             t.characterSpacing = 10;
             t.alignment = TextAlignmentOptions.Center;
             t.textWrappingMode = TextWrappingModes.NoWrap;
@@ -344,23 +359,27 @@ namespace Bonanza
             mk.SetFloat("_ShadowRecv", 0);
             _marker = Part("YouMarker", transform, b, mk, Vector3.zero).transform;
             _marker.GetComponent<MeshRenderer>().receiveShadows = false;
-            _markerY = SingerTop(hu) + 0.5f;
+            _markerY = SingerTop(hu) + 0.66f;   // room under it for the lane's word (WordY)
             _marker.localPosition = new Vector3(hx, _markerY, -0.35f);
         }
 
         Transform _marker;
         float _markerY;
+        /// The lane's verdict word: over the singer's head, under the YOU marker's tip.
+        float WordY(int i) => SingerTop(i) + 0.27f;
 
         // The monitor sign: width, height, depth, back-tilt; the glyph's half size.
-        const float SignW = 1.16f, SignH = 0.7f, SignD = 0.14f, SignTilt = 9f, GlyphSize = 0.17f;
+        // On the boards in front of the marquee, low enough that it never covers the pedestal's base (it sat on the
+        // riser's lip and hid the drum).
+        const float SignW = 0.96f, SignH = 0.46f, SignD = 0.12f, SignTilt = 17f, GlyphSize = 0.12f;
         Material _stripMat;
         static Quaternion SignRot => Quaternion.Euler(SignTilt, 0, 0);
-        static Vector3 SignCenter(int i) => new Vector3(ChompChart.X[i], SignH / 2 + 0.04f, -1.66f);
+        static Vector3 SignCenter(int i) => new Vector3(ChompChart.X[i] * 0.88f, SignH / 2 + 0.04f, -1.95f);   // a little in toward the centre: inside the frame with room
         /// A point on the sign's face, `up` metres above its centre.
         static Vector3 SignPoint(int i, float up) => SignCenter(i) + SignRot * new Vector3(0, up, -SignD / 2);
 
         /// Top of the singer's silhouette, accessory included (beams leave from above it, the marker floats over it).
-        static readonly float[] AccTop = { 0.36f, 0.02f, 0.13f, 0.08f };
+        static readonly float[] AccTop = { 0.36f, 0.12f, 0.13f, 0.08f };
         float SingerTop(int i) => _pedTop[i] + 0.025f + BodyH[i] + AccTop[i];
 
         /// A flat down-pointing triangle in XY (facing -z): `w` half width, `h` height, tip at (0, y0), `z` offset.
@@ -390,15 +409,19 @@ namespace Bonanza
             b.T.Add(o + 2); b.T.Add(o + 3); b.T.Add(o + 4); b.T.Add(o + 2); b.T.Add(o + 4); b.T.Add(o + 5);
         }
 
-        // The air gauge: a glass pipe bent along the front rim of each cap (off the singer's silhouette, under its feet),
-        // brass ends, LED segments that light left to right as the breath is taken, a tick ring at the far end where the
-        // note lands.
-        const int GaugeSeg = 10;
-        const float GaugeR = 0.88f, GaugeArc = 44f * Mathf.Deg2Rad, GaugeTube = 0.125f;
-        Vector3 GaugeAt(int i, float u)
+        // The air gauge: a dark glass window wrapped across the front of each drum, under the cap (off the singer's
+        // silhouette), framed by two lit rails. The breath FILLS it left to right in the lane colour, a white-hot
+        // leading edge, up to a white tick at the right end where the note lands; it drains on the release. The level
+        // is the time left to the note (web props.js air pipe, as a bar).
+        const int GaugeSeg = 22;
+        const float GaugeH = 0.13f, GaugeArc = 68f * Mathf.Deg2Rad;
+        /// Bottom of the gauge window: its top sits just under the collar.
+        float GaugeY0(int i) => _pedTop[i] - 0.15f - GaugeH;
+        /// The drum's radius at the window (the drum tapers), plus a hair so it sits proud of the paint.
+        float GaugeR(int i)
         {
-            float a = Mathf.Lerp(-GaugeArc, GaugeArc, u);
-            return new Vector3(ChompChart.X[i] + Mathf.Sin(a) * GaugeR, _pedTop[i] + 0.12f, -Mathf.Cos(a) * GaugeR);
+            float h = Mathf.Max(0.14f, _pedTop[i] - RiserTop), y = GaugeY0(i) + GaugeH * 0.5f;
+            return Mathf.Lerp(DrumBotR, DrumTopR, Mathf.Clamp01((y - RiserTop) / h)) + 0.01f;
         }
 
         // Chord bridges: an arc over the heads from one singer to the next of the chord, as open tube segments (no
@@ -415,58 +438,38 @@ namespace Bonanza
             tpl.Torus(1, 0.05f, 6, 56, Mathf.PI * 2, Matrix4x4.identity, Color.white);
             _rings = new MeshBatch("BreathRings", transform, tpl, N, GlowAdd(0.55f, 0));
 
-            // gauge housing: brass end caps and a valve at the target end, then the glass
-            var brass = EnvKit.Surface(_env, Hex(0xd6aa52), null, null, rim: 1.3f, pulse: 0.1f, bands: 3);
-            var b = new MeshBuilder();
-            var glass = new MeshBuilder();
-            for (int i = 0; i < N; i++)
-            {
-                var pts = new Vector3[17];
-                for (int k = 0; k < pts.Length; k++) pts[k] = GaugeAt(i, k / (pts.Length - 1f));
-                glass.Tube(pts, GaugeTube, 10, Matrix4x4.identity, _laneLin[i] * 0.5f + new Color(0.14f, 0.14f, 0.16f));
-                foreach (var u in new[] { 0f, 1f })
-                {
-                    var p = GaugeAt(i, u);
-                    var tan = (GaugeAt(i, u + (u > 0.5f ? -0.02f : 0.02f)) - p).normalized;
-                    b.Sphere(GaugeTube * 1.45f, 12, 8, Matrix4x4.TRS(p, Quaternion.FromToRotation(Vector3.up, tan), Vector3.one), Color.white, new Vector3(1, 0.7f, 1));
-                }
-                var end = GaugeAt(i, 1);
-                b.Shell(0.05f, 0.06f, 0.12f, 10, 0, Mathf.PI * 2, Matrix4x4.Translate(end + Vector3.up * 0.16f), Color.white, Vector2.one);
-                b.Sphere(0.075f, 10, 6, Matrix4x4.Translate(end + Vector3.up * 0.24f), Color.white * 1.15f, new Vector3(1, 0.5f, 1));
-            }
-            Part("GaugeBrass", transform, b, brass, Vector3.zero);
-            Part("GaugeGlass", transform, glass, GlowAdd(-2.0f, 0, 0.2f), Vector3.zero).receiveShadows = false;
+            // gauge fill: one slice of the window per segment (unit radius, centred on the front), rotated into place
+            float dA = GaugeArc * 2 / GaugeSeg;
             tpl = new MeshBuilder();
-            float segLen = 2 * GaugeArc * GaugeR / GaugeSeg;
-            tpl.Capsule(GaugeTube * 0.64f, segLen * 0.6f, 2, 8, Matrix4x4.Rotate(Quaternion.Euler(0, 0, 90)), Color.white);
-            _gauge = new MeshBatch("GaugeFill", transform, tpl, N * GaugeSeg, GlowAdd(0.5f, 0));
+            tpl.Shell(1.016f, 1.016f, GaugeH * 0.86f, 3, Mathf.PI - dA / 2, dA, Matrix4x4.Translate(new Vector3(0, GaugeH / 2, 0)), Color.white, Vector2.one);
+            _gauge = new MeshBatch("GaugeFill", transform, tpl, N * GaugeSeg, GlowAdd(0, 0));
+            // the target tick: a white bar standing across the window's right end
             tpl = new MeshBuilder();
-            tpl.Torus(GaugeTube * 1.18f, 0.022f, 5, 18, Mathf.PI * 2, Matrix4x4.identity, Color.white);
+            tpl.Capsule(0.022f, GaugeH + 0.03f, 2, 6, Matrix4x4.Translate(new Vector3(0, GaugeH / 2, -1.03f)), Color.white);
             _ticks = new MeshBatch("GaugeTicks", transform, tpl, N, GlowAdd(0.3f, 0));
             for (int i = 0; i < N; i++)
             {
-                // the tick sits one segment short of the end: "full" is reached on the note
-                var p = GaugeAt(i, 1 - 0.5f / GaugeSeg);
-                var tan = (GaugeAt(i, 1) - GaugeAt(i, 1 - 1f / GaugeSeg)).normalized;
-                _ticks.Matrix[i] = Matrix4x4.TRS(p, Quaternion.FromToRotation(Vector3.forward, tan), Vector3.one);
+                float r = GaugeR(i);
+                _ticks.Matrix[i] = Matrix4x4.TRS(new Vector3(ChompChart.X[i], GaugeY0(i), 0), Quaternion.Euler(0, -(GaugeArc - dA * 0.5f) * Mathf.Rad2Deg, 0), new Vector3(r, 1, r));
             }
 
-            // Beams: a cone of light rising from ABOVE the singer (never over its face), set behind it, fading in over its
-            // first fifth and out toward the top (vertex colours carry the profile, so the material needs no ramp).
+            // Beams: a column of light rising from ABOVE the singer (never over its face), set behind it, widening as it
+            // climbs (web: the voice's cone opens upward out of the frame), fading in over its first eighth and only slowly
+            // toward the top (vertex colours carry the profile, so the material needs no ramp). Soft edges (facing).
             tpl = new MeshBuilder();
-            tpl.Surface(18, 8, (u, v) =>
+            tpl.Surface(20, 10, (u, v) =>
             {
-                float a = u * Mathf.PI * 2, r = Mathf.Lerp(0.38f, 0.07f, v);
+                float a = u * Mathf.PI * 2, r = Mathf.Lerp(0.26f, 0.52f, v);
                 var d = new Vector3(Mathf.Sin(a), 0, Mathf.Cos(a));
-                return (d * r + Vector3.up * v, new Vector3(d.x, 0.36f, d.z).normalized);
+                return (d * r + Vector3.up * v, new Vector3(d.x, -0.3f, d.z).normalized);
             }, Matrix4x4.identity, Color.white, Vector2.one);
             for (int k = 0; k < tpl.Count; k++)
             {
                 float v = tpl.P[k].y;
-                float prof = Mathf.SmoothStep(0, 1, v / 0.2f) * Mathf.Pow(1 - v, 1.4f);
+                float prof = Mathf.SmoothStep(0, 1, v / 0.12f) * Mathf.Pow(1 - v, 0.7f);
                 tpl.C[k] = Color.white * prof;
             }
-            _beams = new MeshBatch("VoiceBeams", transform, tpl, N, GlowAdd(0.7f, 0));
+            _beams = new MeshBatch("VoiceBeams", transform, tpl, N, GlowAdd(0.8f, 0));
 
             tpl = new MeshBuilder();
             tpl.Shell(0.1f, 0.1f, 1, 10, 0, Mathf.PI * 2, Matrix4x4.Rotate(Quaternion.Euler(0, 0, 90)), Color.white, Vector2.one);
@@ -514,7 +517,9 @@ namespace Bonanza
             var lane = _laneLin[i];
             Color belly = Color.Lerp(lane, Color.white, 0.3f), dark = lane * 0.32f, white = new Color(0.98f, 0.97f, 0.95f);
             dark.a = 1;
-            s.Mat = EnvKit.Surface(_env, Color.white, null, null, rim: 1.25f, pulse: 0.1f, bands: 3);
+            // a strong rim (1.25 -> 1.6) so the silhouette holds against the pastel house (an ink-hull outline cost ~7 ms
+            // a frame under SwiftShader: the singers are a big share of the frame)
+            s.Mat = EnvKit.Surface(_env, Color.white, null, null, rim: 1.6f, pulse: 0.1f, bands: 3);
             s.Mat.SetFloat("_Softness", 0.3f);
             s.Mat.SetFloat("_ShadowRecv", 0);   // casts on its pedestal, never self-shadows (jagged acne on a curved toon body)
             var face = EnvKit.Surface(_env, Color.white, null, null, rim: 0.35f, pulse: 0.05f, lift: 0.12f, bands: 2);
@@ -646,7 +651,7 @@ namespace Bonanza
         }
 
         /// One personal touch per singer, baked into the body mesh (lane colours): round = an antenna bobble,
-        /// wide = a bow tie, tall = a quiff, small = a bow.
+        /// wide = a beret (a bow tie on the face read as a moustache with the open mouth), tall = a quiff, small = a bow.
         static void Accessory(MeshBuilder b, int i, float w, float h, Color lane, Color dark)
         {
             var gold = Hex(0xffd93d).linear; var pink = Hex(0xff6fae).linear; var ink = new Color(0.07f, 0.05f, 0.12f);
@@ -658,11 +663,11 @@ namespace Bonanza
                     break;
                 case 1:
                 {
-                    var p = FacePoint(0, h * 0.36f, w, h, out var n);
-                    var q = Quaternion.LookRotation(n);
-                    b.Sphere(0.05f, 10, 6, Matrix4x4.TRS(p - n * 0.02f, q, Vector3.one), ink, new Vector3(1, 1, 0.8f));
-                    foreach (var sx in new[] { -1f, 1f })
-                        b.Cone(0.09f, 0.16f, 8, Matrix4x4.TRS(p + new Vector3(sx * 0.02f, 0, 0) - n * 0.03f, Quaternion.Euler(0, 0, sx * 90), new Vector3(1, 1, 0.5f)), ink);
+                    // a squashed, tilted beret in deep plum with a little stalk, sitting back on the crown
+                    var beret = new Color(0.16f, 0.05f, 0.2f);
+                    var q = Quaternion.Euler(-8, 0, -13);
+                    b.Sphere(0.3f, 18, 10, Matrix4x4.TRS(new Vector3(0.07f, h * 0.975f, 0.04f), q, Vector3.one), beret, new Vector3(1.18f, 0.3f, 1.05f));
+                    b.Sphere(0.04f, 8, 6, Matrix4x4.Translate(new Vector3(0.05f, h * 0.975f + 0.1f, 0.04f)), beret * 1.4f, new Vector3(1, 1.3f, 1));
                     break;
                 }
                 case 2:
@@ -690,8 +695,9 @@ namespace Bonanza
             var l = _lanes[i];
             bool calm = Settings.ReduceMotion;
             float puff = l.Gulp * l.Armed;
-            float alive = l.AliveT;
-            float sing = Mathf.Clamp01(l.Sing);
+            // Curtain call (a finale that landed): every singer is back up, cheering, the dropped voices included.
+            float alive = Mathf.Max(l.AliveT, _curtain);
+            float sing = Mathf.Max(Mathf.Clamp01(l.Sing), _curtain * (0.62f + 0.22f * Mathf.Sin(t * 7 + i * 1.7f)));
             float ph = Phase(beat);
             bool hold = finaleHold && _round.Alive[i];
             float dead = 1 - alive;
@@ -760,12 +766,13 @@ namespace Bonanza
             s.Mouth.localScale = new Vector3(mx, Mathf.Max(0.1f, my), 1);
             s.Cheeks.localScale = Vector3.one * (1 + puff * 0.75f);
 
-            // A dead voice goes grey and dim; a voice that sings flushes a little brighter.
-            var c = Color.Lerp(new Color(0.5f, 0.5f, 0.56f), Color.white, alive) * (1 + sing * 0.12f);
+            // A dead voice goes grey (pale and still lit: a resting voice, not a hole in the picture); a voice that sings
+            // flushes a little brighter.
+            var c = Color.Lerp(new Color(0.8f, 0.8f, 0.86f), Color.white, alive) * (1 + sing * 0.12f);
             c.a = 1;
             s.Mat.SetColor("_BaseColor", c);
-            s.Mat.SetFloat("_Desat", dead * 0.9f);
-            s.Mat.SetFloat("_Lift", sing * 0.1f);
+            s.Mat.SetFloat("_Desat", dead * 0.82f);
+            s.Mat.SetFloat("_Lift", sing * 0.1f + dead * 0.28f);
         }
 
         /// The glow families and the riser/pedestal lights (web props.update), plus the YOU marker.
@@ -792,6 +799,7 @@ namespace Bonanza
             bool calm = Settings.ReduceMotion;
             float beatK = beat >= 0 && _playing ? Mathf.Exp(-6f * bp) : 0;
             _chordFx = Damp(_chordFx, 0, 2.2f, dt);
+            _column = Mathf.Max(0, _column - dt / 1.1f);   // the chord column lasts about a second
             for (int i = 0; i < N; i++)
             {
                 var l = _lanes[i];
@@ -816,40 +824,42 @@ namespace Bonanza
                 }
                 else { _rings.Matrix[i] = Matrix4x4.TRS(Hidden, Quaternion.identity, Vector3.one * 0.001f); _rings.Tint[i] = Color.black; }
 
-                // gauge: the segments light left to right over the breath (the last one on the note), drain on release;
-                // the leading segment runs white-hot, the tick flashes when the gauge is full.
-                float fill = Mathf.Max(g * armed, sing * 0.6f);
-                float lit = fill * GaugeSeg;
+                // gauge: the window fills left to right over the breath (full on the note), drains on the release; the
+                // leading slice runs white-hot, the tick flashes white when the gauge is full.
+                float fill = Mathf.Max(g * armed, sing * sing);
+                float lit = fill * GaugeSeg, gr = GaugeR(i), gy = GaugeY0(i);
+                var lc = c / Mathf.Max(0.05f, Mathf.Max(c.r, Mathf.Max(c.g, c.b)));   // lane hue at full value: a clear level, never clipped
                 for (int k = 0; k < GaugeSeg; k++)
                 {
                     int idx = i * GaugeSeg + k;
                     float on = Mathf.Clamp01(lit - k);
                     if (on > 0.004f)
                     {
-                        float u = (k + 0.5f) / GaugeSeg;
-                        var p = GaugeAt(i, u);
-                        var tan = (GaugeAt(i, u + 0.01f) - GaugeAt(i, u - 0.01f)).normalized;
-                        _gauge.Matrix[idx] = Matrix4x4.TRS(p, Quaternion.FromToRotation(Vector3.right, tan), Vector3.one);
-                        bool head = lit - k < 1.0f;
-                        var col = head ? Color.Lerp(c, Color.white, 0.55f) : c;
-                        _gauge.Tint[idx] = col * (on * (0.55f + 0.75f * fill));
+                        float a = Mathf.Lerp(-GaugeArc, GaugeArc, (k + 0.5f) / GaugeSeg);
+                        _gauge.Matrix[idx] = Matrix4x4.TRS(new Vector3(x, gy, 0), Quaternion.Euler(0, -a * Mathf.Rad2Deg, 0), new Vector3(gr, 1, gr));
+                        bool head = lit - k < 1.5f && fill < 0.999f;
+                        var gc = head ? Color.Lerp(lc, Color.white, 0.6f) : lc * (0.62f + 0.18f * k / GaugeSeg);
+                        _gauge.Tint[idx] = gc * on * (0.75f + 0.25f * armed);
                     }
                     else { _gauge.Matrix[idx] = Matrix4x4.TRS(Hidden, Quaternion.identity, Vector3.one * 0.001f); _gauge.Tint[idx] = Color.black; }
                 }
                 float full = Mathf.Clamp01((g * armed - 0.9f) / 0.1f);
-                _ticks.Tint[i] = Color.Lerp(c * 0.35f + new Color(0.12f, 0.12f, 0.12f), new Color(2.2f, 2.2f, 2.2f), Mathf.Max(full, sing * 0.6f));
+                _ticks.Tint[i] = Color.Lerp(new Color(0.5f, 0.5f, 0.5f), new Color(1.6f, 1.6f, 1.6f), Mathf.Max(full, sing * 0.6f));
 
-                // beam: the sung note leaving above the singer, behind it, plus a faint resting halo while alive. Peak
-                // tint is capped (a chord of four never washes the stage out); the finale's held bar sustains it lower.
+                // beam: the sung note leaving above the singer, behind it, plus a faint resting glow while alive. The tint
+                // is the lane hue at full value, deepened (_beamHue: added over the pink sky a pastel hue reads white), its
+                // peak capped, a chord / the finale's payoff stretches every live voice's beam into a full-height column.
                 float rest = alive * (0.12f + 0.05f * Mathf.Sin(bp * Mathf.PI * 2));
-                float sb = finaleHold ? Mathf.Min(sing, 0.62f) : sing;
-                float bb = Mathf.Max(sb, rest * 0.5f);
+                float sb = finaleHold ? Mathf.Max(Mathf.Min(sing, 0.7f), 0.45f) : sing;
+                float col = _column * (alive > 0.5f && (sing > 0.05f || finaleHold) ? 1 : 0);
+                // (no resting glow column: four always-on additive columns cost fill on weak GPUs for little read)
+                float bb = Mathf.Max(sb, col);
                 if (bb > 0.006f)
                 {
-                    float h = 0.8f + 4.4f * sb * sb + rest * 1.2f;
-                    float wsc = 0.85f + sb * 0.65f;
+                    float h = 0.9f + 3.6f * sb + rest * 1.0f + col * 4.5f;
+                    float wsc = 0.8f + sb * 0.55f + col * 0.35f;
                     _beams.Matrix[i] = Matrix4x4.TRS(new Vector3(x, SingerTop(i) + 0.04f, 0.3f), Quaternion.identity, new Vector3(wsc, h, wsc));
-                    _beams.Tint[i] = c * Mathf.Min(1.5f, (0.14f + 1.25f * sb) * (0.35f + 0.65f * alive) * 1.6f);
+                    _beams.Tint[i] = _beamHue[i] * Mathf.Min(1.35f + 0.25f * col, (0.12f + 1.1f * sb + 0.7f * col) * (0.35f + 0.65f * alive));
                 }
                 else { _beams.Matrix[i] = Matrix4x4.TRS(Hidden, Quaternion.identity, Vector3.one * 0.001f); _beams.Tint[i] = Color.black; }
 
@@ -870,21 +880,17 @@ namespace Bonanza
                     if (prev >= 0 && br < N - 1)
                     {
                         float g = Mathf.Max(_lanes[prev].Gulp * _lanes[prev].Armed, _lanes[i].Gulp * _lanes[i].Armed);
-                        float k = 0.42f + 0.9f * g * g;
-                        var A = new Vector3(ChompChart.X[prev], SingerTop(prev) + 0.06f, 0.2f);
-                        var B = new Vector3(ChompChart.X[i], SingerTop(i) + 0.06f, 0.2f);
-                        // arch just high enough to clear every singer it passes over
-                        float arc = 0.3f + 0.08f * Mathf.Abs(B.x - A.x);
-                        for (int j = prev + 1; j < i; j++)
-                        {
-                            float uj = (ChompChart.X[j] - A.x) / (B.x - A.x);
-                            arc = Mathf.Max(arc, (SingerTop(j) + 0.3f - Mathf.Lerp(A.y, B.y, uj)) / Mathf.Max(0.2f, Mathf.Sin(Mathf.PI * uj)));
-                        }
+                        float k = 0.22f + 0.4f * g * g;   // two voices' arcs and sparks overlap additively: kept low, never white
+                        // every arc leaves from one common line over all the heads, in one plane behind them: the chain
+                        // reads as one garland of the chord instead of loops crossing at different heights
+                        var A = new Vector3(ChompChart.X[prev], _bridgeY, 0.25f);
+                        var B = new Vector3(ChompChart.X[i], _bridgeY, 0.25f);
+                        float arc = 0.28f + 0.06f * Mathf.Abs(B.x - A.x);
                         for (int q = 0; q < BridgeSeg; q++, seg++)
                         {
                             float u0 = q / (float)BridgeSeg, u1 = (q + 1) / (float)BridgeSeg;
                             Vector3 p0 = BridgeAt(A, B, arc, u0), p1 = BridgeAt(A, B, arc, u1), d = p1 - p0;
-                            _bridges.Matrix[seg] = Matrix4x4.TRS((p0 + p1) * 0.5f, Quaternion.FromToRotation(Vector3.right, d.normalized), new Vector3(d.magnitude * 1.02f, 1, 1));
+                            _bridges.Matrix[seg] = Matrix4x4.TRS((p0 + p1) * 0.5f, Quaternion.FromToRotation(Vector3.right, d.normalized), new Vector3(d.magnitude, 1.35f, 1.35f));
                             float fade = Mathf.SmoothStep(0, 1, Mathf.Min(u0, 1 - u1) * 10 + 0.15f);   // melt into the heads
                             _bridges.Tint[seg] = Color.Lerp(_laneLin[prev], _laneLin[i], (u0 + u1) * 0.5f) * (k * fade);
                         }
@@ -892,9 +898,9 @@ namespace Bonanza
                         {
                             float u = Mathf.Repeat(t * 0.75f + q / (float)Sparks, 1);
                             int si = br * Sparks + q;
-                            _sparks.Matrix[si] = Matrix4x4.TRS(BridgeAt(A, B, arc, u), Quaternion.identity, Vector3.one * (0.8f + g * 0.6f));
+                            _sparks.Matrix[si] = Matrix4x4.TRS(BridgeAt(A, B, arc, u), Quaternion.identity, Vector3.one * (1.2f + g * 0.7f));
                             var sc = Color.Lerp(Color.Lerp(_laneLin[prev], _laneLin[i], u), Color.white, 0.5f);
-                            _sparks.Tint[si] = sc * ((0.3f + 0.65f * g) * Mathf.Sin(Mathf.PI * u));
+                            _sparks.Tint[si] = sc * ((0.2f + 0.4f * g) * Mathf.Sin(Mathf.PI * u));
                         }
                         br++;
                     }
@@ -933,15 +939,19 @@ namespace Bonanza
             _stripMat.SetFloat("_Intensity", 1 + pulse * 0.5f);
         }
 
+        float _bridgeY;
+        readonly Color[] _beamHue = new Color[N];
+
         static Vector3 BridgeAt(Vector3 a, Vector3 b, float arc, float u) => Vector3.Lerp(a, b, u) + Vector3.up * (Mathf.Sin(Mathf.PI * u) * arc);
 
-        float _chordFx;
+        float _chordFx, _column, _curtain;
 
         // Framing (reworked from the web's 1.05 / 6.9 / 1.15 / 48): aimed higher and a little tighter, so the stage
         // sits lower in the frame: less dead floor under the riser, the whole skyline over the crowd, the monitor sign
         // inside the frame with room to spare at 16:9 and 16:10.
-        static readonly Vector3 CamTarget = new Vector3(0, 1.55f, 0);
-        const float CamDist = 7.3f, CamHeight = 0.9f, CamFov = 46;
+        // Round 3: aimed higher still and a touch closer (the floor under the marquee was a quarter of the frame).
+        static readonly Vector3 CamTarget = new Vector3(0, 1.8f, 0);
+        const float CamDist = 7.3f, CamHeight = 0.95f, CamFov = 46;
 
         /// The camera: the frame, then the finale's slow push and the ending's pull-back (rig.frame calls), plus a
         /// small lean toward the human's lane on their notes and a punch-in on a big chord.
