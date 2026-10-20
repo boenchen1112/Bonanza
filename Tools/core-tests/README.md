@@ -1,5 +1,9 @@
 # Core tests without Unity
 
+Needs the .NET 8 SDK (or newer; the project targets net8.0) and NuGet access. If `dotnet` is missing:
+`curl -sSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel 8.0` then
+`export PATH="$HOME/.dotnet:$PATH"` (and `DOTNET_ROOT=$HOME/.dotnet`).
+
 `dotnet test Tools/core-tests` compiles `Assets/Game/Core/**` plus the EditMode tests and runs
 them with NUnit, no Unity needed (about 5 s after the first restore). 148 of the project's 230
 EditMode tests run this way: all the game rules, judging, scoring, party, roster, input map,
