@@ -1,5 +1,5 @@
 // Hymn Meter — the round: a ladder of six hymn excerpts, the CPUs, the reveal flag and the
-// outcome. The round shape matches BounceRound: Start(audioTime) / Press / Update / Done /
+// outcome. The round shape is the other games' rounds: Start(audioTime) / Press / Update / Done /
 // Result().
 //
 // THE LADDER (a pure function of pool and seed, HymnLadder.Select). Six slots, in order:
@@ -60,17 +60,49 @@ namespace Bonanza.Core
         public HymnMidi Midi;
         public HymnGrid Grid;
         public HymnExcerptRow Row;
+        /// The clip this candidate's timing is rendered to (the hymn's name, or `<hymn>.<level>` for a level variant).
+        public string Clip = "";
+        /// Per HymnLevel: a candidate with that level's own timing (tempo map level scale), null where the level
+        /// plays the base timing. Null when the hymn has no level overrides.
+        public HymnCandidate[] Variants;
 
         public static HymnCandidate From(HymnMidi midi, HymnGrid grid, HymnExcerptRow row) =>
-            new HymnCandidate { Name = row.Hymn, Pattern = grid.Pattern, Pickup = grid.HasPickup, Midi = midi, Grid = grid, Row = row };
+            new HymnCandidate { Name = row.Hymn, Pattern = grid.Pattern, Pickup = grid.HasPickup, Midi = midi, Grid = grid, Row = row, Clip = row.Hymn };
+
+        /// A hymn under its tempo map: the base timing, plus a variant for each level the map re-times.
+        /// The map's pattern wins over the table's, 0 detects it.
+        public static HymnCandidate From(HymnMidi file, HymnTempoMap map, HymnExcerptRow row)
+        {
+            int pattern = map.Pattern > 0 ? map.Pattern : row.Pattern;
+            var baseMidi = map.Apply(file);
+            var c = From(baseMidi, HymnGrid.Build(baseMidi, pattern), row);
+            foreach (HymnLevel level in new[] { HymnLevel.Easy, HymnLevel.Medium, HymnLevel.Hard })
+            {
+                string key = map.VariantKey(level);
+                if (key.Length == 0) continue;
+                var m = map.Apply(file, level);
+                var v = From(m, HymnGrid.Build(m, pattern), row);
+                v.Clip = row.Hymn + "." + key;
+                if (c.Variants == null) c.Variants = new HymnCandidate[3];
+                c.Variants[(int)level] = v;
+            }
+            return c;
+        }
+
+        /// The candidate whose timing a level plays.
+        public HymnCandidate For(HymnLevel level) => Variants != null && Variants[(int)level] != null ? Variants[(int)level] : this;
+
+        /// The clip a level plays.
+        public string ClipFor(HymnLevel level) => For(level).Clip;
 
         public bool TryCut(HymnLevel level, out HymnExcerpt excerpt, out string error)
         {
             excerpt = null;
             error = Name + ": no hymn data";
-            if (Midi == null || Grid == null) return false;
+            var c = For(level);
+            if (c.Midi == null || c.Grid == null) return false;
             var row = Row ?? new HymnExcerptRow { Hymn = Name, Pattern = Pattern, Pickup = Pickup, Use = true };
-            return HymnExcerpt.TryCut(Midi, Grid, row, level, out excerpt, out error);
+            return HymnExcerpt.TryCut(c.Midi, c.Grid, row, level, out excerpt, out error);
         }
 
         /// True when all three levels cut.
@@ -194,6 +226,7 @@ namespace Bonanza.Core
         public int Index;
         public HymnLevel Level;
         public string Name = "";
+        public string Clip = "";                 // the rendered clip that plays it (HymnCandidate.ClipFor)
         public int Pattern;
         public bool Pickup;
         public HymnExcerpt Excerpt;              // the cut, in file time
@@ -279,7 +312,7 @@ namespace Bonanza.Core
                 double shift = t - x.StartTime;
                 var slot = new HymnSlot
                 {
-                    Index = k, Level = HymnLadder.SlotLevels[k], Name = _picked[k].Name,
+                    Index = k, Level = HymnLadder.SlotLevels[k], Name = _picked[k].Name, Clip = _picked[k].ClipFor(HymnLadder.SlotLevels[k]),
                     Pattern = _picked[k].Pattern, Pickup = _picked[k].Pickup,
                     Excerpt = x, Shift = shift, StartTime = t,
                     WindowStart = x.WindowStart + shift, WindowEnd = x.WindowEnd + shift,
@@ -404,7 +437,9 @@ namespace Bonanza.Core
 
         public const double MaxExcerptPoints = 1000;
 
-        public Outcome Result()
+        /// `playerIds`: the party lineup ids, human first then the CPUs in the order given to the round;
+        /// with them the outcome carries a Field (places by total points, equal totals share a place).
+        public Outcome Result(IReadOnlyList<int> playerIds = null)
         {
             if (!Done) return null;
             double score = 0;
@@ -421,7 +456,25 @@ namespace Bonanza.Core
             var o = Outcome.Build(score, acc, Scoring.RankFor(acc, wrong), stats, 0, null);
             o.Extra("WON", $"{won}/{Slots.Count}")
              .Extra("CORRECT", $"{correct}/{Slots.Count}");
+            if (playerIds != null && playerIds.Count == CpuCount + 1)
+            {
+                var totals = Totals();
+                o.Field = new List<FieldRow>();
+                for (int i = 0; i < totals.Length; i++)
+                    o.Field.Add(new FieldRow { Id = playerIds[i], Place = totals.Count(t => t > totals[i] + 1e-9) });
+            }
             return o;
+        }
+
+        /// Each player's points over the whole round (human first).
+        public double[] Totals()
+        {
+            var t = new double[CpuCount + 1];
+            foreach (var s in Slots)
+                if (s.Judgement != null)
+                    for (int i = 0; i < t.Length && i < s.Judgement.Results.Count; i++)
+                        t[i] += PointsFor(s.Judgement.Results[i], s.Beats.Count);
+            return t;
         }
     }
 }

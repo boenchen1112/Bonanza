@@ -80,34 +80,6 @@ namespace Bonanza.Core.Tests
         }
 
         [Test]
-        public void BounceHasANoteForEveryPlatformAtEveryVerdict()
-        {
-            var baked = Baked;
-            var (plats, notes, _, _) = BounceChart.Build();
-            foreach (var p in plats.Where(p => p.Scored))
-            {
-                if (p.Charge)
-                {
-                    Assert.IsTrue(baked.Contains(VoiceCatalog.BounceHold(p.Midi, p.Roll)), $"hold {p.Midi}");
-                    Assert.IsTrue(baked.Contains(VoiceCatalog.BounceRise(p.Roll)), $"rise {p.Roll}");
-                    Assert.IsTrue(baked.Contains(VoiceCatalog.BounceRelease(p.Midi, p.Kind == 'F')), $"release {p.Midi}");
-                }
-                else
-                    foreach (var v in new[] { Verdict.Perfect, Verdict.Great, Verdict.Good })
-                        Assert.IsTrue(baked.Contains(VoiceCatalog.BounceNote(v, p)), $"platform {p.Index} {v}: {VoiceCatalog.BounceNote(v, p)}");
-            }
-            // The lead-in demo bounce: the runway's pitch as a great, one beat long.
-            Assert.IsTrue(baked.Contains(VoiceCatalog.BounceNote(Verdict.Great, plats[0].Midi, 1)));
-            foreach (var n in new[] { VoiceCatalog.BounceKick, VoiceCatalog.BounceBigCrash, VoiceCatalog.BounceThud, VoiceCatalog.BounceSplash })
-                Assert.IsTrue(baked.Contains(n), n);
-            Assert.IsTrue(notes.Any(n => n.Kind == "release"), "the chart has charge releases");
-            // The game asks only for what a platform needs: notes cover pitches the melody has and no others.
-            var pitches = new HashSet<int>(plats.Select(p => p.Midi));
-            foreach (var n in VoiceCatalog.ClipsOf("bounce-brigade").Where(n => n.StartsWith("bb_note_")))
-                Assert.IsTrue(pitches.Contains(int.Parse(n.Split('_')[3])), n);
-        }
-
-        [Test]
         public void ChompHasEveryLaneOnEveryChordItCanBeSungOn()
         {
             var baked = Baked;
@@ -169,10 +141,6 @@ namespace Bonanza.Core.Tests
             // web chompChorus _sing: 0.30 perfect, 0.25 great (the baked clip), 0.18 good.
             Assert.AreEqual(1.2f, VoiceMix.ChompSingPerfect, 1e-6);
             Assert.AreEqual(0.72f, VoiceMix.ChompSingGood, 1e-6);
-            // web bounceBrigade noteGainFor.
-            Assert.AreEqual(1f, VoiceMix.BounceGain(Verdict.Perfect));
-            Assert.AreEqual(0.86f, VoiceMix.BounceGain(Verdict.Great));
-            Assert.AreEqual(0.66f, VoiceMix.BounceGain(Verdict.Good));
             Assert.AreEqual(0.625f, VoiceMix.FinaleRimPlain, 1e-6);
         }
     }

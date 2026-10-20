@@ -21,7 +21,6 @@
 // Names (Core/VoiceCatalog.cs builds the same):
 //   title_kick (the title screen's beat kick)
 //   dd_call_<k> dd_callhat dd_handoff dd_crash dd_fumble dd_snare dd_stumble_<i>
-//   bb_note_<p|g|o>_<midi>_<ms> bb_hold_<midi>_<ms> bb_rise_<ms> bb_release_<midi>_<0|1> bb_kick bb_bigcrash bb_thud bb_splash
 //   cc_sing_<lane>_<deg> cc_bell_<lane>_<deg> cc_fsing_<lane>_<deg> cc_sour_<lane>_<deg> cc_bed_<lane>_<deg> cc_gulp_<lane> cc_gulpbig_<lane>
 //   ff_swing_<deg> ff_chord_<deg>_<tone> ff_call_<deg>_<tone>_<a|n> ff_rim ff_ans_<deg>_<i>_<12|24> ff_pluck_<deg>_<i>
 // Swing Kings has no game voices on the web (only sfx() calls), so it has no clips here.
@@ -65,7 +64,6 @@ const rendered = await page.evaluate(async ({ base, SR, AT, listOnly }) => {
   const { createAudio, makeVirtualClock } = await import(base + '/src/audio/index.js');
   const { TRACKS } = await import(base + '/src/audio/music/index.js');
   const { SCALES, chord, mtof } = await import(base + '/src/audio/theory.js');
-  const bounce = await import(base + '/src/games/bounceBrigade/chart.js');
   const chomp = await import(base + '/src/games/chompChorus/chart.js');
   const finale = await import(base + '/src/games/finaleFever/chart.js');
 
@@ -105,48 +103,6 @@ const rendered = await page.evaluate(async ({ base, SR, AT, listOnly }) => {
   // ========================================================================= Title (shell/title.js onBeat)
   // kick(ctx, t, gain) = audio.voices.kick(t, { gain }) on the loose bus, no dest. Baked at the reel's 0.5; the menu's 0.34 is a playback scale.
   add('title_kick', 'title', [['kick', 0, { gain: 0.5 }]]);
-
-  // ========================================================================= Bounce Brigade (games/bounceBrigade/index.js)
-  {
-    const spb = 60 / bounce.BPM;
-    const ch = bounce.buildChart();
-    const GV = { p: ['perfect', 1, 4.8], g: ['great', 0.86, 3.9], o: ['good', 0.66, 2.5] };   // noteGainFor :250 and bright :264
-    const notes = new Map();   // name -> [midi, dur]
-    const noteKey = (midi, durBeats) => { const dur = clamp((durBeats || 1) * spb * 0.9, 0.16, 1.6); return [midi, dur]; };
-    for (const p of ch.platforms) {
-      if (!p.scored || p.charge) continue;
-      const [midi, dur] = noteKey(p.midi, Math.max(0.5, p.flightBeats));   // :329
-      notes.set(`${midi}_${ms(dur)}`, [midi, dur]);
-    }
-    { const [midi, dur] = noteKey(ch.platforms[0].midi, 1); notes.set(`${midi}_${ms(dur)}`, [midi, dur]); }   // the lead-in demo bounce :681
-    for (const [key, [midi, dur]] of notes) for (const [code, [, g, bright]] of Object.entries(GV)) {
-      const calls = [['pluck', 0, { midi, dur, gain: 0.33 * g, bright, rev: 0.22, dly: 0.14, pan: 0.06 }]];   // playPlatformNote :259
-      if (code !== 'o') calls.push(['pluck', 0.014, { midi: midi + 12, dur: dur * 0.45, gain: 0.11 * g, bright: 5.4, rev: 0.22, dly: 0.1 }]);
-      if (code === 'p') calls.push(['bell', 0.02, { midi: midi + 12, dur: 0.55, gain: 0.10, ratio: 2.01, index: 3.2, rev: 0.42, dly: 0.26 }]);
-      calls.push(['hit', 0, { gain: 0.085 * g, d: 0.028, hp: 900, lp: 5600, rev: 0.06, dest: undefined }]);
-      add(`bb_note_${code}_${key}`, 'bounce-brigade', calls);
-    }
-    const holds = new Map(), releases = new Map();
-    for (const p of ch.platforms) {
-      if (!p.scored || !p.charge) continue;
-      const roll = p.roll * spb;
-      holds.set(`${p.midi}_${ms(roll)}`, [p.midi, roll]);
-      releases.set(`${p.midi}_${p.kind === 'F' ? 1 : 0}`, [p.midi, p.kind === 'F']);
-    }
-    for (const [key, [midi, roll]] of holds) add(`bb_hold_${key}`, 'bounce-brigade', [   // playSustain :281, at g = 1
-      ['lead', 0, { midi, dur: roll, gain: 0.20, cutoff: 4.2, res: 2.4, rev: 0.24, dly: 0.16, vib: 0.9 }],
-      ['pluck', 0, { midi, dur: 0.2, gain: 0.2, bright: 4, rev: 0.2 }]]);
-    for (const roll of new Set([...holds.values()].map(([, r]) => r))) add(`bb_rise_${ms(roll)}`, 'bounce-brigade', [
-      ['riser', 0, { dur: roll, gain: 0.075, from: 500, to: 5200, rev: 0.25 }],
-      ['hit', 0, { gain: 0.09, d: 0.03, hp: 800, lp: 5200 }]]);
-    for (const [key, [midi, huge]] of releases) add(`bb_release_${key}`, 'bounce-brigade', [   // playRelease :294, at g = 1
-      ['bell', 0, { midi: midi + 12, dur: huge ? 0.9 : 0.5, gain: 0.15, ratio: 2.01, index: 4.5, rev: 0.45, dly: 0.28 }],
-      ['pluck', 0, { midi: midi + 19, dur: 0.22, gain: 0.13, bright: 6, rev: 0.3 }]]);
-    add('bb_kick', 'bounce-brigade', [['kick', 0, { gain: 0.55, decay: 0.26, tune: 1.1, dest: SFX }]]);
-    add('bb_bigcrash', 'bounce-brigade', [['crash', 0, { gain: 0.24, decay: 1.3, rev: 0.5, dest: SFX }]]);
-    add('bb_thud', 'bounce-brigade', [['hit', 0, { gain: 0.16, d: 0.11, hp: 110, lp: 850, rev: 0.05 }]]);   // playThud :306
-    add('bb_splash', 'bounce-brigade', [['hit', 0, { gain: 0.22, d: 0.24, hp: 260, lp: 2600, rev: 0.3 }]]);   // :720
-  }
 
   // ========================================================================= Chomp Chorus (games/chompChorus/index.js)
   {

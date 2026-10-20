@@ -8,11 +8,11 @@ alone or as a party against CPU players:
 | `swing-kings` | Swing Kings | Time the swing to the pitch. |
 | `chomp-chorus` | Chomp Chorus | Sing your lane in a four-voice row. |
 | `drumline-dash` | Drumline Dash | Answer the drum call and race the field. |
-| `bounce-brigade` | Bounce Brigade | Bounce from platform to platform on the beat. |
+| `bounce-brigade` | Bounce Brigade | Hear a hymn, find the downbeat, conduct it with the arrow keys. |
 | `finale-fever` | Finale Fever | Call-and-answer finale with a rising tempo. |
 
 All timing runs on the audio clock (`AudioSettings.dspTime`), never on frame
-time, and every game plays on taps alone.
+time. The games play on taps alone, except Bounce Brigade, which conducts with the arrow keys.
 
 ## Requirements
 

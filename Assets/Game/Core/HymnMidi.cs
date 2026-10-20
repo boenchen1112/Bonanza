@@ -81,6 +81,16 @@ namespace Bonanza.Core
             return _tempoSeconds[i] + (tick - _tempos[i].Tick) * perTick;
         }
 
+        /// The same notes under another tempo map and time-signature list (HymnTempoMap.Apply). Same
+        /// normalising as the file's own: one entry per tick, a default at tick 0, verse 1 found again.
+        public HymnMidi WithMaps(IEnumerable<HymnTempo> tempos, IEnumerable<HymnTimeSig> sigs)
+        {
+            var m = new HymnMidi { TicksPerQuarter = TicksPerQuarter, EndTick = EndTick };
+            m._notes.AddRange(_notes);
+            m.Normalize(tempos.ToList(), sigs.ToList());
+            return m;
+        }
+
         /// Throws FormatException for anything that is not a readable SMF.
         public static HymnMidi Parse(byte[] data)
         {

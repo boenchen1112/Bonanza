@@ -10,7 +10,7 @@
 //     (swing-kings: a verdict sound after every impact), and prints the autoplay biasMs.
 //     Since ticket 30 the same run covers the games' own instrument voices (Assets/Game/Audio/Voices, the `[VOICE]` lines
 //     the host logs under ?voicelog): every game's voices are counted per kind and tied to its round (a snare per drum
-//     hit, a note / hold / release per Bounce hit, an answer per Finale hit, a singer per Chomp hit), each is looked up in
+//     hit, an answer per Finale hit, a singer per Chomp hit), each is looked up in
 //     Assets/Game/Audio/Voices/voices.json, and the RMS burst check runs for all games (the voices are baked, not
 //     placeholder clips of the SFX's length).
 //  2. Pause menu (?debug, no autoplay): Escape, then Down. The menu's sounds play while the listener is paused;
@@ -145,13 +145,7 @@ const clipOf = (t) => /clip=(\S+)/.exec(t)?.[1];
     check(n('dd_call') >= 20 && n('dd_callhat') >= 3, `the call: toms + rim (${n('dd_call')}) and the opening hats (${n('dd_callhat')})`);
     check(n('dd_handoff') >= 3 && n('dd_crash') >= 3, `handoff hats ${n('dd_handoff')}, crash per call ${n('dd_crash')}`);
   }
-  if (GAME === 'bounce-brigade') {
-    const play = n('bb_note') + n('bb_hold') + n('bb_release');
-    check(play === hits + 1, `a note, hold or release per hit, plus the demo bounce (${play} for ${hits} hits)`);
-    check(n('bb_kick') === n('bb_release') && n('bb_rise') === n('bb_hold'), `kick per release (${n('bb_kick')}), riser per hold (${n('bb_rise')})`);
-    check(n('bb_bigcrash') === 1, `one crash on the finale ramp (${n('bb_bigcrash')})`);
-    check(n('bb_thud') === misses, `a thud per miss (${n('bb_thud')} for ${misses})`);
-  }
+  if (GAME === 'bounce-brigade') check(vox.length === 0, `Hymn Meter plays no game voices (its music is the rendered hymns) (${vox.length})`);
   if (GAME === 'chomp-chorus') {
     check(n('cc_sing') + n('cc_fsing') >= hits, `a singer per hit and per CPU note (${n('cc_sing') + n('cc_fsing')} for ${hits} player hits)`);
     check(n('cc_bed') >= 4 * 20, `the four-part bed under the bars (${n('cc_bed')})`);

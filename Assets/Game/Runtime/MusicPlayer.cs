@@ -188,17 +188,35 @@ namespace Bonanza
             if (e == null || info == null) { Debug.LogError($"[MUSIC] unknown track {id}"); return; }
             Stop(0.25f);
             Prepare(id);
+            StartDeck(info, e.mixes, beatZeroGame, fileBeat, adaptive, !adaptive);
+        }
+
+        /// A clip that is not in the library, played like a ramped one-shot (Finale Fever's way): file position =
+        /// game time since `fileZeroGame` (the game time at which the file's tick/beat 0 sounds) + `beatOffset`, at
+        /// pitch 1, held to the game's clock like any track (the same resync, pause and resume handling). Hymn Meter
+        /// plays one excerpt this way: when `fileZeroGame` is already past, the clip starts in the middle, exactly where
+        /// the clock says it should be. The previous clip fades out.
+        public void PlayClip(AudioClip clip, double fileZeroGame, double beatOffset)
+        {
+            if (_lib == null || clip == null) return;
+            var info = new MusicTrackInfo { Id = "clip", Bpm = 60, Bars = 0, BeatOffset = beatOffset, Loop = false, Frames = clip.samples, Levels = 1, Ramped = true };
+            Stop(0.25f);
+            StartDeck(info, new[] { clip }, fileZeroGame, null, false, false);
+        }
+
+        void StartDeck(MusicTrackInfo info, AudioClip[] clips, double beatZeroGame, Func<double> fileBeat, bool adaptive, bool shell)
+        {
             Deck deck = null;
             foreach (var d in _decks) if (!d.Active) { deck = d; break; }
             if (deck == null) { deck = _decks[0] == _cur ? _decks[1] : _decks[0]; HardStop(deck); }
             deck.Info = info;
-            deck.Clips = e.mixes;
+            deck.Clips = clips;
             deck.Active = true; deck.Started = false; deck.Fading = false;
             deck.BeatZeroGame = beatZeroGame;
             deck.FileBeat = fileBeat;
             deck.Gain = 1;
             deck.Adaptive = adaptive;
-            _shellInfo = adaptive ? null : info;
+            _shellInfo = shell ? info : null;
             _shellZero = beatZeroGame;
             deck.Current = deck.Pending = adaptive ? 1 : 0;
             deck.LastBar = int.MinValue;
@@ -267,6 +285,7 @@ namespace Bonanza
         {
             if (d.Started || !_host.ClockRunning) return;
             if (!Ready(d.Info.Id)) return;
+            foreach (var c in d.Clips) if (c != null && (c.loadState == AudioDataLoadState.Loading || c.loadState == AudioDataLoadState.Unloaded)) return;   // a clip from outside the library: decoded by its game
             double dsp = _host.DspAt(d.BeatZeroGame) - d.Info.BeatOffset;
             double now = AudioSettings.dspTime;
             double late = now + 0.03 - dsp;   // how far into the file we are by the time we can start

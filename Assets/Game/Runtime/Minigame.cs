@@ -72,6 +72,11 @@ namespace Bonanza
         public virtual void OnResume() { }
         /// The tempo the pause menu counts back in at.
         public virtual double SecondsPerBeat => 0.5;
+        /// True for a game that plays its own music (Hymn Meter's rendered hymns, through Host.PlayClip): the host then
+        /// neither prepares nor starts a score for it, and MusicBeatAt / MusicTimeAt only serve the SFX chord lookup.
+        public virtual bool OwnsMusic => false;
+        /// False while the game is still decoding something it needs (the rules card waits for it, like the score).
+        public virtual bool AudioReady => true;
 
         // The transport, for the music. A round's beat map, in game time. Valid after Begin.
         public abstract double MusicBeatAt(double time);

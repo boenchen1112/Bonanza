@@ -47,7 +47,6 @@ namespace Bonanza
         {
             new MusicTrackInfo { Id = "swing-kings",    Bpm = 124, Bars = 16, BeatOffset = 0.00933, Loop = true,  Frames = 1365677, Levels = 4 },
             new MusicTrackInfo { Id = "drumline-dash",  Bpm = 132, Bars = 16, BeatOffset = 0.00931, Loop = true,  Frames = 1282909, Levels = 4 },
-            new MusicTrackInfo { Id = "bounce-brigade", Bpm = 118, Bars = 16, BeatOffset = 0.00932, Loop = true,  Frames = 1435119, Levels = 4 },
             new MusicTrackInfo { Id = "chomp-chorus",   Bpm = 140, Bars = 16, BeatOffset = 0.00932, Loop = true,  Frames = 1209600, Levels = 4 },
             new MusicTrackInfo { Id = "finale-fever",   Bpm = 150, Bars = 54, BeatOffset = 0.01018, Loop = false, Frames = 3626124, Levels = 4, Ramped = true },
             new MusicTrackInfo { Id = "title",          Bpm = 112, Bars = 8,  BeatOffset = 0.00932, Loop = true,  Frames = 756000,  Levels = 1 },

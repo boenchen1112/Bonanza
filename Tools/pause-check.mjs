@@ -19,7 +19,7 @@ import { installMusicHook, analyzeResume } from './music-hook.mjs';
 const DIR = process.argv[2];
 const OUT = process.argv[3];
 const GAME = process.argv[4] || 'swing-kings';
-const PORT = 7962;
+const PORT = Number(process.env.PORT || 7962);
 const TYPES = { '.html': 'text/html', '.js': 'application/javascript', '.css': 'text/css',
   '.wasm': 'application/wasm', '.data': 'application/octet-stream', '.png': 'image/png', '.ico': 'image/x-icon' };
 
@@ -62,7 +62,7 @@ await page.screenshot({ path: `${OUT}-menu.png` });
 await page.keyboard.press('Space');          // RESUME (the first item)
 await wait(0.4);
 await page.screenshot({ path: `${OUT}-count.png` });
-await wait(2.5);
+await wait(3.6);   // the count back in (3 beats, up to 1.5 s) + the player's 1.5 s report after the resume
 await page.screenshot({ path: `${OUT}-after.png` });
 const a = analyzeResume(await page.evaluate(() => window.__musicEv));
 let fail = errors.length > 0;

@@ -83,16 +83,6 @@ const judge = await load('core/judge.js');
     ['beat', 'bpm', 'section', 'progress']);
 }
 
-// ---- Bounce Brigade
-{
-  const c = await load('games/bounceBrigade/chart.js');
-  const { platforms, notes, finishIndex, maxPoints } = c.buildChart();
-  save('bounce-brigade-platforms.txt', platforms, ['index', 'beat', 'deg', 'kind', 'roll', 'scored', 'charge', 'midi', 'color', 'weight',
-    'y', 'tilt', 'departBeat', 'contactX', 'departX', 'nextBeat', 'flightBeats', 'anchorX', 'width', 'slope', 'endX', 'departY', 'centerX', 'centerY']);
-  save('bounce-brigade-notes.txt', notes, ['beat', 'action', 'kind', 'platform', 'weight']);
-  console.log('finishIndex', finishIndex, 'maxPoints', maxPoints);
-}
-
 // ---- Party (shell/state.js)
 {
   const st = await load('shell/state.js');

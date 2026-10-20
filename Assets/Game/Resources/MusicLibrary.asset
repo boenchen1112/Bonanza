@@ -25,12 +25,6 @@ MonoBehaviour:
     - {fileID: 8300000, guid: ba19d9a9bc4f44ac09f70e94224a943f, type: 3}
     - {fileID: 8300000, guid: b5e216535a1b84802940fd9b800a068f, type: 3}
     - {fileID: 8300000, guid: 6b13782611e954715bbb8adc3f1157ab, type: 3}
-  - id: bounce-brigade
-    mixes:
-    - {fileID: 8300000, guid: 421b018654de34693860152d5b48e14b, type: 3}
-    - {fileID: 8300000, guid: 286e18fc98c964e6fb0d369afd7e200e, type: 3}
-    - {fileID: 8300000, guid: 649b36119b29b4d8593d21e99b437416, type: 3}
-    - {fileID: 8300000, guid: b8ef41ba48da84b56806d92fd8fd9e31, type: 3}
   - id: chomp-chorus
     mixes:
     - {fileID: 8300000, guid: 6bc1ffcd0846b4ec49964f156dbfd05f, type: 3}

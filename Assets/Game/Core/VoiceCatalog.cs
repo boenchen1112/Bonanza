@@ -29,20 +29,17 @@ namespace Bonanza.Core
         public const float ChompSingPerfect = 0.30f / 0.25f, ChompSingGood = 0.18f / 0.25f;
         /// Finale solo-tick rim: baked at the accent gain 0.24; the other ticks are 0.15.
         public const float FinaleRimPlain = 0.15f / 0.24f;
-        /// Bounce hold and release layers: baked at a perfect (g = 1); web noteGainFor.
-        public static float BounceGain(Verdict v) => v == Verdict.Perfect ? 1 : v == Verdict.Great ? 0.86f : 0.66f;
     }
 
     public static class VoiceCatalog
     {
-        public static readonly string[] Games = { "drumline-dash", "bounce-brigade", "chomp-chorus", "finale-fever", "title" };
+        public static readonly string[] Games = { "drumline-dash", "chomp-chorus", "finale-fever", "title" };
 
         /// The title's kick on every beat (web title.js onBeat -> audio.voices.kick), baked at gain 0.5 (the reel's);
         /// the menu plays it at 0.34 / 0.5. "title" is a shell screen, not a game: it only has this clip.
         public const string TitleKick = "title_kick";
 
         static int Ms(double seconds) => (int)Math.Floor(seconds * 1000 + 0.5);   // JS Math.round for positives
-        static double Spb => 60 / BounceChart.Bpm;
 
         // ---- Drumline Dash
         public const int DrumToms = 5;
@@ -50,18 +47,6 @@ namespace Bonanza.Core
         public const string DrumCallHat = "dd_callhat", DrumHandoff = "dd_handoff", DrumCrash = "dd_crash", DrumFumble = "dd_fumble", DrumSnare = "dd_snare";
         /// A CPU racer's stumble (racer index 1..3).
         public static string DrumStumble(int racer) => "dd_stumble_" + racer;
-
-        // ---- Bounce Brigade
-        public static char VerdictCode(Verdict v) => v == Verdict.Perfect ? 'p' : v == Verdict.Great ? 'g' : 'o';
-        /// A tap platform's note: web playPlatformNote with durBeats = max(0.5, flightBeats), the note's length clamped to 0.16..1.6 s.
-        public static string BounceNote(Verdict v, int midi, double durBeats) => $"bb_note_{VerdictCode(v)}_{midi}_{Ms(BounceNoteSeconds(durBeats))}";
-        public static double BounceNoteSeconds(double durBeats) => Math.Min(1.6, Math.Max(0.16, (durBeats == 0 ? 1 : durBeats) * Spb * 0.9));
-        /// The note of a tap platform given its flight (the web passes max(0.5, flightBeats)).
-        public static string BounceNote(Verdict v, BouncePlatform p) => BounceNote(v, p.Midi, Math.Max(0.5, p.FlightBeats));
-        public static string BounceHold(int midi, double rollBeats) => $"bb_hold_{midi}_{Ms(rollBeats * Spb)}";
-        public static string BounceRise(double rollBeats) => $"bb_rise_{Ms(rollBeats * Spb)}";
-        public static string BounceRelease(int midi, bool huge) => $"bb_release_{midi}_{(huge ? 1 : 0)}";
-        public const string BounceKick = "bb_kick", BounceBigCrash = "bb_bigcrash", BounceThud = "bb_thud", BounceSplash = "bb_splash";
 
         // ---- Chomp Chorus
         public static string ChompSing(int lane, int deg) => $"cc_sing_{lane}_{deg}";
@@ -109,7 +94,6 @@ namespace Bonanza.Core
                     o.AddRange(new[] { DrumCallHat, DrumHandoff, DrumCrash, DrumFumble, DrumSnare });
                     for (int i = 1; i <= DrumlineRound.HouseCpus.Length; i++) o.Add(DrumStumble(i));
                     break;
-                case "bounce-brigade": BounceClips(o); break;
                 case "chomp-chorus": ChompClips(o); break;
                 case "finale-fever": FinaleClips(o); break;
                 case "title": o.Add(TitleKick); break;
@@ -119,28 +103,6 @@ namespace Bonanza.Core
         }
 
         public static IEnumerable<string> All() => Games.SelectMany(ClipsOf);
-
-        static void BounceClips(List<string> o)
-        {
-            var (plats, _, _, _) = BounceChart.Build();
-            var notes = new List<(int midi, double beats)>();
-            foreach (var p in plats)
-            {
-                if (!p.Scored || p.Charge) continue;
-                notes.Add((p.Midi, Math.Max(0.5, p.FlightBeats)));
-            }
-            notes.Add((plats[0].Midi, 1));   // the lead-in demo bounce plays the runway's pitch as a great, one beat long
-            foreach (var (midi, beats) in notes)
-                foreach (var v in new[] { Verdict.Perfect, Verdict.Great, Verdict.Good }) o.Add(BounceNote(v, midi, beats));
-            foreach (var p in plats)
-            {
-                if (!p.Scored || !p.Charge) continue;
-                o.Add(BounceHold(p.Midi, p.Roll));
-                o.Add(BounceRise(p.Roll));
-                o.Add(BounceRelease(p.Midi, p.Kind == 'F'));
-            }
-            o.AddRange(new[] { BounceKick, BounceBigCrash, BounceThud, BounceSplash });
-        }
 
         static void ChompClips(List<string> o)
         {

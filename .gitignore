@@ -135,3 +135,8 @@ node_modules/
 /Tools/core-tests/bin/
 /Tools/core-tests/obj/
 !/Tools/core-tests/*.csproj
+/Tools/hymns/beatmap/bin/
+/Tools/hymns/beatmap/obj/
+# Hymn Meter data: built from the private hymns at build time, never committed
+/HymnBuild/
+!/Tools/hymns/beatmap/*.csproj

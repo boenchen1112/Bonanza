@@ -98,7 +98,7 @@ namespace Bonanza.Core.Tests
         {
             Assert.AreEqual(SwingRules.Bpm, MusicTracks.Find("swing-kings").Bpm);
             Assert.AreEqual(DrumChart.Bpm, MusicTracks.Find("drumline-dash").Bpm);
-            Assert.AreEqual(BounceChart.Bpm, MusicTracks.Find("bounce-brigade").Bpm);
+            Assert.IsNull(MusicTracks.Find("bounce-brigade"), "Bounce Brigade plays the hymn clips, not a score of its own");
             Assert.AreEqual(ChompChart.Bpm, MusicTracks.Find("chomp-chorus").Bpm);
             Assert.AreEqual(FeverChart.Bpm0, MusicTracks.Find("finale-fever").Bpm);
         }
@@ -119,7 +119,6 @@ namespace Bonanza.Core.Tests
             Assert.AreEqual(8, DrumChart.LeadBeats);
             Assert.AreEqual(8, ChompChart.LeadBeats);
             Assert.AreEqual(8, FeverChart.LeadBeats);
-            Assert.AreEqual(-8, BounceChart.RunwayBeat);
         }
 
         [Test]

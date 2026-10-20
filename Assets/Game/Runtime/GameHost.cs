@@ -53,7 +53,7 @@ namespace Bonanza
         {
             new Entry { Id = "swing-kings", Title = "SWING KINGS", Blurb = "One swing. One beat. Send it.", Type = typeof(SwingKingsGame) },
             new Entry { Id = "drumline-dash", Title = "DRUMLINE DASH", Blurb = "Hear it. Hit it back.", Type = typeof(DrumlineDashGame) },
-            new Entry { Id = "bounce-brigade", Title = "BOUNCE BRIGADE", Blurb = "The platforms are the tune.", Type = typeof(BounceBrigadeGame) },
+            new Entry { Id = "bounce-brigade", Title = "BOUNCE BRIGADE", Blurb = "Find the downbeat. Conduct the hymn.", Type = typeof(HymnMeterGame) },
             new Entry { Id = "chomp-chorus", Title = "CHOMP CHORUS", Blurb = "Four singers, one of them is you.", Type = typeof(ChompChorusGame) },
             new Entry { Id = "finale-fever", Title = "FINALE FEVER", Blurb = "It only gets faster.", Type = typeof(FinaleFeverGame) },
         };
@@ -404,6 +404,9 @@ namespace Bonanza
         /// Fade the music out (Chomp Chorus ends its track under the last note).
         public void MusicStop(float fade) => _music.Stop(fade);
 
+        /// Play a game's own clip on the music deck (MusicPlayer.PlayClip): file time 0 sounds at game time `fileZeroGame`.
+        public void PlayClip(AudioClip clip, double fileZeroGame, double beatOffset) => _music.PlayClip(clip, fileZeroGame, beatOffset);
+
         /// The title theme runs under every menu screen and the party hub.
         void EnsureTitleMusic()
         {
@@ -565,7 +568,7 @@ namespace Bonanza
             _game = (Minigame)_gameGo.AddComponent(e.Type);
             _game.Bind(this, Seed(e.Id));
             _game.Load();
-            _music.Prepare(e.Id);   // decode now; the rules card waits for it
+            if (!_game.OwnsMusic) _music.Prepare(e.Id);   // decode now; the rules card waits for it
             _sfx.Prepare(e.Id);     // ... and for the game's sound effects
             _startRequested = false;
             _rulesWait = 0;
@@ -580,8 +583,10 @@ namespace Bonanza
             _pausedTotal = 0;
             _game.Begin(Now + 0.6);
             var g = _game;
-            _music.PlayGame(_entry.Id, g.MusicTimeAt(MusicTracks.GameStartBeat),
-                () => g.MusicBeatAt(Now) - MusicTracks.GameStartBeat);
+            if (g.OwnsMusic) _music.Stop(0.25f);   // the title loop ends; the game starts its own clips
+            else
+                _music.PlayGame(_entry.Id, g.MusicTimeAt(MusicTracks.GameStartBeat),
+                    () => g.MusicBeatAt(Now) - MusicTracks.GameStartBeat);
             _autoChart.Clear();
             _autoCursor = 0;
             if (Autoplay)
@@ -967,7 +972,7 @@ namespace Bonanza
                         // The round's music has to be decoded before it starts: the
                         // count-in is two bars of it.
                         _rulesWait += Time.unscaledDeltaTime;
-                        bool ready = _music.Ready(_entry.Id) && _sfx.Ready;
+                        bool ready = (_game.OwnsMusic || _music.Ready(_entry.Id)) && _game.AudioReady && _sfx.Ready;
                         if (!ready && _rulesWait < MusicLoadTimeout) break;
                         if (!ready) Debug.LogError($"[MUSIC] {_entry.Id} not decoded after {MusicLoadTimeout}s; starting without it");
                         Begin();
