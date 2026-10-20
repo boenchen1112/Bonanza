@@ -10,7 +10,7 @@ float4 _BonFillSky, _BonFillGround;
 float4 _BonRimColor, _BonRimDir;
 float4 _BonRimParams;   // x strength, y power, z beat pulse (0..1)
 float4 _BonFogColor;
-float4 _BonFogParams;   // x near, y far
+float4 _BonFogParams;   // x near, y far, z height-fog strength (0 = off), w height it starts at
 float4 _BonShadowColor;
 float4 _BonShadowFocus;   // xyz centre, w radius of the circle the key's real shadow covers (0 = none)
 
@@ -32,6 +32,14 @@ float BonRamp(float x, float steps, float softness)
 float BonFog(float viewDepth)
 {
     return saturate((viewDepth - _BonFogParams.x) / max(_BonFogParams.y - _BonFogParams.x, 0.001));
+}
+
+// Depth fog plus an opt-in height term (palette FogHeight): high and far surfaces (upper stands, a skyline) sink
+// into the haze, the near field keeps its contrast. With z = 0 this is exactly BonFog.
+float BonFogH(float viewDepth, float worldY)
+{
+    float h = _BonFogParams.z * saturate((worldY - _BonFogParams.w) / 6.0) * saturate((viewDepth - _BonFogParams.x * 0.5) / 20.0);
+    return saturate(BonFog(viewDepth) + h);
 }
 
 #endif

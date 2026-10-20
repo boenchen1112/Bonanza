@@ -145,7 +145,7 @@ Shader "Bonanza/Crowd"
                 // A figure at the top of its hop catches a little more light (web: hop lifts the instance colour).
                 float lift = _Lift + i.hop * _Glow;
                 float3 c = BonToon(albedo, normalize(i.normalWS), i.positionWS, _Bands, _Softness, _Rim, _Pulse, lift);
-                c = lerp(c, _BonFogColor.rgb, BonFog(i.viewDepth) * _FogMul);
+                c = lerp(c, _BonFogColor.rgb, BonFogH(i.viewDepth, i.positionWS.y) * _FogMul);
                 return half4(c, 1);
             }
             ENDHLSL

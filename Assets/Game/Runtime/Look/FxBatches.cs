@@ -181,6 +181,8 @@ namespace Bonanza.Look
         /// Tumble only: a piece that falls below this height lands (lies flat, stops, fades within half a second).
         /// -inf = no floor (the default).
         public float Floor = float.NegativeInfinity;
+        /// Tumble only: pieces fade out as they fall from FadeY1 to FadeY0 and die below FadeY0 (-inf = off, the default).
+        public float FadeY0 = float.NegativeInfinity, FadeY1;
 
         public ParticleBatch(string name, Transform parent, Material mat, Vector4 rect, PMode mode, int max, FxRng rng, int order, System.Action<EmitParams> defaults)
         {
@@ -308,6 +310,11 @@ namespace Bonanza.Look
                         // lens and never fill more than a sliver of the frame (a piece falling past the camera read as a
                         // huge brown card).
                         if (t > 0.6f) { float kf = (t - 0.6f) / 0.4f; sc *= 1 - kf * 0.65f; a *= 1 - kf * kf; }
+                        if (FadeY0 > float.NegativeInfinity)
+                        {
+                            if (y[i] < FadeY0 && dt > 0) { alive[k] = alive[--_aliveCount]; free[_freeCount++] = i; k--; continue; }
+                            a *= Mathf.Clamp01((y[i] - FadeY0) / (FadeY1 - FadeY0));
+                        }
                         float depth = Vector3.Dot(pos - cam.P, cam.F);
                         a *= Mathf.Clamp01((depth - 1.8f) / 2.7f);
                         sc = Mathf.Min(sc, Mathf.Max(0, depth) * 0.032f);

@@ -73,7 +73,7 @@ Shader "Bonanza/ToonEnv"
                 albedo = lerp(albedo, dot(albedo, float3(0.2126, 0.7152, 0.0722)).xxx, _Desat);
                 albedo *= _BaseColor.rgb;
                 float3 c = BonToonS(albedo, n, i.positionWS, _Bands, _Softness, _Rim, _Pulse, _Lift, _ShadowRecv);
-                c = lerp(c, _BonFogColor.rgb, BonFog(i.viewDepth) * _FogMul);
+                c = lerp(c, _BonFogColor.rgb, BonFogH(i.viewDepth, i.positionWS.y) * _FogMul);
                 return half4(c, 1);
             }
             ENDHLSL

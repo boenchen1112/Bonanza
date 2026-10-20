@@ -296,7 +296,7 @@ namespace Bonanza.Look
             Shader.SetGlobalVector("_BonRimParams", new Vector4(p[PF.RimStrength], p[PF.RimPower], pulse, 0));
             Shader.SetGlobalVector("_BonPostParams", new Vector4(p[PF.Exposure], p[PF.Saturation], p[PF.Vignette] * RenderQuality.Vignette, _time % 100f));
             Shader.SetGlobalVector("_BonFogColor", V(p[PC.Fog]));
-            Shader.SetGlobalVector("_BonFogParams", new Vector4(p[PF.FogNear], p[PF.FogFar], 0, 0));
+            Shader.SetGlobalVector("_BonFogParams", new Vector4(p[PF.FogNear], p[PF.FogFar], p[PF.FogHeight], p[PF.FogHeightY]));
             // Shadow tint: a much darker, slightly cooler ground, so shadows sit in the palette.
             var sh = Color.Lerp(p[PC.Ground].linear * 0.28f, p[PC.Fog].linear, 0.25f);
             Shader.SetGlobalVector("_BonShadowColor", new Vector4(sh.r, sh.g, sh.b, 1));

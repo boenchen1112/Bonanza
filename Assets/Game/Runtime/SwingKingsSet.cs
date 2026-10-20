@@ -54,7 +54,8 @@ namespace Bonanza
         Pitch _pipOwner;
         static readonly Color PipCol = new Color(1f, 0.784f, 0.239f);
         static readonly Color MuzzleRingCol = new Color(1f, 0.74f, 0.25f);
-        static readonly Color StandDay = new Color(0x54 / 255f, 0x74 / 255f, 0xad / 255f), StandNight = new Color(0.2f, 0.27f, 0.45f);
+        static readonly Color StandDay = new Color(0x54 / 255f, 0x74 / 255f, 0xad / 255f), StandNight = new Color(0.12f, 0.16f, 0.3f);
+        static readonly Color RoofDay = new Color(0.55f, 0.6f, 0.72f), RoofNight = new Color(1.6f, 1.25f, 0.8f);
         static readonly Color HazeDay = new Color(1f, 0.62f, 0.45f) * 0.16f, HazeNight = new Color(0.25f, 0.33f, 0.62f) * 0.05f;
         static readonly Color LedDay = new Color(1f, 0.62f, 0.25f) * 0.55f, LedNight = new Color(1f, 0.7f, 0.35f) * 0.85f;
 
@@ -77,8 +78,13 @@ namespace Bonanza
 
         static readonly Vector3[] TowerAt = { W(-13, 0, 3.5f), W(-13, 0, -9.5f) };
         const float BankY = 8.5f, BankYRight = 10.5f;
-        static readonly Vector3[] TowerRight = { new Vector3(13.5f, 0, 17.5f) };
-        Material _hazeMat, _rowsMat;
+        // The right-hand tower behind the bowl, and two mid-ground towers standing behind the far stands (depth layers
+        // between the bowl and the city; their heads light at night like the near ones).
+        static readonly Vector3[] TowerRight = { new Vector3(13.5f, 0, 17.5f), new Vector3(-7.6f, 0, 23.2f), new Vector3(5.2f, 0, 24.4f) };
+        static readonly float[] TowerRightH = { BankYRight, 10.2f, 10.8f };
+        Material _hazeMat, _rowsMat, _roofMat;
+        Material[] _beamMats = new Material[0];
+        Renderer[] _beamR = new Renderer[0];
         Material[] _flareMatsR;
 
         // ------------------------------------------------------------ helpers
@@ -144,11 +150,47 @@ namespace Bonanza
 
         const float MoundR = 1.95f, MoundH = 0.32f;
         static float Smooth01(float k) => k * k * (3 - 2 * k);
-        /// Worn grass: the turf colour pulled toward a dry, sandy green (as a ratio over the dirt material).
-        static Color Worn(Color toGrass) => Color.Lerp(toGrass, new Color(0.78f, 0.82f, 0.62f), 0.5f);
-        /// The thin lighter lip on a dirt cut's edge.
-        static void Lip(MeshBuilder b, Vector3 centre, float r, float y, int seg) =>
-            FeatherRing(b, centre, r - 0.06f, r + 0.07f, y + 0.002f, new Color(1.35f, 1.3f, 1.2f), new Color(1.2f, 1.15f, 1.05f), seg);
+        /// Worn grass: the turf a shade darker and drier (scuffed, not lit), as a ratio over the dirt material. It must
+        /// never read lighter than the turf: a pale band round the dirt read as a glow halo.
+        static Color Worn(Color toGrass) => new Color(toGrass.r * 0.95f, toGrass.g * 0.86f, toGrass.b * 0.72f, 1);
+        /// A cut's edge: a crisp, slightly raised rim of packed dirt (a low bevelled ring, darker on its outer face).
+        static void Lip(MeshBuilder b, Vector3 centre, float r, float y, int seg)
+        {
+            int s0 = b.Count;
+            b.Surface(seg, 3, (u, v) =>
+            {
+                float a = u * Mathf.PI * 2;
+                float rr = r - 0.1f + v * 0.16f, h = 0.035f * Mathf.Sin(v * Mathf.PI);
+                var n = new Vector3(Mathf.Cos(a) * (0.5f - v) * 0.9f, 1, Mathf.Sin(a) * (0.5f - v) * 0.9f).normalized;
+                return (new Vector3(Mathf.Cos(a) * rr, h, Mathf.Sin(a) * rr), n);
+            }, Matrix4x4.Translate(centre + Vector3.up * (y + 0.002f)), Color.white, new Vector2(6, 0.2f));
+            for (int i = s0; i < b.Count; i++)
+            {
+                float k = Mathf.InverseLerp(r - 0.1f, r + 0.06f, new Vector2(b.P[i].x - centre.x, b.P[i].z - centre.z).magnitude);
+                b.C[i] = Color.white * Mathf.Lerp(1.12f, 0.8f, k);
+            }
+        }
+        /// Cheap, deterministic value noise for ragged edges (no allocation; build time only).
+        static float Hash1(float x) { float s = Mathf.Sin(x * 127.1f) * 43758.5453f; return s - Mathf.Floor(s); }
+        static float Noise1(float x) { float i = Mathf.Floor(x), f = x - i; f = f * f * (3 - 2 * f); return Mathf.Lerp(Hash1(i), Hash1(i + 1), f); }
+        /// A worn ring whose outer edge wanders (scuffed grass is never a clean circle), vertex colour fading to the turf.
+        static void WornRing(MeshBuilder b, Vector3 centre, float r0, float r1, float y, Color inner, Color outer, int seg, float seed)
+        {
+            int start = b.Count;
+            b.Surface(seg, 3, (u, v) =>
+            {
+                float a = u * Mathf.PI * 2;
+                float wob = (Noise1(u * 13 + seed) - 0.5f) * 0.5f + (Noise1(u * 37 + seed * 3) - 0.5f) * 0.18f;
+                float r = Mathf.Lerp(r0, r1 + wob, v);
+                return (new Vector3(Mathf.Cos(a) * r, 0, Mathf.Sin(a) * r), Vector3.up);
+            }, Matrix4x4.Translate(centre + Vector3.up * y), Color.white, new Vector2(5, 0.4f));
+            for (int i = start; i < b.Count; i++)
+            {
+                int row = (i - start) / (seg + 1);   // Surface writes rows of (seg + 1) vertices, u fastest
+                float k = row / 3f;
+                b.C[i] = Color.Lerp(inner, outer, k * k * (3 - 2 * k));
+            }
+        }
 
         // ------------------------------------------------------------ build
 
@@ -160,14 +202,14 @@ namespace Bonanza
             var toGrass = new Color(grassL.r / Mathf.Max(0.02f, dirtL.r), grassL.g / Mathf.Max(0.02f, dirtL.g), grassL.b / Mathf.Max(0.02f, dirtL.b), 1) * 0.92f;
 
             // Dirt: the cut-out around the plate and the mound under the machine, feathered into the turf.
-            var dirtMat = EnvKit.Surface(_env, Color.white, "sk-dirt", new Vector2(2.2f, 2.2f), rim: 0.25f, pulse: 0.05f, mapStrength: 0.75f);
+            var dirtMat = EnvKit.Surface(_env, Color.white, "sk-dirt", new Vector2(3.4f, 3.4f), rim: 0.25f, pulse: 0.05f, mapStrength: 0.9f);   // finer, firmer grain
             Look.Track(dirtMat, PC.Dirt);
             var b = new MeshBuilder();
             var cut = PlatePos + new Vector3(-0.2f, 0, 0); cut.y = 0;
             b.Disc(2.55f, 56, Matrix4x4.Translate(cut + Vector3.up * 0.02f), Color.white, 2.2f);
             // A crisp cut edge with a thin lighter lip, then worn, yellowed grass fading out into the turf.
-            Lip(b, cut, 2.55f, 0.021f, 56);
-            FeatherRing(b, cut, 2.62f, 3.5f, 0.02f, Worn(toGrass), toGrass, 56);
+            Lip(b, cut, 2.55f, 0.021f, 72);
+            WornRing(b, cut, 2.6f, 3.25f, 0.019f, Worn(toGrass), toGrass, 72, 3.1f);
             // Wear down the baselines: a scuffed strip beside each foul line for the first few metres from the plate.
             foreach (var sgn in new[] { -1f, 1f })
             {
@@ -201,8 +243,8 @@ namespace Bonanza
                 float k = Mathf.InverseLerp(0.85f, MoundR, r);
                 b.C[i] = Color.white * Mathf.Lerp(1.08f, 0.78f, k);
             }
-            Lip(b, mound, MoundR, 0.016f, 40);
-            FeatherRing(b, mound, MoundR + 0.07f, MoundR + 0.75f, 0.012f, Worn(toGrass), toGrass, 40);
+            Lip(b, mound, MoundR, 0.016f, 56);
+            WornRing(b, mound, MoundR + 0.05f, MoundR + 0.6f, 0.012f, Worn(toGrass), toGrass, 56, 7.7f);
             EnvKit.Static(_env, "Infield", transform, b, dirtMat);
 
             // Chalk and the plate: one draw, a near-flat bright white (web MeshBasic 0xf6f1e4, below the bloom cut).
@@ -230,6 +272,9 @@ namespace Bonanza
             b = new MeshBuilder();
             b.Disc(0.36f, 5, Matrix4x4.Translate(new Vector3(PlatePos.x, 0.045f, PlatePos.z)), white);   // a vertex points at the catcher
             b.Shell(0.36f, 0.38f, 0.04f, 5, Mathf.PI / 2, Mathf.PI * 2, Matrix4x4.Translate(new Vector3(PlatePos.x, 0.025f, PlatePos.z)), new Color(0.55f, 0.52f, 0.48f), Vector2.one);
+            // The pitching rubber: a white slab on the mound's flat top, in front of PITCH-O's cart (toward the plate).
+            var rubber = new Vector3(MachinePos.x + 1.05f, MachineRootY + 0.02f, MachinePos.z - 0.05f);
+            b.Box(Matrix4x4.TRS(rubber, Quaternion.identity, new Vector3(0.16f, 0.05f, 0.62f)), white);
             EnvKit.Static(_env, "Plate", transform, b, plateMat);
 
             // Backstop behind the plate (+x): a chain-link arc with a top rail and three posts (web: r 3.3, h 3.4).
@@ -298,17 +343,79 @@ namespace Bonanza
             // Night lights: tower-head flares, turf pools under the floods (both on at zero from Load: prewarmed).
             _flareMats = new Material[TowerAt.Length];
             for (int i = 0; i < TowerAt.Length; i++)
-                _flareMats[i] = Glow("TowerFlare" + i, transform, TowerAt[i] + new Vector3(0.25f, BankY, 0), 3.2f, Hex(0xfff3d0), true, null, 2.6f);
+                _flareMats[i] = Glow("TowerFlare" + i, transform, TowerAt[i] + new Vector3(0.25f, BankY, 0), i == 0 ? 2.0f : 3.2f, Hex(0xfff3d0), true, null, i == 0 ? 3.4f : 2.6f);   // the near head is small and tight: it sits by the score
             var flat = Quaternion.Euler(90, 0, 0);
             _poolMats = new[]
             {
-                Glow("PoolPlate", transform, new Vector3(PlatePos.x - 0.3f, 0.06f, PlatePos.z), 11f, Hex(0xfff0d6), false, flat, 0.5f),
-                Glow("PoolMound", transform, new Vector3(MachinePos.x + 0.3f, 0.36f, MachinePos.z), 8f, Hex(0xfff0d6), false, flat, 0.5f),
+                Glow("PoolPlate", transform, new Vector3(PlatePos.x - 0.3f, 0.06f, PlatePos.z), 7.6f, Hex(0xfff6e6), false, flat, 0.42f),
+                Glow("PoolMound", transform, new Vector3(MachinePos.x + 0.3f, 0.37f, MachinePos.z), 5.8f, Hex(0xfff6e6), false, flat, 0.42f),
             };
             // The low sun behind the skyline (day): a wide soft glare the bloom carries into the arches.
             _glareMat = Glow("SunGlare", transform, new Vector3(30, 7, 92), 70, Hex(0xffc98a), true, null, 1.2f);
             BuildSkylineDressing();
             BuildAtmosphere();
+            BuildPropTrim();
+        }
+
+        // The inner face of the authored low wall on the machine side (sk-setedge), one point per segment joint.
+        static readonly Vector2[] SideWall =
+        {
+            new Vector2(-13.15f, 0.94f), new Vector2(-13.14f, -0.97f), new Vector2(-13.04f, -1.91f), new Vector2(-12.87f, -2.84f),
+            new Vector2(-12.63f, -3.76f), new Vector2(-12.34f, -4.65f), new Vector2(-11.96f, -5.52f), new Vector2(-11.54f, -6.36f),
+            new Vector2(-11.05f, -7.17f), new Vector2(-10.51f, -7.95f), new Vector2(-9.91f, -8.68f), new Vector2(-9.26f, -9.37f),
+            new Vector2(-8.56f, -10.01f), new Vector2(-7.83f, -10.6f), new Vector2(-7.05f, -11.13f),
+        };
+
+        /// Trim and decals on the props that read as primitives: an ad panel and bolts on each segment of the side wall,
+        /// a stencil plate and corner caps on the crate stack beside the machine, and on PITCH-O's cart (BuildMachine).
+        void BuildPropTrim()
+        {
+            // Ad panels: each wall segment shows a different slice of the ad-board sheet, inset from the segment's ends.
+            var adMat = EnvKit.Surface(_env, Color.white, "sk-adboard", Vector2.one, rim: 0.2f, pulse: 0.12f, lift: 0.22f, bands: 2, mapStrength: 1);
+            adMat.SetColor("_BaseColor", new Color(0.8f, 0.8f, 0.86f));
+            var ad = new MeshBuilder();
+            var trim = new MeshBuilder();
+            Color bolt = new Color(0.75f, 0.78f, 0.86f), seam = new Color(0.25f, 0.27f, 0.35f);
+            for (int i = 0; i + 1 < SideWall.Length; i++)
+            {
+                Vector3 p0 = new Vector3(SideWall[i].x, 0, SideWall[i].y), p1 = new Vector3(SideWall[i + 1].x, 0, SideWall[i + 1].y);
+                var along = (p1 - p0); float len = along.magnitude; along /= len;
+                var n = new Vector3(along.z, 0, -along.x);   // toward the field (+x side)
+                if (n.x < 0) n = -n;
+                Vector3 a0 = p0 + along * 0.12f + n * 0.025f, a1 = p1 - along * 0.12f + n * 0.025f;
+                const float Y0 = 0.32f, Y1 = 0.86f;
+                float u0 = (i * 0.137f) % 1f, u1 = u0 + 0.13f;
+                int o = ad.Count;
+                ad.P.Add(a0 + Vector3.up * Y0); ad.P.Add(a0 + Vector3.up * Y1); ad.P.Add(a1 + Vector3.up * Y1); ad.P.Add(a1 + Vector3.up * Y0);
+                ad.UV.Add(new Vector2(u0, 0)); ad.UV.Add(new Vector2(u0, 1)); ad.UV.Add(new Vector2(u1, 1)); ad.UV.Add(new Vector2(u1, 0));
+                for (int k = 0; k < 4; k++) { ad.N.Add(n); ad.C.Add(Color.white); }
+                ad.T.Add(o); ad.T.Add(o + 2); ad.T.Add(o + 1); ad.T.Add(o); ad.T.Add(o + 3); ad.T.Add(o + 2);
+                ad.T.Add(o); ad.T.Add(o + 1); ad.T.Add(o + 2); ad.T.Add(o); ad.T.Add(o + 2); ad.T.Add(o + 3);   // both windings: no guessing the face
+                // a frame round the panel and bolts at its corners, a dark seam at the joint
+                var q = Quaternion.LookRotation(n);
+                var mid = (a0 + a1) * 0.5f + n * 0.005f;
+                trim.Box(Matrix4x4.TRS(mid + Vector3.up * (Y1 + 0.03f), q, new Vector3(len - 0.2f, 0.04f, 0.03f)), bolt);
+                trim.Box(Matrix4x4.TRS(mid + Vector3.up * (Y0 - 0.03f), q, new Vector3(len - 0.2f, 0.04f, 0.03f)), bolt);
+                foreach (var c in new[] { a0, a1 })
+                    foreach (var y in new[] { 0.14f, 1.02f })
+                        trim.Sphere(0.035f, 6, 4, Matrix4x4.Translate(c + n * 0.01f + Vector3.up * y), bolt, Vector3.one);
+                trim.Box(Matrix4x4.TRS(p0 + n * 0.02f + Vector3.up * 0.58f, q, new Vector3(0.05f, 1.12f, 0.03f)), seam);
+            }
+            EnvKit.Static(_env, "SideWallAds", transform, ad, adMat).receiveShadows = false;
+
+            // The crate stack by the machine (x -12.4..-10.5, z 1.5..3.0, 1.8 high): a stencil plate and corner caps.
+            Color cream = Lin(0xe9dcc0), dark = Lin(0x1a1f33), yellow = Lin(0xffc93d);
+            var face = new Vector3(-11.45f, 0, 1.49f);
+            trim.Box(Matrix4x4.TRS(face + new Vector3(0, 0.82f, 0), Quaternion.identity, new Vector3(1.1f, 0.42f, 0.02f)), cream);
+            for (int k = 0; k < 3; k++)   // stencil bars: reads as a crate number at this distance
+                trim.Box(Matrix4x4.TRS(face + new Vector3(-0.3f + k * 0.3f, 0.82f, -0.012f), Quaternion.identity, new Vector3(k == 1 ? 0.08f : 0.18f, 0.26f, 0.01f)), dark);
+            for (int k = 0; k < 6; k++)   // a hazard band along the foot
+                trim.Box(Matrix4x4.TRS(face + new Vector3(-0.75f + k * 0.3f, 0.12f, -0.005f), Quaternion.Euler(0, 0, 35), new Vector3(0.1f, 0.26f, 0.015f)), k % 2 == 0 ? yellow : dark);
+            foreach (var x in new[] { -12.38f, -10.52f })
+                foreach (var y in new[] { 0.05f, 1.56f })
+                    trim.Box(Matrix4x4.TRS(new Vector3(x, y, 1.53f), Quaternion.identity, new Vector3(0.14f, 0.12f, 0.14f)), bolt);
+            var trimMat = EnvKit.Surface(_env, Color.white, null, null, rim: 0.8f, pulse: 0.06f, bands: 3);
+            EnvKit.Static(_env, "PropTrim", transform, trim, trimMat).receiveShadows = true;
         }
 
         /// The bowl gets rows: a dark riser band and a pale seat nosing under every row of fans, lighter step nosings
@@ -382,6 +489,69 @@ namespace Bonanza
             b.Tube(lip, 0.11f, 6, Matrix4x4.identity, new Color(1.7f, 1.7f, 1.75f));
             var r0r = EnvKit.Static(_env, "StandRows", transform, b, mat);
             r0r.receiveShadows = false;
+
+            // Section dividers: low concrete walls up three of the aisles, splitting the bowl into sections, with a pale cap.
+            var db = new MeshBuilder();
+            foreach (int ai in new[] { 2, 5, 8 })
+            {
+                float a = a0 + arc * ai / 10f + 0.016f;
+                for (int side = 0; side < 2; side++)
+                {
+                    int d0 = db.Count;
+                    float aa = a + (side == 0 ? -0.0025f : 0.0025f);
+                    db.Surface(1, 6, (u, v) =>
+                    {
+                        float rr = Mathf.Lerp(o.BowlBottom + 0.1f, o.BowlTop - 0.1f, v);
+                        float yy = YAt(rr) + u * 0.55f;
+                        return (new Vector3(Mathf.Sin(aa) * rr, yy, cz + Mathf.Cos(aa) * rr), new Vector3(Mathf.Cos(aa), 0, -Mathf.Sin(aa)) * (side == 0 ? -1 : 1));
+                    }, Matrix4x4.identity, Color.white, Vector2.one, side == 1);
+                    for (int i = d0; i < db.Count; i++) { float t = Tone(a) * 0.55f; db.C[i] = new Color(t, t, t * 1.08f, 1); }
+                }
+                var cap = new Vector3[8];
+                for (int i = 0; i < cap.Length; i++)
+                {
+                    float rr = Mathf.Lerp(o.BowlBottom + 0.1f, o.BowlTop - 0.1f, i / 7f);
+                    cap[i] = new Vector3(Mathf.Sin(a) * rr, YAt(rr) + 0.57f, cz + Mathf.Cos(a) * rr);
+                }
+                db.Tube(cap, 0.05f, 4, Matrix4x4.identity, new Color(1.5f, 1.5f, 1.55f));
+            }
+            EnvKit.Static(_env, "StandDividers", transform, db, mat).receiveShadows = false;
+
+            // Aisle handrails: a steel rail on posts up the middle of every aisle.
+            var steel = EnvKit.Surface(_env, Hex(0xc9d2e6), null, null, rim: 1.0f, pulse: 0.05f, bands: 2);
+            var hb = new MeshBuilder();
+            for (int ai = 1; ai < 10; ai++)
+            {
+                float a = a0 + arc * ai / 10f;
+                var rail = new Vector3[10];
+                for (int i = 0; i < rail.Length; i++)
+                {
+                    float rr = Mathf.Lerp(o.BowlBottom + 0.4f, o.BowlTop - 0.4f, i / (float)(rail.Length - 1));
+                    rail[i] = new Vector3(Mathf.Sin(a) * rr, YAt(rr) + 0.82f, cz + Mathf.Cos(a) * rr);
+                }
+                hb.Tube(rail, 0.022f, 4, Matrix4x4.identity, Color.white);
+                for (int i = 0; i < rail.Length; i += 3) hb.Tube(new[] { rail[i] - Vector3.up * 0.82f, rail[i] }, 0.016f, 4, Matrix4x4.identity, Color.white);
+            }
+            EnvKit.Static(_env, "AisleRails", transform, hb, steel).receiveShadows = false;
+
+            // The roof edge: a lit strip under the facade's lip with lamp boxes along it (pale by day, warm and glowing at night).
+            _roofMat = EnvKit.Surface(_env, RoofDay, null, null, rim: 0f, pulse: 0.15f, lift: 1.1f, bands: 1);
+            _roofMat.SetFloat("_ShadowRecv", 0);
+            var lb = new MeshBuilder();
+            var strip = new Vector3[57];
+            for (int i = 0; i < strip.Length; i++)
+            {
+                float a = a0 + arc * i / (strip.Length - 1);
+                strip[i] = new Vector3(Mathf.Sin(a) * (o.BowlTop - 0.12f), topY + 0.74f, cz + Mathf.Cos(a) * (o.BowlTop - 0.12f));
+            }
+            lb.Tube(strip, 0.045f, 4, Matrix4x4.identity, Color.white);
+            for (int i = 2; i < 56; i += 4)
+            {
+                float a = a0 + arc * i / 56f;
+                var at = new Vector3(Mathf.Sin(a) * (o.BowlTop - 0.2f), topY + 1.12f, cz + Mathf.Cos(a) * (o.BowlTop - 0.2f));
+                lb.Box(Matrix4x4.TRS(at, Quaternion.Euler(0, a * Mathf.Rad2Deg, 0), new Vector3(0.5f, 0.22f, 0.14f)), Color.white);
+            }
+            EnvKit.Static(_env, "RoofEdge", transform, lb, _roofMat).receiveShadows = false;
         }
 
         /// The warning track's edge (replaces the env kit's full-circle glow ring): a padded navy bumper at the foot of
@@ -460,18 +630,40 @@ namespace Bonanza
 
             var towerMat = EnvKit.Surface(_env, Hex(0x262d3f), null, null, rim: 0.6f, pulse: 0.04f);
             var shafts = new MeshBuilder(); var banks = new MeshBuilder();
-            foreach (var at in TowerRight)
+            for (int ti = 0; ti < TowerRight.Length; ti++)
             {
-                shafts.Shell(0.18f, 0.32f, BankYRight, 8, 0, Mathf.PI * 2, Matrix4x4.Translate(at + new Vector3(0, BankYRight / 2, 0)), Color.white, Vector2.one);
+                var at = TowerRight[ti]; float hy = TowerRightH[ti];
+                shafts.Shell(0.18f, 0.32f, hy, 8, 0, Mathf.PI * 2, Matrix4x4.Translate(at + new Vector3(0, hy / 2, 0)), Color.white, Vector2.one);
                 var face = Quaternion.LookRotation((new Vector3(PlatePos.x, 0, PlatePos.z) - at).normalized);
-                banks.Box(Matrix4x4.TRS(at + new Vector3(0, BankYRight, 0), face, new Vector3(1.7f, 1.0f, 0.28f)), Color.white);
-                shafts.Box(Matrix4x4.TRS(at + new Vector3(0, BankYRight - 0.62f, 0), face, new Vector3(1.9f, 0.08f, 0.5f)), Color.white);
+                banks.Box(Matrix4x4.TRS(at + new Vector3(0, hy, 0), face, new Vector3(1.7f, 1.0f, 0.28f)), Color.white);
+                shafts.Box(Matrix4x4.TRS(at + new Vector3(0, hy - 0.62f, 0), face, new Vector3(1.9f, 0.08f, 0.5f)), Color.white);
+                // a lattice: cross braces up the shaft, so the far towers read as structures, not poles
+                for (float y = 1.5f; y < hy - 1.2f; y += 1.6f)
+                    shafts.Box(Matrix4x4.TRS(at + new Vector3(0, y, 0), face * Quaternion.Euler(0, 0, (y % 3.2f) < 1.6f ? 35 : -35), new Vector3(0.9f, 0.06f, 0.06f)), Color.white);
             }
             EnvKit.Static(_env, "TowerShaftsR", transform, shafts, towerMat);
             EnvKit.Static(_env, "TowerBanksR", transform, banks, _bankMat);
+            // Faint floodlight beams from the far towers' heads down onto the field (night only; off by day). Cones, like the
+            // near towers' (EnvSpotlights), but static and narrow: far away they cover little of the screen.
+            Vector3[] beamTo = { new Vector3(PlatePos.x, 0, PlatePos.z + 1), new Vector3(MachinePos.x + 1, 0, MachinePos.z), new Vector3(0, 0, -1) };
+            _beamMats = new Material[TowerRight.Length]; _beamR = new Renderer[TowerRight.Length];
+            for (int i = 0; i < TowerRight.Length; i++)
+            {
+                var head = TowerRight[i] + new Vector3(0, TowerRightH[i] - 0.4f, -0.3f);
+                var d = beamTo[i] - head;
+                var cb = new MeshBuilder();
+                cb.Cone(i == 0 ? 2.0f : 2.6f, d.magnitude, 18, Matrix4x4.identity, Color.white);
+                var m = _beamMats[i] = _env.Mat(EnvKit.BeamMat);
+                m.SetColor(IdColor, Hex(0xfff0d6)); m.SetFloat(IdIntensity, 0);
+                var br = EnvKit.Renderer("FarBeam" + i, transform, _env.Own(cb.ToMesh("FarBeam")), m);
+                br.receiveShadows = false;
+                _beamR[i] = br;
+                br.transform.localPosition = head;
+                br.transform.localRotation = Quaternion.FromToRotation(Vector3.down, d.normalized);
+            }
             _flareMatsR = new Material[TowerRight.Length];
             for (int i = 0; i < TowerRight.Length; i++)
-                _flareMatsR[i] = Glow("TowerFlareR" + i, transform, TowerRight[i] + new Vector3(0, BankYRight, -0.3f), 3.2f, Hex(0xfff3d0), true, null, 2.8f);
+                _flareMatsR[i] = Glow("TowerFlareR" + i, transform, TowerRight[i] + new Vector3(0, TowerRightH[i], -0.3f), i == 0 ? 3.2f : 2.6f, Hex(0xfff3d0), true, null, 2.8f);
         }
 
         /// The authored skyline's dressing, built from its own faces at load:
@@ -626,6 +818,20 @@ namespace Bonanza
                     b.Sphere(0.1f, 10, 6, Matrix4x4.TRS(new Vector3(x, 0.12f, z), Quaternion.identity, new Vector3(1, 1, 0.45f)), hub, Vector3.one);
                 }
             b.Shell(0.2f, 0.3f, 0.75f, 14, 0, Mathf.PI * 2, Matrix4x4.Translate(new Vector3(0, 0.81f, 0)), trim, Vector2.one);
+            // Trim so the cart stops reading as a primitive: a cream lip round the top edge, a yellow-and-dark hazard band
+            // on the camera face, bolts at its corners, corner bumpers and a small number plate on the side.
+            b.Box(Matrix4x4.TRS(new Vector3(0, 0.455f, 0), Quaternion.identity, new Vector3(1.74f, 0.035f, 1.19f)), trim);
+            for (int k = 0; k < 9; k++)
+                b.Box(Matrix4x4.TRS(new Vector3(-0.68f + k * 0.17f, 0.2f, -0.588f), Quaternion.Euler(0, 0, 35), new Vector3(0.07f, 0.17f, 0.012f)), k % 2 == 0 ? yellow : dark);
+            b.Box(Matrix4x4.TRS(new Vector3(0, 0.2f, -0.582f), Quaternion.identity, new Vector3(1.5f, 0.13f, 0.008f)), dark);
+            foreach (var x in new[] { -0.78f, 0.78f })
+                foreach (var y in new[] { 0.16f, 0.4f })
+                    b.Sphere(0.028f, 6, 4, Matrix4x4.Translate(new Vector3(x, y, -0.59f)), hub, Vector3.one);
+            foreach (var x in new[] { -0.86f, 0.86f })
+                foreach (var z in new[] { -0.58f, 0.58f })
+                    b.Box(Matrix4x4.TRS(new Vector3(x, 0.28f, z), Quaternion.identity, new Vector3(0.07f, 0.36f, 0.07f)), trim);
+            b.Box(Matrix4x4.TRS(new Vector3(0.858f, 0.28f, -0.05f), Quaternion.identity, new Vector3(0.012f, 0.17f, 0.42f)), cream);
+            b.Box(Matrix4x4.TRS(new Vector3(0.866f, 0.28f, -0.05f), Quaternion.identity, new Vector3(0.006f, 0.1f, 0.06f)), Lin(0xe8563f));
             Part("PitchO.Cart", root, b, mat, Vector3.zero, cast: true);
 
             _mHead = new GameObject("PitchO.Head").transform;
@@ -939,10 +1145,17 @@ namespace Bonanza
             _nightK = Damp(_nightK, _nightGoal, 1.4f, dt);
             float n = _nightK;
             float flicker = 1 + Mathf.Sin(Time.time * 23f) * 0.015f;
-            for (int i = 0; i < _flareMats.Length; i++) _flareMats[i].SetFloat(IdIntensity, n * 2.0f * flicker + Look.BeatPulse * n * 0.4f);
+            for (int i = 0; i < _flareMats.Length; i++) _flareMats[i].SetFloat(IdIntensity, (n * 2.0f * flicker + Look.BeatPulse * n * 0.4f) * (i == 0 ? 0.6f : 1));
             for (int i = 0; i < _flareMatsR.Length; i++) _flareMatsR[i].SetFloat(IdIntensity, n * 2.2f * flicker + Look.BeatPulse * n * 0.3f);
             // the floods carry the night: warm pools on the plate and the mound
-            for (int i = 0; i < _poolMats.Length; i++) _poolMats[i].SetFloat(IdIntensity, n * 0.42f);
+            for (int i = 0; i < _poolMats.Length; i++) _poolMats[i].SetFloat(IdIntensity, n * 0.9f * (1 + Look.BeatPulse * 0.06f));
+            for (int i = 0; i < _beamMats.Length; i++)
+            {
+                _beamMats[i].SetFloat(IdIntensity, n * 0.36f * flicker);
+                bool on = n > 0.01f;   // no blended cone over the frame by day (the shader is linked by the near cones)
+                if (_beamR[i].enabled != on) _beamR[i].enabled = on;
+            }
+            if (_roofMat) _roofMat.SetColor("_BaseColor", Color.Lerp(RoofDay, RoofNight, n) * (1 + Look.BeatPulse * n * 0.2f));
             _glareMat.SetFloat(IdIntensity, (1 - n) * 0.22f);
             {
                 // beacons blink day and night (two phases), a touch brighter in the dark
@@ -958,11 +1171,11 @@ namespace Bonanza
             _hazeMat.SetColor(IdColor, Color.Lerp(HazeDay, HazeNight, n));
             _hazeMat.SetFloat(IdIntensity, 1);
             if (_ledMat) _ledMat.SetColor("_BaseColor", Color.Lerp(LedDay, LedNight, n) * (1 + Look.BeatPulse * 0.25f));
-            _env?.Spotlights?.SetLevel(Mathf.Lerp(0.03f, 0.05f, n), Mathf.Lerp(0.04f, 0.09f, n));   // the cones stay a hint; the pools carry the light
+            _env?.Spotlights?.SetLevel(Mathf.Lerp(0.03f, 0.042f, n), Mathf.Lerp(0.04f, 0.07f, n));   // at night the cones read from the towers to the pools
             // the bowl falls dark toward the walls at night; the floods and the rim light carry the crowd
             if (_env?.Crowd != null) _env.Crowd.O.StandColor = Color.Lerp(StandDay, StandNight, n);
             if (_rowsMat) _rowsMat.SetColor("_BaseColor", Color.Lerp(StandDay, StandNight, n));
-            _env?.Crowd?.SetTint(Color.Lerp(Color.white, new Color(0.6f, 0.65f, 0.86f), n));
+            _env?.Crowd?.SetTint(Color.Lerp(Color.white, new Color(0.4f, 0.44f, 0.64f), n));   // the crowd falls ~40% darker: the field's pools are the brightest thing
 
             // stand-in: hop on a hit, slump on a miss (the character replaces this; the cues stay)
             _batterHop = Damp(_batterHop, 0, 5, dt);

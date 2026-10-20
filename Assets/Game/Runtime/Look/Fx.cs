@@ -32,6 +32,14 @@ namespace Bonanza.Look
         /// flare stays). For a subject whose FACE is the impact point (Chomp Chorus' singers): a 1-px loop over a face
         /// reads as a scribble. Off by default.
         public bool NoLoops;
+        /// No confetti from this hit or its combo milestone (a game that throws its confetti somewhere else, e.g. into
+        /// the stands, and keeps the play area clean). Off by default.
+        public bool NoConfetti;
+        /// Gain on the hit's and the milestone's additive flares (0 = 1): a game whose bursts stack under bloom clamps them
+        /// so the frame never whites out over its subject.
+        public float FlareGain;
+        /// Where the milestone's "xN" word sits relative to the hit (null = the default spot above it, plus MilestoneLift).
+        public Vector3? MilestoneOffset;
         public static VerdictOpts Default => new VerdictOpts { Scale = 1, GroundY = float.NaN, Text = true, Stage = true, Rings = true };
     }
 
@@ -59,7 +67,7 @@ namespace Bonanza.Look
         sealed class Rec
         {
             public bool On; public float T; public L Layer; public int K; public Verdict V;
-            public Vector3 Pos, Dir; public Color Color; public float Scale, Size, Count, Gy; public bool HasRings, NoRing;
+            public Vector3 Pos, Dir; public Color Color; public float Scale, Size, Count, Gy, Gain = 1; public bool HasRings, NoRing;
         }
 
         const int Pending = 160;
@@ -153,6 +161,10 @@ namespace Bonanza.Look
         /// Confetti that reaches the ground (SetGroundY) lands: it lies flat and fades out instead of falling through
         /// the floor edge-on. Off by default.
         public void SetConfettiLanding(bool on) => _confetti.Floor = on && _groundY.HasValue ? _groundY.Value + 0.012f : float.NegativeInfinity;
+        /// Confetti fades out as it falls from `y1` down to `y0` and is gone below `y0` (a game that keeps its play area
+        /// clean: paper never reaches the field). Off by default; `Clear` does not reset it, a game turns it off itself.
+        public void SetConfettiFade(float y0, float y1) { _confetti.FadeY0 = y0; _confetti.FadeY1 = Mathf.Max(y0 + 0.01f, y1); }
+        public void ConfettiFadeOff() { _confetti.FadeY0 = float.NegativeInfinity; }
         public void SetCombo(int c) => _combo = c;
 
         /// Touch every material and the callout font once (a frame or two) so no shader link or font upload
@@ -187,10 +199,10 @@ namespace Bonanza.Look
                 {
                     // Two flares, different sizes and durations, so even the first frame has a foreground and a background.
                     var e = _flare.Begin();
-                    e.Pos(r.Pos).Color(Feel.HeatUp(r.Color, 0.45f));
+                    e.Pos(r.Pos).Color(Feel.HeatUp(r.Color, 0.45f), r.Gain);
                     e.Size = 0.52f * sc * sz; e.Life = 0.16f; e.S0 = 0.3f; e.S1 = 2.1f;
                     _flare.Emit(1);
-                    e.Color(Feel.Hex(Feel.Hot));
+                    e.Color(Feel.Hex(Feel.Hot), r.Gain);
                     e.Size = 0.30f * sc * sz; e.Life = 0.095f; e.S0 = 0.55f; e.S1 = 2.8f;
                     _flare.Emit(1);
                     break;
@@ -290,7 +302,7 @@ namespace Bonanza.Look
                     int k = r.K;
                     if (!r.NoRing) _overlayRings.Spawn(r.Pos, r.Color, 0.5f + k * 0.08f, 0.3f + k * 0.5f, 2.4f + k * 1.5f, 0.16f - k * 0.03f, 0.02f, 0.012f + k * 0.003f, 0.85f - k * 0.2f, null, 0);
                     var e = _flare.Begin();
-                    e.Pos(r.Pos).Color(Feel.Hex(Feel.Hot));
+                    e.Pos(r.Pos).Color(Feel.Hex(Feel.Hot), r.Gain);
                     e.Size = (0.45f + k * 0.25f) * sc; e.Life = 0.22f + k * 0.05f; e.S0 = 0.4f; e.S1 = 2.0f + k * 0.4f;
                     _flare.Emit(1);
                     break;
@@ -313,7 +325,7 @@ namespace Bonanza.Look
 
         static void Copy(Rec r, Rec s, L layer, int k)
         {
-            r.Layer = layer; r.K = k; r.V = s.V; r.Pos = s.Pos; r.Dir = s.Dir; r.Color = s.Color; r.Scale = s.Scale; r.Size = s.Size; r.Count = s.Count; r.Gy = s.Gy; r.NoRing = false;
+            r.Layer = layer; r.K = k; r.V = s.V; r.Pos = s.Pos; r.Dir = s.Dir; r.Color = s.Color; r.Scale = s.Scale; r.Size = s.Size; r.Count = s.Count; r.Gy = s.Gy; r.Gain = s.Gain; r.NoRing = false;
         }
 
         // ------------------------------------------------------------- verdict
@@ -333,6 +345,7 @@ namespace Bonanza.Look
             rec.Color = o.Color ?? Feel.HeatUp(VColor(verdict), f.Hot);
             rec.Scale = o.Scale; rec.Size = f.SizeScale * o.Scale; rec.Count = f.CountScale;
             rec.Gy = !float.IsNaN(o.GroundY) ? o.GroundY : (_groundY ?? pos.y - 1.6f);
+            rec.Gain = o.FlareGain > 0 ? o.FlareGain : 1;
 
             foreach (var layer in Recipe(verdict))
             {
@@ -340,6 +353,7 @@ namespace Bonanza.Look
                 // `Rings = false`: the big outward wave and its echo. In a game whose subject stands AT the impact
                 // point they draw wobbly loops through the character; the core flash and shards still sell the hit.
                 if (!o.Rings && (layer.Id == L.RingOut || layer.Id == L.Echo)) continue;
+                if (o.NoConfetti && layer.Id == L.Confetti) continue;
                 if (o.NoLoops && (layer.Id == L.RingOut || layer.Id == L.Echo || layer.Id == L.RingIn || layer.Id == L.SagRing)) continue;
                 if (layer.Delay <= 0)
                 {
@@ -357,10 +371,17 @@ namespace Bonanza.Look
                 _rig.Shake(f.Shake, new Vector3(rec.Dir.x, rec.Dir.y * 0.5f, 0));
                 if (f.Flash > 0) _rig.DoFlash(f.Flash, rec.Color);
             }
-            if (verdict != Verdict.Miss && Feel.IsMilestone(_combo)) { _noWaves = o.NoLoops; Milestone(_combo, pos, o.MilestoneColor, o.MilestoneLift); _noWaves = false; }
+            if (verdict != Verdict.Miss && Feel.IsMilestone(_combo))
+            {
+                _noWaves = o.NoLoops; _noConfetti = o.NoConfetti; _msGain = rec.Gain; _msOffset = o.MilestoneOffset;
+                Milestone(_combo, pos, o.MilestoneColor, o.MilestoneLift);
+                _noWaves = false; _noConfetti = false; _msGain = 1; _msOffset = null;
+            }
         }
 
-        bool _noWaves;
+        bool _noWaves, _noConfetti;
+        float _msGain = 1;
+        Vector3? _msOffset;
 
         /// The combo-milestone flourish: three ring waves, a flare, a confetti shower, a word.
         public void Milestone(int combo, Vector3 pos, Color? color = null, float lift = 0)
@@ -369,11 +390,11 @@ namespace Bonanza.Look
             var rec = _v;
             rec.V = Verdict.Perfect; rec.Pos = pos; rec.Color = color ?? Feel.Hex(Feel.Combo);
             rec.Scale = 1 + tier * 0.06f; rec.Size = 1 + tier * 0.08f; rec.Count = 1 + tier * 0.22f;
-            rec.Gy = _groundY ?? pos.y - 1.6f; rec.Dir = Vector3.up;
+            rec.Gy = _groundY ?? pos.y - 1.6f; rec.Dir = Vector3.up; rec.Gain = _msGain;
             float[] delays = { 0, 0.075f, 0.15f };
             for (int i = 0; i < delays.Length; i++) Schedule(L.MilestoneWave, delays[i], rec, i).NoRing = _noWaves;
-            Schedule(L.Confetti, 0.06f, rec, 1);
-            _callouts.Spawn("x" + combo, null, pos + new Vector3(-0.45f, 0.85f + lift, 0), Feel.Hex(Feel.Combo), 0.5f + tier * 0.045f, 0.95f, 0.4f, 0, 0, false);
+            if (!_noConfetti) Schedule(L.Confetti, 0.06f, rec, 1);
+            _callouts.Spawn("x" + combo, null, pos + (_msOffset ?? new Vector3(-0.45f, 0.85f + lift, 0)), Feel.Hex(Feel.Combo), 0.5f + tier * 0.045f, 0.95f, 0.4f, 0, 0, false);
             if (_rig != null) { _rig.Shake(Feel.MilestoneShake * (1 + tier * 0.08f), Vector3.up); _rig.DoFlash(Feel.MilestoneFlash); }
         }
 
@@ -419,6 +440,24 @@ namespace Bonanza.Look
                 e.Color((colors != null ? colors[i] : Feel.Hex(Feel.Party[i])).linear);
                 _confetti.Emit(per);
             }
+        }
+
+        /// A firework shell: a radial spray of long-lived streaking sparks (each draws its own short trail) in two
+        /// colours, a soft glow at the heart that fades. Far off in the sky, so sizes are world-large.
+        public void Shell(Vector3 pos, Color a, Color b, int count = 40, float speed = 9, float size = 0.32f, float life = 1.1f)
+        {
+            int n = Mathf.Max(4, Mathf.RoundToInt(count * Mul));
+            var e = _shards.Begin();
+            e.Pos(pos).Dir(Vector3.up); e.Cone = 1; e.Speed = speed; e.SpeedVar = 0.12f; e.Size = size; e.SizeVar = 0.2f;
+            e.Life = life; e.LifeVar = 0.2f; e.Drag = 1.6f; e.Grav = -2.2f; e.Stretch = 0.16f; e.S0 = 1; e.S1 = 0.25f; e.Fade = PFade.Late;
+            e.Color(a); _shards.Emit(n - n / 3);
+            e.Color(b); e.Speed = speed * 0.55f; _shards.Emit(n / 3);   // an inner ring in the second colour
+            var s = _sparks.Begin();
+            s.Pos(pos); s.Cone = 1; s.Speed = speed * 0.8f; s.Size = size * 0.55f; s.Life = life * 1.3f; s.LifeVar = 0.4f; s.Grav = -2.5f; s.Drag = 1.8f; s.Fade = PFade.Late;
+            s.Color(Color.Lerp(a, Color.white, 0.35f)); _sparks.Emit(Mathf.Max(2, n / 2));   // glitter that hangs on after the streaks
+            var f = _flare.Begin();
+            f.Pos(pos).Color(a, 0.9f); f.Size = size * 9; f.Life = 0.45f; f.S0 = 0.5f; f.S1 = 1.7f; f.Fade = PFade.QuadOut; f.SpinVar = 0.3f;
+            _flare.Emit(1);
         }
 
         /// Directional impact cone: the primitive behind a hit that has an AIM.

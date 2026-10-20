@@ -96,7 +96,7 @@ namespace Bonanza
         float _camPush, _camLift;
 
         sealed class Ball { public GameObject Go; public int PipCursor; public TrailHandle Trail; }
-        sealed class HitBall { public GameObject Go; public Vector3 P, V; public float T, Life, GravMul; public bool Bounce, Slam, Land; public TrailHandle Trail; public Color Color; }
+        sealed class HitBall { public GameObject Go; public Vector3 P, V; public float T, Life, GravMul, Fade; public bool Bounce, Slam, Land; public TrailHandle Trail; public Color Color; }
 
         // ------------------------------------------------------------ contract
 
@@ -109,6 +109,7 @@ namespace Bonanza
             var fx = Look.Fx;
             fx.SetGroundY(0);
             fx.SetFocus(W(-1.6f, 1.6f, 0));
+            fx.SetConfettiFade(0.9f, 2.4f);   // paper belongs to the stands and the sky: it melts before it reaches the field
             fx.Prewarm();   // touch every FX material and the callout font now: a first-use shader link mid-round would push a press out of its window
             _round = new SwingRound(Save.OffsetMs);
             _round.Judged += (v, err) =>
@@ -393,7 +394,7 @@ namespace Bonanza
             _env = Look.CreateEnv(EnvPreset.Stage, o =>
             {
                 o.Ground.Confetti = 0; o.Ground.Rings = false; o.Ground.EdgeRing = false;   // the track edge is SwingKingsSet's padded wall          // a ballpark, not a stage
-                o.Ground.Map = "grass"; o.Ground.MapTiles = 7; o.Ground.Stripes = 16; o.Ground.StripeContrast = 0.3f;   // broad mow bands, like the web's
+                o.Ground.Map = "grass"; o.Ground.MapTiles = 9; o.Ground.Stripes = 16; o.Ground.StripeContrast = 0.3f;   // broad mow bands, like the web's
                 o.Backdrop.Arches = 4; o.Backdrop.Radius = 24; o.Backdrop.Spacing = 7.5f; o.Backdrop.Z = 30;
                 o.Backdrop.SkylineMesh = "sk-skyline";
                 // Pale, bloomed hoops (the web's read white-gold in its bloom; the palette accent alone is mustard).
@@ -408,8 +409,8 @@ namespace Bonanza
             });
             // Calmer blade noise and a touch of lift: the web's turf reads as bright, clean bands.
             var turf = _env.Ground?.Top ? _env.Ground.Top.sharedMaterial : null;
-            if (turf) { turf.SetFloat("_MapStrength", 0.62f); turf.SetFloat("_Lift", 0.06f); }   // the map carries the turf's breakup patches
-            _env.AddBanners(new EnvBanners.Options { Count = 24, Radius = 13.5f, Y = 7.6f, Z = 3, Glow = 2.2f, Whiten = 0.12f, LineRadius = 0.018f, SizeJitter = 0.2f, Span = Mathf.PI * 0.95f });   // ends kept out of the HUD corners
+            if (turf) { turf.SetFloat("_MapStrength", 0.72f); turf.SetFloat("_Lift", 0.05f); }   // the map carries the turf's clumps, cross-mow and breakup patches
+            _env.AddBanners(new EnvBanners.Options { Count = 20, Radius = 13.5f, Y = 6.7f, Sag = 1.2f, Z = 3, Glow = 2.2f, Whiten = 0.12f, LineRadius = 0.018f, SizeJitter = 0.2f, Span = Mathf.PI * 0.66f });   // ends kept out of the top 130 px HUD corners
             _env.AddCrowd(new EnvCrowd.Options
             {
                 Style = EnvCrowd.FigureStyle.Figure, Stands = EnvCrowd.StandStyle.Bowl,
@@ -419,6 +420,9 @@ namespace Bonanza
                 RoofTube = 0, Poses = true, Rim = 0.9f, FrontRowScale = 0.88f,
             });
             _env.AddMesh("sk-setedge", Color.white, rim: 0.5f, pulse: 0.06f);
+            // The authored skyline takes the (height) fog too, so the city sits back behind the bowl.
+            var skyR = _env.Backdrop?.Root ? _env.Backdrop.Root.transform.Find("Skyline")?.GetComponent<Renderer>() : null;
+            if (skyR) skyR.sharedMaterial.SetFloat("_FogMul", 0.55f);
 
             // Light towers frame the open (machine-side) edge the stands do not cover; their banks light at night.
             var towerMat = EnvKit.Surface(_env, Hex(0x262d3f), null, null, rim: 0.6f, pulse: 0.04f);
@@ -560,13 +564,13 @@ namespace Bonanza
                 hull.transform.localScale = Vector3.one * 1.16f;
                 var hr = hull.GetComponent<MeshRenderer>();
                 hr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off; hr.receiveShadows = false;
-                Look.Blob(go.transform, 0.3f, 0.85f, 0, 0.6f);   // a firm shadow that stays readable at flight height
+                Look.Blob(go.transform, 0.4f, 1f, 0, 0.6f);   // a firm, wide shadow that stays readable on the turf at flight height
             }
             go.SetActive(true);
             return go;
         }
 
-        void FreeBall(GameObject go) { go.SetActive(false); _ballPool.Push(go); }
+        void FreeBall(GameObject go) { go.SetActive(false); go.transform.localScale = Vector3.one * 0.34f; _ballPool.Push(go); }
 
         void OnLaunched(Pitch p)
         {
@@ -574,7 +578,9 @@ namespace Bonanza
             var b = new Ball { Go = AcquireBall() };
             b.Go.transform.position = Muzzle;
             b.Go.transform.localScale = Vector3.one * 0.34f;
-            b.Trail = Look.Fx.Trail(Hex(0x7fdcff) * 1.25f, 0.13f);   // a saturated cyan comet tail: the ball reads against sky and stands
+            b.Trail = Look.Fx.Trail(Hex(0xffe9b0) * 1.15f, 0.14f);   // the hit ball's warm comet tail from release (it takes the tier colour on contact)
+            // One live ball on screen: a hit ball still flying when the next pitch leaves shrinks away now.
+            foreach (var h in _hitBalls) if (h.Fade <= 0) h.Fade = 0.0001f;
             // Half-beat markers along the flight path: the ball is the metronome.
             SetPips(p);
             _pitchBalls[p] = b;
@@ -670,18 +676,23 @@ namespace Bonanza
             // off, and so is the FX layer's own flash (it washed the frame milky): the game shakes the camera itself.
             var o = VerdictOpts.Default;
             o.Dir = dirV; o.Combo = c.Combo; o.Scale = scale; o.GroundY = 0; o.Text = false; o.Stage = false; o.Rings = false;
-            o.MilestoneColor = Hex(0xffb347); o.MilestoneLift = 0.75f;   // gold waves; "xN" above the flash
+            o.MilestoneColor = Hex(0xffb347);
+            // No loops round the batter (the starburst below carries the aim), no paper on the field (the stands get the
+            // confetti), flares clamped so stacked bursts never white out the plate, and the "xN" low and left of the
+            // plate, clear of the badge (upper right) and the flash.
+            o.NoLoops = true; o.NoConfetti = true; o.FlareGain = 0.62f; o.MilestoneOffset = new Vector3(-1.75f, -0.55f, -0.9f);
             var fx = Look.Fx;
             fx.PlayVerdict(c.Verdict, Contact, o);
             fx.Impact(Contact, dirV, tierColor, big ? 24 : 12, 13, scale: scale);
             if (big && !c.IsDemo)
             {
                 fx.SpeedLines(Contact, tierColor, roomy ? 16 : 8, 3.0f);
-                // The home-run burst: ONE thick gold-orange shock ring out and gone in a quarter second, a hot
-                // starburst flare on the bat, and short rays all round (the cone above carries the aim).
-                fx.Ring(Contact, Hex(0xff8a1a), 0.25f, 0.25f * scale, 2.1f * scale, 0.55f, 0.12f, wobble: 0.002f, overlay: true);
-                fx.Flare(Contact, Hex(0xffc860), 0.8f * scale, 0.18f, 0.4f, 2.2f);
-                fx.Impact(Contact, Vector3.up, Hex(0xfff0c0), roomy ? 18 : 10, 17, 0.2f, 1f, scale * 0.8f);
+                // The home-run burst: a directional starburst of long gold streaks thrown along the hit, a warm (not
+                // white) flare on the bat that stays under the bloom's blow-out, and short rays all round.
+                fx.Impact(Contact, dirV, Hex(0xffc24a), roomy ? 16 : 10, 26, 0.34f, 0.07f, scale);
+                fx.Impact(Contact, dirV, Hex(0xff7a1a), roomy ? 10 : 6, 15, 0.26f, 0.16f, scale);
+                fx.Flare(Contact, Hex(0xff9a3a) * 0.75f, 0.68f * scale, 0.16f, 0.4f, 1.9f);
+                fx.Impact(Contact, Vector3.up, Hex(0xffe0a0), roomy ? 14 : 8, 15, 0.18f, 1f, scale * 0.7f);
                 // The grand slam's shockwave and its echo reach well below the bat: overlay rings the field can't slice flat.
                 if (p.Finale)
                 {
@@ -703,10 +714,10 @@ namespace Bonanza
             var f = Feel.ForCombo(c.Verdict, c.Combo);
             if (!c.IsDemo)
             {
-                float hs = Mathf.Min(Feel.HitstopMax * 1.6f, f.Hitstop * (big ? 1.5f : 1f) * (p.Finale ? 2.6f : 1f));
+                float hs = Mathf.Min(Feel.HitstopMax * 1.6f, f.Hitstop * (big ? 1.9f : 1f) * (p.Finale ? 2.6f : 1f));
                 // The freeze ends well before the next unjudged note arrives, and is visual only.
                 Look.Hitstop(Feel.HitstopFor(hs, _round.Judge.Notes, _round.Map.TimeAt(p.TargetBeat)));
-                rig.PunchZoom(1 + (big ? 0.1f : 0.03f) * (p.Finale ? 2.0f : 1f));   // a real FOV kick on a home run
+                rig.PunchZoom(1 + (big ? 0.14f : 0.035f) * (p.Finale ? 1.6f : 1f));   // a real camera punch on a home run
             }
             _camPush = big ? 1 : 0.45f;
 
@@ -722,9 +733,9 @@ namespace Bonanza
 
             if (p.Finale)
             {
-                rig.DoFlash(Feel.FinaleFlash, Hex(0xfff3cf));
+                rig.DoFlash(Feel.FinaleFlash * 0.55f, Hex(0xffd9a0));   // a warm pulse, not a white-out over the batter
                 rig.Shake(Feel.FinaleShake, new Vector3(-1, 0.5f, 0));
-                fx.Confetti(Contact + new Vector3(2, 2, 0), 140, null, 9, 1);
+                fx.Confetti(new Vector3(-1, 8.5f, 12), 120, null, 4, 0.4f, 0.11f, 3.6f);   // a shower over the stands, not on the plate
                 _finaleShow = 0;   // and the sky over the stands fills with fireworks and a slow confetti shower
             }
         }
@@ -768,12 +779,34 @@ namespace Bonanza
                 if (h.Bounce && h.P.y < 0.19f) { h.P.y = 0.19f; h.V.y *= -0.35f; h.V.x *= 0.7f; }
                 h.Go.transform.position = h.P;
                 h.Trail?.Set(h.P);
+                // Gone the moment it leaves the frame (or fading out under a new pitch): never two balls on screen.
+                bool off = false;
+                var cam = Camera.main;
+                if (cam && h.T > 0.15f && !h.Slam)
+                {
+                    var vp = cam.WorldToViewportPoint(h.P);
+                    off = vp.z < 0 || vp.x < -0.03f || vp.x > 1.03f || vp.y > 1.03f;
+                }
+                if (h.Fade > 0)
+                {
+                    h.Fade += dt;
+                    h.Go.transform.localScale = Vector3.one * (0.34f * Mathf.Max(0, 1 - h.Fade / 0.16f));
+                    if (h.Fade >= 0.16f) off = true;
+                }
+                if (off && h.T < h.Life)
+                {
+                    h.Go.transform.localScale = Vector3.one * 0.34f;
+                    h.Trail?.Release();
+                    FreeBall(h.Go);
+                    _hitBalls.RemoveAt(i);
+                    continue;
+                }
                 if (h.T >= h.Life)
                 {
                     if (h.Land)
                     {
                         // Caught in the stands: a pop of confetti.
-                        Look.Fx.Confetti(h.P + Vector3.up * 0.3f, 36, null, 5, 1);
+                        Look.Fx.Confetti(h.P + Vector3.up * 0.3f, 36, null, 5, 1, 0.11f);
                         Look.Fx.Burst(h.P, 10, h.Color, 4, life: 0.45f);
                         if (_nightK > 0.5f) Firework(h.P);
                     }
@@ -788,13 +821,12 @@ namespace Bonanza
         void Firework(Vector3 landing)
         {
             var fx = Look.Fx;
-            var at = new Vector3(landing.x * 0.6f + 2, 8.5f + (_fireworks % 3) * 0.7f, landing.z + 4);
+            // Over the skyline behind the arches, not over the stands.
+            var at = new Vector3(Mathf.Clamp(landing.x * 0.8f, -12, 12), 10.6f + (_fireworks % 3) * 0.9f, 27 + (_fireworks % 2) * 3);
             var col = Hex(Feel.Party[_fireworks % Feel.Party.Length]);
+            var col2 = Hex(Feel.Party[(_fireworks + 2) % Feel.Party.Length]);
             _fireworks++;
-            fx.Burst(at, 60, col, 11f, 0.42f, 1.1f, -2.5f);
-            fx.Ring(at, col, 0.7f, 0.6f, 6.5f, 0.16f, 0.025f, 0.01f, 0.85f);
-            fx.Flare(at, col, 2.4f, 0.25f);
-            fx.Confetti(at, 60, null, 6.5f, 0.2f);
+            fx.Shell(at, col.linear * 1.8f, col2.linear * 1.8f, 64, 15f, 0.7f);
         }
         int _fireworks;
 
@@ -809,13 +841,12 @@ namespace Bonanza
             {
                 float t = FinaleShots[i];
                 if (before >= t || _finaleShow < t) continue;
-                var at = new Vector3(-7 + (i * 5.3f) % 15, 8 + (i % 3) * 1.1f, 10 + (i % 2) * 4);
+                var at = new Vector3(-12 + (i * 6.7f) % 24, 10.4f + (i % 3) * 1.0f, 26 + (i % 2) * 4);
                 var col = Hex(Feel.Party[i % Feel.Party.Length]);
+                var col2 = Hex(Feel.Party[(i + 2) % Feel.Party.Length]);
                 var fx = Look.Fx;
-                fx.Burst(at, 60, col, 11f, 0.42f, 1.1f, -2.5f);
-                fx.Ring(at, col, 0.7f, 0.6f, 6f, 0.16f, 0.025f, 0.01f, 0.85f);
-                fx.Flare(at, col, 2.4f, 0.25f);
-                fx.Confetti(at + Vector3.up * 2, 50, null, 3.5f, 0.6f, 0.5f, 3.2f);
+                fx.Shell(at, col.linear * 1.8f, col2.linear * 1.8f, 70, 15.5f, 0.72f);
+                if (i % 2 == 0) fx.Confetti(new Vector3(-6 + (i * 4.1f) % 12, 9.5f, 12 + (i % 3) * 2), 26, null, 2.5f, 0.3f, 0.11f, 3.4f);
             }
             if (_finaleShow > FinaleShots[FinaleShots.Length - 1] + 0.1f) _finaleShow = -1;
         }
@@ -904,6 +935,7 @@ namespace Bonanza
         protected override void OnDestroy()
         {
             StopCamera();
+            Look.Fx?.ConfettiFadeOff();
             if (_traceMesh) Destroy(_traceMesh);
             base.OnDestroy();
         }
