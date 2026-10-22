@@ -35,7 +35,7 @@ namespace Bonanza.Core
     public enum PitchKind { Normal, Demo, Fast, Slam }
 
     /// One ball: leaves the machine at LaunchBeat, crosses the plate at TargetBeat.
-    public sealed class Pitch
+    public class Pitch
     {
         public int Id;
         public double TargetBeat;
