@@ -15,12 +15,13 @@ namespace Bonanza.Core
         /// Every action a minigame can be handed (pause is the host's).
         public static readonly string[] GameActions = { A, B, Left, Down, Up, Right };
 
-        /// Web KEY_MAP, in the order it is declared.
+        /// Web KEY_MAP, in the order it is declared, plus Backspace on b (Hymn Meter: clear the answer boxes).
         public static readonly KeyValuePair<string, string>[] Keys =
         {
             new KeyValuePair<string, string>("Space", A), new KeyValuePair<string, string>("KeyZ", A),
             new KeyValuePair<string, string>("KeyJ", A), new KeyValuePair<string, string>("Enter", A),
             new KeyValuePair<string, string>("KeyX", B), new KeyValuePair<string, string>("KeyK", B),
+            new KeyValuePair<string, string>("Backspace", B),
             new KeyValuePair<string, string>("ArrowLeft", Left), new KeyValuePair<string, string>("KeyA", Left),
             new KeyValuePair<string, string>("ArrowRight", Right), new KeyValuePair<string, string>("KeyD", Right),
             new KeyValuePair<string, string>("ArrowUp", Up), new KeyValuePair<string, string>("KeyW", Up),

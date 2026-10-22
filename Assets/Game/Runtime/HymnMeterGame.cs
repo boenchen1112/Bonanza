@@ -1,17 +1,23 @@
 // Bounce Brigade (the game id and name stay): hear a hymn's last lines, find the downbeat, conduct it.
-// The arrow keys are the conducting pattern of the hymn's meter, one key per beat (4 beats: down left
-// right up; 3: left right up; 2: right up) and each key is tied to where its beat REALLY sits in the bar:
-// join on beat 2 of a 4-beat bar and the key is "left". A valid answer is an unbroken run of correct,
-// on-beat keys at least one bar long that ends on the bar's last beat; the last valid run counts.
-// The floor tiles under the hopping jumper are hidden under cloud and reveal once everyone has answered.
+// The jumper hops on every beat by itself. Answer with the arrow keys, one per beat, starting on the beat
+// you think is the DOWNBEAT with the first key of the meter's pattern: DOWN starts 4 boxes (down left right
+// up), LEFT starts 3 (left right up), RIGHT starts 2 (right up). Each following on-beat key fills the next
+// box; a wrong key or a missed beat empties them. Once the boxes are full every beat lights one box (box 1 on
+// the beat you claimed), looping with the music. BACKSPACE (b: X, K) clears; ENTER (a: Space, Z, J) submits a
+// full answer and locks it. Right = the hymn's pattern AND box 1 on a true downbeat. The steps under the
+// jumper (heavier = lower: 4 beats 1 3 2 3, 3 beats 1 3 3, 2 beats 1 3) hide under cloud that lifts at the
+// halfway point of the excerpt or once everyone has submitted; a submission after that ranks below all earlier
+// ones and scores a quarter.
 //
-// The rules live in Bonanza.Core (Meter, MeterJudge, HymnRound, ...); this is stage, sound and HUD.
+// The rules live in Bonanza.Core (Meter, MeterAnswer, HymnRound, ...); this is stage, sound and HUD.
 // The grid is built from the hymn's MIDI + tempo map (HymnData) and the audio was rendered from the same
 // pair (Tools/hymns), so the beats you hear are the beats judged. A build without the private hymn data
 // (a fresh clone) fails Load() with "hymn data missing" and the host returns to the title.
 //
-// Hooks for the visual side: Round / CurrentSlot / BeatIndex / BeatPhase / BarPosition / BeatsPerBar /
-// Revealed / Live (the player's run so far) / Presses, and the tile colours by pattern key (KeyColor).
+// Hooks for the visual side: Round / CurrentSlot / Shown / BeatIndex / BeatPhase / BarPosition / BeatsPerBar /
+// StepHeight (the shown beat's, Shown.Beats[i].StepHeight for any beat) / Revealed / Answer (the player's boxes:
+// Count, Filled, KeyAt(i), Full, Locked, SubmitTime, StartBeat) / LitBox (the box that flickers now, -1 if none),
+// and the tile colours by pattern key (KeyColor).
 //
 // Time: everything is game time (the audio clock); presses arrive in game time.
 
@@ -27,7 +33,7 @@ namespace Bonanza
         public override string Id => "bounce-brigade";
         public override string Title => "BOUNCE BRIGADE";
         public override string Blurb => "Find the downbeat. Conduct the hymn.";
-        public override string Controls => "Six hymn excerpts. Listen: where does the bar start?\nConduct with the ARROW KEYS, one per beat:\n4 beats: DOWN LEFT RIGHT UP   -   3 beats: LEFT RIGHT UP   -   2 beats: RIGHT UP\nJoin on any beat, but each key must match where that beat sits in its bar.\nKeep going to the end of a bar. A wrong key? Start again. The earlier you are right, the more you score.";
+        public override string Controls => "Six hymn excerpts. Listen: where does the bar start?\nOn the DOWNBEAT press the first key of the pattern, then one key per beat:\n4 beats: DOWN LEFT RIGHT UP   -   3 beats: LEFT RIGHT UP   -   2 beats: RIGHT UP\nA wrong key or a missed beat empties the boxes. BACKSPACE clears them.\nWhen they are full press ENTER to lock your answer. The earlier you are right, the more you score.";
         public override bool OwnsMusic => true;
 
         const double PreRoll = 0.5;      // the clip starts this long before the first beat (the hymn leading in)
@@ -50,9 +56,12 @@ namespace Bonanza
         public int BeatsPerBar => BeatIndex >= 0 && Shown != null ? Shown.Beats[BeatIndex].BeatsPerBar : 0;
         /// The cloud is off the shown excerpt's floor.
         public bool Revealed => Shown != null && Shown.Revealed;
-        /// The player's presses on this excerpt so far, and what MeterJudge makes of them.
-        public IReadOnlyList<MeterPress> Presses => _presses;
-        public MeterResult Live { get; private set; }
+        /// Step height of the latest beat that has sounded, 1 = lowest = heaviest (4 beats 1 3 2 3, 3 beats 1 3 3, 2 beats 1 3), 0 before the first.
+        public int StepHeight => BeatIndex >= 0 && Shown != null ? Shown.Beats[BeatIndex].StepHeight : 0;
+        /// The player's boxes on the shown excerpt (Count, Filled, KeyAt, Full, Locked, SubmitTime, StartBeat), null before the first.
+        public MeterAnswer Answer => Shown?.Answer;
+        /// The box that lights at the current time once the boxes are full (box 1 on the beat claimed as the downbeat), -1 if none.
+        public int LitBox => Answer != null ? Answer.LitBox(_now) : -1;
 
         /// A floor tile's colour for a pattern key (down, left, right, up).
         public static Color KeyColor(string key) => key == "down" ? Hex(0xffd34d) : key == "left" ? Hex(0x4cc9f0) : key == "right" ? Hex(0xf15bb5) : Hex(0x8ee05a);
@@ -64,8 +73,7 @@ namespace Bonanza
         readonly AudioClip[] _clips = new AudioClip[HymnRound.ExcerptCount];
         IReadOnlyList<int> _ids;
         readonly Callouts _say = new Callouts();
-        readonly List<MeterPress> _presses = new List<MeterPress>();
-        int _pressSlot = -1, _musicSlot = -1, _stoppedSlot = -1, _layoutSlot = -1;
+        int _musicSlot = -1, _stoppedSlot = -1, _layoutSlot = -1;
         double _now, _doneAt = -1;
         bool _playing;
         readonly float[] _flash = new float[4];       // down left right up: how lit the key box is
@@ -155,14 +163,10 @@ namespace Bonanza
         {
             if (!_playing || _round.Done) return;
             double t = time + Save.OffsetMs / 1000.0;
-            if (!_round.Press(action, t)) return;   // not an arrow: nothing to conduct with
-            int slotIndex = _round.Current;
-            if (slotIndex != _pressSlot) { _presses.Clear(); _pressSlot = slotIndex; }
-            _presses.Add(new MeterPress { Action = action, Time = t });
-            var slot = _round.Slots[slotIndex];
-            Live = MeterJudge.Judge(slot.Beats, slot.WindowStart, slot.WindowEnd, _presses);
+            if (!_round.Press(action, t)) return;   // not an arrow, clear or submit: nothing to answer with
             int ki = System.Array.IndexOf(KeyOrder, action);
-            if (ki >= 0) _flash[ki] = 1;
+            if (ki < 0) return;   // clear and submit make no tick
+            _flash[ki] = 1;
             Host.PlaySfx("tick", time, gain: 0.12f);
         }
 
@@ -217,9 +221,6 @@ namespace Bonanza
 
         void OnStarted(HymnSlot slot)
         {
-            _presses.Clear();
-            _pressSlot = slot.Index;
-            Live = null;
             _lastLine = "";
             BuildLayout(slot);
             _say.Banner($"{slot.Index + 1} / {HymnRound.ExcerptCount}", 1.3f, slot.Level.ToString().ToUpperInvariant());
@@ -234,10 +235,10 @@ namespace Bonanza
         {
             var me = j.Results[0];
             if (me.Correct)
-                _lastLine = $"RIGHT - joined on beat {me.StartBeat + 1}" + (j.Winner == 0 ? " - FIRST!" : j.Winner > 0 ? " - a rival was first" : "");
+                _lastLine = "RIGHT" + (me.PostReveal ? " - AFTER THE REVEAL" : j.Winner == 0 ? " - FIRST!" : j.Winner > 0 ? " - a rival was first" : "");
             else
             {
-                _lastLine = "NO ANSWER" + (j.Winner > 0 ? " - a rival got it" : "");
+                _lastLine = (me.Submitted ? "WRONG" : "NO ANSWER") + (j.Winner > 0 ? " - a rival got it" : "");
                 Host.PlaySfx("miss", _now + 0.01);
             }
             _lastLineLife = 3f;
@@ -368,9 +369,24 @@ namespace Bonanza
                 Hud.Center(0.06f, state, Hud.Mid, state == "REVEALED" ? Hud.Gold : white, 60);
                 string pos = slot.Revealed && BarPosition >= 0 ? $"BAR POSITION {BarPosition + 1} of {BeatsPerBar}" : "BAR POSITION ?";
                 Hud.Center(0.13f, pos, Hud.Small, white, 40);
-                int keys = _presses.Count;
-                string run = Live == null || Live.Runs.Count == 0 ? $"KEYS {keys}" : $"KEYS {keys}   RUN {Live.Runs.Last().Length}" + (slot.Revealed ? (Live.Correct ? "   RIGHT" : "   NOT YET") : "");
-                Hud.Center(0.18f, run, Hud.Small, white, 40);
+                Hud.Center(0.18f, AnswerLine(slot), Hud.Small, white, 40);
+            }
+            // the answer boxes: filled with the key, the lit one is the beat's position in the answer
+            var ans = slot?.Answer;
+            if (ans != null)
+            {
+                int boxes = ans.Count > 0 ? ans.Count : 4;
+                int lit = ans.LitBox(_now);
+                float aw = 96 * s, ah = 64 * s, ag = 12 * s, ax0 = Screen.width / 2f - (boxes * aw + (boxes - 1) * ag) / 2f, ay = Screen.height - 240 * s;
+                for (int i = 0; i < boxes; i++)
+                {
+                    var r = new Rect(ax0 + i * (aw + ag), ay, aw, ah);
+                    string key = ans.KeyAt(i);
+                    if (key == null) { Hud.Box(r, new Color(1, 1, 1, 0.12f)); continue; }
+                    var c = KeyColor(key);
+                    Hud.Box(r, new Color(c.r, c.g, c.b, i == lit ? 1f : 0.45f));
+                    Hud.Text(r, key.ToUpperInvariant(), Hud.Small, i == lit ? Hud.Gold : white);
+                }
             }
             // the four keys
             float bw = 110 * s, bh = 56 * s, gap = 10 * s, x0 = Screen.width / 2f - (4 * bw + 3 * gap) / 2f, y = Screen.height - 150 * s;
@@ -394,6 +410,16 @@ namespace Bonanza
             }
             if (_lastLineLife > 0) Hud.Center(0.24f, _lastLine, Hud.Mid, Hud.Gold, 60);
             _say.Draw();
+        }
+
+        // One line under the state: where the player's answer stands.
+        string AnswerLine(HymnSlot slot)
+        {
+            var a = slot.Answer;
+            if (a.Locked) return slot.Revealed && a.SubmitTime > _round.RevealAt(slot) ? "LOCKED (AFTER THE REVEAL)" : "LOCKED";
+            if (a.Full) return "ENTER TO LOCK   BACKSPACE TO CLEAR";
+            if (a.Filled > 0) return $"BOX {a.Filled} of {a.Count}";
+            return "PRESS THE FIRST KEY ON THE DOWNBEAT";
         }
     }
 }

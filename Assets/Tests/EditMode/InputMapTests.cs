@@ -1,4 +1,4 @@
-// Pins the input vocabulary to the web prototype's core/input.js: KEY_MAP, PAD_MAP,
+// Pins the input vocabulary to the web prototype's core/input.js: KEY_MAP (plus Backspace on b), PAD_MAP,
 // the stick-as-d-pad rule, and the held set that blur releases.
 
 using System.Collections.Generic;
@@ -10,7 +10,7 @@ namespace Bonanza.Core.Tests
     public class InputMapTests
     {
         [TestCase("Space", "a"), TestCase("KeyZ", "a"), TestCase("KeyJ", "a"), TestCase("Enter", "a")]
-        [TestCase("KeyX", "b"), TestCase("KeyK", "b")]
+        [TestCase("KeyX", "b"), TestCase("KeyK", "b"), TestCase("Backspace", "b")]
         [TestCase("ArrowLeft", "left"), TestCase("KeyA", "left")]
         [TestCase("ArrowRight", "right"), TestCase("KeyD", "right")]
         [TestCase("ArrowUp", "up"), TestCase("KeyW", "up")]
@@ -22,7 +22,7 @@ namespace Bonanza.Core.Tests
         public void UnmappedKeyIsNull() => Assert.IsNull(InputMap.ForKey("KeyQ"));
 
         [Test]
-        public void KeyTableHasExactlySixteenKeys() => Assert.AreEqual(16, InputMap.Keys.Length);
+        public void KeyTableHasExactlySeventeenKeys() => Assert.AreEqual(17, InputMap.Keys.Length);
 
         [TestCase(0, "a"), TestCase(1, "b"), TestCase(2, "b"), TestCase(3, "a")]
         [TestCase(12, "up"), TestCase(13, "down"), TestCase(14, "left"), TestCase(15, "right")]
