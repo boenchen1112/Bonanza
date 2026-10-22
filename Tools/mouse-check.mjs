@@ -158,7 +158,7 @@ check('swings fire at the ictus, before the button goes up', conducted.every((c)
 check('swings land near the ictus (mean |err| within the GREAT window)', hits.length > 0 && meanErr < 82, `mean ${meanErr.toFixed(1)}ms`);
 check('every hit is inside the GOOD window', hits.every((c) => Math.abs(c.s.err) <= 128));
 check('a hold for the whole flight is a home run (power >= 0.72)', hits.every((c) => c.s.power >= 0.72), hits.map((c) => c.s.power).join(','));
-check('the windup length is the flight (~2 beats)', hits.every((c) => c.s.hold > 1.5 && c.s.hold < 2.6), hits.map((c) => c.s.hold).join(','));
+check('the windup length is the flight (~1 beat since the downbeat round: one ball per beat)', hits.every((c) => c.s.hold > 0.6 && c.s.hold < 1.4), hits.map((c) => c.s.hold).join(','));
 check('release with no pointer motion swings on the button-up', seven.rel && seven.rel.src === 'button' && seven.s.verdict !== 'miss', `${seven.s.verdict} ${seven.s.err}ms`);
 check('a slow drift is not a swing (no ictus, pitch missed)', eight.s.verdict === 'miss' && (!eight.rel || eight.rel.src !== 'ictus'));
 check('the round scores', swings[swings.length - 1].pts > 0, `pts=${swings[swings.length - 1].pts}`);
