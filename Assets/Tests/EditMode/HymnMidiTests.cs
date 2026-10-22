@@ -492,30 +492,43 @@ namespace Bonanza.Core.Tests
             Assert.AreEqual(0.0, x.StartTime, 1e-9);
         }
 
+        // The pattern's keys on the `pattern` beats from beat `from`, then Enter just after the last.
+        static List<MeterPress> Answer(HymnExcerpt x, int pattern, int from)
+        {
+            var keys = Meter.Pattern(pattern);
+            var p = new List<MeterPress>();
+            for (int k = 0; k < pattern; k++) p.Add(new MeterPress { Action = keys[k], Time = x.Beats[from + k].Time });
+            p.Add(new MeterPress { Action = "a", Time = x.Beats[from + pattern - 1].Time + 0.02 });
+            return p;
+        }
+
         [Test]
-        public void ExcerptBeatsWithAPerfectRightPatternPressListAreCorrect()
+        public void ExcerptBeatsWithAPerfectAnswerAreCorrect()
         {
             var m = Sixteen();
             var g = HymnGrid.Build(m, 4);
             var hard = Cut(m, g, "h 4 no - - yes", HymnLevel.Hard);
-            var presses = hard.Beats.Select(b => new MeterPress { Action = Meter.KeyFor(b.BeatsPerBar, b.BarPosition), Time = b.Time }).ToList();
-            var r = MeterJudge.Judge(hard.Beats, hard.WindowStart, hard.WindowEnd, presses);
+            var r = MeterJudge.Judge(hard.Beats, 4, hard.WindowStart, hard.WindowEnd, Answer(hard, 4, 0));
             Assert.IsTrue(r.Correct);
             Assert.AreEqual(0, r.StartBeat);
             Assert.AreEqual(1.0, r.Accuracy, 1e-9);
         }
 
         [Test]
-        public void JoiningMidBarFromTheExcerptStillCountsWithTheRightKeys()
+        public void ClaimingTheSecondBeatOfTheFirstBarAsTheDownbeatIsNotCorrect()
         {
             var m = HymnMidi.Parse(Hymn(3, 4, 12, pickup: true));
             var g = HymnGrid.Build(m, 3);
             var x = Cut(m, g, "h 3 yes - - yes", HymnLevel.Hard);
-            // start on the second beat of the first bar: left is wrong there, right is right
-            var presses = x.Beats.Skip(1).Select(b => new MeterPress { Action = Meter.KeyFor(b.BeatsPerBar, b.BarPosition), Time = b.Time }).ToList();
-            var r = MeterJudge.Judge(x.Beats, x.WindowStart, x.WindowEnd, presses);
-            Assert.IsTrue(r.Correct);
+            // the same left right up from the second beat of the first bar: a full answer, but box 1 is not on a downbeat
+            var r = MeterJudge.Judge(x.Beats, 3, x.WindowStart, x.WindowEnd, Answer(x, 3, 1));
+            Assert.IsTrue(r.Submitted);
+            Assert.IsFalse(r.Correct);
             Assert.AreEqual(1, r.StartBeat);
+            // from the first true downbeat it is right
+            int down = HymnCpu.FirstDownbeat(x.Beats, 3);
+            Assert.GreaterOrEqual(down, 0);
+            Assert.IsTrue(MeterJudge.Judge(x.Beats, 3, x.WindowStart, x.WindowEnd, Answer(x, 3, down)).Correct);
         }
 
         // ---- the real files (optional) ---------------------------------------

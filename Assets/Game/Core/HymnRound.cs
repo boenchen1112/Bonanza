@@ -25,22 +25,27 @@
 // next excerpt begins then. The first excerpt begins at the Start time (the host
 // owns any count-in). The round is done when the last window has closed and been judged.
 //
-// THE REVEAL. Revealed turns true for an excerpt once every player has a valid answer
-// (human: MeterJudge on the presses so far is Correct; CPU: its answer time has passed, and a
-// CPU rolled wrong never answers), or when the window closes, whichever first.
+// THE REVEAL. An excerpt reveals at the halfway point of its answer window, or as soon as every
+// player has submitted (the human has locked an answer, right or wrong; every CPU's submit time
+// has passed), whichever is first (RevealAt). A submission after that moment is flagged PostReveal.
+// The flag is a function of the submit times, not of when Update ran.
 //
 // CPUS. Each CPU rolls per excerpt with Rng seeded from (round seed, slot, cpu), at the
-// excerpt's start (so the reveal can know when it answers): correct or not (by level and
-// skill), a start beat from which a valid run to the end exists (later for harder levels and
-// lower skill), and an accuracy. The result is a MeterResult, ranked by MeterRanking like the
-// human's.
+// excerpt's start (so the reveal can know when it submits): correct or not (by level and skill),
+// a submit time (later for harder levels and lower skill, never before it could have filled its
+// boxes) and an accuracy. A wrong CPU submits a wrong answer; a CPU that cannot fill a bar
+// never submits. The result is a MeterResult, ranked by MeterRanking like the human's.
 //
-// WINNER. Best by MeterRanking; a tie goes to the earlier list index (the human is index 0,
-// the CPUs follow in order). Nobody correct: no winner (-1).
+// WINNER. Best by MeterRanking (correct > pre-reveal > earlier Submit > accuracy); a tie goes to
+// the earlier list index (the human is index 0, the CPUs follow in order). Nobody correct: no
+// winner (-1).
 //
-// SCORE. A correct excerpt is worth 600 + 300 * earliness + 100 * accuracy, earliness =
-// 1 - start / (beats - 1) clamped to 0..1; a wrong one 0. Round accuracy is score / max for
-// the rank (Scoring.RankFor, wrong excerpts as misses).
+// SCORE. A correct excerpt is worth 600 + 300 * earliness + 100 * accuracy, earliness = 1 at the
+// window start .. 0 at its end by Submit time; times 0.25 when PostReveal; a wrong or missing
+// answer 0. Round accuracy (for the rank) is score / the sum of the excerpts' CeilingPoints (what
+// a perfect answer submitted the moment its boxes are full is worth), wrong excerpts as misses, so
+// the perfect presses rank S although no answer can be worth the full 1000 (the window opens
+// before the first beat).
 //
 // No UnityEngine here: this assembly is pure C# so it stays test-pinned.
 
@@ -172,48 +177,58 @@ namespace Bonanza.Core
         }
     }
 
-    /// A CPU's rolled excerpt.
+    /// A CPU's rolled excerpt: its Result carries the submit time (+infinity when it never submits).
     public sealed class HymnCpuRoll
     {
         public MeterResult Result;
-        public double AnswerTime = double.PositiveInfinity;   // when its answer first becomes valid, never if wrong
     }
 
     public static class HymnCpu
     {
-        /// Roll one CPU's excerpt on `beats` (any time base). Always draws the same four numbers.
-        public static HymnCpuRoll Roll(IReadOnlyList<MeterBeat> beats, HymnLevel level, double skill, Rng rng)
+        /// A CPU cannot submit sooner than this after the beat that fills its last box.
+        public const double Reaction = 0.15;
+
+        /// Grid index of the first true downbeat that has a whole pattern of beats after it, -1 if none.
+        public static int FirstDownbeat(IReadOnlyList<MeterBeat> beats, int pattern)
         {
-            double rCorrect = rng.Next(), rStart = rng.Next(), w1 = rng.Next(), w2 = rng.Next();
+            for (int i = 0; i + pattern <= beats.Count; i++)
+                if (beats[i].BarPosition == 0 && beats[i].BeatsPerBar == pattern) return i;
+            return -1;
+        }
+
+        /// Roll one CPU's excerpt on `beats` and its window (any time base). Always draws the same four numbers.
+        public static HymnCpuRoll Roll(IReadOnlyList<MeterBeat> beats, int pattern, double windowStart, double windowEnd,
+                                       HymnLevel level, double skill, Rng rng)
+        {
+            double rCorrect = rng.Next(), rTime = rng.Next(), w1 = rng.Next(), w2 = rng.Next();
             var roll = new HymnCpuRoll { Result = new MeterResult() };
 
-            int last = -1;
-            for (int i = beats.Count - 1; i >= 0; i--)
-                if (beats[i].BarPosition == beats[i].BeatsPerBar - 1) { last = i; break; }
-            int maxStart = last < 0 ? -1 : last - beats[last].BeatsPerBar + 1;
-            if (maxStart < 0) return roll;
+            int start = FirstDownbeat(beats, pattern);
+            if (start < 0) return roll;
 
             double penalty = level == HymnLevel.Easy ? 0 : level == HymnLevel.Medium ? 0.06 : 0.14;
             double pCorrect = Clamp(0.5 + 0.45 * skill - penalty, 0.05, 0.98);
-            if (rCorrect >= pCorrect) return roll;
+            bool correct = rCorrect < pCorrect;
 
             double baseDelay = level == HymnLevel.Easy ? 0.02 : level == HymnLevel.Medium ? 0.08 : 0.16;
-            double frac = Clamp(baseDelay + (1 - skill) * 0.3 + (rStart - 0.5) * 0.2, 0, 0.9);
-            int start = Math.Min(maxStart, (int)Math.Floor(frac * maxStart + 0.5));
+            double frac = Clamp(baseDelay + (1 - skill) * 0.3 + (rTime - 0.5) * 0.2, 0, 0.9);
+            double earliest = beats[start + pattern - 1].Time + Reaction;
+            double submit = Math.Min(windowEnd, Math.Max(earliest, windowStart + frac * (windowEnd - windowStart)));
             double accuracy = Clamp(0.45 + 0.5 * skill + (w1 + w2 - 1) * 0.12, 0.3, 0.98);
             accuracy = Math.Floor(accuracy * 1000 + 0.5) / 1000;
 
-            int answer = start;
-            for (int e = start; e <= last; e++)
-                if (beats[e].BarPosition == beats[e].BeatsPerBar - 1 && e - start + 1 >= beats[e].BeatsPerBar) { answer = e; break; }
-
             var r = roll.Result;
-            r.Correct = true;
-            r.StartBeat = start;
-            r.StartTime = beats[start].Time;
+            r.Submitted = true;
+            r.SubmitTime = submit;
             r.Accuracy = accuracy;
-            r.Runs.Add(new MeterRun { StartBeat = start, Length = last - start + 1, ValidLength = last - start + 1, Accuracy = accuracy });
-            roll.AnswerTime = beats[answer].Time;
+            r.Correct = correct;
+            if (correct)
+            {
+                r.Count = pattern;
+                r.StartBeat = start;
+                r.StartTime = beats[start].Time;
+            }
+            else r.Count = pattern % 3 + 2;   // 4 -> 3, 3 -> 4, 2 -> 4: never the hymn's own
             return roll;
         }
 
@@ -238,8 +253,11 @@ namespace Bonanza.Core
         /// Per player (human first), set when the excerpt is judged.
         public HymnJudgement Judgement;
         public bool Revealed;
-        public double RevealTime;                // round time of the update that revealed it
-        internal List<MeterPress> Presses = new List<MeterPress>();
+        public double RevealTime;                // round time of the update that revealed it (the exact moment is HymnRound.RevealAt)
+        /// The human's boxes for this excerpt (made by Start): the model the HUD reads, fed by HymnRound.Press.
+        public MeterAnswer Answer;
+        /// Halfway through the answer window: the reveal at the latest.
+        public double Halfway => (WindowStart + WindowEnd) / 2;
         /// The CPUs' rolls for this excerpt, in player order after the human (set when it starts).
         public HymnCpuRoll[] CpuRolls = new HymnCpuRoll[0];
     }
@@ -275,7 +293,7 @@ namespace Bonanza.Core
         readonly double[] _skills;
         readonly List<HymnCandidate> _picked = new List<HymnCandidate>();
         readonly List<HymnExcerpt> _cuts = new List<HymnExcerpt>();
-        bool _slotStarted, _humanDirty, _humanValid;
+        bool _slotStarted;
 
         /// Pool candidates that cannot be cut are dropped before the ladder runs. cpuSkills:
         /// one skill 0..1 per CPU, null or empty for free play.
@@ -319,6 +337,7 @@ namespace Bonanza.Core
                 };
                 foreach (var b in x.Beats)
                     slot.Beats.Add(new MeterBeat { Time = b.Time + shift, BarPosition = b.BarPosition, BeatsPerBar = b.BeatsPerBar });
+                slot.Answer = new MeterAnswer(slot.Beats, slot.Pattern, slot.WindowStart, slot.WindowEnd);
                 Slots.Add(slot);
                 double beat = x.Beats.Count > 1 ? x.Beats[1].Time - x.Beats[0].Time : 0.5;
                 t = slot.WindowEnd + GapBeats * beat;
@@ -328,24 +347,38 @@ namespace Bonanza.Core
             Done = false;
             Current = 0;
             _slotStarted = false;
-            _humanDirty = false;
-            _humanValid = false;
         }
 
-        /// The perfect presses (action, time) for one excerpt, from its first beat.
-        public List<MeterPress> PerfectPresses(int slot) =>
-            Slots[slot].Beats.Select(b => new MeterPress { Action = Meter.KeyFor(b.BeatsPerBar, b.BarPosition), Time = b.Time }).ToList();
+        /// Delay after the fill of the last box at which the perfect presses press Enter.
+        public const double PerfectEnterDelay = 0.02;
+
+        /// The perfect presses (action, time) for one excerpt: the first downbeat's key and the pattern's
+        /// keys on the beats, then Enter ("a") at once.
+        public List<MeterPress> PerfectPresses(int slot)
+        {
+            var s = Slots[slot];
+            var list = new List<MeterPress>();
+            int start = HymnCpu.FirstDownbeat(s.Beats, s.Pattern);
+            if (start < 0) return list;
+            var keys = Meter.Pattern(s.Pattern);
+            for (int k = 0; k < s.Pattern; k++) list.Add(new MeterPress { Action = keys[k], Time = s.Beats[start + k].Time });
+            list.Add(new MeterPress { Action = InputMap.A, Time = s.Beats[start + s.Pattern - 1].Time + PerfectEnterDelay });
+            return list;
+        }
 
         /// The perfect presses of the whole round, for the autoplay.
         public List<MeterPress> PerfectPresses() => Slots.SelectMany((s, i) => PerfectPresses(i)).ToList();
 
-        /// Record the human's key for the excerpt being played. False when it cannot count.
+        /// Record the human's key for the excerpt being played: an arrow into the boxes, "b" clears,
+        /// "a" submits. False when it is none of those or the round is not running.
         public bool Press(string action, double time)
         {
             if (!Started || Done || Current < 0 || Current >= Slots.Count) return false;
-            if (Array.IndexOf(Meter.Pattern(4), action) < 0) return false;   // not an arrow key
-            Slots[Current].Presses.Add(new MeterPress { Action = action, Time = time });
-            _humanDirty = true;
+            var answer = Slots[Current].Answer;
+            if (action == InputMap.A) answer.Submit(time);
+            else if (action == InputMap.B) answer.Clear();
+            else if (Array.IndexOf(Meter.Pattern(4), action) >= 0) answer.Press(action, time);
+            else return false;
             return true;
         }
 
@@ -360,7 +393,8 @@ namespace Bonanza.Core
                     if (now < slot.StartTime) return;
                     BeginSlot(slot);
                 }
-                if (!slot.Revealed && AllAnswered(slot, now)) Reveal(slot, now);
+                slot.Answer.Update(now);
+                if (!slot.Revealed && now >= RevealAt(slot)) Reveal(slot, now);
                 if (now <= slot.WindowEnd) return;
                 if (!slot.Revealed) Reveal(slot, now);
                 Judge(slot);
@@ -370,31 +404,27 @@ namespace Bonanza.Core
             }
         }
 
+        /// Round time at which the excerpt reveals: halfway through its window, or when the last
+        /// player submits if every player does so sooner. Needs the CPU rolls, so it is exact once
+        /// the excerpt has started; the human's Submit moves it earlier as it happens.
+        public double RevealAt(HymnSlot slot)
+        {
+            double all = slot.Answer.SubmitTime;
+            foreach (var c in slot.CpuRolls)
+                if (c.Result.SubmitTime > all) all = c.Result.SubmitTime;   // +infinity if anyone never submits
+            return Math.Min(slot.Halfway, all);
+        }
+
         void BeginSlot(HymnSlot slot)
         {
             _slotStarted = true;
-            _humanDirty = false;
-            _humanValid = false;
             slot.CpuRolls = new HymnCpuRoll[CpuCount];
             for (int c = 0; c < CpuCount; c++)
             {
                 uint s = Seed ^ unchecked((uint)(slot.Index + 1) * 0x9e3779b1u) ^ unchecked((uint)(c + 1) * 0x85ebca6bu);
-                slot.CpuRolls[c] = HymnCpu.Roll(slot.Beats, slot.Level, _skills[c], new Rng(s));
+                slot.CpuRolls[c] = HymnCpu.Roll(slot.Beats, slot.Pattern, slot.WindowStart, slot.WindowEnd, slot.Level, _skills[c], new Rng(s));
             }
             ExcerptStarted?.Invoke(slot);
-        }
-
-        bool AllAnswered(HymnSlot slot, double now)
-        {
-            if (_humanDirty)
-            {
-                _humanDirty = false;
-                if (!_humanValid && MeterJudge.Judge(slot.Beats, slot.WindowStart, slot.WindowEnd, slot.Presses).Correct) _humanValid = true;
-            }
-            if (!_humanValid) return false;
-            foreach (var c in slot.CpuRolls)
-                if (!(c.AnswerTime <= now)) return false;
-            return true;
         }
 
         void Reveal(HymnSlot slot, double now)
@@ -407,11 +437,13 @@ namespace Bonanza.Core
         void Judge(HymnSlot slot)
         {
             var j = new HymnJudgement { Slot = slot };
-            var human = MeterJudge.Judge(slot.Beats, slot.WindowStart, slot.WindowEnd, slot.Presses);
+            var human = slot.Answer.Result();
             j.Results.Add(human);
             foreach (var c in slot.CpuRolls) j.Results.Add(c.Result);
+            double revealAt = RevealAt(slot);
+            foreach (var r in j.Results) r.PostReveal = r.Submitted && r.SubmitTime > revealAt;
             j.Winner = WinnerOf(j.Results);
-            j.HumanPoints = PointsFor(human, slot.Beats.Count);
+            j.HumanPoints = PointsFor(human, slot.WindowStart, slot.WindowEnd);
             slot.Judgement = j;
             ExcerptJudged?.Invoke(slot, j);
         }
@@ -426,16 +458,30 @@ namespace Bonanza.Core
             return results.Count > 0 && results[best].Correct ? best : -1;
         }
 
-        /// 600 + 300 * earliness + 100 * accuracy for a correct excerpt, else 0.
-        public static double PointsFor(MeterResult r, int beatCount)
+        /// 600 + 300 * earliness + 100 * accuracy for a correct excerpt (earliness 1 at the window start,
+        /// 0 at its end, by Submit time), a quarter of that after the reveal, else 0.
+        public static double PointsFor(MeterResult r, double windowStart, double windowEnd)
         {
             if (!r.Correct) return 0;
-            double earliness = beatCount > 1 ? 1 - r.StartBeat / (double)(beatCount - 1) : 1;
+            double span = windowEnd - windowStart;
+            double earliness = span > 0 ? 1 - (r.SubmitTime - windowStart) / span : 1;
             earliness = earliness < 0 ? 0 : earliness > 1 ? 1 : earliness;
-            return 600 + 300 * earliness + 100 * r.Accuracy;
+            double points = 600 + 300 * earliness + 100 * r.Accuracy;
+            return r.PostReveal ? points * PostRevealFactor : points;
         }
 
+        public const double PostRevealFactor = 0.25;
         public const double MaxExcerptPoints = 1000;
+
+        /// The most an excerpt can be worth: a perfect answer submitted the moment its boxes are full on
+        /// the first downbeat.
+        public static double CeilingPoints(HymnSlot slot)
+        {
+            int start = HymnCpu.FirstDownbeat(slot.Beats, slot.Pattern);
+            if (start < 0) return MaxExcerptPoints;
+            var best = new MeterResult { Correct = true, Accuracy = 1, SubmitTime = slot.Beats[start + slot.Pattern - 1].Time };
+            return PointsFor(best, slot.WindowStart, slot.WindowEnd);
+        }
 
         /// `playerIds`: the party lineup ids, human first then the CPUs in the order given to the round;
         /// with them the outcome carries a Field (places by total points, equal totals share a place).
@@ -451,7 +497,8 @@ namespace Bonanza.Core
                 if (s.Judgement.Results[0].Correct) correct++;
             }
             int wrong = Slots.Count - correct;
-            double acc = score / (Slots.Count * MaxExcerptPoints);
+            double ceiling = Slots.Sum(CeilingPoints);
+            double acc = ceiling > 0 ? Math.Min(1, score / ceiling) : 0;
             var stats = new JudgeStats { Miss = wrong };
             var o = Outcome.Build(score, acc, Scoring.RankFor(acc, wrong), stats, 0, null);
             o.Extra("WON", $"{won}/{Slots.Count}")
@@ -473,7 +520,7 @@ namespace Bonanza.Core
             foreach (var s in Slots)
                 if (s.Judgement != null)
                     for (int i = 0; i < t.Length && i < s.Judgement.Results.Count; i++)
-                        t[i] += PointsFor(s.Judgement.Results[i], s.Beats.Count);
+                        t[i] += PointsFor(s.Judgement.Results[i], s.WindowStart, s.WindowEnd);
             return t;
         }
     }

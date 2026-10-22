@@ -1,6 +1,6 @@
-// Pins the Hymn Meter rules: the conducting pattern of each meter and the run judge
-// (claiming beats, runs, the answer that counts, ranking). Pure C#, no hymn files:
-// beat grids are built in memory at 120 bpm (one beat every 0.5 s).
+// Pins the Hymn Meter rules: the conducting pattern of each meter and the answer boxes
+// (downbeat first, fill, break, flicker, clear, submit, lock, ranking). Pure C#, no hymn
+// files: beat grids are built in memory at 120 bpm (one beat every 0.5 s, window 128 ms).
 
 using System.Collections.Generic;
 using System.Linq;
@@ -31,8 +31,21 @@ namespace Bonanza.Core.Tests
             return p;
         }
 
-        static MeterResult Run(List<MeterBeat> g, List<MeterPress> p) =>
-            MeterJudge.Judge(g, 0, g[g.Count - 1].Time + 1, p);
+        static MeterAnswer Ans(List<MeterBeat> g, int pattern) => new MeterAnswer(g, pattern, 0, g[g.Count - 1].Time + 1);
+
+        // Press the pattern's keys on `pattern` beats from beat `start` (claiming it as the downbeat, true or not).
+        static MeterAnswer Fill(List<MeterBeat> g, int pattern, int start, int hymnPattern = 0)
+        {
+            var a = Ans(g, hymnPattern > 0 ? hymnPattern : pattern);
+            var keys = Meter.Pattern(pattern);
+            for (int k = 0; k < pattern; k++) a.Press(keys[k], g[start + k].Time);
+            return a;
+        }
+
+        static MeterResult Run(List<MeterBeat> g, int pattern, List<MeterPress> p) =>
+            MeterJudge.Judge(g, pattern, 0, g[g.Count - 1].Time + 1, p);
+
+        static MeterPress Enter(double t) => new MeterPress { Action = "a", Time = t };
 
         [Test]
         public void PatternsFollowTheConductedBeats()
@@ -49,211 +62,387 @@ namespace Bonanza.Core.Tests
         }
 
         [Test]
-        public void StartingOnTheDownbeatForOneBarIsValid()
+        public void StepHeightsFollowTheWeightOfTheBeat()
+        {
+            CollectionAssert.AreEqual(new[] { 1, 3, 2, 3 }, Enumerable.Range(0, 4).Select(i => Meter.StepHeight(4, i)));
+            CollectionAssert.AreEqual(new[] { 1, 3, 3 }, Enumerable.Range(0, 3).Select(i => Meter.StepHeight(3, i)));
+            CollectionAssert.AreEqual(new[] { 1, 3 }, Enumerable.Range(0, 2).Select(i => Meter.StepHeight(2, i)));
+            Assert.AreEqual(0, Meter.StepHeight(4, 4));
+            Assert.AreEqual(0, Meter.StepHeight(5, 0));
+            var b = new MeterBeat { Time = 0, BarPosition = 2, BeatsPerBar = 4 };
+            Assert.AreEqual(2, b.StepHeight);
+        }
+
+        [TestCase("down", 4), TestCase("left", 3), TestCase("right", 2)]
+        public void TheFirstKeyOfEachPatternSetsTheBoxCount(string key, int boxes)
         {
             var g = Grid(3, 4);
-            var r = Run(g, Keys(g, 0, 3));
-            Assert.IsTrue(r.Correct);
-            Assert.AreEqual(0, r.StartBeat);
-            Assert.AreEqual(g[0].Time, r.StartTime, 1e-9);
-            Assert.AreEqual(1.0, r.Accuracy, 1e-9);
-            Assert.AreEqual(0, r.FreeTicks);
+            var a = Ans(g, boxes);
+            Assert.IsTrue(a.Press(key, g[0].Time));
+            Assert.AreEqual(boxes, a.Count);
+            Assert.AreEqual(1, a.Filled);
+            Assert.AreEqual(key, a.KeyAt(0));
+            Assert.IsNull(a.KeyAt(1));
+            Assert.AreEqual(0, a.StartBeat);
+            Assert.IsFalse(a.Full);
         }
 
         [Test]
-        public void StartingMidBarAndSpanningTheBarLineIsValid()
+        public void AWrongFirstKeyIsIgnored()
         {
             var g = Grid(3, 4);
-            var r = Run(g, Keys(g, 1, 7)); // beats 2-4 then 1-4: seven keys
-            Assert.IsTrue(r.Correct);
-            Assert.AreEqual(1, r.StartBeat);
-            Assert.AreEqual(1, r.Runs.Count);
-            Assert.AreEqual(7, r.Runs[0].Length);
+            var a = Ans(g, 4);
+            Assert.IsFalse(a.Press("up", g[0].Time));
+            Assert.AreEqual(0, a.Count);
+            Assert.AreEqual(0, a.Filled);
+            Assert.AreEqual(-1, a.StartBeat);
+            Assert.IsFalse(a.Press("a", g[0].Time));   // not an arrow: the Press method only takes arrows
+            Assert.AreEqual(0, a.Filled);
         }
 
         [Test]
-        public void ARunThatEndsMidBarIsNotValid()
+        public void AFirstKeyOffTheBeatIsIgnored()
         {
             var g = Grid(3, 4);
-            Assert.IsFalse(Run(g, Keys(g, 0, 2)).Correct);   // 1-3
-            Assert.IsFalse(Run(g, Keys(g, 1, 3)).Correct);   // 2-4 ends on the bar end but is under a bar
-            Assert.IsFalse(Run(g, Keys(g, 0, 0)).Correct);
-            Assert.IsFalse(Run(g, new List<MeterPress>()).Correct);
+            var a = Ans(g, 4);
+            Assert.IsFalse(a.Press("down", g[0].Time + 0.25));   // halfway between beats
+            Assert.IsFalse(a.Press("down", 0.1));                 // before the music, outside the window
+            Assert.AreEqual(0, a.Count);
         }
 
         [Test]
-        public void ARunPastTheBarEndKeepsItsValidPrefixAndStart()
+        public void FollowingOnBeatKeysFillTheNextBoxes()
         {
             var g = Grid(3, 4);
-            var r = Run(g, Keys(g, 0, 5)); // 1-4 then 1-2 and stop
-            Assert.IsTrue(r.Correct);
-            Assert.AreEqual(0, r.StartBeat);
-            Assert.AreEqual(1, r.Runs.Count);
+            var a = Fill(g, 4, 0);
+            Assert.IsTrue(a.Full);
+            Assert.AreEqual(4, a.Count);
+            for (int i = 0; i < 4; i++) Assert.AreEqual(Meter.Pattern(4)[i], a.KeyAt(i));
+            Assert.AreEqual(1.0, a.Accuracy, 1e-9);
+            Assert.IsFalse(a.Locked);
         }
 
         [Test]
-        public void AWrongKeyBreaksTheRun()
+        public void AWrongKeyEmptiesTheBoxes()
         {
             var g = Grid(3, 4);
-            var p = Keys(g, 0, 5);
-            p[2].Action = "up"; // beat 3 should be "right"
-            var r = Run(g, p);
-            Assert.IsFalse(r.Correct); // 1-2, break, 4-6: nothing reaches a full bar ending on a bar end
-            Assert.AreEqual(2, r.Runs.Count);
+            var a = Ans(g, 4);
+            a.Press("down", g[0].Time);
+            a.Press("left", g[1].Time);
+            a.Press("up", g[2].Time);   // right was due
+            Assert.AreEqual(0, a.Filled);
+            Assert.AreEqual(0, a.Count);
+            Assert.AreEqual(-1, a.StartBeat);
+            // and it starts again on the next downbeat
+            foreach (var p in Keys(g, 4, 7)) a.Press(p.Action, p.Time);
+            Assert.IsTrue(a.Full);
+            Assert.AreEqual(4, a.StartBeat);
         }
 
         [Test]
-        public void ASkippedBeatBreaksTheRun()
+        public void AMissedBeatEmptiesTheBoxesOnPressAndOnUpdate()
         {
             var g = Grid(3, 4);
-            var p = Keys(g, 0, 7);
-            p.RemoveAt(2); // beat 3 never pressed
-            var r = Run(g, p);
-            Assert.IsTrue(r.Correct); // beats 1-2 are cut off; the run restarts on beat 4 and runs to 8
-            Assert.AreEqual(3, r.StartBeat);
-            Assert.AreEqual(2, r.Runs.Count);
+            // seen by the next press: beat 2 (index 1) never pressed, a press on beat 3 (index 2) empties
+            var a = Ans(g, 4);
+            a.Press("down", g[0].Time);
+            a.Press("up", g[2].Time);
+            Assert.AreEqual(0, a.Filled);
+            // seen by the clock: the beat's window plus the grace has passed
+            var b = Ans(g, 4);
+            b.Press("down", g[0].Time);
+            b.Update(g[1].Time + 0.128 + MeterAnswer.LateGrace - 0.01);
+            Assert.AreEqual(1, b.Filled, "still inside the grace");
+            b.Update(g[1].Time + 0.128 + MeterAnswer.LateGrace + 0.01);
+            Assert.AreEqual(0, b.Filled);
         }
 
         [Test]
-        public void TheLastValidRunCounts()
+        public void AFullAnswerDoesNotBreakOnLaterBeats()
+        {
+            var g = Grid(3, 4);
+            var a = Fill(g, 4, 0);
+            a.Update(g[8].Time);
+            Assert.IsTrue(a.Full);
+            Assert.IsFalse(a.Press("down", g[4].Time));   // more keys do nothing
+            Assert.AreEqual(4, a.Filled);
+        }
+
+        [Test]
+        public void ADoublePressOnOneBeatIsAFreeTick()
+        {
+            var g = Grid(3, 4);
+            var a = Ans(g, 4);
+            a.Press("down", g[0].Time);
+            Assert.IsFalse(a.Press("left", g[0].Time + 0.03));   // same beat again: ignored, nothing breaks
+            Assert.AreEqual(1, a.Filled);
+            Assert.IsTrue(a.Press("left", g[1].Time));
+            Assert.AreEqual(2, a.Filled);
+        }
+
+        [Test]
+        public void TheLitBoxFollowsTheBeatsSinceTheClaimedDownbeat()
+        {
+            var g = Grid(3, 4);
+            var a = Fill(g, 4, 0);
+            Assert.AreEqual(3, a.LitBox(g[3].Time + 0.01));
+            Assert.AreEqual(0, a.LitBox(g[4].Time + 0.01), "bar line: back to box 1");
+            Assert.AreEqual(1, a.LitBox(g[5].Time + 0.2));
+            Assert.AreEqual(3, a.LitBox(g[7].Time));
+            Assert.AreEqual(0, a.LitBox(g[8].Time));
+            Assert.AreEqual(2, a.LitBox(g[10].Time + 0.4));
+        }
+
+        [Test]
+        public void TheLitBoxCountsFromWhereTheDownbeatWasClaimed()
         {
             var g = Grid(4, 4);
-            var p = Keys(g, 0, 3);          // a valid bar...
-            p.AddRange(Keys(g, 5, 11));     // ...skip beat 5, restart on beat 6: 6-12 is valid too
-            var r = Run(g, p);
-            Assert.IsTrue(r.Correct);
-            Assert.AreEqual(5, r.StartBeat); // the later run replaces the earlier one
+            // claim beat 2 (a mid-bar beat) as the downbeat: box 1 lights there, not on the true bar line
+            var a = Fill(g, 4, 2);
+            Assert.AreEqual(2, a.StartBeat);
+            Assert.AreEqual(3, a.LitBox(g[5].Time + 0.01));
+            Assert.AreEqual(0, a.LitBox(g[6].Time + 0.01));
+            Assert.AreEqual(2, a.LitBox(g[8].Time + 0.01));   // the true bar line lights box 3
         }
 
         [Test]
-        public void ALaterRestartThatNeverBecomesValidKeepsTheEarlierAnswer()
-        {
-            var g = Grid(4, 4);
-            var p = Keys(g, 0, 3);
-            p.AddRange(Keys(g, 6, 7).Take(1)); // a stray correct key after a gap
-            var r = Run(g, p);
-            Assert.IsTrue(r.Correct);
-            Assert.AreEqual(0, r.StartBeat);
-        }
-
-        [Test]
-        public void TheThreeFourPatternOnAFourFourHymnIsNotCorrect()
+        public void NothingLightsBeforeTheBoxesAreFull()
         {
             var g = Grid(3, 4);
-            var three = new[] { "left", "right", "up" };
-            var p = new List<MeterPress>();
-            for (int i = 0; i < 12; i++) p.Add(new MeterPress { Action = three[i % 3], Time = g[i].Time });
-            Assert.IsFalse(Run(g, p).Correct);
+            var a = Ans(g, 4);
+            Assert.AreEqual(-1, a.LitBox(g[0].Time));
+            a.Press("down", g[0].Time);
+            a.Press("left", g[1].Time);
+            Assert.AreEqual(-1, a.LitBox(g[2].Time));
         }
 
         [Test]
-        public void TheTwoBeatPatternWorks()
+        public void ThreeAndTwoBoxFlickerLoopWithTheirCount()
         {
-            var g = Grid(3, 2);
-            var r = Run(g, Keys(g, 0, 1));
-            Assert.IsTrue(r.Correct);
-            Assert.AreEqual(0, r.StartBeat);
-            Assert.AreEqual("right", Meter.KeyFor(2, 0));
-            Assert.IsFalse(Run(g, Keys(g, 0, 0)).Correct);
-            // joining on the up beat and running through two bars
-            Assert.IsTrue(Run(g, Keys(g, 1, 4)).Correct);
+            var g3 = Grid(4, 3);
+            var a3 = Fill(g3, 3, 0);
+            Assert.AreEqual(2, a3.LitBox(g3[2].Time));
+            Assert.AreEqual(0, a3.LitBox(g3[3].Time));
+            Assert.AreEqual(1, a3.LitBox(g3[7].Time));
+            var g2 = Grid(4, 2);
+            var a2 = Fill(g2, 2, 0);
+            Assert.AreEqual(1, a2.LitBox(g2[1].Time));
+            Assert.AreEqual(0, a2.LitBox(g2[2].Time));
+            Assert.AreEqual(1, a2.LitBox(g2[5].Time));
         }
 
         [Test]
-        public void ThreeFourNeedsThreeKeysEndingOnTheThird()
+        public void ClearEmptiesAndTheBoxesRefill()
         {
-            var g = Grid(3, 3);
-            Assert.IsTrue(Run(g, Keys(g, 0, 2)).Correct);
-            Assert.IsFalse(Run(g, Keys(g, 0, 1)).Correct);
-            Assert.IsTrue(Run(g, Keys(g, 2, 5)).Correct);
+            var g = Grid(3, 4);
+            var a = Fill(g, 4, 0);
+            Assert.IsTrue(a.Clear());
+            Assert.AreEqual(0, a.Filled);
+            Assert.AreEqual(0, a.Count);
+            Assert.AreEqual(-1, a.LitBox(g[5].Time));
+            foreach (var p in Keys(g, 4, 7)) a.Press(p.Action, p.Time);
+            Assert.IsTrue(a.Full);
+            Assert.AreEqual(4, a.StartBeat);
+            // clear half way through, too
+            var b = Ans(g, 4);
+            b.Press("down", g[0].Time);
+            Assert.IsTrue(b.Clear());
+            Assert.AreEqual(0, b.Filled);
         }
 
         [Test]
-        public void PressesThatClaimNoBeatAreFreeTicks()
+        public void SubmitWorksOnlyWhenFullThenLocks()
+        {
+            var g = Grid(3, 4);
+            var a = Ans(g, 4);
+            Assert.IsFalse(a.Submit(g[0].Time));
+            a.Press("down", g[0].Time);
+            Assert.IsFalse(a.Submit(g[0].Time + 0.1), "not full");
+            Assert.IsFalse(a.Locked);
+            foreach (var p in Keys(g, 1, 3)) a.Press(p.Action, p.Time);
+            Assert.IsTrue(a.Submit(g[3].Time + 0.1));
+            Assert.IsTrue(a.Locked);
+            Assert.AreEqual(g[3].Time + 0.1, a.SubmitTime, 1e-9);
+            // locked: no resubmit, no clear, later keys ignored
+            Assert.IsFalse(a.Submit(g[4].Time));
+            Assert.AreEqual(g[3].Time + 0.1, a.SubmitTime, 1e-9);
+            Assert.IsFalse(a.Clear());
+            Assert.IsFalse(a.Press("down", g[4].Time));
+            Assert.IsTrue(a.Full);
+            Assert.AreEqual(0, a.StartBeat);
+            Assert.AreEqual(0, a.LitBox(g[4].Time + 0.01), "the flicker goes on after the lock");
+        }
+
+        [Test]
+        public void SubmitOutsideTheAnswerWindowIsIgnored()
         {
             var g = Grid(2, 4);
-            var p = Keys(g, 0, 3);
-            p.Add(new MeterPress { Action = "down", Time = g[3].Time + 0.25 }); // between beats
-            p.Add(new MeterPress { Action = "up", Time = 0.1 });                 // before the music
-            var r = Run(g, p);
+            var a = new MeterAnswer(g, 4, 0, g[3].Time + 0.1);
+            foreach (var p in Keys(g, 0, 3)) a.Press(p.Action, p.Time);
+            Assert.IsFalse(a.Submit(g[3].Time + 0.5));
+            Assert.IsFalse(a.Locked);
+        }
+
+        [Test]
+        public void TheRightPatternOnTheDownbeatIsCorrect()
+        {
+            var g = Grid(3, 4);
+            var a = Fill(g, 4, 4);
+            Assert.IsTrue(a.MatchesHymn);
+            a.Submit(g[7].Time + 0.1);
+            var r = a.Result();
             Assert.IsTrue(r.Correct);
-            Assert.AreEqual(2, r.FreeTicks);
+            Assert.IsTrue(r.Submitted);
+            Assert.AreEqual(4, r.StartBeat);
+            Assert.AreEqual(g[4].Time, r.StartTime, 1e-9);
+            Assert.AreEqual(4, r.Count);
+            Assert.AreEqual(g[7].Time + 0.1, r.SubmitTime, 1e-9);
             Assert.AreEqual(1.0, r.Accuracy, 1e-9);
         }
 
         [Test]
-        public void ADoublePressClaimsOneBeatAndTheSecondIsAFreeTick()
+        public void TheRightPatternOnTheWrongBeatIsNotCorrect()
         {
-            var g = Grid(2, 4);
-            var p = Keys(g, 0, 3);
-            p.Add(new MeterPress { Action = "down", Time = g[0].Time + 0.01 });
-            var r = Run(g, p);
-            Assert.IsTrue(r.Correct);
-            Assert.AreEqual(1, r.FreeTicks);
+            var g = Grid(3, 4);
+            var a = Fill(g, 4, 1);   // down left right up, but box 1 sat on beat 2 of the bar
+            Assert.IsTrue(a.Full);
+            Assert.IsFalse(a.MatchesHymn);
+            a.Submit(g[4].Time + 0.1);
+            var r = a.Result();
+            Assert.IsFalse(r.Correct);
+            Assert.IsTrue(r.Submitted, "it is an answer, just a wrong one");
         }
 
         [Test]
-        public void AccuracyUsesTheJudgeWindowsOverTheCountedRun()
+        public void ADifferentPatternIsNotCorrect()
+        {
+            var g = Grid(3, 4);
+            var a = Fill(g, 3, 0, hymnPattern: 4);   // the 3-pattern on a 4/4 hymn
+            Assert.IsTrue(a.Full);
+            a.Submit(g[2].Time + 0.1);
+            Assert.IsFalse(a.Result().Correct);
+        }
+
+        [Test]
+        public void ANeverSubmittedAnswerIsNotAnAnswer()
+        {
+            var g = Grid(3, 4);
+            var r = Fill(g, 4, 0).Result();
+            Assert.IsFalse(r.Correct);
+            Assert.IsFalse(r.Submitted);
+            Assert.IsTrue(double.IsPositiveInfinity(r.SubmitTime));
+            Assert.AreEqual(-1, r.StartBeat);
+        }
+
+        [Test]
+        public void APickupHymnCountsTheTrueDownbeatNotTheFirstBeat()
+        {
+            // a 3/4 hymn that opens on a pickup: the grid starts on beat 3 of a bar, the downbeat is index 1
+            var g = new List<MeterBeat>();
+            for (int i = 0; i < 10; i++)
+                g.Add(new MeterBeat { Time = 1.0 + i * Step, BarPosition = (i + 2) % 3, BeatsPerBar = 3 });
+            Assert.AreEqual(2, g[0].BarPosition);
+            Assert.AreEqual(0, g[1].BarPosition);
+            Assert.IsTrue(Fill(g, 3, 1).MatchesHymn);
+            Assert.IsFalse(Fill(g, 3, 0).MatchesHymn);   // starting on the pickup beat with "left" is not the downbeat
+        }
+
+        [Test]
+        public void AccuracyIsTheMeanGradeOverTheFilledBoxes()
         {
             var g = Grid(2, 4);
             var p = Keys(g, 0, 3);
             p[1].Time += 0.060; // Great (600), the rest Perfect (1000)
             p[2].Time += 0.100; // Good (250)
-            var r = Run(g, p);
-            Assert.IsTrue(r.Correct);
-            Assert.AreEqual((1000 + 600 + 250 + 1000) / 4000.0, r.Accuracy, 1e-9);
+            var a = Ans(g, 4);
+            foreach (var k in p) a.Press(k.Action, k.Time);
+            Assert.AreEqual((1000 + 600 + 250 + 1000) / 4000.0, a.Accuracy, 1e-9);
         }
 
         [Test]
-        public void APressOutsideTheGoodWindowClaimsNothing()
+        public void ThePressesClaimBeatsWithTheBeatWindow()
         {
             var g = Grid(2, 4);
-            var p = Keys(g, 0, 3);
-            p[1].Time += 0.2; // 200 ms late: not on beat 2
-            var r = Run(g, p);
-            Assert.IsFalse(r.Correct);
-            Assert.AreEqual(1, r.FreeTicks);
+            var a = Ans(g, 4);
+            Assert.IsTrue(a.Press("down", g[0].Time + 0.120));    // inside 128 ms
+            Assert.IsFalse(a.Press("left", g[1].Time + 0.2));     // 200 ms late: no beat claimed, and beat 2 went by
+            Assert.AreEqual(0, a.Filled);
         }
 
         [Test]
         public void PressesOutsideTheAnswerWindowAreIgnored()
         {
             var g = Grid(3, 4);
-            var p = Keys(g, 0, 3);
-            // window closes after beat 3 (index 2): the fourth key never counts
-            var r = MeterJudge.Judge(g, 0, g[2].Time + 0.1, p);
-            Assert.IsFalse(r.Correct);
-            Assert.AreEqual(0, r.FreeTicks);
+            var a = new MeterAnswer(g, 4, g[1].Time - 0.1, g[2].Time + 0.1);
+            Assert.IsFalse(a.Press("down", g[0].Time));   // before the window
+            Assert.IsTrue(a.Press("down", g[1].Time));
+            Assert.IsTrue(a.Press("left", g[2].Time));
+            Assert.IsFalse(a.Press("right", g[3].Time));   // after it
+            Assert.AreEqual(2, a.Filled);
         }
 
-        static MeterResult Result(bool correct, int start, double acc) =>
-            new MeterResult { Correct = correct, StartBeat = correct ? start : -1, Accuracy = acc };
+        [Test]
+        public void ThePureFormReplaysKeysClearAndEnter()
+        {
+            var g = Grid(4, 4);
+            var p = Keys(g, 0, 1);                 // down left ...
+            p.Add(new MeterPress { Action = "b", Time = g[1].Time + 0.1 });   // ... clear
+            p.AddRange(Keys(g, 4, 7));             // start again on the next bar line
+            p.Add(Enter(g[7].Time + 0.05));
+            var r = Run(g, 4, p);
+            Assert.IsTrue(r.Correct);
+            Assert.AreEqual(4, r.StartBeat);
+            // an unsorted list is replayed in time order
+            p.Reverse();
+            Assert.IsTrue(Run(g, 4, p).Correct);
+            // no Enter, no answer
+            Assert.IsFalse(Run(g, 4, Keys(g, 0, 3)).Submitted);
+            // Enter before the boxes are full does nothing, and the answer can still be finished
+            var early = Keys(g, 0, 2);
+            early.Add(Enter(g[2].Time + 0.05));
+            early.AddRange(Keys(g, 3, 3));
+            early.Add(Enter(g[3].Time + 0.05));
+            var e = Run(g, 4, early);
+            Assert.IsTrue(e.Correct);
+            Assert.AreEqual(g[3].Time + 0.05, e.SubmitTime, 1e-9);
+        }
+
+        static MeterResult Result(bool correct, double submit, double acc, bool post = false) =>
+            new MeterResult { Correct = correct, Submitted = true, SubmitTime = submit, StartBeat = correct ? 0 : -1, Accuracy = acc, PostReveal = post };
 
         [Test]
-        public void RankingIsCorrectThenEarlierStartThenAccuracy()
+        public void RankingIsCorrectThenPreRevealThenEarlierEnterThenAccuracy()
         {
-            var late = Result(true, 8, 0.99);
-            var earlyLoose = Result(true, 1, 0.50);
-            var earlyTight = Result(true, 1, 0.90);
-            var wrong = Result(false, 0, 1.0);
-            var order = new[] { wrong, late, earlyLoose, earlyTight }
+            var lateButBefore = Result(true, 30, 0.99);
+            var earlyLoose = Result(true, 5, 0.50);
+            var earlyTight = Result(true, 5, 0.90);
+            var postFast = Result(true, 2, 1.0, post: true);
+            var wrong = Result(false, 1, 1.0);
+            var order = new[] { wrong, postFast, lateButBefore, earlyLoose, earlyTight }
                 .OrderBy(r => r, new MeterRanking()).ToList();
             Assert.AreSame(earlyTight, order[0]);
             Assert.AreSame(earlyLoose, order[1]);
-            Assert.AreSame(late, order[2]);
-            Assert.AreSame(wrong, order[3]);
-            Assert.AreEqual(0, new MeterRanking().Compare(Result(false, 0, 0.2), Result(false, 0, 0.9)));
+            Assert.AreSame(lateButBefore, order[2]);
+            Assert.AreSame(postFast, order[3]);
+            Assert.AreSame(wrong, order[4]);
+            Assert.AreEqual(0, new MeterRanking().Compare(Result(false, 3, 0.2), Result(false, 9, 0.9)));
+            Assert.Less(new MeterRanking().Compare(Result(true, 9, 0.5, post: true), Result(false, 1, 1)), 0, "a late right answer still beats a wrong one");
         }
 
         [Test]
         public void RankingWorksOnJudgedPlayers()
         {
             var g = Grid(3, 4);
-            var fast = Run(g, Keys(g, 0, 3));
-            var slow = Run(g, Keys(g, 4, 7));
-            var wrongKey = Keys(g, 0, 3);
-            wrongKey[0].Action = "up";
-            var wrong = Run(g, wrongKey);
+            MeterResult Player(int from, double enterAfter, bool wrongKey = false)
+            {
+                var p = Keys(g, from, from + 3);
+                if (wrongKey) p[0].Action = "up";
+                p.Add(Enter(g[from + 3].Time + enterAfter));
+                return Run(g, 4, p);
+            }
+            var fast = Player(0, 0.05);
+            var slow = Player(4, 0.05);
+            var wrong = Player(0, 0.05, wrongKey: true);
             var order = new[] { wrong, slow, fast }.OrderBy(r => r, new MeterRanking()).ToList();
             Assert.AreSame(fast, order[0]);
             Assert.AreSame(slow, order[1]);

@@ -56,9 +56,9 @@ namespace Bonanza.Core.Tests
             var presses = new List<MeterPress>();
             string[] keys = { "down", "left", "right", "up" };
             for (int i = 0; i < 4; i++) presses.Add(new MeterPress { Action = keys[i], Time = 1 + i + 0.2 });
-            var r = MeterJudge.Judge(beats, 0, 10, presses);
+            presses.Add(new MeterPress { Action = "a", Time = 4.25 });
+            var r = MeterJudge.Judge(beats, 4, 0, 10, presses);
             Assert.IsTrue(r.Correct);
-            Assert.AreEqual(0, r.FreeTicks);
             Assert.AreEqual(Scoring.PointsFor(Verdict.Good) / 1000.0, r.Accuracy, 1e-9);
         }
     }

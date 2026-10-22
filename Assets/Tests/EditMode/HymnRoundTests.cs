@@ -239,24 +239,55 @@ namespace Bonanza.Core.Tests
             Assert.IsNotNull(r.Result());
         }
 
+        // The keys of one excerpt's answer from its first true downbeat, with Enter at the absolute time `enterAt`.
+        static List<MeterPress> Answer(HymnRound r, int slot, double enterAt)
+        {
+            var presses = r.PerfectPresses(slot);
+            presses[presses.Count - 1].Time = enterAt;
+            return presses;
+        }
+
+        [Test]
+        public void PerfectPressesAreTheFirstDownbeatTheFillAndEnterAtOnce()
+        {
+            var r = Started(7, 0, 5);
+            for (int k = 0; k < 6; k++)
+            {
+                var s = r.Slots[k];
+                var p = r.PerfectPresses(k);
+                int down = HymnCpu.FirstDownbeat(s.Beats, s.Pattern);
+                Assert.GreaterOrEqual(down, 0);
+                Assert.AreEqual(s.Pattern + 1, p.Count);
+                CollectionAssert.AreEqual(Meter.Pattern(s.Pattern), p.Take(s.Pattern).Select(x => x.Action));
+                for (int i = 0; i < s.Pattern; i++) Assert.AreEqual(s.Beats[down + i].Time, p[i].Time, 1e-9);
+                Assert.AreEqual("a", p[s.Pattern].Action);
+                Assert.AreEqual(s.Beats[down + s.Pattern - 1].Time + HymnRound.PerfectEnterDelay, p[s.Pattern].Time, 1e-9);
+            }
+            Assert.AreEqual(Enumerable.Range(0, 6).Sum(k => r.PerfectPresses(k).Count), r.PerfectPresses().Count);
+        }
+
         [Test]
         public void PerfectPressesAllCorrectRankS()
         {
             var r = Started(7, 0, 5);
-            var presses = r.PerfectPresses();
-            Assert.AreEqual(r.Slots.Sum(s => s.Beats.Count), presses.Count);
-            Drive(r, presses, 5, r.EndTime + 1);
+            Drive(r, r.PerfectPresses(), 5, r.EndTime + 1);
             Assert.IsTrue(r.Done);
             foreach (var s in r.Slots)
             {
-                Assert.IsTrue(s.Judgement.Results[0].Correct, s.Name);
-                Assert.AreEqual(0, s.Judgement.Results[0].StartBeat);
+                var me = s.Judgement.Results[0];
+                Assert.IsTrue(me.Correct, s.Name);
+                Assert.IsFalse(me.PostReveal, s.Name);
+                Assert.AreEqual(HymnCpu.FirstDownbeat(s.Beats, s.Pattern), me.StartBeat);
                 Assert.AreEqual(0, s.Judgement.Winner);
+                Assert.Greater(s.Judgement.HumanPoints, 0.97 * HymnRound.CeilingPoints(s), s.Name);
+                Assert.LessOrEqual(s.Judgement.HumanPoints, HymnRound.CeilingPoints(s) + 1e-9, s.Name);
             }
             var o = r.Result();
             Assert.AreEqual("S", o.Rank);
-            Assert.AreEqual(6000, o.Score);
-            Assert.AreEqual(1.0, o.Accuracy, 1e-9);
+            Assert.Greater(o.Accuracy, 0.99);
+            Assert.LessOrEqual(o.Accuracy, 1.0);
+            Assert.Less(o.Score, 6000, "no answer is worth the full 1000: the window opens before the first beat");
+            Assert.Greater(o.Score, 5400);
             Assert.AreEqual("WON", o.Extras[0].Key);
             Assert.AreEqual("6/6", o.Extras[0].Value);
             Assert.AreEqual("CORRECT", o.Extras[1].Key);
@@ -267,8 +298,9 @@ namespace Bonanza.Core.Tests
         public void TheWrongPatternIsNotCorrect()
         {
             var r = Started(7, 0, 0);
-            // always "down": right only for the downbeat, never a full bar of it
-            var presses = r.Slots.SelectMany(s => s.Beats.Select(b => new MeterPress { Action = "down", Time = b.Time })).ToList();
+            // "down" on every beat, with Enter after each: never a full, right answer
+            var presses = r.Slots.SelectMany(s => s.Beats.Select(b => new MeterPress { Action = "down", Time = b.Time })
+                .Concat(s.Beats.Select(b => new MeterPress { Action = "a", Time = b.Time + 0.1 }))).ToList();
             Drive(r, presses, 0, r.EndTime + 1);
             Assert.IsTrue(r.Done);
             Assert.IsTrue(r.Slots.All(s => !s.Judgement.Results[0].Correct));
@@ -280,29 +312,61 @@ namespace Bonanza.Core.Tests
         }
 
         [Test]
-        public void JoiningLateScoresLess()
+        public void SubmittingLaterScoresLess()
         {
             var r = Started(7, 0, 0);
-            var presses = new List<MeterPress>();
-            for (int k = 0; k < 6; k++) presses.AddRange(r.PerfectPresses(k).Skip(k == 0 ? 2 : 0));
-            Drive(r, presses, 0, r.EndTime + 1);
-            var j = r.Slots[0].Judgement;
+            var s = r.Slots[0];
+            double span = s.WindowEnd - s.WindowStart;
+            Drive(r, Answer(r, 0, s.WindowStart + 0.25 * span), 0, r.EndTime + 1);
+            var j = s.Judgement;
             Assert.IsTrue(j.Results[0].Correct);
-            Assert.AreEqual(2, j.Results[0].StartBeat);
-            double expected = 600 + 300 * (1 - 2.0 / (r.Slots[0].Beats.Count - 1)) + 100;
-            Assert.AreEqual(expected, j.HumanPoints, 1e-9);
-            Assert.AreEqual(Math.Round(5000 + expected, MidpointRounding.AwayFromZero), r.Result().Score);
-            Assert.Less(r.Result().Score, 6000);
+            Assert.IsFalse(j.Results[0].PostReveal, "alone, the submit reveals");
+            Assert.AreEqual(600 + 300 * 0.75 + 100, j.HumanPoints, 1e-6);
+            Assert.AreEqual(s.WindowStart + 0.25 * span, j.Results[0].SubmitTime, 1e-9);
+        }
+
+        [Test]
+        public void AnAnswerThatNeverGetsSubmittedScoresNothing()
+        {
+            var r = Started(7, 0, 0);
+            Drive(r, r.PerfectPresses(0).Take(r.Slots[0].Pattern), 0, r.EndTime + 1);   // boxes full, no Enter
+            var j = r.Slots[0].Judgement;
+            Assert.IsFalse(j.Results[0].Correct);
+            Assert.IsFalse(j.Results[0].Submitted);
+            Assert.AreEqual(0, j.HumanPoints);
+            Assert.AreEqual(-1, j.Winner);
         }
 
         [Test]
         public void PointsFormula()
         {
-            var first = new MeterResult { Correct = true, StartBeat = 0, Accuracy = 1 };
-            var last = new MeterResult { Correct = true, StartBeat = 19, Accuracy = 0 };
-            Assert.AreEqual(1000, HymnRound.PointsFor(first, 20), 1e-9);
-            Assert.AreEqual(600, HymnRound.PointsFor(last, 20), 1e-9);
-            Assert.AreEqual(0, HymnRound.PointsFor(new MeterResult(), 20));
+            const double ws = 10, we = 30;
+            MeterResult R(double submit, double acc, bool post = false) =>
+                new MeterResult { Correct = true, Submitted = true, SubmitTime = submit, Accuracy = acc, PostReveal = post };
+            Assert.AreEqual(1000, HymnRound.PointsFor(R(10, 1), ws, we), 1e-9);
+            Assert.AreEqual(600, HymnRound.PointsFor(R(30, 0), ws, we), 1e-9);
+            Assert.AreEqual(600 + 150 + 50, HymnRound.PointsFor(R(20, 0.5), ws, we), 1e-9);
+            Assert.AreEqual(600, HymnRound.PointsFor(R(45, 0), ws, we), 1e-9, "earliness stops at 0");
+            Assert.AreEqual((600 + 150 + 50) * 0.25, HymnRound.PointsFor(R(20, 0.5, post: true), ws, we), 1e-9);
+            Assert.AreEqual(0, HymnRound.PointsFor(new MeterResult { Submitted = true, SubmitTime = 12, Accuracy = 1 }, ws, we));
+            Assert.AreEqual(0, HymnRound.PointsFor(new MeterResult(), ws, we));
+        }
+
+        [Test]
+        public void PressRoutesArrowsClearAndEnterToTheBoxes()
+        {
+            var r = Started(7, 0, 0);
+            var s = r.Slots[0];
+            var p = r.PerfectPresses(0);
+            double t0 = p[0].Time;
+            Assert.IsTrue(r.Press(p[0].Action, p[0].Time));
+            Assert.AreEqual(1, s.Answer.Filled);
+            Assert.IsTrue(r.Press("b", t0 + 0.05));
+            Assert.AreEqual(0, s.Answer.Filled);
+            foreach (var x in p.Take(s.Pattern)) r.Press(x.Action, x.Time);   // the fill, the first key again
+            Assert.IsTrue(s.Answer.Full);
+            Assert.IsTrue(r.Press("a", p.Last().Time));
+            Assert.IsTrue(s.Answer.Locked);
         }
 
         [Test]
@@ -336,7 +400,7 @@ namespace Bonanza.Core.Tests
         // ---- the reveal ------------------------------------------------------
 
         [Test]
-        public void RevealComesAtTheFirstValidBarWhenEveryoneAnswered()
+        public void RevealComesWhenAllSubmittedIfThatIsBeforeHalfway()
         {
             var r = Started(7, 0, 0);
             var reveals = new Dictionary<int, double>();
@@ -344,15 +408,16 @@ namespace Bonanza.Core.Tests
             Drive(r, r.PerfectPresses(), 0, r.EndTime + 1);
             foreach (var s in r.Slots)
             {
-                double firstBarEnd = s.Beats[s.Beats[0].BeatsPerBar - 1].Time;
-                Assert.GreaterOrEqual(reveals[s.Index], firstBarEnd - 1e-9, s.Name);
-                Assert.Less(reveals[s.Index], firstBarEnd + 0.02, s.Name);
-                Assert.Less(reveals[s.Index], s.WindowEnd - 1.0);
+                double enter = r.PerfectPresses(s.Index).Last().Time;
+                Assert.GreaterOrEqual(reveals[s.Index], enter - 1e-9, s.Name);
+                Assert.Less(reveals[s.Index], enter + 0.02, s.Name);
+                Assert.Less(reveals[s.Index], s.Halfway, s.Name);
+                Assert.AreEqual(enter, r.RevealAt(s), 1e-9);
             }
         }
 
         [Test]
-        public void RevealWaitsForTheWindowWhenTheHumanNeverAnswers()
+        public void RevealWaitsForHalfwayWhenTheHumanNeverSubmits()
         {
             var r = Started(7, 0, 0);
             var reveals = new Dictionary<int, double>();
@@ -360,13 +425,15 @@ namespace Bonanza.Core.Tests
             Drive(r, new MeterPress[0], 0, r.EndTime + 1);
             foreach (var s in r.Slots)
             {
-                Assert.Greater(reveals[s.Index], s.WindowEnd);
-                Assert.Less(reveals[s.Index], s.WindowEnd + 0.02);
+                Assert.AreEqual((s.WindowStart + s.WindowEnd) / 2, s.Halfway, 1e-9);
+                Assert.GreaterOrEqual(reveals[s.Index], s.Halfway - 1e-9);
+                Assert.Less(reveals[s.Index], s.Halfway + 0.02);
+                Assert.Less(reveals[s.Index], s.WindowEnd);
             }
         }
 
         [Test]
-        public void RevealWaitsForTheSlowestCpuOrAWrongOne()
+        public void RevealWaitsForTheSlowestPlayerButNotPastHalfway()
         {
             for (uint seed = 0; seed < 8; seed++)
             {
@@ -374,24 +441,78 @@ namespace Bonanza.Core.Tests
                 Drive(r, r.PerfectPresses(), 0, r.EndTime + 1);
                 foreach (var s in r.Slots)
                 {
-                    double human = s.Beats[s.Beats[0].BeatsPerBar - 1].Time;
-                    double slowest = s.CpuRolls.Max(c => c.AnswerTime);
-                    double expected = double.IsInfinity(slowest) ? s.WindowEnd : Math.Max(human, slowest);
+                    double human = r.PerfectPresses(s.Index).Last().Time;
+                    double slowest = Math.Max(human, s.CpuRolls.Max(c => c.Result.SubmitTime));
+                    double expected = Math.Min(s.Halfway, slowest);
+                    Assert.AreEqual(expected, r.RevealAt(s), 1e-9, "seed " + seed + " " + s.Name);
                     Assert.GreaterOrEqual(s.RevealTime, expected - 1e-9, "seed " + seed + " " + s.Name);
                     Assert.Less(s.RevealTime, expected + 0.03, "seed " + seed + " " + s.Name);
-                    if (double.IsInfinity(slowest)) Assert.IsTrue(s.RevealTime > s.WindowEnd);
                 }
             }
         }
 
         [Test]
-        public void PressesAreIgnoredBeforeStartAndForNonArrowKeys()
+        public void ASubmissionAfterTheRevealIsFlaggedAndWorthAQuarter()
+        {
+            var r = Started(7, 0, 0);
+            var s = r.Slots[0];
+            double span = s.WindowEnd - s.WindowStart;
+            double enter = s.WindowStart + 0.75 * span;
+            double revealedAt = -1;
+            r.ExcerptRevealed += x => { if (x.Index == 0) revealedAt = x.RevealTime; };
+            Drive(r, Answer(r, 0, enter), 0, r.EndTime + 1);
+            Assert.AreEqual(s.Halfway, revealedAt, 0.02, "revealed halfway, before the Enter");
+            var me = s.Judgement.Results[0];
+            Assert.IsTrue(me.Correct);
+            Assert.IsTrue(me.PostReveal);
+            Assert.AreEqual((600 + 300 * 0.25 + 100) * 0.25, s.Judgement.HumanPoints, 1e-6);
+            // the other excerpts (no Enter at all) are untouched by it
+            Assert.IsFalse(r.Slots[1].Judgement.Results[0].PostReveal);
+        }
+
+        [Test]
+        public void ASubmissionExactlyAtTheRevealMomentIsNotPost()
+        {
+            var r = Started(7, 0, 0);
+            var s = r.Slots[0];
+            Drive(r, Answer(r, 0, s.Halfway), 0, r.EndTime + 1);
+            Assert.IsFalse(s.Judgement.Results[0].PostReveal);
+        }
+
+        [Test]
+        public void PostRevealFlagsFollowTheSubmitTimesOfEveryPlayer()
+        {
+            for (uint seed = 0; seed < 8; seed++)
+            {
+                var r = Started(seed, 3, 0);
+                Drive(r, r.PerfectPresses(), 0, r.EndTime + 1);
+                foreach (var s in r.Slots)
+                {
+                    var j = s.Judgement;
+                    double at = r.RevealAt(s);
+                    foreach (var res in j.Results)
+                        Assert.AreEqual(res.Submitted && res.SubmitTime > at, res.PostReveal, "seed " + seed + " " + s.Name);
+                }
+                var totals = r.Totals();
+                var expected = new double[4];
+                foreach (var s in r.Slots)
+                    for (int i = 0; i < 4; i++)
+                        expected[i] += HymnRound.PointsFor(s.Judgement.Results[i], s.WindowStart, s.WindowEnd);
+                CollectionAssert.AreEqual(expected, totals);
+            }
+        }
+
+        [Test]
+        public void PressesAreIgnoredBeforeStartAndForOtherActions()
         {
             var r = new HymnRound(Pool(), 1, 0);
             Assert.IsFalse(r.Press("left", 0));
             r.Start(0);
-            Assert.IsFalse(r.Press("a", 0.1));
+            Assert.IsFalse(r.Press("pause", 0.1));
+            Assert.IsFalse(r.Press("x", 0.1));
             Assert.IsTrue(r.Press("up", 0.1));
+            Assert.IsTrue(r.Press("a", 0.1));
+            Assert.IsTrue(r.Press("b", 0.1));
         }
 
         // ---- the CPUs --------------------------------------------------------
@@ -404,73 +525,101 @@ namespace Bonanza.Core.Tests
             return g;
         }
 
+        static HymnCpuRoll Roll(List<MeterBeat> beats, int pattern, HymnLevel level, double skill, uint seed) =>
+            HymnCpu.Roll(beats, pattern, 0.9, beats[beats.Count - 1].Time + 1, level, skill, new Rng(seed));
+
         [Test]
         public void CpuRollsAreReproducibleBySeedAndPerPlayer()
         {
             string Dump(HymnRound r) => string.Join(";", r.Slots.SelectMany(s => s.CpuRolls.Select(c =>
-                c.Result.Correct + "/" + c.Result.StartBeat + "/" + c.Result.Accuracy + "/" + c.AnswerTime)));
+                c.Result.Correct + "/" + c.Result.Submitted + "/" + c.Result.Accuracy + "/" + c.Result.SubmitTime)));
             var a = Started(5, 3, 0); a.Update(a.EndTime + 100);
             var b = Started(5, 3, 0); b.Update(b.EndTime + 100);
             var c = Started(6, 3, 0); c.Update(c.EndTime + 100);
             Assert.AreEqual(Dump(a), Dump(b));
             Assert.AreNotEqual(Dump(a), Dump(c));
             // the CPUs differ from each other
-            Assert.IsTrue(a.Slots.Any(s => s.CpuRolls[0].Result.StartBeat != s.CpuRolls[1].Result.StartBeat
+            Assert.IsTrue(a.Slots.Any(s => s.CpuRolls[0].Result.SubmitTime != s.CpuRolls[1].Result.SubmitTime
                                            || s.CpuRolls[0].Result.Accuracy != s.CpuRolls[1].Result.Accuracy));
         }
 
         [Test]
-        public void CpuRollsStayInRangeAndFormAValidRun()
+        public void CpuRollsStayInRangeAndReplayAsTheyClaim()
         {
-            var beats = Beats(6, 4);
-            int last = beats.Count - 1;
-            foreach (HymnLevel level in Enum.GetValues(typeof(HymnLevel)))
-                foreach (double skill in new[] { 0.0, 0.4, 0.63, 0.86, 1.0 })
-                    for (uint seed = 0; seed < 60; seed++)
-                    {
-                        var roll = HymnCpu.Roll(beats, level, skill, new Rng(seed));
-                        var r = roll.Result;
-                        if (!r.Correct) { Assert.AreEqual(-1, r.StartBeat); Assert.IsTrue(double.IsPositiveInfinity(roll.AnswerTime)); continue; }
-                        Assert.GreaterOrEqual(r.StartBeat, 0);
-                        Assert.LessOrEqual(r.StartBeat, last - 3);
-                        Assert.GreaterOrEqual(r.Accuracy, 0.3);
-                        Assert.LessOrEqual(r.Accuracy, 0.98);
-                        Assert.AreEqual(beats[r.StartBeat].Time, r.StartTime, 1e-9);
-                        // the answer it claims is one MeterJudge would accept
-                        var presses = beats.Skip(r.StartBeat).Select(b => new MeterPress { Action = Meter.KeyFor(b.BeatsPerBar, b.BarPosition), Time = b.Time });
-                        var judged = MeterJudge.Judge(beats, 0, 100, presses);
-                        Assert.IsTrue(judged.Correct);
-                        Assert.AreEqual(r.StartBeat, judged.StartBeat);
-                        Assert.GreaterOrEqual(roll.AnswerTime, r.StartTime + 1.5 - 1e-9);
-                        Assert.LessOrEqual(roll.AnswerTime, beats[last].Time);
-                    }
+            foreach (int pattern in new[] { 4, 3, 2 })
+            {
+                var beats = Beats(6, pattern);
+                double end = beats[beats.Count - 1].Time + 1;
+                foreach (HymnLevel level in Enum.GetValues(typeof(HymnLevel)))
+                    foreach (double skill in new[] { 0.0, 0.4, 0.63, 0.86, 1.0 })
+                        for (uint seed = 0; seed < 60; seed++)
+                        {
+                            var r = Roll(beats, pattern, level, skill, seed).Result;
+                            Assert.IsTrue(r.Submitted);
+                            Assert.GreaterOrEqual(r.SubmitTime, beats[pattern - 1].Time + HymnCpu.Reaction - 1e-9);
+                            Assert.LessOrEqual(r.SubmitTime, end);
+                            Assert.GreaterOrEqual(r.Accuracy, 0.3);
+                            Assert.LessOrEqual(r.Accuracy, 0.98);
+                            Assert.IsFalse(r.PostReveal);
+                            if (!r.Correct)
+                            {
+                                Assert.AreEqual(-1, r.StartBeat);
+                                Assert.AreNotEqual(pattern, r.Count);
+                                continue;
+                            }
+                            Assert.AreEqual(0, r.StartBeat);
+                            Assert.AreEqual(pattern, r.Count);
+                            Assert.AreEqual(beats[0].Time, r.StartTime, 1e-9);
+                            // the answer it claims is one the judge accepts
+                            var presses = beats.Take(pattern).Select(b => new MeterPress { Action = Meter.KeyFor(b.BeatsPerBar, b.BarPosition), Time = b.Time }).ToList();
+                            presses.Add(new MeterPress { Action = "a", Time = r.SubmitTime });
+                            var judged = MeterJudge.Judge(beats, pattern, 0, end, presses);
+                            Assert.IsTrue(judged.Correct);
+                            Assert.AreEqual(r.SubmitTime, judged.SubmitTime, 1e-9);
+                        }
+            }
+        }
+
+        [Test]
+        public void CpuStartsOnTheFirstTrueDownbeatOfAPickupExcerpt()
+        {
+            var beats = new List<MeterBeat>();
+            for (int i = 0; i < 12; i++) beats.Add(new MeterBeat { Time = 1 + i * 0.5, BarPosition = (i + 2) % 3, BeatsPerBar = 3 });
+            Assert.AreEqual(1, HymnCpu.FirstDownbeat(beats, 3));
+            for (uint seed = 0; seed < 30; seed++)
+            {
+                var r = Roll(beats, 3, HymnLevel.Easy, 1, seed).Result;
+                if (r.Correct) Assert.AreEqual(1, r.StartBeat);
+                Assert.GreaterOrEqual(r.SubmitTime, beats[3].Time + HymnCpu.Reaction - 1e-9);
+            }
         }
 
         [Test]
         public void CpuSkillAndLevelShapeTheRolls()
         {
             var beats = Beats(12, 4);
-            double Rate(HymnLevel l, double skill) => Enumerable.Range(0, 400).Count(s => HymnCpu.Roll(beats, l, skill, new Rng((uint)s)).Result.Correct) / 400.0;
-            double Start(HymnLevel l, double skill) => Enumerable.Range(0, 400).Select(s => HymnCpu.Roll(beats, l, skill, new Rng((uint)s)).Result)
-                .Where(r => r.Correct).Average(r => (double)r.StartBeat);
+            double Rate(HymnLevel l, double skill) => Enumerable.Range(0, 400).Count(s => Roll(beats, 4, l, skill, (uint)s).Result.Correct) / 400.0;
+            double Submit(HymnLevel l, double skill) => Enumerable.Range(0, 400).Average(s => Roll(beats, 4, l, skill, (uint)s).Result.SubmitTime);
             Assert.Greater(Rate(HymnLevel.Easy, 0.9), Rate(HymnLevel.Easy, 0.2));
             Assert.Greater(Rate(HymnLevel.Easy, 0.6), Rate(HymnLevel.Hard, 0.6));
-            Assert.Less(Start(HymnLevel.Easy, 0.6), Start(HymnLevel.Hard, 0.6));
-            Assert.Less(Start(HymnLevel.Medium, 0.9), Start(HymnLevel.Medium, 0.2));
+            Assert.Less(Submit(HymnLevel.Easy, 0.6), Submit(HymnLevel.Hard, 0.6));
+            Assert.Less(Submit(HymnLevel.Medium, 0.9), Submit(HymnLevel.Medium, 0.2));
         }
 
         [Test]
-        public void CpuCanNotAnswerWhenThereIsNoFullBar()
+        public void CpuNeverSubmitsWhenThereIsNoFullBar()
         {
-            var roll = HymnCpu.Roll(Beats(1, 4).Take(3).ToList(), HymnLevel.Easy, 1, new Rng(1));
+            var roll = Roll(Beats(1, 4).Take(3).ToList(), 4, HymnLevel.Easy, 1, 1);
             Assert.IsFalse(roll.Result.Correct);
+            Assert.IsFalse(roll.Result.Submitted);
+            Assert.IsTrue(double.IsPositiveInfinity(roll.Result.SubmitTime));
         }
 
         [Test]
         public void CpuResultsRankLikeTheHumans()
         {
             var beats = Beats(8, 3);
-            var rolls = Enumerable.Range(0, 30).Select(s => HymnCpu.Roll(beats, HymnLevel.Medium, 0.7, new Rng((uint)s)).Result).ToList();
+            var rolls = Enumerable.Range(0, 30).Select(s => Roll(beats, 3, HymnLevel.Medium, 0.7, (uint)s).Result).ToList();
             var sorted = rolls.OrderBy(r => r, new MeterRanking()).ToList();
             for (int i = 1; i < sorted.Count; i++) Assert.LessOrEqual(new MeterRanking().Compare(sorted[i - 1], sorted[i]), 0);
             Assert.IsTrue(sorted[0].Correct);
@@ -478,18 +627,25 @@ namespace Bonanza.Core.Tests
 
         // ---- winners ---------------------------------------------------------
 
-        static MeterResult Res(bool correct, int start = -1, double acc = 0) =>
-            new MeterResult { Correct = correct, StartBeat = correct ? start : -1, Accuracy = acc };
+        static MeterResult Res(bool correct, double submit = 99, double acc = 0, bool post = false) =>
+            new MeterResult { Correct = correct, Submitted = true, SubmitTime = submit, StartBeat = correct ? 0 : -1, Accuracy = acc, PostReveal = post };
 
         [Test]
         public void WinnerIsTheBestByRankingEarlierIndexOnTies()
         {
             Assert.AreEqual(1, HymnRound.WinnerOf(new[] { Res(false), Res(true, 4, 0.5), Res(true, 6, 0.9) }));
             Assert.AreEqual(2, HymnRound.WinnerOf(new[] { Res(true, 4, 0.5), Res(true, 4, 0.6), Res(true, 4, 0.9) }));
-            Assert.AreEqual(0, HymnRound.WinnerOf(new[] { Res(true, 4, 0.5), Res(true, 4, 0.5), Res(true, 5, 0.9) }), "tie: the human (index 0) wins");
+            Assert.AreEqual(0, HymnRound.WinnerOf(new[] { Res(true, 4, 0.5), Res(true, 4, 0.5), Res(false) }), "tie: the human (index 0) wins");
             Assert.AreEqual(1, HymnRound.WinnerOf(new[] { Res(false), Res(true, 2, 0.4), Res(true, 2, 0.4) }), "tie between CPUs: the earlier one");
             Assert.AreEqual(-1, HymnRound.WinnerOf(new[] { Res(false), Res(false) }));
             Assert.AreEqual(-1, HymnRound.WinnerOf(new MeterResult[0]));
+        }
+
+        [Test]
+        public void AnAnswerBeforeTheRevealBeatsAFasterOneAfterIt()
+        {
+            Assert.AreEqual(1, HymnRound.WinnerOf(new[] { Res(true, 2, 1.0, post: true), Res(true, 30, 0.3) }));
+            Assert.AreEqual(0, HymnRound.WinnerOf(new[] { Res(true, 2, 1.0, post: true), Res(false) }), "a late right answer still wins over a wrong one");
         }
 
         [Test]
@@ -512,7 +668,7 @@ namespace Bonanza.Core.Tests
         }
 
         [Test]
-        public void AFlawlessHumanOutranksCpusWhoJoinNoEarlierOrAreLessAccurate()
+        public void AFlawlessHumanOutranksCpusWhoNeedTimeToReact()
         {
             for (uint seed = 0; seed < 10; seed++)
             {
