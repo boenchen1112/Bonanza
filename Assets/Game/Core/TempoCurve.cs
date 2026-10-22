@@ -254,6 +254,7 @@ namespace Bonanza.Core
                 next += 1;
                 if (Math.Abs(next - cur) < 0.12) next = 2 - next;
                 int len = Math.Min(rng.Int(3, 10), (int)(n - pos));
+                if (n - pos - len < 3) len = (int)(n - pos);       // no one-beat tail at a new tempo
                 segs.Add(TempoSegment.Jump(len, next));
                 cur = next; pos += len;
             }
