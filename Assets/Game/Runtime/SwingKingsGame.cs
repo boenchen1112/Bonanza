@@ -1,6 +1,7 @@
-// Swing Kings on the shared look kit (Look/), wired to SwingRound (Bonanza.Core).
-// No rule logic lives here. The ballpark around the field is the environment
-// kit (Look/Env: grass, arches, skyline, bunting, a beat-bouncing crowd in a
+// Swing Kings on the shared look kit (Look/), wired to DownbeatRound (Bonanza.Core): find the downbeat of a
+// hymn by ear. Every beat sends one identical ball; the ones on the downbeat are real, the rest are bombs in
+// disguise (revealed only when swung at or when they fizzle past the plate). No rule logic lives here.
+// The ballpark around the field is the environment kit (Look/Env: grass, arches, skyline, bunting, a beat-bouncing crowd in a
 // stadium bowl, beams, light towers); the machine, the batter and the bat are
 // still primitives standing in for art that comes later. The camera, the hit
 // effects and the callouts are the real thing (CameraRig, Fx), driven like the
@@ -14,6 +15,7 @@
 // index.js sample()/connect()), with three.js z flipped to Unity's.
 
 using System.Collections.Generic;
+using System.Linq;
 using Bonanza.Core;
 using Bonanza.Look;
 using UnityEngine;
@@ -24,17 +26,26 @@ namespace Bonanza
     {
         public override string Id => "swing-kings";
         public override string Title => "SWING KINGS";
-        public override string Blurb => "One swing. One beat. Send it.";
-        public override double SecondsPerBeat => 60 / SwingRules.Bpm;
+        public override string Blurb => "Find the downbeat. Hit the ball, dodge the bombs.";
+        public override bool OwnsMusic => true;   // the hymns' rendered clips (HymnData), through Host.PlayClip
+        public override double SecondsPerBeat
+        {
+            get
+            {
+                var s = _round?.CurrentSlot ?? (_round != null && _round.Slots.Count > 0 ? _round.Slots[0] : null);
+                // the pause menu counts back in at this tempo: a hymn's own beat when quick, never slower than half a second
+                return s != null && s.Pitches.Count > 1 ? System.Math.Max(0.25, System.Math.Min(0.5, s.Pitches[1].Time - s.Pitches[0].Time)) : 0.5;
+            }
+        }
         protected override bool UseLook => true;
         public override bool UseCanvasHud => true;
         bool _night;
 
         public override string Controls => CameraMode
-            ? "RAISE your hand to the camera as the ball flies, then CONDUCT DOWN as it lands.\nThe stop of the stroke is the swing. On the beat = HOME RUN. Three misses retire the side.\nNo camera? The mouse takes over: HOLD it as the ball flies, then flick DOWN."
+            ? "Listen: a ball comes on EVERY beat, but only the DOWNBEAT (beat one of the bar) is real. The rest are BOMBS.\nRAISE your hand to the camera, then CONDUCT DOWN on the downbeat. The stop of the stroke is the swing.\nA bomb you swing at explodes: a strike. The first two bars of each hymn are free. Three strikes retire the side.\nNo camera? The mouse takes over: HOLD it, then flick DOWN."
             : Conducting
-            ? "HOLD the mouse (or SPACE) as the ball flies, then flick DOWN as it lands.\nThe stop of the stroke is the swing. On the beat = HOME RUN. Three misses retire the side."
-            : "SPACE / click / tap as the ball reaches the plate.\nOn the beat = HOME RUN. Three misses retire the side.";
+            ? "Listen: a ball comes on EVERY beat, but only the DOWNBEAT (beat one of the bar) is real. The rest are BOMBS.\nHOLD the mouse (or SPACE), then flick DOWN on the downbeat. The stop of the stroke is the swing.\nA bomb you swing at explodes: a strike. The first two bars of each hymn are free. Three strikes retire the side."
+            : "Listen: a ball comes on EVERY beat, but only the DOWNBEAT (beat one of the bar) is real. The rest are BOMBS.\nSPACE / click / tap on the downbeat only. On the beat = HOME RUN.\nA bomb you swing at explodes: a strike. The first two bars of each hymn are free. Three strikes retire the side.";
 
         // Mouse conducting (ADR 0004, web swingKings/index.js): the button down is the windup, a downward flick of
         // the pointer fires the swing at the ictus (the stroke's stop), and releasing the button swings too.
@@ -43,8 +54,8 @@ namespace Bonanza
         // (SwingInputEffective) or the camera fails, the mouse conducts instead. Tap is the default.
         static bool Conducting => Settings.SwingInputEffective != SwingInput.Tap;
         static bool CameraMode => Settings.SwingInputEffective == SwingInput.Camera;
-        const string HintMouse = "<color=#ffe58a>HOLD</color> the mouse as the ball flies \u00B7 <color=#ffe58a>SWING DOWN</color> as it lands";
-        const string HintCamera = "<color=#ffe58a>RAISE</color> your hand as the ball flies \u00B7 <color=#ffe58a>CONDUCT DOWN</color> as it lands";
+        const string HintMouse = "<color=#ffe58a>HOLD</color> the mouse \u00B7 <color=#ffe58a>SWING DOWN</color> on the downbeat only \u00B7 the other balls are bombs";
+        const string HintCamera = "<color=#ffe58a>RAISE</color> your hand \u00B7 <color=#ffe58a>CONDUCT DOWN</color> on the downbeat only \u00B7 the other balls are bombs";
         const float CameraLoadGrace = 20f;   // seconds of play to wait for a camera that is still loading or never answered the prompt
         bool _mouse;
         bool _cam;                           // the camera is the live conducting source (cleared when it falls back to the mouse)
@@ -74,9 +85,19 @@ namespace Bonanza
         static readonly Vector3 PlatePos = W(2.55f, 0.02f, 0.25f);
         const float Grav = 15.5f;
 
-        SwingRound _round;
+        DownbeatRound _round;
         bool _playing;
         double _now;
+
+        // the hymns (as HymnMeterGame): one rendered clip per excerpt, played from the excerpt's Shift
+        const double LeadIn = 2.0;       // seconds of silence before the first hymn leads in
+        const double PreRoll = 0.5;      // the clip starts this long before the first beat
+        const double ResultHold = 1.8;   // the last swing stays on screen this long before the results card
+        HymnData _data;
+        readonly AudioClip[] _clips = new AudioClip[DownbeatRound.ExcerptCount];
+        IReadOnlyList<int> _ids;
+        int _musicSlot = -1, _stoppedSlot = -1;
+        double _doneAt = -1;
 
         // stage
         Transform _batPivot;
@@ -86,8 +107,6 @@ namespace Bonanza
         readonly Stack<GameObject> _ballPool = new Stack<GameObject>();
         Material _ballMat, _ballOutlineMat;
 
-        // audio
-        double _clickBeat;
         bool _finishShown;
 
         // HUD (canvas: Ui). Presentation only; it ages on real time.
@@ -100,28 +119,45 @@ namespace Bonanza
 
         // ------------------------------------------------------------ contract
 
-        public override double MusicBeatAt(double time) => _round.Map.BeatAt(time);
-        public override double MusicTimeAt(double beat) => _round.Map.TimeAt(beat);
+        // The SFX chord lookup (Host.PlaySfx) wants a beat for the clock: the round's beat axis once it runs.
+        public override double MusicBeatAt(double time) => _round != null && _round.Clock != null ? _round.Clock.BeatAt(time) : time * 2;
+        public override double MusicTimeAt(double beat) => _round != null && _round.Clock != null ? _round.Clock.TimeAt(beat) : beat / 2;
+
+        public override bool AudioReady
+        {
+            get
+            {
+                foreach (var c in _clips)
+                {
+                    if (c == null) continue;
+                    if (c.loadState == AudioDataLoadState.Loading || c.loadState == AudioDataLoadState.Unloaded) return false;
+                }
+                return true;
+            }
+        }
 
         public override void Load()
         {
+            LoadHymns();   // first: a build without the private hymns fails here, before the stage is built
             BuildStage();
             var fx = Look.Fx;
             fx.SetGroundY(0);
             fx.SetFocus(W(-1.6f, 1.6f, 0));
             fx.SetConfettiFade(0.9f, 2.4f);   // paper belongs to the stands and the sky: it melts before it reaches the field
             fx.Prewarm();   // touch every FX material and the callout font now: a first-use shader link mid-round would push a press out of its window
-            _round = new SwingRound(Save.OffsetMs);
             _round.Judged += (v, err) =>
             {
                 MusicJudged(v != Verdict.Miss);
                 // The conducting check (Tools/mouse-check.mjs) reads these two lines.
                 if (_mouse) Debug.Log($"[SWING] verdict={v.ToString().ToLowerInvariant()} err={err:F1} power={_round.LastPower:F2} hold={_round.LastHoldBeats:F2} pts={_round.Points:F0}");
             };
+            _round.ExcerptStarted += OnExcerptStarted;
             _round.PitchLaunched += OnLaunched;
             _round.PitchPassed += OnPassed;
             _round.Contact += OnContact;
             _round.Whiff += OnWhiff;
+            _round.Explode += OnExplode;
+            _round.Fizzle += OnFizzle;
             _round.SwingAtNothing += _ => { StartSwing(); Host.PlaySfx("swoosh", _now); };
             BuildTrace();
             // The camera is asked for now, while the rules card is up, so the permission prompt and the model load
@@ -134,10 +170,36 @@ namespace Bonanza
             }
         }
 
+        /// The hymn pool, the three excerpts and their clips (decoded now, never mid-round), as HymnMeterGame.Load.
+        void LoadHymns()
+        {
+            _data = HymnData.Load();   // throws "hymn data missing: ..." for the host's fault path
+            if (_data.Problems.Count > 0) Debug.LogWarning("[ERROR] hymn data: " + string.Join("; ", _data.Problems));
+            List<double> skills = null;
+            if (Host.Lineup != null)
+            {
+                skills = Host.Lineup.Where(p => p.IsCpu).Select(p => p.CpuSkill).ToList();
+                var human = Host.Lineup.FirstOrDefault(p => !p.IsCpu);
+                var ids = new List<int> { human != null ? human.Id : 0 };
+                ids.AddRange(Host.Lineup.Where(p => p.IsCpu).Select(p => p.Id));
+                _ids = ids;
+            }
+            // A new set of hymns each time: the game's seed, moved by how often it has been played.
+            uint seed = unchecked((uint)(Rng.Next() * 4294967295.0) + (uint)Save.Get(Id).Plays * 0x9e3779b1u);
+            _round = new DownbeatRound(_data.Pool, seed, skills, Save.OffsetMs);
+            for (int k = 0; k < DownbeatRound.ExcerptCount; k++)
+            {
+                var cand = _data.Pool.First(c => c.Name == _round.Playlist[k]);
+                string name = cand.ClipFor(DownbeatRound.Levels[k]);
+                _clips[k] = HymnData.Clip(name);
+                if (_clips[k] == null) throw new System.InvalidOperationException("hymn data missing: clip " + name);
+                _clips[k].LoadAudioData();
+            }
+        }
+
         public override void Begin(double now)
         {
-            _round.Start(now);
-            _clickBeat = -SwingRules.LeadInBeats;
+            _round.Start(now + LeadIn);   // no count-in: the downbeat is for the ear to find
             _playing = true;
             _now = now;
             // The HUD (web ui.hud + swingKings/hud.js): score block, outs lamps, the one-line instruction, the title card.
@@ -147,16 +209,17 @@ namespace Bonanza
             _mouse = Conducting;
             Ui.Hint(_cam ? HintCamera : _mouse
                 ? HintMouse
-                : "<color=#ffe58a>SPACE</color> / tap as the ball reaches the plate \u00B7 on the beat = <color=#ffe58a>HOME RUN</color>");
+                : "<color=#ffe58a>SPACE</color> / tap on the <color=#ffe58a>DOWNBEAT</color> only \u00B7 the other balls are bombs");
             _hintHidden = false;
             Ui.Banner("SWING KINGS", life: _mouse ? 2.2f : 1.5f);
             if (_mouse && Autoplay)
             {
-                var scored = new List<Pitch>();
-                foreach (var p in _round.Pitches) if (p.Scored) scored.Add(p);
-                var targets = new double[scored.Count];
-                var launches = new double[scored.Count];
-                for (int i = 0; i < scored.Count; i++) { targets[i] = _round.Map.TimeAt(scored[i].TargetBeat); launches[i] = _round.Map.TimeAt(scored[i].LaunchBeat); }
+                // The scripted conductor swings at the scored downbeats only; it starts each windup 0.9 s before the ball
+                // lands (one beat of flight is shorter than the stroke it has to play).
+                var balls = _round.ScoredBalls().ToList();
+                var targets = new double[balls.Count];
+                var launches = new double[balls.Count];
+                for (int i = 0; i < balls.Count; i++) { targets[i] = balls[i].Time; launches[i] = balls[i].Time - 0.9; }
                 _bot = new ConductBot(targets, launches, now);
             }
         }
@@ -285,17 +348,16 @@ namespace Bonanza
 
         public override void Tick(double now, float dt)
         {
-            double beatBefore = _round.BeatAt(_now);
             _now = now;
             if (_cam) CameraStep(now);
             if (_mouse) ConductStep(now);
             _round.Update(now);
             double beat = _round.BeatAt(now);
-            CountIn(beatBefore, beat);
+            DriveMusic(now);
             // Beat flash on the audio clock, and the dusk -> night swap when the fast section starts.
             Look.BeatPulse = beat < 0 ? 0 : Mathf.Exp(-5f * Phase(beat));
             Look.TickBeat(beat);
-            bool night = SwingRules.SectionAt(beat) is Section.Escalate or Section.Finale;
+            bool night = Night;
             if (night != _night)
             {
                 _night = night;
@@ -304,58 +366,49 @@ namespace Bonanza
             }
             UpdateCrowd(beat);
             UpdateArming(beat);
-            ScheduleClicks();
-            // The song ends on a word, on the last bar's downbeat (web: GAME! and the fanfare).
-            if (!_finishShown && beat >= SwingRules.EndBeat - 4) { _finishShown = true; Host.PlaySfx("fanfare", now); _env?.Crowd?.Wave(1, 2); }
+            // The last excerpt ends on a word (web: GAME! and the fanfare).
+            if (!_finishShown && _round.Over) { _finishShown = true; Host.PlaySfx("fanfare", now); _env?.Crowd?.Wave(1, 2); }
             UpdatePitchBalls(beat);
             UpdateCamera(beat, dt);
             UpdateHud(beat);
         }
 
-        /// The crowd's energy climbs with the round and the player's streak (web updateShow); the slam windup holds
-        /// it high, and after the grand slam the stands wave every bar.
+        /// The crowd's energy climbs with the excerpt's level and the player's streak (web updateShow).
         void UpdateCrowd(double beat)
         {
             var crowd = _env?.Crowd;
             if (crowd == null) return;
-            var section = SwingRules.SectionAt(beat);
-            float baseE = section switch { Section.Lead => 0.28f, Section.Teach => 0.42f, Section.Play => 0.58f, Section.Escalate => 0.8f, Section.Finale => 1f, _ => 0.5f };
-            float streak = Mathf.Clamp01(_round.Judge.Stats.Combo / 14f) * 0.25f;
+            var slot = _round.CurrentSlot;
+            float baseE = slot == null ? 0.28f : slot.Level == HymnLevel.Easy ? 0.45f : slot.Level == HymnLevel.Medium ? 0.62f : 0.8f;
+            float streak = Mathf.Clamp01(_round.Combo / 14f) * 0.25f;
             crowd.SetEnergy(Mathf.Clamp01(baseE + streak));
-            if (beat >= SwingRules.FinaleBeat - 8 && beat < SwingRules.FinaleBeat) crowd.SetEnergy(0.95f);
-            int whole = (int)System.Math.Floor(beat);
-            if (beat >= SwingRules.FinaleBeat + 2 && whole != _curtainBeat)
-            {
-                _curtainBeat = whole;
-                if (whole % 4 == 0) crowd.Wave(0.8f, 1.6f);
-                crowd.SetEnergy(1);
-            }
         }
-        int _curtainBeat = int.MinValue;
+
+        /// The last (Hard) excerpt plays under the night grade, the fast half of the old set.
+        bool Night => _round.CurrentSlot != null && _round.CurrentSlot.Level == HymnLevel.Hard;
 
         /// The readouts follow the judge; the instruction bar goes once the teach section is over (web: beat 16).
         void UpdateHud(double beat)
         {
             Ui.Score(Mathf.RoundToInt((float)_round.Points));
-            Ui.Combo(_round.Judge.Stats.Combo);
-            Ui.Accuracy((float)_round.Judge.Accuracy);
+            Ui.Combo(_round.Combo);
+            Ui.Accuracy((float)_round.Accuracy);
             if (!_hintHidden && beat >= 16) { _hintHidden = true; Ui.HideHint(); }
         }
 
         public override Outcome Result()
         {
             if (!_round.Over) return null;
+            if (_doneAt < 0) _doneAt = _now;
+            if (_now - _doneAt < ResultHold) return null;
             _playing = false;
             StopCamera();
-            var r = _round.Result();
-            return Outcome.Build(r.Score, r.Accuracy, r.Rank, _round.Judge.Stats, _round.Judge.Bias, null)
-                .Extra("HOME RUNS", r.Homers).Extra("LINE DRIVES", r.Liners).Extra("BUNTS", r.Bunts)
-                .Extra("FOULS", r.Fouls).Extra("GRAND SLAM", r.GrandSlam ? "YES" : "NO");
+            return _round.Result(_ids);
         }
 
         public override IEnumerable<KeyValuePair<string, double>> TestChart()
         {
-            foreach (var n in _round.Judge.Notes) yield return new KeyValuePair<string, double>("a", n.Time);
+            foreach (var t in _round.PerfectPresses()) yield return new KeyValuePair<string, double>("a", t);
         }
 
         // ------------------------------------------------------------ stage
@@ -459,19 +512,6 @@ namespace Bonanza
 
         void StartSwing() { _swingT = 0; StartSwingArc(); Cue(BatterCue.Swing); }
 
-        /// The count-in ticks over the lead-in (the web has no click after it; the
-        /// music carries the beat), scheduled a little ahead on the audio clock itself.
-        void ScheduleClicks()
-        {
-            double horizon = _round.BeatAt(_now + 0.2);
-            while (_clickBeat <= horizon && _clickBeat < 0)
-            {
-                double at = _round.Map.TimeAt(_clickBeat);
-                if (at > _now) Host.CountTick(at, Core.CountIn.Accent((int)_clickBeat));
-                _clickBeat += 1;
-            }
-        }
-
         // ------------------------------------------------------------ visuals (run on through results)
 
         void Update()
@@ -492,51 +532,49 @@ namespace Bonanza
             }
         }
 
-        /// The web's camera: eases to a target that leans in on a hit (camPush), lifts to follow the grand slam up, and
-        /// sits a little closer in the night half. The rig adds the beat push, shake and punch zoom on top.
+        /// The web's camera: eases to a target that leans in on a hit (camPush) and sits a little closer in the night half. The rig adds the beat push, shake and punch zoom on top.
         void UpdateCamera(double beat, float dt)
         {
-            bool night = SwingRules.SectionAt(beat) is Section.Escalate or Section.Finale;
-            const double FinaleBeat = SwingRules.FinaleBeat;
-            var slam = _round.Pitches[_round.Pitches.Count - 1];
-            bool slamHold = beat >= FinaleBeat - 8 && beat < FinaleBeat;
-            float lift = 0;
-            float? flying = null;
-            if (_pitchBalls.TryGetValue(slam, out var sb) && sb.Go.activeSelf) flying = sb.Go.transform.position.y;
-            else foreach (var h in _hitBalls) if (h.Slam) { flying = h.P.y; break; }
-            if ((slamHold || beat < FinaleBeat + 4) && flying.HasValue && beat >= FinaleBeat - 8)
-                lift = Mathf.Min(3.2f, Mathf.Max(0, flying.Value - 2.6f));   // capped: a grand slam leaves the park
-            _camLift = Damp(_camLift, lift, 3.4f, dt);
+            bool night = Night;
+            _camLift = Damp(_camLift, 0, 3.4f, dt);
             _camPush = Damp(_camPush, 0, 3.2f, dt);
             Look.Rig.Frame(
                 W(-1.9f + _camPush * 0.9f, 1.95f + _camPush * 0.15f + _camLift * 0.42f, 0),
-                (slamHold ? 12.2f : night ? 12.0f : 12.6f) - _camPush * 0.5f + _camLift * 0.7f,
+                (night ? 12.0f : 12.6f) - _camPush * 0.5f + _camLift * 0.7f,
                 2.15f, 0.055f + Mathf.Sin((float)beat * 0.11f) * 0.012f, 45, 2.4f);
         }
 
-        /// Seconds from this pitch's target to the next pitch's (the space its feedback has).
+        /// Seconds from this pitch's target to the next BALL's (the space its feedback has). A ball comes on every
+        /// downbeat, a beat or two to four apart: the bombs in between do not count, they are all alike.
         float GapAfter(Pitch p)
         {
-            double next = double.PositiveInfinity;
-            foreach (var q in _round.Pitches) if (q.TargetBeat > p.TargetBeat && q.TargetBeat < next) next = q.TargetBeat;
-            return (float)((next - p.TargetBeat) * _round.Map.Spb);
+            var d = p as DownbeatPitch;
+            if (d == null) return 1;
+            foreach (var q in _round.Pitches) if (q.IsBall && q.Time > d.Time + 1e-6) return (float)(q.Time - d.Time);
+            return 2;
         }
 
-        /// "3, 2, 1, PLAY BALL!" on the last four lead-in beats (web round.js countIn).
-        void CountIn(double before, double beat)
+        /// The clip of each excerpt starts PreRoll before its first beat (the hymn leading in) and stops after its last bar.
+        void DriveMusic(double now)
         {
-            for (int b = (int)System.Math.Floor(before) + 1; b <= System.Math.Floor(beat); b++)
+            if (_round.Slots.Count == 0) return;
+            int k = _musicSlot + 1;
+            if (k < _round.Slots.Count && now >= _round.Slots[k].StartTime - PreRoll)
             {
-                string s = Core.CountIn.TextFor(b, SwingRules.LeadInBeats, 3, "PLAY BALL!");
-                if (s != null) SetCount(s);
+                // File time 0 sounds at the slot's Shift; the deck starts in the middle if that is already past.
+                Host.PlayClip(_clips[k], _round.Slots[k].Shift, _data.BeatOffset);
+                _musicSlot = k;
+            }
+            if (_musicSlot >= 0 && _stoppedSlot < _musicSlot && now > _round.Slots[_musicSlot].EndTime + 0.05)
+            {
+                _stoppedSlot = _musicSlot;
+                Host.MusicStop(0.4f);
             }
         }
 
-        /// web: ui.popup at y 0.26, 1.4x (1.2x and 0.44 s for the last beat, PLAY BALL!).
-        void SetCount(string s)
+        void OnExcerptStarted(DownbeatSlot slot)
         {
-            bool go = s == "PLAY BALL!";
-            Ui.Countdown(s, 0.26f, go ? 1.2f : 1.4f, go ? 0.44f : 0.42f);
+            Ui.Banner($"{slot.Index + 1} / {DownbeatRound.ExcerptCount}", life: 1.3f, sub: slot.Level.ToString().ToUpperInvariant());
         }
 
         // ------------------------------------------------------------ pitches
@@ -574,13 +612,16 @@ namespace Bonanza
 
         void OnLaunched(Pitch p)
         {
-            if (_mouse && p.Scored) Debug.Log($"[LAUNCH] id={p.Id} eta={_round.Map.TimeAt(p.TargetBeat) - _now:F4}");
+            // The check harnesses conduct on these: the scored downbeat balls only, numbered from 1 (a bomb never logs).
+            var dp = (DownbeatPitch)p;
+            if (_mouse && dp.Ordinal > 0) Debug.Log($"[LAUNCH] id={dp.Ordinal} eta={dp.Time - _now:F4}");
             var b = new Ball { Go = AcquireBall() };
             b.Go.transform.position = Muzzle;
             b.Go.transform.localScale = Vector3.one * 0.34f;
             b.Trail = Look.Fx.Trail(Hex(0xffe9b0) * 1.15f, 0.14f);   // the hit ball's warm comet tail from release (it takes the tier colour on contact)
-            // One live ball on screen: a hit ball still flying when the next pitch leaves shrinks away now.
-            foreach (var h in _hitBalls) if (h.Fade <= 0) h.Fade = 0.0001f;
+            // A pitch leaves on every beat: only a hit ball that has flown for a while shrinks away now (a home run
+            // keeps its flight into the stands), so the hit never hides the next ball.
+            foreach (var h in _hitBalls) if (h.Fade <= 0 && h.T > 1.1f) h.Fade = 0.0001f;
             // Half-beat markers along the flight path: the ball is the metronome.
             SetPips(p);
             _pitchBalls[p] = b;
@@ -608,7 +649,7 @@ namespace Bonanza
             foreach (var kv in _pitchBalls)
             {
                 var p = kv.Key; var b = kv.Value;
-                double u = SwingRound.FlightU(p, beat);
+                double u = DownbeatRound.FlightU(p, beat);
                 var pos = Sample(p, System.Math.Min(u, 1.6));
                 if (u > 1) pos.y = Mathf.Max(0.16f, pos.y - (float)(u - 1) * 1.4f);
                 b.Go.transform.position = pos;
@@ -716,7 +757,8 @@ namespace Bonanza
             {
                 float hs = Mathf.Min(Feel.HitstopMax * 1.6f, f.Hitstop * (big ? 1.9f : 1f) * (p.Finale ? 2.6f : 1f));
                 // The freeze ends well before the next unjudged note arrives, and is visual only.
-                Look.Hitstop(Feel.HitstopFor(hs, _round.Judge.Notes, _round.Map.TimeAt(p.TargetBeat)));
+                var dpHit = p as DownbeatPitch;
+                Look.Hitstop(Mathf.Max(0, Mathf.Min(hs, dpHit != null ? (float)(_round.Clock.SpbAt(dpHit.Time) * 0.4) : hs)));   // ends well before the next pitch lands
                 rig.PunchZoom(1 + (big ? 0.14f : 0.035f) * (p.Finale ? 1.6f : 1f));   // a real camera punch on a home run
             }
             _camPush = big ? 1 : 0.45f;
@@ -724,7 +766,8 @@ namespace Bonanza
             // --- callout: a badge, tier word big, timing grade small -----------------------------
             string grade = c.Verdict == Verdict.Perfect ? "PERFECT" : c.Verdict == Verdict.Great ? "GREAT" : "GOOD";
             string word = c.IsDemo ? "LIKE THIS!" : c.Foul ? "FOUL!" : t.Label;
-            string sub = c.IsDemo ? null : grade + (c.HomerFeet > 0 ? $" \u00B7 {c.HomerFeet} FT" : "");
+            bool free = p is DownbeatPitch fp && fp.IsFree;   // in the free bars it counts for nothing
+            string sub = c.IsDemo ? null : grade + (c.HomerFeet > 0 ? $" \u00B7 {c.HomerFeet} FT" : "") + (free ? " \u00B7 FREE" : "");
             float life = p.Finale ? 2.4f : c.IsDemo ? 0.7f : Mathf.Min(big ? 1.25f : 0.95f, Mathf.Max(0.55f, gap * 0.8f));
             // Right of the batter, off the incoming pitch's arc (it comes down from the machine on the left).
             Look.Fx.ClearBadges();
@@ -740,23 +783,25 @@ namespace Bonanza
             }
         }
 
-        void OnWhiff(WhiffEvent w)
+        void OnWhiff(WhiffEvent w) => Strike(w.Pitch, w.Outs, w.SideRetired, w.Swung, w.Swung ? "WHIFF!" : "STRIKE!");
+
+        /// A strike, whatever its cause: a ball let go or a bomb swung at. Batter, lamps, crowd, burst and callout.
+        void Strike(Pitch pitch, int outs, bool sideRetired, bool swung, string word)
         {
-            if (w.Swung) StartSwing();
-            Cue(w.SideRetired ? BatterCue.SideRetired : w.Swung ? BatterCue.Whiff : BatterCue.Strike);
+            if (swung) StartSwing();
+            Cue(sideRetired ? BatterCue.SideRetired : swung ? BatterCue.Whiff : BatterCue.Strike);
             if (_outsClear > 0) { _outsClear = 0; Ui.Outs(0); }   // a new out while SIDE RETIRED still holds the lamps: the new inning starts now
-            Ui.Outs(w.Outs);
+            Ui.Outs(outs);
             Host.PlaySfx("miss", _now);
-            _env?.Crowd?.Deflate(w.SideRetired ? 1.4f : 0.9f);
-            if (w.SideRetired) _env?.Crowd?.Wave(0.55f, 1.4f);
+            _env?.Crowd?.Deflate(sideRetired ? 1.4f : 0.9f);
+            if (sideRetired) _env?.Crowd?.Wave(0.55f, 1.4f);
             var fx = Look.Fx;
             var o = VerdictOpts.Default;
             o.Combo = 0; o.GroundY = 0; o.Text = false; o.Stage = false;
             fx.PlayVerdict(Verdict.Miss, Contact, o);
-            float gap = GapAfter(w.Pitch);
+            float gap = GapAfter(pitch);
             float life = Mathf.Min(0.9f, Mathf.Max(0.5f, gap * 0.7f));
-            var miss = Hex(0xff9999);
-            if (w.SideRetired)
+            if (sideRetired)
             {
                 float retire = Mathf.Max(1.2f, Mathf.Min(1.8f, gap * 0.9f));
                 _outsClear = retire;
@@ -764,8 +809,50 @@ namespace Bonanza
                 fx.Callout("SIDE RETIRED!", "3 OUTS", Contact + new Vector3(1.1f, 1.6f, 0), Hex(0xff4d6a), 1.05f, retire, 0.3f);
                 Look.Rig.Shake(0.08f, new Vector3(0, -1, 0));
             }
-            else { fx.ClearBadges(); fx.Callout(w.Swung ? "WHIFF!" : "STRIKE!", null, Contact + new Vector3(1.0f, 1.3f, 0), w.Swung ? Hex(0xff5d8a) : Hex(0xff8a3c), 0.8f, life, 0.4f); }
+            else { fx.ClearBadges(); fx.Callout(word, null, Contact + new Vector3(1.0f, 1.3f, 0), swung ? Hex(0xff5d8a) : Hex(0xff8a3c), 0.8f, life, 0.4f); }
             _camPush = 0.25f;
+        }
+
+        /// Takes the pitch's ball off the field (it is gone: hit, blown up) and returns where it was.
+        Vector3 TakeBall(Pitch p)
+        {
+            var at = Contact;
+            if (_pitchBalls.TryGetValue(p, out var b))
+            {
+                at = b.Go.transform.position;
+                b.Trail?.Release();
+                FreeBall(b.Go);
+                _pitchBalls.Remove(p);
+            }
+            ClearPips(p);
+            return at;
+        }
+
+        /// A bomb swung at: the ball blows up where the bat met it. In the free bars it is only a show (no strike).
+        void OnExplode(ExplodeEvent e)
+        {
+            var at = TakeBall(e.Pitch);
+            var fx = Look.Fx;
+            fx.Burst(at, 30, Hex(0xff7a1a), 7, life: 0.55f);
+            fx.Impact(at, Vector3.up, Hex(0xffc24a), 14, 16, scale: 1.1f);
+            fx.Flare(at, Hex(0xff9a3a) * 0.75f, 0.9f, 0.16f, 0.4f, 1.9f);
+            Look.Rig.Shake(e.Free ? 0.05f : 0.1f, new Vector3(0, 0.5f, 0));
+            Host.PlaySfx("impact", _now);
+            if (e.Free)
+            {
+                StartSwing();
+                fx.ClearBadges();
+                fx.Callout("BOMB!", "FREE", Contact + new Vector3(1.0f, 1.3f, 0), Hex(0xffb347), 0.8f, 0.8f, 0.4f);
+                return;
+            }
+            Strike(e.Pitch, e.Outs, e.SideRetired, true, "BOMB!");
+        }
+
+        /// A bomb let go: it shows itself and goes by, harmlessly (PitchPassed then clears its ball).
+        void OnFizzle(DownbeatPitch p)
+        {
+            if (!_pitchBalls.TryGetValue(p, out var b)) return;
+            Look.Fx.Burst(b.Go.transform.position, 6, Hex(0x8f93a3), 2, life: 0.35f);
         }
 
         void UpdateHitBalls(float dt)
@@ -935,6 +1022,7 @@ namespace Bonanza
         protected override void OnDestroy()
         {
             StopCamera();
+            foreach (var c in _clips) if (c != null) c.UnloadAudioData();
             Look.Fx?.ConfettiFadeOff();
             if (_traceMesh) Destroy(_traceMesh);
             base.OnDestroy();
@@ -949,11 +1037,12 @@ namespace Bonanza
             bool coiled = false;
             if (_playing && _swingT >= 1)
             {
-                var live = _round.LivePitch();
+                var live = _round.LivePitch() as DownbeatPitch;
                 if (live != null)
                 {
-                    double toGo = _round.Map.TimeAt(live.TargetBeat) - _now;
-                    coiled = toGo < _round.Map.Spb * 2 && toGo > -0.2;
+                    // every pitch coils the batter alike: the coil must not give the downbeat away
+                    double toGo = live.Time - _now;
+                    coiled = toGo < _round.Clock.SpbAt(_now) * 1.5 && toGo > -0.2;
                 }
             }
             if (coiled && !_wasCoiled) Cue(BatterCue.Coil);

@@ -60,6 +60,8 @@ namespace Bonanza.Core
         public double BeatSeconds;      // this beat's length: the window is a fraction of it
         public bool IsBall;
         public bool IsFree;             // inside the free bars: nothing scores, nothing costs an out
+        /// 1, 2, 3... among the scored balls, 0 for a bomb or a free pitch (what the check harnesses count as pitches).
+        public int Ordinal;
         public DownbeatKind Type => IsBall ? DownbeatKind.Ball : DownbeatKind.Bomb;
         public bool IsBomb => !IsBall;
         /// Half-width of the swing window, ms.
@@ -441,6 +443,8 @@ namespace Bonanza.Core
                 g += x.Beats.Count + GapBeats;
             }
             Clock = new DownbeatClock(times, beats);
+            int ordinal = 0;
+            foreach (var p in Pitches) if (p.IsBall && !p.IsFree) p.Ordinal = ++ordinal;
             foreach (var p in Pitches) p.LaunchTime = Clock.TimeAt(p.TargetBeat - Lead);
 
             CpuRolls = new DownbeatCpuRoll[ExcerptCount][];
@@ -472,7 +476,8 @@ namespace Bonanza.Core
         /// The round's last moment: the end of the last excerpt.
         public double EndTime => Slots.Count > 0 ? Slots[Slots.Count - 1].EndTime : 0;
 
-        public double BeatAt(double audioTime) => Clock.BeatAt(audioTime);
+        /// The round's beat at audio time `audioTime`; 0 before Start.
+        public double BeatAt(double audioTime) => Clock == null ? 0 : Clock.BeatAt(audioTime);
 
         /// Flight progress of a pitch at `beat`: 0 at the muzzle, 1 at the plate.
         public static double FlightU(Pitch p, double beat) => (beat - p.LaunchBeat) / p.Lead;
@@ -491,7 +496,7 @@ namespace Bonanza.Core
         public IEnumerable<DownbeatPitch> ScoredBalls() => Pitches.Where(p => p.IsBall && !p.IsFree);
 
         /// One swing exactly on every scored downbeat: the autoplay's presses (audio time).
-        public List<double> PerfectPresses() => ScoredBalls().Select(p => p.Time - OffsetMs / 1000.0).ToList();
+        public List<double> PerfectPresses() => ScoredBalls().Select(p => p.Time).ToList();
 
         // ------------------------------------------------------------ swings
 
@@ -507,6 +512,12 @@ namespace Bonanza.Core
             Holding = true;
             HoldStart = time;
         }
+
+        /// Beats of windup that fill the cosmetic windup gauge (the bat's coil and the trace's colour).
+        public const double WindupBeats = 1.5;
+
+        /// The windup gauge 0..1 for the visuals. It is only a gesture: the power of a swing comes from its timing.
+        public double WindupPower(double now) => Math.Min(1, HoldBeatsAt(now) / WindupBeats);
 
         /// The windup so far, beats.
         public double HoldBeatsAt(double now) => Holding && Clock != null ? Math.Max(0, (now - HoldStart) / Clock.SpbAt(now)) : 0;

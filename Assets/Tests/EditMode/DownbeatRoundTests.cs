@@ -387,6 +387,28 @@ namespace Bonanza.Core.Tests
             Assert.AreEqual(r.Points, r2.Points, 1e-9);
         }
 
+        [Test]
+        public void ScoredBallsAreNumberedFromOneAndTheRoundHasNoClockBeforeStart()
+        {
+            var r = Round();
+            CollectionAssert.AreEqual(Enumerable.Range(1, ScoredBalls(r).Count), ScoredBalls(r).Select(p => p.Ordinal));
+            Assert.IsTrue(r.Pitches.Where(p => p.IsBomb || p.IsFree).All(p => p.Ordinal == 0));
+            var fresh = new DownbeatRound(Pool(), 1);
+            Assert.AreEqual(0, fresh.BeatAt(5));
+            Assert.AreEqual(0, fresh.Pitches.Count);
+            Assert.IsNull(fresh.Swing(5), "a swing before Start claims nothing");
+        }
+
+        [Test]
+        public void TheWindupGaugeFillsOverAFewBeatsAndPowerIgnoresIt()
+        {
+            var r = Single(Hymn("a", 4, 4, false));
+            Assert.AreEqual(0, r.WindupPower(Start));
+            r.BeginWindup(Start);
+            Assert.AreEqual(1, r.WindupPower(Start + 5));
+            Assert.AreEqual(0.5, r.WindupPower(Start + DownbeatRound.WindupBeats * 0.5 / 2), 1e-9);
+        }
+
         // ---- score, accuracy and rank -----------------------------------------------
 
         [Test]
