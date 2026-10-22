@@ -209,7 +209,7 @@ namespace Bonanza.Core.Tests
                 var s = r.Slots[k];
                 Assert.AreEqual(HymnLadder.SlotLevels[k], s.Level);
                 Assert.AreEqual(s.StartTime, s.Beats[0].Time, 1e-9);
-                Assert.AreEqual(s.StartTime - Windows.GoodMs / 1000.0, s.WindowStart, 1e-9);
+                Assert.AreEqual(s.StartTime - BeatWindow.GoodMs(s.Beats[1].Time - s.Beats[0].Time) / 1000.0, s.WindowStart, 1e-9);
                 double span = s.Excerpt.EndTime - s.Excerpt.StartTime;
                 Assert.AreEqual(s.StartTime + span, s.WindowEnd, 1e-9);
                 double beat = s.Beats[1].Time - s.Beats[0].Time;

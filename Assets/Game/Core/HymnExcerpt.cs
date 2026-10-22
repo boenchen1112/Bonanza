@@ -136,7 +136,7 @@ namespace Bonanza.Core
         public int EndBar;
         public double StartTime;        // the first beat of the start bar
         public double EndTime;          // the end of the end bar (cut at the end of verse 1)
-        public double WindowStart;      // StartTime less the GOOD window, so a slightly early first press counts
+        public double WindowStart;      // StartTime less the first beat's window (BeatWindow), so a slightly early first press counts
         public double WindowEnd;        // = EndTime
         /// Every beat from the start bar to the end bar: what MeterJudge.Judge takes.
         public List<MeterBeat> Beats = new List<MeterBeat>();
@@ -173,7 +173,8 @@ namespace Bonanza.Core
             for (int i = first; i <= last; i++) x.Beats.Add(grid.Beats[i].ToMeterBeat());
             x.StartTime = grid.Beats[first].Time;
             x.EndTime = midi.SecondsAt(eb.EndTick);
-            x.WindowStart = x.StartTime - Windows.GoodMs / 1000.0;
+            double firstLen = x.Beats.Count > 1 ? x.Beats[1].Time - x.Beats[0].Time : 0.5;
+            x.WindowStart = x.StartTime - BeatWindow.GoodMs(firstLen) / 1000.0;
             x.WindowEnd = x.EndTime;
 
             int startTick = grid.Beats[first].Tick, endTick = eb.EndTick;
