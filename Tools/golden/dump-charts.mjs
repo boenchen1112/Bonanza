@@ -71,17 +71,8 @@ const judge = await load('core/judge.js');
   console.log('maxPoints', c.maxPoints(phrases), 'endBeat', c.chartEndBeat(phrases), 'bars', c.chartDurationBars(phrases));
 }
 
-// ---- Finale Fever
-{
-  const c = await load('games/finaleFever/chart.js');
-  const { notes, cues, phrases } = c.buildChart();
-  save('finale-fever-notes.txt', notes, ['beat', 'action', 'kind', 'lane', 'telegraph', 'section', 'weight', 'patName']);
-  save('finale-fever-cues.txt', cues, ['beat', 'type', 'kind', 'accent', 'tone', 'of']);
-  save('finale-fever-phrases.txt', phrases, ['idx0', 'idx1', 'callBeat0', 'ansBeat0', 'endBeat', 'section', 'patName', 'solo', 'finale']);
-  const probes = [-8, -1, 0, 0.5, 7, 40, 99.25, 150, 183.5, 199, 200, 230];
-  save('finale-fever-tempo.txt', probes.map((b) => ({ beat: b, bpm: c.bpmAt(b), section: c.sectionAt(b), progress: c.progressAt(b) })),
-    ['beat', 'bpm', 'section', 'progress']);
-}
+// ---- Finale Fever: no web chart any more. It is the hymn tempo game now; its rules are pinned by Core tests
+// (TempoCurveTests, TempoRoundTests) against their own expectations, not against the web build.
 
 // ---- Party (shell/state.js)
 {

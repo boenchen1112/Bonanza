@@ -22,8 +22,8 @@
 //   title_kick (the title screen's beat kick)
 //   dd_call_<k> dd_callhat dd_handoff dd_crash dd_fumble dd_snare dd_stumble_<i>
 //   cc_sing_<lane>_<deg> cc_bell_<lane>_<deg> cc_fsing_<lane>_<deg> cc_sour_<lane>_<deg> cc_bed_<lane>_<deg> cc_gulp_<lane> cc_gulpbig_<lane>
-//   ff_swing_<deg> ff_chord_<deg>_<tone> ff_call_<deg>_<tone>_<a|n> ff_rim ff_ans_<deg>_<i>_<12|24> ff_pluck_<deg>_<i>
-// Swing Kings has no game voices on the web (only sfx() calls), so it has no clips here.
+// Swing Kings has no game voices on the web (only sfx() calls), so it has no clips here; Finale Fever plays
+// rendered hymns (Tools/hymns), so it has none either.
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -65,7 +65,6 @@ const rendered = await page.evaluate(async ({ base, SR, AT, listOnly }) => {
   const { TRACKS } = await import(base + '/src/audio/music/index.js');
   const { SCALES, chord, mtof } = await import(base + '/src/audio/theory.js');
   const chomp = await import(base + '/src/games/chompChorus/chart.js');
-  const finale = await import(base + '/src/games/finaleFever/chart.js');
 
   const b64 = (f32) => {
     const i16 = new Int16Array(f32.length);
@@ -134,48 +133,6 @@ const rendered = await page.evaluate(async ({ base, SR, AT, listOnly }) => {
         ['tone', 0, { freq: 150 + lane * 26, type: 'sine', bend: big ? 4.4 : 3.0, d: spb * (big ? 3.4 : 0.62), gain: big ? 0.075 : 0.05, pan, rev: 0.14 }],
         ['hit', 0, { gain: 0.045, d: 0.05, hp: 1500, pan, rev: 0.05 }]]);
     }
-  }
-
-  // ========================================================================= Finale Fever (games/finaleFever/index.js)
-  {
-    const id = 'finale-fever';
-    const ch = finale.buildChart();
-    const callKinds = new Set(), chordTones = new Set(), noteTones = new Set();
-    for (const c of ch.cues) {
-      if (c.type !== 'call') continue;
-      const tone = c.tone % 3;
-      if (c.kind === 'swing') callKinds.add('swing');
-      else if (c.kind === 'chord') chordTones.add(tone);
-      else noteTones.add(`${tone}_${c.accent ? 'a' : 'n'}`);
-    }
-    const kinds = new Set(ch.notes.map((n) => n.kind));
-    for (const deg of degsOf(id)) {
-      const cd = chordOf(id, deg);
-      if (callKinds.has('swing')) add(`ff_swing_${deg}`, id, [   // bossVoice 'swing' :568
-        ['orchHit', 0, { midis: cd.map((m) => m - 12), gain: 0.24, rev: 0.5 }],
-        ['tom', 0, { freq: 86, gain: 0.9, decay: 0.42, pan: -0.34, rev: 0.3 }]]);
-      for (const tone of chordTones) {
-        const midi = cd[tone % cd.length] - 12;
-        add(`ff_chord_${deg}_${tone}`, id, [   // 'chord' :570
-          ['stab', 0, { midis: [midi, midi + 7], dur: 0.2, gain: 0.19, wah: 1.7, rev: 0.3, pan: -0.3 }],
-          ['tom', 0, { freq: 128, gain: 0.5, decay: 0.24, pan: -0.3 }]]);
-      }
-      for (const tn of noteTones) {
-        const [tone, a] = tn.split('_'); const acc = a === 'a';
-        const midi = cd[Number(tone) % cd.length] - 12;
-        const calls = [['brass', 0, { midi, dur: acc ? 0.3 : 0.16, gain: acc ? 0.19 : 0.12, bite: 1.4, rev: 0.28, pan: -0.32 }]];   // :573
-        if (acc) calls.push(['tom', 0, { freq: 112, gain: 0.4, decay: 0.2, pan: -0.28 }]);
-        add(`ff_call_${deg}_${tone}_${a}`, id, calls);
-      }
-      for (let i = 0; i < cd.length; i++) {
-        const octs = [12]; if (kinds.has('solo')) octs.push(24);
-        for (const o of octs) add(`ff_ans_${deg}_${i}_${o}`, id, [   // playerVoice :683
-          ['bell', 0, { midi: cd[i] + o, dur: 0.24, gain: 0.12, ratio: 2.01, index: 4, rev: 0.3, dly: 0.16, pan: 0.28 }]]);
-        if (kinds.has('swing')) add(`ff_pluck_${deg}_${i}`, id, [
-          ['pluck', 0, { midi: cd[i] + 12 + 7, dur: 0.2, gain: 0.11, bright: 5, rev: 0.25, pan: 0.3 }]]);
-      }
-    }
-    add('ff_rim', id, [['rim', 0, { gain: 0.24, pan: -0.08, rev: 0.14 }]]);   // soloTick :587, non-accent gain 0.15
   }
 
   if (listOnly) return clips.map((c) => ({ name: c.name, game: c.game }));

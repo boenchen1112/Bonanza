@@ -3,6 +3,8 @@
 # Nothing it writes is committed: Assets/Resources/ and HymnBuild/ are gitignored.
 #
 #   Tools/hymns/prepare-data.sh            tempo maps (only missing ones), copy the data in, render the audio
+#                                          (the hymns' own clips and, for Finale Fever, every hymn x level on its tempo
+#                                          curve: <hymn>.<level>.tempo; the curves come from Core via Tools/hymns/tempocurves)
 #   Tools/hymns/prepare-data.sh --force    also re-render every clip
 #   Tools/hymns/prepare-data.sh --clean    remove the data again (a build then has no hymns: the game
 #                                          reports "hymn data missing" and the other games are unaffected)
@@ -44,6 +46,6 @@ for f in "$OUT"/hymn_*.mid.bytes; do   # hymns no longer in use
   echo "$used" | grep -qx "$b" || { rm -f "$f" "$f.meta" "$OUT/$b.tempo.json" "$OUT/$b.tempo.json.meta"; echo "removed $b (use no)"; }
 done
 
-# 3. the audio and the beat maps
+# 3. the audio, the beat maps and the tempo curves (render-hymns.mjs runs both dotnet tools; everything is incremental)
 node Tools/hymns/render-hymns.mjs --hymns "$HYMNS" --out "$OUT" "$@"
 echo "hymn data ready in $OUT"

@@ -89,6 +89,7 @@ const results = await page.evaluate(async ({ base, SR, TAIL, stems, wantTracks }
   const out = [];
   for (const id of Object.keys(TRACKS)) {
     if (id === 'bounce-brigade') continue;   // replaced by Hymn Meter: it plays rendered hymns (Tools/hymns), no score of its own
+    if (id === 'finale-fever') continue;   // replaced by the tempo game: it plays rendered hymns (Tools/hymns), no score of its own
     if (wantTracks && !wantTracks.includes(id)) continue;
     const track = TRACKS[id];
     const spb = 60 / track.bpm;

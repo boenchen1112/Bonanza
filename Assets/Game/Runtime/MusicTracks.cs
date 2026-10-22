@@ -3,9 +3,8 @@
 // from the web prototype's synth tracks; Assets/Game/Audio/Music/tracks.json
 // is that tool's manifest and MusicTracksTests keeps this table equal to it.
 //
-// Finale Fever is the exception: its tempo ramp (FeverChart.BpmAt) is rendered
-// into the file (finale-fever-ramped.json), so the clip plays at pitch 1 and
-// its position is simply game time since the track's first beat plus BeatOffset.
+// Finale Fever and Swing Kings play rendered hymn clips of their own (Tools/hymns, through
+// MusicPlayer.PlayClip) and have no score here.
 //
 // Beat grid: the render puts the first beat of every track `BeatOffset`
 // seconds into the file (graph latency measured by the renderer), so a clip
@@ -25,11 +24,11 @@ namespace Bonanza
         public bool Loop;
         public int Frames;          // sample frames in each mix file
         public int Levels;          // intensity mixes shipped: i0..i3, or the one that ever plays (title i1, results i0)
-        /// A full-length, non-looping render with the game's tempo ramp built in (Tools/music/render-ramped.mjs):
-        /// file position = game time since the track's first beat + BeatOffset, at pitch 1.
+        /// A full-length, non-looping clip with its tempo built in, played at pitch 1: file position = game time since
+        /// its first beat + BeatOffset, held to the clock tighter than a loop (MusicPlayer.PlayClip's hymn clips).
         public bool Ramped;
         /// File name stem of the mix clips (Assets/Game/Audio/Music/{Stem}.iN.ogg).
-        public string Stem => Ramped ? Id + "-ramped" : Id;
+        public string Stem => Id;
 
         public const int BeatsPerBar = 4;
         public const int Rate = 44100;
@@ -48,7 +47,6 @@ namespace Bonanza
             new MusicTrackInfo { Id = "swing-kings",    Bpm = 124, Bars = 16, BeatOffset = 0.00933, Loop = true,  Frames = 1365677, Levels = 4 },
             new MusicTrackInfo { Id = "drumline-dash",  Bpm = 132, Bars = 16, BeatOffset = 0.00931, Loop = true,  Frames = 1282909, Levels = 4 },
             new MusicTrackInfo { Id = "chomp-chorus",   Bpm = 140, Bars = 16, BeatOffset = 0.00932, Loop = true,  Frames = 1209600, Levels = 4 },
-            new MusicTrackInfo { Id = "finale-fever",   Bpm = 150, Bars = 54, BeatOffset = 0.01018, Loop = false, Frames = 3626124, Levels = 4, Ramped = true },
             new MusicTrackInfo { Id = "title",          Bpm = 112, Bars = 8,  BeatOffset = 0.00932, Loop = true,  Frames = 756000,  Levels = 1 },
             new MusicTrackInfo { Id = "results",        Bpm = 128, Bars = 4,  BeatOffset = 0.00949, Loop = false, Frames = 463050,  Levels = 1 },
         };

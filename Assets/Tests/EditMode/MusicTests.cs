@@ -21,16 +21,6 @@ namespace Bonanza.Core.Tests
             public bool loop;
         }
 
-        [Serializable] class Ramped
-        {
-            public bool ramped, loop;
-            public int musicalBeats, fileBeatZeroIsGameBeat;
-            public double firstBeatOffsetSeconds;
-            public double[] beatSeconds, bpmAtBeat;
-        }
-
-        static string RampedJson => File.ReadAllText(Path.Combine(Application.dataPath, "Game/Audio/Music/finale-fever-ramped.json"));
-
         static string Json => File.ReadAllText(Path.Combine(Application.dataPath, "Game/Audio/Music/tracks.json"));
 
         static Manifest Load() => JsonUtility.FromJson<Manifest>(Json);
@@ -45,7 +35,6 @@ namespace Bonanza.Core.Tests
                 var info = MusicTracks.Find(t.id);
                 Assert.IsNotNull(info, t.id);
                 Assert.AreEqual(t.bpm, info.Bpm, t.id + " bpm");
-                if (info.Ramped) continue;   // played from finale-fever-ramped.json instead (RampedFinaleIsTheGamesBeatMap)
                 Assert.AreEqual(t.bars, info.Bars, t.id + " bars");
                 Assert.AreEqual(t.loop, info.Loop, t.id + " loop");
                 Assert.AreEqual(MusicTrackInfo.BeatsPerBar, t.beatsPerBar, t.id);
@@ -60,47 +49,13 @@ namespace Bonanza.Core.Tests
         }
 
         [Test]
-        public void RampedFinaleIsTheGamesBeatMap()
-        {
-            var info = MusicTracks.Find("finale-fever");
-            Assert.IsTrue(info.Ramped);
-            Assert.IsFalse(info.Loop);
-            foreach (var t in MusicTracks.All) if (t.Id != "finale-fever") Assert.IsFalse(t.Ramped, t.Id);
-            Assert.AreEqual("finale-fever-ramped", info.Stem);
-
-            var j = JsonUtility.FromJson<Ramped>(RampedJson);
-            Assert.IsTrue(j.ramped);
-            Assert.IsFalse(j.loop);
-            Assert.AreEqual((int)MusicTracks.GameStartBeat, j.fileBeatZeroIsGameBeat, "file beat 0 is game beat -8");
-            Assert.AreEqual(j.firstBeatOffsetSeconds, info.BeatOffset, 1e-9);
-            Assert.AreEqual(j.musicalBeats + 1, j.beatSeconds.Length);
-            // Every mix file has the frame count the table pins.
-            var m = Regex.Matches(RampedJson, "\"frames\": (\\d+)");
-            Assert.AreEqual(4, m.Count);
-            foreach (Match f in m) Assert.AreEqual(3626124, int.Parse(f.Groups[1].Value));
-            Assert.AreEqual(3626124, info.Frames);
-            Assert.GreaterOrEqual(info.FileSeconds, j.beatSeconds[j.musicalBeats] + j.firstBeatOffsetSeconds);
-
-            // The file's beat k sounds where the game's own map puts game beat k - 8.
-            var map = new RampMap(FeverChart.BpmAt, FeverChart.Bpm0, FeverChart.EndBeat + 16);
-            map.Start(0, MusicTracks.GameStartBeat);
-            double t0 = map.TimeAt(MusicTracks.GameStartBeat);
-            foreach (int k in new[] { 0, 1, 7, 8, 9, 16, 33, 64, 100, 150, 200, 208, 216 })
-            {
-                double want = map.TimeAt(k + MusicTracks.GameStartBeat) - t0;
-                Assert.AreEqual(want, j.beatSeconds[k], 0.001, "file beat " + k);
-                Assert.AreEqual(map.BpmAt(k + MusicTracks.GameStartBeat), j.bpmAtBeat[k], 0.05, "bpm at file beat " + k);
-            }
-        }
-
-        [Test]
         public void GameTemposAreTheCharts()
         {
             Assert.AreEqual(SwingRules.Bpm, MusicTracks.Find("swing-kings").Bpm);
             Assert.AreEqual(DrumChart.Bpm, MusicTracks.Find("drumline-dash").Bpm);
             Assert.IsNull(MusicTracks.Find("bounce-brigade"), "Bounce Brigade plays the hymn clips, not a score of its own");
             Assert.AreEqual(ChompChart.Bpm, MusicTracks.Find("chomp-chorus").Bpm);
-            Assert.AreEqual(FeverChart.Bpm0, MusicTracks.Find("finale-fever").Bpm);
+            Assert.IsNull(MusicTracks.Find("finale-fever"), "Finale Fever plays the hymn tempo clips, not a score of its own");
         }
 
         [Test]
@@ -118,7 +73,6 @@ namespace Bonanza.Core.Tests
             Assert.AreEqual(8, SwingRules.LeadInBeats);
             Assert.AreEqual(8, DrumChart.LeadBeats);
             Assert.AreEqual(8, ChompChart.LeadBeats);
-            Assert.AreEqual(8, FeverChart.LeadBeats);
         }
 
         [Test]

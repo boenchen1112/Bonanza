@@ -55,7 +55,7 @@ namespace Bonanza
             new Entry { Id = "drumline-dash", Title = "DRUMLINE DASH", Blurb = "Hear it. Hit it back.", Type = typeof(DrumlineDashGame) },
             new Entry { Id = "bounce-brigade", Title = "BOUNCE BRIGADE", Blurb = "Find the downbeat. Conduct the hymn.", Type = typeof(HymnMeterGame) },
             new Entry { Id = "chomp-chorus", Title = "CHOMP CHORUS", Blurb = "Four singers, one of them is you.", Type = typeof(ChompChorusGame) },
-            new Entry { Id = "finale-fever", Title = "FINALE FEVER", Blurb = "It only gets faster.", Type = typeof(FinaleFeverGame) },
+            new Entry { Id = "finale-fever", Title = "FINALE FEVER", Blurb = "Stay on the beat while the tempo moves.", Type = typeof(FinaleFeverGame) },
         };
 
         public static Entry Find(string id) => Games.Find(e => e.Id == id);

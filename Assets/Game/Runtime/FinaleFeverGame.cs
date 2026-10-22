@@ -1,17 +1,24 @@
-// Finale Fever in grey boxes: the maestro on a podium throws orbs along a
-// lifted arc into your strike zone; you answer his phrase one bar later while
-// the tempo climbs 150 -> 187.5. Rules live in Bonanza.Core (FeverRound);
-// this is stage, orbs, camera, sound and HUD only. Web source:
-// games/finaleFever/index.js + set.js.
+// Finale Fever, the tempo game, in grey boxes on the shared look kit: tap on every beat of a hymn while its
+// tempo moves under you (gentle ramps, then ups and downs, then jumps and held notes), and in places with the
+// conductor's baton hidden, keep the beat by ear. The rules live in Bonanza.Core (TempoRound, TempoCurve); this is
+// the stage, the sound and the callouts. No rule logic lives here.
 //
-// The telegraph shortens by section (4, 3, 2 beats of orb flight) and is gone
-// for the solo: no orbs, the maestro goes dark, only the music says when.
-// Chords are two orbs that split in the air onto the left and right pips.
+// The music is a rendered clip per excerpt (Tools/hymns/render-hymns.mjs: the hymn's melody laid on the excerpt's
+// tempo curve, the very curve the round judges against), decoded in Load() and played through Host.PlayClip like
+// Swing Kings' hymns. A build without the private hymn data faults cleanly ("hymn data missing").
 //
-// Coordinates: the web build's (x, y, z) is (x, y, -z) here.
+// HOOKS for the visual work (all read-only, valid after Begin):
+//   Round         the TempoRound (Slots, Hearts, BiasText(), ...)         ExcerptIndex   0..2, 3 after the last
+//   Slot          the excerpt on screen (its Curve, Beats, Level, Name)   Beat           curve beats since the excerpt's first beat (fractional; negative in the count-in)
+//   CurveBpm      the tempo as heard now                                  PulseHidden    true while the stroke that lands next has no baton: draw no beat cue at all
+//   Hearts        hearts left (0 = SURVIVE)                               LastCall / LastVerdict / LastErrMs / TapSerial  the last tap (TapSerial counts up on every judged tap)
+// The stage reads them in Update(); nothing here depends on art.
 
 using System.Collections.Generic;
+using System.Linq;
 using Bonanza.Core;
+using Bonanza.HudKit;
+using Bonanza.Look;
 using UnityEngine;
 
 namespace Bonanza
@@ -20,364 +27,367 @@ namespace Bonanza
     {
         public override string Id => "finale-fever";
         public override string Title => "FINALE FEVER";
-        public override string Blurb => "It only gets faster.";
-        /// The ramp's tempo where the round was paused.
-        public override double SecondsPerBeat => 60 / _round.Map.BpmAt(_round.BeatAt(_now));
-        public override string Controls => "The maestro plays a phrase; answer it in the next bar as the orbs land.\nSPACE / tap for single orbs. Chords: LEFT + RIGHT (or tap twice).\nThe last four bars have no orbs: play the hook from memory.";
+        public override string Blurb => "Stay on the beat while the tempo moves.";
+        public override bool OwnsMusic => true;   // the hymns' tempo clips (HymnData), through Host.PlayClip
+        protected override bool UseLook => true;
+        public override bool UseCanvasHud => true;
+        public override string Controls => "A hymn plays and the tempo moves: speeding up, slowing down, jumping, holding a note.\nSPACE / click / tap on EVERY beat. Each tap says EARLY, LATE or ON.\nSometimes the baton disappears: keep the beat by ear.\nThree hearts: a line you mostly miss costs one, a clean line wins one back.";
 
-        static Vector3 W(float x, float y, float z) => new Vector3(x, y, -z);
-        static readonly Vector3 BossPos = W(-3.7f, 0.92f, -1.25f);
-        static readonly Vector3 PlayerPos = W(3.15f, 0, 0.35f);
-        static readonly Vector3 Launch = W(-2.75f, 2.65f, -0.95f);
-        static readonly Vector3 Strike = W(1.72f, 1.28f, 0.55f);
-        static readonly Color Gold = Hex(0xffd93d), Pink = Hex(0xff5fd0), Red = Hex(0xff5d73), Lime = Hex(0x9ee87a);
-        static readonly Color LaneL = Hex(0x35c8f0), LaneR = Hex(0xff8a3c);
+        // ------------------------------------------------------------ constants a human tunes by ear
+        const double TapGain = 0.12;          // the tap tick's gain
+        const double PreRoll = 0.5;           // the clip is handed to the music deck this long before its first beat
+        const int LeadBeats = 4;              // count-in beats before the first excerpt (the later ones get TempoRound.GapBeats)
+        const double ResultHold = 1.4;        // seconds the last callout stays up before the results card
 
-        FeverRound _round;
-        readonly Callouts _say = new Callouts();
-        double _now, _lastBeat = -99;
+        static Vector3 W(float x, float y, float z) => new Vector3(x, y, -z);   // the web's z, flipped
+        static readonly Vector3 PodiumPos = W(0, 0, 1.6f);
+        static readonly Vector3 PlayerPos = W(2.9f, 0, -0.4f);
+        static readonly Vector3 RingPos = W(0, 0.03f, 0.1f);
+        static readonly Color Gold = Hex(0xffd93d), Red = Hex(0xff5d73), Lime = Hex(0x9ee87a), Sky = Hex(0x6fd0ff), Orange = Hex(0xff8a3c);
+
+        TempoRound _round;
+        HymnData _data;
+        readonly AudioClip[] _clips = new AudioClip[TempoRound.ExcerptCount];
+        IReadOnlyList<int> _ids;
         bool _playing;
-        string _section = "teach";
+        double _now, _doneAt = -1;
+        int _musicSlot = -1, _stoppedSlot = -1;
+        int _tickCursor;
+        readonly List<CountTick> _ticks = new List<CountTick>();
+        int _hiddenSeen = -1;
+        bool _surviveShown;
 
-        Transform _boss, _player, _baton, _ring, _cam;
-        Material _bossMat, _ringMat, _floorMat;
-        readonly Transform[] _pips = new Transform[3];
-        float _bossLunge, _playerLean, _ringPulse, _camPunch, _heartPop;
-        Vector3 _camPos, _camTarget;
-        float _camFov = 52;
+        struct CountTick { public double Time; public int Accent; public bool Say; public string Text; }
 
-        sealed class Orb { public Transform T; public Material M; public Note Note; public FeverNote N; public double From, To; public bool On; }
-        readonly List<Orb> _orbs = new List<Orb>();
-        int _orbCursor, _cueA, _cueV;
+        // ------------------------------------------------------------ hooks
+
+        public TempoRound Round => _round;
+        public int ExcerptIndex { get; private set; }
+        public TempoSlot Slot => _round != null && ExcerptIndex < _round.Slots.Count ? _round.Slots[ExcerptIndex] : null;
+        /// Curve beats since the excerpt's first beat, fractional (negative through the count-in).
+        public double Beat { get; private set; }
+        public double CurveBpm { get; private set; }
+        /// True while the stroke that lands next is hidden: the stage must show no beat cue (no baton, no pulse).
+        public bool PulseHidden { get; private set; }
+        public int Hearts => _round != null ? _round.Hearts : 3;
+        public TapCall? LastCall { get; private set; }
+        public Verdict LastVerdict { get; private set; }
+        public double LastErrMs { get; private set; }
+        public int TapSerial { get; private set; }
+
+        /// The pause menu counts back in at the beat now playing.
+        public override double SecondsPerBeat
+        {
+            get
+            {
+                var s = Slot;
+                if (s == null || s.Curve == null) return 0.5;
+                int i = Mathf.Clamp((int)System.Math.Floor(System.Math.Max(0, Beat)), 0, s.Curve.BeatCount - 1);
+                return System.Math.Max(0.25, System.Math.Min(0.5, s.Curve.LengthOf(i)));   // never slower than half a second: the count back in stays short
+            }
+        }
+
+        // The SFX chord lookup (Host.PlaySfx) wants a beat for the clock: beats counted through the round's excerpts.
+        public override double MusicBeatAt(double time)
+        {
+            if (_round == null || _round.Slots.Count == 0) return time * 2;
+            double beats = 0;
+            foreach (var s in _round.Slots)
+            {
+                if (time < s.EndTime || s == _round.Slots[_round.Slots.Count - 1]) return beats + s.Curve.BeatAt(time - s.StartTime);
+                beats += s.Curve.BeatCount;
+            }
+            return beats;
+        }
+
+        public override double MusicTimeAt(double beat)
+        {
+            if (_round == null || _round.Slots.Count == 0) return beat / 2;
+            foreach (var s in _round.Slots)
+            {
+                if (beat < s.Curve.BeatCount || s == _round.Slots[_round.Slots.Count - 1]) return s.StartTime + s.Curve.TimeAt(beat);
+                beat -= s.Curve.BeatCount;
+            }
+            return 0;
+        }
+
+        public override bool AudioReady
+        {
+            get
+            {
+                foreach (var c in _clips)
+                {
+                    if (c == null) continue;
+                    if (c.loadState == AudioDataLoadState.Loading || c.loadState == AudioDataLoadState.Unloaded) return false;
+                }
+                return true;
+            }
+        }
 
         // ------------------------------------------------------------ contract
 
-        public override double MusicBeatAt(double time) => _round.Map.BeatAt(time);
-        public override double MusicTimeAt(double beat) => _round.Map.TimeAt(beat);
-
         public override void Load()
         {
-            _round = new FeverRound(Save.OffsetMs);
-            _round.Judged += OnJudged;
+            LoadHymns();   // first: a build without the private hymns fails here, before the stage is built
+            BuildStage();
+            Look.Fx.SetGroundY(0);
+            Look.Fx.SetFocus(W(0, 1.5f, 0.5f));
+            Look.Fx.Prewarm();   // touch every FX material now: a first-use shader link mid-round would push a tap out of its window
+            _round.Tapped += OnTapped;
+            _round.Missed += OnMissed;
             _round.HeartLost += OnHeartLost;
             _round.HeartGained += OnHeartGained;
-            _round.Ghost += () => { Host.PlaySfx("tick", _now, gain: 0.12f); _playerLean = -0.4f; };
+            _round.ExcerptStarted += OnExcerptStarted;
+        }
 
-            _cam = Camera.main.transform;
-
-            _floorMat = Mat(new Color(0.2f, 0.12f, 0.24f));
-            Prim(PrimitiveType.Plane, new Vector3(0, 0, 0), new Vector3(3, 1, 2), _floorMat);
-
-            // The maestro: tall, on a podium, with a cape and a baton.
-            Prim(PrimitiveType.Cylinder, new Vector3(BossPos.x, BossPos.y / 2, BossPos.z), new Vector3(2.6f, BossPos.y / 2, 2.6f), Hex(0x4a0c26));
-            _boss = new GameObject("Maestro").transform;
-            _boss.SetParent(transform, false);
-            _boss.localPosition = BossPos;
-            _bossMat = Mat(Hex(0x3d4bff));
-            Prim(PrimitiveType.Capsule, new Vector3(0, 1.35f, 0), new Vector3(0.62f, 1.35f, 0.62f), _bossMat, _boss);
-            Prim(PrimitiveType.Sphere, new Vector3(0, 2.95f, 0), Vector3.one * 0.66f, Hex(0xc9d0ff), _boss);
-            Prim(PrimitiveType.Cylinder, new Vector3(0, 1.1f, 0.25f), new Vector3(1.0f, 0.9f, 0.3f), Hex(0x2a1060), _boss);   // cape
-            _baton = new GameObject("Baton").transform;
-            _baton.SetParent(_boss, false);
-            _baton.localPosition = new Vector3(0.55f, 2.0f, -0.2f);
-            Prim(PrimitiveType.Cube, new Vector3(0.35f, 0.35f, 0), new Vector3(0.06f, 0.9f, 0.06f), Color.white, _baton).transform.localRotation = Quaternion.Euler(0, 0, -45);
-
-            // You.
-            _player = new GameObject("Player").transform;
-            _player.SetParent(transform, false);
-            _player.localPosition = PlayerPos;
-            Prim(PrimitiveType.Capsule, new Vector3(0, 0.75f, 0), new Vector3(0.7f, 0.75f, 0.7f), Hex(0xff5d3a), _player);
-            Prim(PrimitiveType.Sphere, new Vector3(0, 1.75f, 0), Vector3.one * 0.62f, Hex(0xffc2a8), _player);
-
-            // The strike zone and its three pips (left, centre, right).
-            _ringMat = Mat(new Color(0.35f, 0.3f, 0.4f));
-            _ring = Prim(PrimitiveType.Cylinder, Strike, new Vector3(1.7f, 0.02f, 1.7f), _ringMat).transform;
-            _ring.localRotation = Quaternion.Euler(90, 0, 0);
-            for (int l = -1; l <= 1; l++)
-                _pips[l + 1] = Prim(PrimitiveType.Sphere, Strike + new Vector3(l * 1.34f, 0, -0.05f), Vector3.one * 0.28f,
-                    l < 0 ? LaneL : l > 0 ? LaneR : Gold).transform;
-
-            PlaceCamera(0, false, 1, true);
+        /// The tempo pool, the three excerpts and their clips (decoded now, never mid-round).
+        void LoadHymns()
+        {
+            _data = HymnData.Load();   // throws "hymn data missing: ..." for the host's fault path
+            if (_data.Problems.Count > 0) Debug.LogWarning("[ERROR] hymn data: " + string.Join("; ", _data.Problems));
+            if (_data.TempoPool.Count == 0)
+                throw new System.InvalidOperationException("hymn data missing: no tempo clips (" + string.Join("; ", _data.TempoProblems) + "); run Tools/hymns/prepare-data.sh");
+            if (_data.TempoProblems.Count > 0) Debug.LogWarning("[ERROR] hymn data: " + string.Join("; ", _data.TempoProblems));
+            List<double> skills = null;
+            if (Host.Lineup != null)
+            {
+                skills = Host.Lineup.Where(p => p.IsCpu).Select(p => p.CpuSkill).ToList();
+                var human = Host.Lineup.FirstOrDefault(p => !p.IsCpu);
+                var ids = new List<int> { human != null ? human.Id : 0 };
+                ids.AddRange(Host.Lineup.Where(p => p.IsCpu).Select(p => p.Id));
+                _ids = ids;
+            }
+            // A new set of hymns each time: the game's seed, moved by how often it has been played.
+            uint seed = unchecked((uint)(Rng.Next() * 4294967295.0) + (uint)Save.Get(Id).Plays * 0x9e3779b1u);
+            _round = new TempoRound(_data.TempoPool, seed, skills);
+            for (int k = 0; k < TempoRound.ExcerptCount; k++)
+            {
+                string name = TempoRound.ClipName(_round.Playlist[k], TempoRound.SlotLevels[k]);
+                _clips[k] = HymnData.Clip(name);
+                if (_clips[k] == null) throw new System.InvalidOperationException("hymn data missing: clip " + name);
+                _clips[k].LoadAudioData();
+            }
         }
 
         public override void Begin(double now)
         {
             _round.Start(now);
+            double lead = LeadBeats * _round.Slots[0].Curve.LengthOf(0);
+            _round.Start(now + lead);   // the first excerpt waits for its count-in
             _now = now;
             _playing = true;
-            _say.Banner(Title, 1.5f, Blurb);
+            BuildTicks();
+            Ui.ShowScoreboard();
+            Ui.Outs(0);
+            Ui.Hint("<color=#ffe58a>SPACE</color> / click / tap on <color=#ffe58a>EVERY BEAT</color> · the tempo will move");
+            Ui.Banner(Title, "tap every beat", Gold, 1.4f);
         }
 
         public override void Press(string action, double time)
         {
-            if (!_playing) return;
+            if (!_playing || action != "a") return;
+            time += Save.OffsetMs / 1000.0;
+            Host.PlaySfx("tick", time, gain: (float)TapGain);
             _round.Press(action, time);
+            _playerHop = 1;
         }
 
         public override void Tick(double now, float dt)
         {
             _now = now;
-            double beat = _round.BeatAt(now);
-            for (int b = (int)System.Math.Floor(_lastBeat) + 1; b <= System.Math.Floor(beat); b++)
-            {
-                string s = CountIn.TextFor(b, FeverChart.LeadBeats);
-                if (s != null) _say.Count(s);
-                if (b < 0 && b >= -FeverChart.LeadBeats) Host.CountTick(_round.Map.TimeAt(b), CountIn.Accent(b));
-            }
-            _lastBeat = beat;
-
             _round.Update(now);
-            var section = FeverChart.SectionAt(beat);
-            if (section != _section) OnSection(section);
-            FireCues(now, beat);
-            LaunchOrbs(beat);
+            DriveMusic(now);
+            DriveTicks(now);
+            Follow(now);
+            UpdateHud();
         }
 
         public override Outcome Result()
         {
-            var o = _round.Result();
-            if (o != null) _playing = false;
-            return o;
+            if (!_round.Done) return null;
+            if (_doneAt < 0) { _doneAt = _now; Host.PlaySfx(_round.Survived ? "impact" : "fanfare", _now); }
+            if (_now - _doneAt < ResultHold) return null;
+            _playing = false;
+            return _round.Result(_ids);
         }
 
         public override IEnumerable<KeyValuePair<string, double>> TestChart()
         {
-            foreach (var n in _round.Live) yield return new KeyValuePair<string, double>(n.Action, n.Time);
+            foreach (var p in _round.PerfectPresses()) yield return new KeyValuePair<string, double>(p.Action, p.Time);
         }
 
-        // ------------------------------------------------------------ cues
+        // ------------------------------------------------------------ the round's clock, sound
 
-        /// Boss audio a lookahead early (at its exact ramped time), and his arm on the beat.
-        void FireCues(double now, double beat)
+        /// The count-in ticks: LeadBeats before the first excerpt, GapBeats before each later one, at that excerpt's
+        /// own opening tempo (so the new tempo is heard before the first tap).
+        void BuildTicks()
         {
-            var cues = _round.Cues;
-            double horizon = _round.BeatAt(now + 0.14);
-            while (_cueA < cues.Count && cues[_cueA].Beat <= horizon)
+            _ticks.Clear();
+            _tickCursor = 0;
+            foreach (var s in _round.Slots)
             {
-                var c = cues[_cueA++];
-                double at = System.Math.Max(_round.Map.TimeAt(c.Beat), now + 0.004);
-                // web fireAudioCues: the key is read at dispatch (scaleInfo() now), not at the cue's own beat.
-                if (c.Type == "call") BossVoice(c, at, DegAt(beat));
-                else Host.PlayVoice(VoiceCatalog.FinaleRim, at, c.Accent ? 1 : VoiceMix.FinaleRimPlain);
-            }
-            while (_cueV < cues.Count && cues[_cueV].Beat <= beat)
-            {
-                var c = cues[_cueV++];
-                if (c.Type != "call") continue;
-                _bossLunge = c.Accent ? (c.Kind == "swing" ? 1 : 0.55f) : Mathf.Max(_bossLunge, 0.22f);
+                int n = s.Index == 0 ? LeadBeats : TempoRound.GapBeats;
+                double len = s.Curve.LengthOf(0);
+                for (int j = n; j >= 1; j--)
+                    _ticks.Add(new CountTick { Time = s.StartTime - j * len, Accent = n - j == 0 ? 0 : 1, Say = s.Index == 0, Text = s.Index == 0 ? j.ToString() : null });
             }
         }
 
-        void LaunchOrbs(double beat)
+        void DriveTicks(double now)
         {
-            var live = _round.Live;
-            while (_orbCursor < live.Count)
+            while (_tickCursor < _ticks.Count && _ticks[_tickCursor].Time <= now + 0.15)
             {
-                var n = (FeverNote)live[_orbCursor].Data;
-                if (n.Telegraph <= 0) { _orbCursor++; continue; }
-                if (n.Beat - n.Telegraph > beat) break;
-                var note = live[_orbCursor++];
-                if (note.Judged) continue;
-                var o = _orbs.Find(x => !x.On);
-                if (o == null)
-                {
-                    o = new Orb { M = Mat(Color.white) };
-                    o.T = Prim(PrimitiveType.Sphere, Launch, Vector3.one * 0.4f, o.M).transform;
-                    _orbs.Add(o);
-                }
-                o.On = true; o.Note = note; o.N = n; o.From = n.Beat - n.Telegraph; o.To = n.Beat;
-                o.M.SetColor("_BaseColor", n.Lane < 0 ? LaneL : n.Lane > 0 ? LaneR : n.Kind == "swing" ? Pink : Gold);
-                o.T.localScale = Vector3.one * (n.Kind == "swing" ? 0.62f : 0.4f);
-                o.T.gameObject.SetActive(true);
+                var t = _ticks[_tickCursor++];
+                Host.CountTick(t.Time, t.Accent);
+                if (t.Say && t.Time > now - 0.2) Ui.Countdown(t.Text);
             }
         }
 
-        /// A throw, not a lerp: quadratic bezier with the control point lifted.
-        static Vector3 OrbPos(float u, int lane)
+        /// Each excerpt's clip is handed to the deck PreRoll before its first beat: beat 0 sounds at the slot's start
+        /// (the file holds `lead` seconds of silence and the graph's own offset before it), and it stops after the last beat.
+        void DriveMusic(double now)
         {
-            Vector3 a = Launch, b = Strike + new Vector3(lane * 1.34f, 0, 0);
-            var c = new Vector3((Launch.x + Strike.x) * 0.5f + lane * 0.9f, Mathf.Max(Launch.y, Strike.y) + 1.55f, (Launch.z + Strike.z) * 0.5f + 0.2f);
-            float it = 1 - u;
-            return it * it * a + 2 * it * u * c + u * u * b;
+            int k = _musicSlot + 1;
+            if (k < _round.Slots.Count && now >= _round.Slots[k].StartTime - PreRoll)
+            {
+                var s = _round.Slots[k];
+                Host.PlayClip(_clips[k], s.StartTime, _data.BeatOffset + _data.TempoLead(s.Clip));
+                _musicSlot = k;
+            }
+            if (_musicSlot >= 0 && _stoppedSlot < _musicSlot && now > _round.Slots[_musicSlot].EndTime + 0.05)
+            {
+                _stoppedSlot = _musicSlot;
+                Host.MusicStop(0.4f);
+            }
         }
 
-        void KillOrbs() { foreach (var o in _orbs) { o.On = false; o.T.gameObject.SetActive(false); } }
+        /// Which excerpt is on screen, where its curve is, and whether the baton shows.
+        void Follow(double now)
+        {
+            if (_round.Slots.Count == 0) return;
+            int k = 0;
+            while (k < _round.Slots.Count - 1 && now >= _round.Slots[k].EndTime) k++;
+            ExcerptIndex = k;
+            var s = _round.Slots[k];
+            Beat = s.Curve.BeatAt(now - s.StartTime);
+            CurveBpm = s.Curve.BpmAt(Beat);
+            int landing = (int)System.Math.Floor(Beat) + 1;   // the stroke now in the air lands on this beat
+            PulseHidden = landing >= 0 && landing < s.Beats.Count && s.Beats[landing].Hidden && now >= s.StartTime - 1e-9;
+            if (PulseHidden && _hiddenSeen != k * 1000 + landing && (landing == 0 || !s.Beats[landing - 1].Hidden))
+            {
+                _hiddenSeen = k * 1000 + landing;
+                Ui.Popup("BY EAR", Sky, 0.5f, 0.2f, 0.9f, 1.4f);
+            }
+        }
 
         // ------------------------------------------------------------ round events
 
-        void OnSection(string section)
+        void OnExcerptStarted(TempoSlot slot)
         {
-            _section = section;
-            if (section == "play") _say.Banner("DUEL", 1.2f, "Answer every phrase.", Gold);
-            else if (section == "escalate") _say.Banner("FEVER", 1.4f, "Less warning. More notes.", Hex(0xff8a3c));
-            else if (section == "solo")
-            {
-                _say.Banner("SOLO", 1.8f, "No signals. Just the music.", Pink);
-                Host.PlaySfx("swoosh", _now);
-                KillOrbs();   // nothing on screen may tell you when
-            }
+            Ui.Banner($"{slot.Index + 1} / {TempoRound.ExcerptCount}", slot.Level.ToString().ToUpperInvariant(), Gold, 1.3f);
         }
 
-        void OnJudged(Note note, FeverNote n, Verdict v, double errMs)
+        void OnTapped(TempoBeat b)
         {
-            var orb = _orbs.Find(o => o.On && o.Note == note);
-            if (orb != null) { orb.On = false; orb.T.gameObject.SetActive(false); }
-            var pos = Strike + new Vector3(n.Lane * 1.34f, 0.5f, 0);
-            MusicJudged(v != Verdict.Miss);
-            if (n.Kind == "finale")
-            {
-                bool hit = v != Verdict.Miss;
-                _say.Banner(hit ? "FINALE!" : "SO CLOSE!", 2.2f, hit ? "You took the last note." : "The maestro takes the last note.", hit ? Gold : Red);
-                _say.Verdict(hit ? Verdict.Perfect : Verdict.Miss, pos, 1.4f);
-                _camPunch = 1.6f;
-                _ringPulse = 2;
-                Host.PlaySfx(hit ? "fanfare" : "impact", _now);   // web finaleHit: the cadence on the last note, a thud when the maestro takes it
-                return;
-            }
-            _say.Verdict(v, pos, n.Kind == "swing" ? 1.3f : 1);
-            Host.PlaySfx(SfxTheory.VerdictSfx(v), _now);
-            // A milestone hit climbs the scale (web: sfx('combo', min(9, combo / 10)) on perfect and great).
-            if (v >= Verdict.Great && Bonanza.Look.Feel.IsMilestone(_round.Combo)) Host.PlaySfx("combo", _now, System.Math.Min(9, _round.Combo / 10));
-            if (v != Verdict.Miss)
-            {
-                // The player's answer: bright, high, in the chord the track sits on; panned to their side.
-                int deg = DegAt(_round.BeatAt(_now)), i = _round.Combo;
-                Host.PlayVoice(VoiceCatalog.FinaleAnswer(deg, i, n.Kind == "solo"), _now + 0.004);
-                if (n.Kind == "swing") Host.PlayVoice(VoiceCatalog.FinalePluck(deg, i), _now + 0.004);
-                _ringPulse = Mathf.Max(_ringPulse, n.Kind == "swing" ? 1.4f : 0.9f);
-                _playerLean = 1;
-            }
-            else
-            {
-                _camPunch = Mathf.Max(_camPunch, 0.3f);
-                _ringPulse = Mathf.Max(_ringPulse, 0.25f);
-            }
+            LastCall = b.Call;
+            LastVerdict = b.Verdict;
+            LastErrMs = b.ErrMs;
+            TapSerial++;
+            MusicJudged(true);
+            string word = b.Call == TapCall.On ? "ON" : b.Call == TapCall.Early ? "EARLY" : "LATE";
+            var col = b.Call == TapCall.On ? Lime : b.Call == TapCall.Early ? Sky : Orange;
+            Ui.Popup(word, col, 0.5f, 0.62f, b.Call == TapCall.On ? 1.05f : 0.9f, 0.55f);
+            if (b.Call == TapCall.On) Look.Fx.Ring(RingPos, Gold);
+            _ringPulse = b.Call == TapCall.On ? 1 : 0.45f;
+        }
+
+        void OnMissed(TempoBeat b)
+        {
+            LastCall = null;
+            LastVerdict = Verdict.Miss;
+            TapSerial++;
+            MusicJudged(false);
+            Ui.Popup("MISS", Red, 0.5f, 0.62f, 0.9f, 0.55f);
+            Host.PlaySfx("miss", _now);
         }
 
         void OnHeartLost(int left)
         {
-            _heartPop = 1;
+            Ui.Outs(3 - left);
+            Host.PlaySfx(left == 0 ? "impact" : "miss", _now);
             if (_round.Survived && left == 0 && !_surviveShown)
             {
                 _surviveShown = true;
-                _say.Banner("SURVIVE!", 1.9f, "Nobody leaves the finale.", Red);
+                Ui.Banner("SURVIVE!", "keep the beat", Red, 1.6f);
             }
-            Host.PlaySfx("miss", _now);
-            if (left == 0) Host.PlaySfx("impact", _now);   // web loseHeart: the last heart goes with a thud
         }
-        bool _surviveShown;
 
         void OnHeartGained(int left)
         {
-            _heartPop = 1;
-            _say.Say("NICE!", Strike + new Vector3(0, 1.5f, 0), Lime, 0.8f);
+            Ui.Outs(3 - left);
+            Ui.Popup("HEART +1", Lime, 0.5f, 0.3f, 0.9f, 0.9f);
             Host.PlaySfx("coin", _now);
         }
 
-        // ------------------------------------------------------------ sound (baked web voices, VoiceCatalog)
-
-        /// The chord degree the track sits on at a game beat (web scaleInfo().chordDeg). The web reads it when it
-        /// plays a voice, so a cue dispatched just before a bar line still sounds on the bar that is ending.
-        static int DegAt(double beat) => Harmony.FinaleFever.ChordDegAt((int)System.Math.Floor((beat + FeverChart.LeadBeats) / 4));
-
-        /// The boss sounds like a boss: low brass or an orchestra hit over a taiko, two octaves under the player's
-        /// bells, panned hard to his side (web bossVoice). The chord is the track's, unshifted, as the web reads it.
-        void BossVoice(FeverCue c, double at, int deg)
+        void UpdateHud()
         {
-            if (c.Kind == "swing") Host.PlayVoice(VoiceCatalog.FinaleSwing(deg), at);
-            else if (c.Kind == "chord") Host.PlayVoice(VoiceCatalog.FinaleChord(deg, c.Tone), at);
-            else Host.PlayVoice(VoiceCatalog.FinaleCall(deg, c.Tone, c.Accent), at);
+            Ui.Score(Mathf.RoundToInt((float)(_round.Accuracy * 1000)));
+            Ui.Combo(_round.Combo);
+            Ui.Accuracy((float)_round.Accuracy);
+            if (ExcerptIndex > 0 || Beat >= 16) Ui.HideHint();
         }
 
-        // ------------------------------------------------------------ stage
+        // ------------------------------------------------------------ stage (greybox: a podium, a baton, a ring, you)
 
-        void PlaceCamera(float heat, bool solo, float k, bool snap)
+        Transform _baton, _batonPivot, _player, _ring;
+        Material _ringMat, _batonMat;
+        float _ringPulse, _playerHop;
+
+        void BuildStage()
         {
-            Vector3 target; float d, h, yaw, fov;
-            if (solo) { target = W(PlayerPos.x - 1.35f, 1.5f, 0.35f); d = 7.0f - _camPunch * 0.35f; h = 2.05f; yaw = -0.24f; fov = 49; }
-            else { target = W(heat * 0.5f, 1.55f + heat * 0.06f, -0.4f); d = 10.3f - heat * 1.35f - _camPunch * 0.25f; h = 2.65f - heat * 0.4f; yaw = 0.02f + heat * 0.09f; fov = 52 - heat * 1.5f; }
-            var pos = target + new Vector3(Mathf.Sin(yaw) * d, h, -Mathf.Cos(yaw) * d);
-            _camTarget = snap ? target : Vector3.Lerp(_camTarget, target, k);
-            _camPos = snap ? pos : Vector3.Lerp(_camPos, pos, k);
-            _camFov = snap ? fov : Mathf.Lerp(_camFov, fov, k);
-            _cam.position = _camPos;
-            _cam.LookAt(_camTarget);
-            Camera.main.fieldOfView = _camFov;
+            Look.Rig.Frame(W(0.4f, 1.6f, 0.8f), 9.2f, 2.4f, 0.0f, 45, 3f, immediate: true);
+            Prim(PrimitiveType.Plane, new Vector3(0, 0, 0), new Vector3(3, 1, 2), Hex(0x2c0820));
+            Prim(PrimitiveType.Cylinder, new Vector3(PodiumPos.x, 0.3f, PodiumPos.z), new Vector3(2.4f, 0.3f, 2.4f), Hex(0x5e0d28));
+            var maestro = new GameObject("Maestro").transform;
+            maestro.SetParent(transform, false);
+            maestro.localPosition = PodiumPos + new Vector3(0, 0.6f, 0);
+            Prim(PrimitiveType.Capsule, new Vector3(0, 1.0f, 0), new Vector3(0.7f, 1.0f, 0.7f), Hex(0x3d4bff), maestro);
+            Prim(PrimitiveType.Sphere, new Vector3(0, 2.3f, 0), Vector3.one * 0.62f, Hex(0xc9d0ff), maestro);
+            _batonPivot = new GameObject("BatonPivot").transform;
+            _batonPivot.SetParent(maestro, false);
+            _batonPivot.localPosition = new Vector3(0.55f, 1.55f, -0.35f);
+            _batonMat = Mat(Color.white, lift: 0.8f);
+            _baton = Prim(PrimitiveType.Cube, new Vector3(0, 0.55f, 0), new Vector3(0.07f, 1.1f, 0.07f), _batonMat, _batonPivot).transform;
+            _ringMat = Mat(new Color(0.4f, 0.3f, 0.35f), lift: 0.2f);
+            _ring = Prim(PrimitiveType.Cylinder, RingPos, new Vector3(1.9f, 0.02f, 1.9f), _ringMat).transform;
+            _player = new GameObject("Player").transform;
+            _player.SetParent(transform, false);
+            _player.localPosition = PlayerPos;
+            Prim(PrimitiveType.Capsule, new Vector3(0, 0.75f, 0), new Vector3(0.7f, 0.75f, 0.7f), Hex(0xff5d3a), _player);
+            Prim(PrimitiveType.Sphere, new Vector3(0, 1.75f, 0), Vector3.one * 0.62f, Hex(0xffc2a8), _player);
         }
 
         void Update()
         {
-            float dt = Time.deltaTime;
-            _say.Update(dt);
-            if (_round == null) return;
-            double beat = _playing ? _round.BeatAt(_now) : -FeverChart.LeadBeats;
-            bool solo = FeverChart.SectionAt(beat) == "solo";
-            float heat = Mathf.Clamp01((float)FeverChart.ProgressAt(beat) * 1.05f);
-            float hop = Phase(beat); hop = 4 * hop * (1 - hop);
-
-            // Orbs in flight.
-            foreach (var o in _orbs)
-            {
-                if (!o.On) continue;
-                float u = Mathf.Clamp01((float)((beat - o.From) / System.Math.Max(1e-3, o.To - o.From)));
-                o.T.localPosition = OrbPos(u, o.N.Lane);
-                if (beat > o.To + 0.6) { o.On = false; o.T.gameObject.SetActive(false); }
-            }
-
-            // The maestro leans in as the tempo climbs, rears back for the solo, and goes dark.
-            _bossLunge = Damp(_bossLunge, 0, 6, dt);
-            float leanZ = solo ? -0.55f : _bossLunge * 0.55f + heat * 0.35f;
-            _boss.localPosition = Vector3.Lerp(_boss.localPosition, BossPos + new Vector3(0, solo ? 0 : _bossLunge * 0.05f, -leanZ), 1 - Mathf.Exp(-4.5f * dt));
-            _boss.localRotation = Quaternion.Euler(0, 0, solo ? 0 : -_bossLunge * 10);
-            _baton.localRotation = Quaternion.Euler(0, 0, Mathf.Lerp(0, solo ? 55 : -60, solo ? 1 : _bossLunge));
-            var bossCol = Hex(0x3d4bff);
-            _bossMat.SetColor("_BaseColor", solo ? bossCol * 0.25f : _round.Hearts == 0 ? Color.Lerp(bossCol, Red, 0.5f) : bossCol);
-
-            // You brace on your bar, bob on the beat.
-            int bar = (int)System.Math.Floor(beat / 4);
-            bool answering = solo || (beat >= 0 && bar % 2 == 1);
-            _playerLean = Damp(_playerLean, 0, 4.5f, dt);
-            _player.localPosition = PlayerPos + new Vector3(-(answering ? 0.24f : 0) - _playerLean * 0.12f, 0, answering ? -hop * 0.05f : 0);
-
-            // Strike zone breathes on the beat; hits make it pulse.
-            _ringPulse = Mathf.Max(0, _ringPulse - dt * 6.5f);
-            float rs = 1 + hop * 0.055f + _ringPulse * 0.3f;
-            _ring.localScale = new Vector3(1.7f * rs, 0.02f, 1.7f * rs);
-            _ringMat.SetColor("_BaseColor", Color.Lerp(new Color(0.35f, 0.3f, 0.4f), solo ? Pink : Gold, Mathf.Clamp01(_ringPulse + (answering ? 0.25f : 0))));
-            _floorMat.SetColor("_BaseColor", _round.Hearts == 0 && !solo ? new Color(0.36f, 0.08f, 0.12f) : Color.Lerp(new Color(0.2f, 0.12f, 0.24f), new Color(0.32f, 0.12f, 0.2f), heat));
-
-            _camPunch = Damp(_camPunch, 0, 3.5f, dt);
-            _heartPop = Damp(_heartPop, 0, 6, dt);
-            PlaceCamera(heat, solo, 1 - Mathf.Exp(-(solo ? 2.2f : 2.6f) * dt), false);
+            float dt = LookRig.VisualDt(Time.deltaTime);
+            if (_round == null || _round.Slots.Count == 0 || _baton == null) return;
+            bool show = _playing && !PulseHidden;
+            float p = (float)(Beat - System.Math.Floor(Beat));            // 0 just after a beat .. 1 at the next
+            // the baton: struck low on the beat, thrown up, and falling back to land on the next one; gone when hidden
+            float lift = Mathf.Sin(Mathf.PI * Mathf.Pow(p, 0.7f));
+            _baton.gameObject.SetActive(show);
+            _batonPivot.localRotation = Quaternion.Euler(0, 0, Mathf.Lerp(-8, 62, lift));
+            // The beat the stage keeps (the camera nudge, the surfaces' lift) stops with the baton: a hidden stretch has no cue at all.
+            Look.BeatPulse = show ? Mathf.Pow(1 - p, 3) * 0.6f : 0;
+            if (show && Beat >= 0) Look.TickBeat(Beat);
+            _ringPulse = Damp(_ringPulse, 0, 7, dt);
+            float rs = 1 + _ringPulse * 0.3f + (show ? Mathf.Pow(1 - p, 3) * 0.08f : 0);
+            _ring.localScale = new Vector3(1.9f * rs, 0.02f, 1.9f * rs);
+            _ringMat.SetColor("_BaseColor", Color.Lerp(new Color(0.4f, 0.3f, 0.35f), Gold, Mathf.Clamp01(_ringPulse)));
+            _playerHop = Damp(_playerHop, 0, 9, dt);
+            _player.localPosition = PlayerPos + new Vector3(0, _playerHop * 0.18f, 0);
         }
 
-        // ------------------------------------------------------------ HUD
-
-        public override void DrawHud(float s)
-        {
-            if (_round == null) return;
-            Hud.Text(new Rect(16 * s, 12 * s, 600 * s, 200 * s),
-                $"SCORE  {System.Math.Round(_round.Accuracy * 1000)}\nCOMBO  {_round.Combo}\nACC  {_round.Accuracy * 100:0.0}%", Hud.Left, Color.white);
-
-            // Hearts, tempo, whose turn: top centre.
-            float hs = 26 * s, gap = 10 * s, x0 = Screen.width / 2f - (3 * hs + 2 * gap) / 2, y = 14 * s;
-            for (int i = 0; i < 3; i++)
-            {
-                bool on = i < _round.Hearts;
-                float grow = on && i == _round.Hearts - 1 ? _heartPop * 6 * s : 0;
-                Hud.Box(new Rect(x0 + i * (hs + gap) - grow / 2, y - grow / 2, hs + grow, hs + grow), on ? Red : new Color(0.24f, 0.1f, 0.2f));
-            }
-            double beat = _playing ? _round.BeatAt(_now) : -FeverChart.LeadBeats;
-            Hud.Text(new Rect(0, y + hs + 4 * s, Screen.width, 30 * s), $"{System.Math.Round(_round.Map.BpmAt(beat))} BPM", Hud.Mid, Gold, TextAnchor.UpperCenter);
-            string turn; Color tc;
-            bool solo = FeverChart.SectionAt(beat) == "solo";
-            if (_round.Hearts == 0 && !solo) { turn = "SURVIVE"; tc = Phase(beat * 2) < 0.5f ? Red : new Color(Red.r, Red.g, Red.b, 0.3f); }
-            else if (beat < 0) { turn = "GET READY"; tc = Hex(0xffb45a); }
-            else if (solo) { turn = "YOUR SOLO"; tc = Pink; }
-            else if (((int)System.Math.Floor(beat / 4)) % 2 == 0) { turn = "MAESTRO"; tc = Hex(0xffb45a); }
-            else { turn = "YOUR TURN"; tc = Lime; }
-            Hud.Text(new Rect(0, y + hs + 34 * s, Screen.width, 30 * s), turn, Hud.Mid, tc, TextAnchor.UpperCenter);
-            _say.Draw();
-        }
+        // The HUD is on the canvas (UseCanvasHud): no DrawHud.
     }
 }

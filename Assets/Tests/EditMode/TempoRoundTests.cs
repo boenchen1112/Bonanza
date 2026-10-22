@@ -51,6 +51,45 @@ namespace Bonanza.Core.Tests
         static IEnumerable<MeterPress> AllBeats(TempoRound r, Func<TempoBeat, bool> keep, double shiftMs = 0) =>
             r.AllBeats.Where(keep).Select(b => new MeterPress { Action = "a", Time = b.Time + shiftMs / 1000.0 });
 
+        // ---- the notes on the curve (what the Mac render plays) ---------------------
+
+        [Test]
+        public void TheExcerptKeepsItsBeatTicksAndNotes()
+        {
+            TempoExcerpt x;
+            string err;
+            Assert.IsTrue(TempoExcerpt.TryCut(Hymn("a"), out x, out err), err);
+            Assert.AreEqual(x.Beats.Count + 1, x.BeatTicks.Count);
+            for (int i = 1; i < x.BeatTicks.Count; i++) Assert.AreEqual(480, x.BeatTicks[i] - x.BeatTicks[i - 1], "4/4 in four: a quarter per beat (incl. the closing edge)");
+            Assert.AreEqual(64, x.Notes.Count, "one synthetic note per quarter inside the excerpt");
+            Assert.IsTrue(x.Notes.All(n => n.StartTick >= x.BeatTicks[0] && n.StartTick < x.BeatTicks[x.BeatTicks.Count - 1]));
+            Assert.AreEqual(0, x.BeatOfTick(x.BeatTicks[0]), 1e-12);
+            Assert.AreEqual(5.5, x.BeatOfTick(x.BeatTicks[5] + 240), 1e-12, "half way through a beat");
+            Assert.AreEqual(64, x.BeatOfTick(x.BeatTicks[64]), 1e-12);
+        }
+
+        [Test]
+        public void NotesLandOnTheCurveFromItsSegmentsNotFromItsBeatLines()
+        {
+            TempoExcerpt x;
+            string err;
+            Assert.IsTrue(TempoExcerpt.TryCut(Hymn("a"), out x, out err), err);
+            foreach (HymnLevel level in Enum.GetValues(typeof(HymnLevel)))
+            {
+                var curve = x.CurveFor(level);
+                var score = x.Score(curve);
+                Assert.AreEqual(x.Notes.Count, score.Count);
+                foreach (var n in score)
+                {
+                    Assert.AreEqual(curve.TimeAt(n.StartBeat), n.Start, 1e-12);
+                    Assert.AreEqual(curve.TimeAt(n.EndBeat), n.End, 1e-12);
+                    Assert.AreEqual(n.StartBeat, Math.Round(n.StartBeat), 1e-9, "the synthetic notes sit on beats");
+                    Assert.AreEqual(curve.Times[(int)Math.Round(n.StartBeat)], n.Start, 1e-9, "on a beat the segment time is the beat line");
+                    Assert.Greater(n.End, n.Start);
+                }
+            }
+        }
+
         // ---- the cut ------------------------------------------------------------
 
         [Test]

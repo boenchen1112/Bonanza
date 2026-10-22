@@ -10,9 +10,9 @@
 // beat should sound) and converted to dspTime once, with the same DspAt() the
 // SFX use, minus the render's beat-0 offset. A game also supplies its own
 // beat <-> time map, so the playing position is checked against the game's
-// beat each frame and a drift that holds is corrected (a seek). Finale
-// Fever's tempo ramp is rendered into its file (MusicTrackInfo.Ramped), so it
-// plays at pitch 1 and its position is the game's time since the track's
+// beat each frame and a drift that holds is corrected (a seek). A hymn clip
+// with its tempo built in (PlayClip: Swing Kings, Finale Fever; MusicTrackInfo.Ramped)
+// plays at pitch 1 and its position is the game's time since the clip's
 // first beat, like every other track.
 //
 // A pause is AudioListener.pause: Unity's WebGL layer pauses every channel at
@@ -191,7 +191,7 @@ namespace Bonanza
             StartDeck(info, e.mixes, beatZeroGame, fileBeat, adaptive, !adaptive);
         }
 
-        /// A clip that is not in the library, played like a ramped one-shot (Finale Fever's way): file position =
+        /// A clip that is not in the library, played like a ramped one-shot: file position =
         /// game time since `fileZeroGame` (the game time at which the file's tick/beat 0 sounds) + `beatOffset`, at
         /// pitch 1, held to the game's clock like any track (the same resync, pause and resume handling). Hymn Meter
         /// plays one excerpt this way: when `fileZeroGame` is already past, the clip starts in the middle, exactly where

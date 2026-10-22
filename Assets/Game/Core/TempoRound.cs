@@ -60,6 +60,10 @@ namespace Bonanza.Core
         /// Beat index where each line starts, and where it ends (inclusive).
         public List<int> LineStarts = new List<int>();
         public List<int> LineEnds = new List<int>();
+        /// MIDI tick of every beat of the excerpt plus one more: the end of the last bar (Beats.Count + 1 entries).
+        public List<int> BeatTicks = new List<int>();
+        /// The notes that START inside the excerpt (ticks), for the Mac render that plays them on the curve.
+        public List<HymnNote> Notes = new List<HymnNote>();
 
         /// With the table's lines: from the first line's start to `end`, split at the lines. Without them:
         /// the last 16 full bars of verse 1 in lines of 4 bars (fewer if the hymn is short, never the
@@ -88,6 +92,10 @@ namespace Bonanza.Core
             for (int i = first; i <= last; i++) x.Beats.Add(grid.Beats[i].ToMeterBeat());
             double interval = first + 1 < grid.Beats.Count ? grid.Beats[first + 1].Time - grid.Beats[first].Time : 0.5;
             x.BaseBpm = 60.0 / (interval > 0 ? interval : 0.5);
+            for (int i = first; i <= last; i++) x.BeatTicks.Add(grid.Beats[i].Tick);
+            x.BeatTicks.Add(eb.EndTick);
+            foreach (var n in c.Midi.Notes)
+                if (n.StartTick >= x.BeatTicks[0] && n.StartTick < eb.EndTick) x.Notes.Add(n);
 
             var lineBars = new List<int>();
             if (row != null && row.Lines != null) lineBars.AddRange(row.Lines);
@@ -105,6 +113,34 @@ namespace Bonanza.Core
             return true;
         }
 
+        /// The excerpt beat (fractional, 0 = its first beat) a MIDI tick falls on: linear in ticks between two conducted beats.
+        public double BeatOfTick(int tick)
+        {
+            int n = BeatTicks.Count - 1;
+            if (n < 1) return 0;
+            int i = 0;
+            while (i < n - 1 && BeatTicks[i + 1] <= tick) i++;
+            int span = BeatTicks[i + 1] - BeatTicks[i];
+            return i + (span > 0 ? (double)(tick - BeatTicks[i]) / span : 0);
+        }
+
+        /// The excerpt's notes laid on `curve`: every note at the curve's own time of its beat position (TimeAt on the
+        /// segments, never an interpolation of the beat lines). This is what the Mac render plays.
+        public List<TempoScoreNote> Score(TempoCurve curve)
+        {
+            var list = new List<TempoScoreNote>();
+            foreach (var n in Notes)
+            {
+                double b0 = BeatOfTick(n.StartTick), b1 = BeatOfTick(n.EndTick);
+                list.Add(new TempoScoreNote
+                {
+                    Track = n.Track, Pitch = n.Pitch, Velocity = n.Velocity,
+                    StartBeat = b0, EndBeat = b1, Start = curve.TimeAt(b0), End = curve.TimeAt(b1),
+                });
+            }
+            return list;
+        }
+
         public int LineOf(int beat)
         {
             int line = 0;
@@ -120,6 +156,13 @@ namespace Bonanza.Core
             c.EndBar = EndBar;
             return c;
         }
+    }
+
+    /// One note of an excerpt on a tempo curve (seconds from the excerpt's first beat).
+    public sealed class TempoScoreNote
+    {
+        public int Track, Pitch, Velocity;
+        public double StartBeat, EndBeat, Start, End;
     }
 
     /// The three hymns of a round.

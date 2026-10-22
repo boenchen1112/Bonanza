@@ -20,6 +20,16 @@
 //   4. Writes the OGG files and <out>/audio.json (sample rate, the graph's start offset, the clips).
 //      Prints what changed, per hymn: the old and new verse length, beats and first tempo.
 //
+// Finale Fever's tempo clips: besides the hymns' own clips it renders each hymn x level (`<hymn>.<level>.tempo`)
+// for the tempo game. Tools/hymns/tempocurves (Core: TempoExcerpt + TempoCurve) writes, per clip, the curve dump
+// (`.curve.txt`) and the excerpt's notes laid on it (`.score.txt`, into <work>/curves). The notes are placed here
+// from the curve's SEGMENT lines (never by interpolating between its beat lines: up to ~3 ms off inside a ramp), and
+// every note time and every beat line is checked against Core's own numbers (1 microsecond) before anything is
+// rendered, so the audio and TempoCurve cannot disagree. Beat 0 sounds `lead` (0.1 s) plus the graph's
+// start offset (`beatOffset`) into the clip. audio.json lists the clip's `beats` and `curveSeconds` so the game can refuse a stale
+// clip. `--probe <dir>` also writes <dir>/<clip>.clicks.wav + .clicks.json: a click on every curve beat through the
+// same placement path, for Tools/hymns/check-tempo-audio.mjs.
+//
 // The first beat (tick 0) sounds `beatOffset` seconds into every file (the graph's own latency, measured
 // like the other renderers); the game starts a clip that much early.
 import http from 'node:http';
@@ -42,10 +52,12 @@ const webRoot = path.resolve(arg('web', path.join(root, '../Bonanza-web/web')));
 const only = arg('only', null)?.split(',');
 const force = process.argv.includes('--force');
 const oggQ = String(arg('q', '3'));
-const RENDER_VERSION = 2;   // bump when the voices or the mix below change: it re-renders everything
+const probeDir = arg('probe', null) ? path.resolve(arg('probe', null)) : null;
+const RENDER_VERSION = 3;   // (tempo clips: lead of 0.1 s, bumped with it)    // bump when the voices or the mix below change: it re-renders everything
 const SR = 44100;
 const TAIL = 2.5;           // seconds of reverb/release kept after verse 1
 const AT = 0.1;             // the latency probe's time
+const TEMPO_LEAD = 0.1;     // seconds of silence before beat 0 in a tempo clip: the graph is not settled at time 0 (the first note would sound ~2 ms late)
 const ffmpeg = fs.existsSync(path.join(os.homedir(), '.local/bin/ffmpeg')) ? path.join(os.homedir(), '.local/bin/ffmpeg') : 'ffmpeg';
 const dotnetBin = fs.existsSync(path.join(os.homedir(), '.dotnet/dotnet')) ? path.join(os.homedir(), '.dotnet/dotnet') : 'dotnet';
 
@@ -60,6 +72,59 @@ if (!rows.length) fail('no hymn to render (excerpts.txt has no `use yes` row' + 
   const r = spawnSync(dotnetBin, ['run', '-c', 'Release', '--project', path.join(here, 'beatmap'), '--', hymnsDir, path.join(workDir, 'beatmaps'), rows.map((x) => x.hymn).join(',')],
     { encoding: 'utf8', env: { ...process.env, DOTNET_ROOT: process.env.DOTNET_ROOT || path.join(os.homedir(), '.dotnet'), DOTNET_NOLOGO: '1', DOTNET_CLI_TELEMETRY_OPTOUT: '1' } });
   if (r.status !== 0) fail('the beat map tool failed:\n' + r.stdout + r.stderr);
+}
+
+// ---- 1b. tempo curves + scores from Core (Finale Fever) ---------------------------
+fs.mkdirSync(path.join(workDir, 'curves'), { recursive: true });
+{
+  const r = spawnSync(dotnetBin, ['run', '-c', 'Release', '--project', path.join(here, 'tempocurves'), '--', hymnsDir, path.join(workDir, 'curves'), rows.map((x) => x.hymn).join(',')],
+    { encoding: 'utf8', env: { ...process.env, DOTNET_ROOT: process.env.DOTNET_ROOT || path.join(os.homedir(), '.dotnet'), DOTNET_NOLOGO: '1', DOTNET_CLI_TELEMETRY_OPTOUT: '1' } });
+  if (r.status !== 0) fail('the tempo curve tool failed:\n' + r.stdout + r.stderr);
+}
+const LEVELS = ['easy', 'medium', 'hard'];
+
+// The curve's seconds at a beat, from its seg lines (TempoCurve.cs: THE DUMP). The same recipe as Core's TimeAt.
+function parseCurve(text) {
+  const segs = []; const beatLines = []; let beats = -1, baseBpm = 0;
+  for (const raw of text.split('\n')) {
+    const f = raw.replace(/#.*/, '').trim().split(/\s+/);
+    if (f[0] === 'seg') {
+      const kind = f[1], len = +f[2];
+      if (kind === 'ramp') segs.push({ kind, len, b0: +f[3], b1: +f[4] });
+      else if (kind === 'fermata') segs.push({ kind, len, b0: +f[3], b1: +f[3], stretch: +f[4] });
+      else segs.push({ kind, len, b0: +f[3], b1: +f[3] });
+    } else if (f[0] === 'beat' && f[3] !== undefined) beatLines.push([+f[1], +f[2]]);
+    else if (f[0] === 'beats') beats = +f[1];
+    else if (f[0] === 'base-bpm') baseBpm = +f[1];
+  }
+  const within = (sg, u) => {
+    if (sg.kind === 'ramp') {
+      const k = (sg.b1 - sg.b0) / sg.len;
+      return Math.abs(k) < 1e-12 ? u * 60 / sg.b0 : 60 / k * Math.log((sg.b0 + k * u) / sg.b0);
+    }
+    return u * 60 * (sg.kind === 'fermata' ? sg.stretch : 1) / sg.b0;
+  };
+  let b = 0, t = 0;
+  for (const sg of segs) { sg.bStart = b; sg.tStart = t; b += sg.len; t += within(sg, sg.len); }
+  const endBeat = b, endSec = t;
+  const last = segs[segs.length - 1];
+  const edgeBpm = last.kind === 'ramp' ? last.b1 : last.kind === 'fermata' ? last.b0 / last.stretch : last.b0;
+  const first = segs[0];
+  const secondsAt = (beat) => {
+    if (beat <= 0) return beat * 60 / first.b0;
+    if (beat >= endBeat) return endSec + (beat - endBeat) * 60 / edgeBpm;
+    let i = segs.length - 1; while (segs[i].bStart > beat) i--;
+    return segs[i].tStart + within(segs[i], beat - segs[i].bStart);
+  };
+  return { segs, beats, baseBpm, beatLines, secondsAt, duration: endSec };
+}
+function parseScore(text) {
+  const notes = [];
+  for (const raw of text.split('\n')) {
+    const f = raw.trim().split(/\s+/);
+    if (f[0] === 'note') notes.push({ track: +f[1], pitch: +f[2], vel: +f[3], b0: +f[4], b1: +f[5], t0: +f[6], t1: +f[7] });
+  }
+  return notes;
 }
 
 // ---- 2. jobs --------------------------------------------------------------------
@@ -92,13 +157,46 @@ for (const row of rows) {
   }
 }
 
+// the tempo clips
+const bassOf = (midi) => {
+  const noteTracks = [...new Set(midi.notes.map((n) => n.track))].sort((a, b) => a - b);
+  return noteTracks.find((t) => /bass/i.test(midi.names[t] || '')) ?? (noteTracks.length > 1 ? noteTracks[noteTracks.length - 1] : -1);
+};
+for (const row of rows) {
+  const midi = parseMidi(fs.readFileSync(path.join(hymnsDir, row.hymn + '.mid')));
+  const bassTrack = bassOf(midi);
+  for (const level of LEVELS) {
+    const clip = `${row.hymn}.${level}.tempo`;
+    const curveText = fs.readFileSync(path.join(workDir, 'curves', clip + '.curve.txt'), 'utf8');
+    const scoreText = fs.readFileSync(path.join(workDir, 'curves', clip + '.score.txt'), 'utf8');
+    const curve = parseCurve(curveText);
+    const score = parseScore(scoreText);
+    // the proof: the segment recipe here agrees with Core at every beat and at every note
+    let worst = 0;
+    for (const [i, t] of curve.beatLines) worst = Math.max(worst, Math.abs(curve.secondsAt(i) - t));
+    for (const n of score) worst = Math.max(worst, Math.abs(curve.secondsAt(n.b0) - n.t0), Math.abs(curve.secondsAt(n.b1) - n.t1));
+    if (curve.beatLines.length !== curve.beats + 1) fail(`${clip}: the curve dump has ${curve.beatLines.length} beat lines for ${curve.beats} beats`);
+    if (worst > 1e-6) fail(`${clip}: the audio timing (segments) and Core's tempo curve disagree by ${worst} s`);
+    const hash = crypto.createHash('sha1').update(curveText).update(scoreText).update(String(TEMPO_LEAD)).update(String(RENDER_VERSION)).update(oggQ).digest('hex').slice(0, 16);
+    jobs.push({
+      clip, hymn: row.hymn, variant: 'tempo-' + level, hash, beats: curve.beats, verse: curve.duration,
+      firstBpm: curve.baseBpm, tempoCount: curve.segs.length, tempo: true, curveBeats: curve.beats, curveSeconds: curve.duration,
+      lead: TEMPO_LEAD,
+      beatTimes: Array.from({ length: curve.beats + 1 }, (_, i) => curve.secondsAt(i) + TEMPO_LEAD),
+      expectedBeatTimes: curve.beatLines.map((x) => x[1]),
+      notes: score.map((n) => ({ t: curve.secondsAt(n.b0) + TEMPO_LEAD, d: Math.max(0.08, (curve.secondsAt(n.b1) - curve.secondsAt(n.b0)) * 0.97), p: n.pitch, v: n.vel, bass: n.track === bassTrack })),
+      length: curve.duration + TEMPO_LEAD + TAIL,
+    });
+  }
+}
+
 const stale = jobs.filter((j) => force || state.clips[j.clip]?.hash !== j.hash || !fs.existsSync(path.join(outDir, j.clip + '.ogg')));
 
 // ---- 3. render in the web audio graph ------------------------------------------------
 const MIME = { '.js': 'text/javascript', '.mjs': 'text/javascript', '.html': 'text/html', '.json': 'application/json' };
 let delaySamples = state.delaySamples ?? null;
 const rendered = new Map();
-if (stale.length || delaySamples == null) {
+if (stale.length || delaySamples == null || probeDir) {
   if (!fs.existsSync(path.join(webRoot, 'src/audio/index.js'))) fail('the web audio sources are not at ' + webRoot + ' (pass --web)');
   const server = http.createServer((req, res) => {
     const p = path.join(webRoot, decodeURIComponent(req.url.split('?')[0]));
@@ -161,6 +259,52 @@ if (stale.length || delaySamples == null) {
     }, { base, SR, job: { ...job, notes: job.notes.map((n) => ({ ...n, p: n.p })) }, delay: delaySamples });
     rendered.set(job.clip, data);
   }
+  if (probeDir) {
+    // a click on every curve beat through the same placement path (job.beatTimes), for check-tempo-audio.mjs
+    fs.mkdirSync(probeDir, { recursive: true });
+    // where a melody organ note placed at 0 s and at 0.1 s starts to sound (1 % of its peak), in samples: the graph is
+    // not quite settled at time 0, which the first click and the first note of every clip run into
+    const organ = await page.evaluate(async ({ base, SR }) => {
+      const { createAudio, makeVirtualClock } = await import(base + '/src/audio/index.js');
+      const res = [];
+      for (const at of [0, 0.1]) {
+        const octx = new OfflineAudioContext(2, Math.ceil(SR * 1.2), SR);
+        const clock = makeVirtualClock(120);
+        const audio = createAudio({ ctx: octx, clock, bus: null, offline: true });
+        audio.voices.musicBus.gain.value = 0.75 / 0.85;
+        clock.setNow(0);
+        audio.voices.organ(at, { midis: [62], dur: 0.6, gain: 0.26, rev: 0.34, drawbars: [1, 0.6, 0.38, 0.22, 0.1] });
+        const buf = await octx.startRendering();
+        const L = buf.getChannelData(0);
+        let pk = 0; for (let i = 0; i < L.length; i++) pk = Math.max(pk, Math.abs(L[i]));
+        let o = 0; while (o < L.length && Math.abs(L[o]) < pk * 0.01) o++;
+        res.push(o);
+      }
+      return res;
+    }, { base, SR });
+    fs.writeFileSync(path.join(probeDir, 'organ.json'), JSON.stringify({ sampleRate: SR, onsetAt0: organ[0], onsetAt100ms: organ[1], delaySamples }) + '\n');
+    for (const job of jobs.filter((j) => j.tempo)) {
+      const data = await page.evaluate(async ({ base, SR, times, length, delay }) => {
+        const { createAudio, makeVirtualClock } = await import(base + '/src/audio/index.js');
+        const octx = new OfflineAudioContext(2, Math.ceil(SR * (length + delay / SR)), SR);
+        const clock = makeVirtualClock(120);
+        const audio = createAudio({ ctx: octx, clock, bus: null, offline: true });
+        audio.sfxBus.gain.value = 1;
+        clock.setNow(0);
+        for (const t of times) audio.sfx('tick', t, 0.12);
+        const buf = await octx.startRendering();
+        const L = buf.getChannelData(0), R = buf.getChannelData(1);
+        const i16 = new Int16Array(L.length);
+        for (let i = 0; i < L.length; i++) i16[i] = Math.max(-32768, Math.min(32767, Math.round((L[i] + R[i]) * 0.5 * 32767)));
+        const u8 = new Uint8Array(i16.buffer);
+        let s = ''; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
+        return btoa(s);
+      }, { base, SR, times: job.beatTimes, length: job.length, delay: delaySamples });
+      const b = Buffer.from(data, 'base64');
+      fs.writeFileSync(path.join(probeDir, job.clip + '.clicks.pcm'), b);
+      fs.writeFileSync(path.join(probeDir, job.clip + '.clicks.json'), JSON.stringify({ clip: job.clip, sampleRate: SR, delaySamples, lead: TEMPO_LEAD, curveBeatTimes: job.expectedBeatTimes, placedBeatTimes: job.beatTimes }) + '\n');
+    }
+  }
   await browser.close();
   server.close();
 }
@@ -193,6 +337,7 @@ for (const job of jobs) {
     fs.writeFileSync(w, wav(x));
     const p = spawnSync(ffmpeg, ['-y', '-v', 'error', '-i', w, '-ac', '1', '-c:a', 'libvorbis', '-q:a', oggQ, out]);
     if (p.status !== 0) fail('ffmpeg failed for ' + job.clip + ': ' + String(p.stderr));
+    if (job.tempo) { summary.curveBeats = job.curveBeats; summary.curveSeconds = +job.curveSeconds.toFixed(6); summary.lead = TEMPO_LEAD; }
     summary.seconds = +(n / SR).toFixed(3);
     summary.bytes = fs.statSync(out).size;
     summary.peak = +data.peak.toFixed(3);
@@ -200,6 +345,7 @@ for (const job of jobs) {
     changes.push(`${why.padEnd(8)}${job.clip}: ${prev ? `verse ${prev.verseSeconds}s -> ${summary.verseSeconds}s, beats ${prev.beats} -> ${summary.beats}, first tempo ${prev.firstBpm} -> ${summary.firstBpm} bpm` : `verse ${summary.verseSeconds}s, ${summary.beats} beats, first tempo ${summary.firstBpm} bpm`}, ${(summary.bytes / 1024).toFixed(0)} KB`);
   } else {
     summary.seconds = prev.seconds; summary.bytes = prev.bytes; summary.peak = prev.peak;
+    if (job.tempo) { summary.curveBeats = job.curveBeats; summary.curveSeconds = +job.curveSeconds.toFixed(6); summary.lead = TEMPO_LEAD; }
   }
   state.clips[job.clip] = summary;
 }
@@ -217,7 +363,7 @@ state.delaySamples = delaySamples;
 fs.writeFileSync(statePath, JSON.stringify(state, null, 1) + '\n');
 const manifest = {
   generator: 'Tools/hymns/render-hymns.mjs', sampleRate: SR, beatOffset: +(delaySamples / SR).toFixed(5),
-  clips: Object.entries(state.clips).filter(([c]) => live.has(c) || only).map(([name, s]) => ({ name, seconds: s.seconds, bytes: s.bytes })).sort((a, b) => (a.name < b.name ? -1 : 1)),
+  clips: Object.entries(state.clips).filter(([c]) => live.has(c) || only).map(([name, s]) => ({ name, seconds: s.seconds, bytes: s.bytes, ...(s.curveBeats ? { beats: s.curveBeats, curveSeconds: s.curveSeconds, lead: s.lead } : {}) })).sort((a, b) => (a.name < b.name ? -1 : 1)),
 };
 fs.writeFileSync(path.join(outDir, 'audio.json'), JSON.stringify(manifest, null, 1) + '\n');
 

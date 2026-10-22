@@ -57,14 +57,6 @@ namespace Bonanza.Core
 
         /// The back action of every menu: b or pause.
         public static bool IsBack(string action) => action == B || action == Pause;
-
-        /// Finale Fever has two lanes: up folds into left, down and b into right (web finaleFever input()).
-        public static string FinaleLane(string action)
-        {
-            if (action == Up) return Left;
-            if (action == B || action == Down) return Right;
-            return action;
-        }
     }
 
     /// The left stick as a d-pad (web pollGamepads): a direction is on past +-0.5 on its axis.

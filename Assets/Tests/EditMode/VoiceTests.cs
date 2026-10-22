@@ -106,32 +106,6 @@ namespace Bonanza.Core.Tests
         }
 
         [Test]
-        public void FinaleHasTheBossAndPlayerVoicesOnEveryChord()
-        {
-            var baked = Baked;
-            var h = Harmony.FinaleFever;
-            var (notes, cues, _) = FeverChart.Build();
-            foreach (int deg in VoiceCatalog.Degrees(h))
-            {
-                foreach (var c in cues)
-                {
-                    if (c.Type != "call") continue;
-                    string n = c.Kind == "swing" ? VoiceCatalog.FinaleSwing(deg) : c.Kind == "chord" ? VoiceCatalog.FinaleChord(deg, c.Tone) : VoiceCatalog.FinaleCall(deg, c.Tone, c.Accent);
-                    Assert.IsTrue(baked.Contains(n), $"{c.Kind} tone {c.Tone} chord {deg}: {n}");
-                }
-                // The player's answer climbs the chord with the combo, whatever the combo is.
-                foreach (var k in notes.Where(k => k.Kind != "finale").Select(k => k.Kind).Distinct())
-                    for (int i = 0; i < 12; i++)
-                    {
-                        Assert.IsTrue(baked.Contains(VoiceCatalog.FinaleAnswer(deg, i, k == "solo")), $"answer {k} combo {i} chord {deg}");
-                        if (k == "swing") Assert.IsTrue(baked.Contains(VoiceCatalog.FinalePluck(deg, i)), $"pluck combo {i} chord {deg}");
-                    }
-            }
-            Assert.IsTrue(baked.Contains(VoiceCatalog.FinaleRim));
-            Assert.AreEqual(3, h.ChordOfDeg(0).Length, "the answer voices index a triad");
-        }
-
-        [Test]
         public void TheMixConstantsAreTheWebsGains()
         {
             // web drumlineDash playCall x1.25; crash 0.30 over 0.16; snare 0.58 over 0.42.
@@ -141,7 +115,6 @@ namespace Bonanza.Core.Tests
             // web chompChorus _sing: 0.30 perfect, 0.25 great (the baked clip), 0.18 good.
             Assert.AreEqual(1.2f, VoiceMix.ChompSingPerfect, 1e-6);
             Assert.AreEqual(0.72f, VoiceMix.ChompSingGood, 1e-6);
-            Assert.AreEqual(0.625f, VoiceMix.FinaleRimPlain, 1e-6);
         }
     }
 }

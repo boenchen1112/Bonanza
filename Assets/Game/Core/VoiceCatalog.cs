@@ -3,7 +3,8 @@
 // Tools/sfx/render-voices.mjs bakes the same set from the web's charts and audio graph (voices.json is its manifest);
 // VoiceTests pins this catalog to that manifest, which cross-checks Core's charts against the web's.
 //
-// Swing Kings plays no voices of its own on the web (only sfx() calls), so it has none here.
+// Swing Kings plays no voices of its own on the web (only sfx() calls), so it has none here; Finale Fever plays
+// rendered hymn clips (Tools/hymns), so it has none either.
 
 using System;
 using System.Collections.Generic;
@@ -27,13 +28,11 @@ namespace Bonanza.Core
         public const float DrumSnarePerfect = 0.58f / 0.42f;
         /// Chomp lead (the singer): baked at the great gain 0.25.
         public const float ChompSingPerfect = 0.30f / 0.25f, ChompSingGood = 0.18f / 0.25f;
-        /// Finale solo-tick rim: baked at the accent gain 0.24; the other ticks are 0.15.
-        public const float FinaleRimPlain = 0.15f / 0.24f;
     }
 
     public static class VoiceCatalog
     {
-        public static readonly string[] Games = { "drumline-dash", "chomp-chorus", "finale-fever", "title" };
+        public static readonly string[] Games = { "drumline-dash", "chomp-chorus", "title" };
 
         /// The title's kick on every beat (web title.js onBeat -> audio.voices.kick), baked at gain 0.5 (the reel's);
         /// the menu plays it at 0.34 / 0.5. "title" is a shell screen, not a game: it only has this clip.
@@ -55,15 +54,6 @@ namespace Bonanza.Core
         public static string ChompSour(int lane, int deg) => $"cc_sour_{lane}_{deg}";
         public static string ChompBed(int lane, int deg) => $"cc_bed_{lane}_{deg}";
         public static string ChompGulp(int lane, bool big) => $"cc_gulp{(big ? "big" : "")}_{lane}";
-
-        // ---- Finale Fever
-        public const int FinaleTones = 3;   // the track's chord is a triad
-        public static string FinaleSwing(int deg) => "ff_swing_" + deg;
-        public static string FinaleChord(int deg, int tone) => $"ff_chord_{deg}_{tone % FinaleTones}";
-        public static string FinaleCall(int deg, int tone, bool accent) => $"ff_call_{deg}_{tone % FinaleTones}_{(accent ? 'a' : 'n')}";
-        public const string FinaleRim = "ff_rim";
-        public static string FinaleAnswer(int deg, int i, bool solo) => $"ff_ans_{deg}_{i % FinaleTones}_{(solo ? 24 : 12)}";
-        public static string FinalePluck(int deg, int i) => $"ff_pluck_{deg}_{i % FinaleTones}";
 
         /// The chord degrees of a track's progression, ascending: every chord a clip can be asked for on.
         public static int[] Degrees(Harmony h) => h.Prog.Distinct().OrderBy(d => d).ToArray();
@@ -95,7 +85,6 @@ namespace Bonanza.Core
                     for (int i = 1; i <= DrumlineRound.HouseCpus.Length; i++) o.Add(DrumStumble(i));
                     break;
                 case "chomp-chorus": ChompClips(o); break;
-                case "finale-fever": FinaleClips(o); break;
                 case "title": o.Add(TitleKick); break;
             }
             _cache[game] = o = o.Distinct().ToList();
@@ -114,29 +103,6 @@ namespace Bonanza.Core
                     if (fin.Contains(deg)) o.Add(ChompFinaleSing(lane, deg));
                 }
             for (int lane = 0; lane < 4; lane++) { o.Add(ChompGulp(lane, false)); o.Add(ChompGulp(lane, true)); }
-        }
-
-        static void FinaleClips(List<string> o)
-        {
-            var (notes, cues, _) = FeverChart.Build();
-            var swing = cues.Any(c => c.Type == "call" && c.Kind == "swing");
-            var chordTones = cues.Where(c => c.Type == "call" && c.Kind == "chord").Select(c => c.Tone % FinaleTones).Distinct().OrderBy(t => t).ToList();
-            var noteTones = cues.Where(c => c.Type == "call" && c.Kind != "swing" && c.Kind != "chord")
-                .Select(c => (tone: c.Tone % FinaleTones, accent: c.Accent)).Distinct().OrderBy(t => t.tone).ThenBy(t => t.accent).ToList();
-            bool solo = notes.Any(n => n.Kind == "solo"), swingNote = notes.Any(n => n.Kind == "swing");
-            foreach (int deg in Degrees(Harmony.FinaleFever))
-            {
-                if (swing) o.Add(FinaleSwing(deg));
-                foreach (int t in chordTones) o.Add(FinaleChord(deg, t));
-                foreach (var (tone, accent) in noteTones) o.Add(FinaleCall(deg, tone, accent));
-                for (int i = 0; i < FinaleTones; i++)
-                {
-                    o.Add(FinaleAnswer(deg, i, false));
-                    if (solo) o.Add(FinaleAnswer(deg, i, true));
-                    if (swingNote) o.Add(FinalePluck(deg, i));
-                }
-            }
-            o.Add(FinaleRim);
         }
     }
 }

@@ -15,7 +15,7 @@ public sealed class HymnImport : AssetPostprocessor
         var s = imp.defaultSampleSettings;
         s.loadType = AudioClipLoadType.DecompressOnLoad;
         s.compressionFormat = AudioCompressionFormat.Vorbis;
-        s.quality = 0.4f;   // organ tones: small at this quality (the build re-encodes the rendered OGG)
+        s.quality = 0.2f;   // organ tones: small at this quality (the build re-encodes the rendered OGG; 0.4 made the 56 clips ~25 MB in the build, anything under ~0.2 is the same floor)
         s.sampleRateSetting = AudioSampleRateSetting.PreserveSampleRate;
         s.preloadAudioData = false;   // HymnMeterGame.Load decodes the six clips of its round
         imp.defaultSampleSettings = s;

@@ -9,7 +9,7 @@ alone or as a party against CPU players:
 | `chomp-chorus` | Chomp Chorus | Sing your lane in a four-voice row. |
 | `drumline-dash` | Drumline Dash | Answer the drum call and race the field. |
 | `bounce-brigade` | Bounce Brigade | Hear a hymn, find the downbeat, conduct it with the arrow keys. |
-| `finale-fever` | Finale Fever | Call-and-answer finale with a rising tempo. |
+| `finale-fever` | Finale Fever | Tap every beat of a hymn while its tempo speeds up, slows down and jumps. |
 
 All timing runs on the audio clock (`AudioSettings.dspTime`), never on frame
 time. The games play on taps alone, except Bounce Brigade, which conducts with the arrow keys.

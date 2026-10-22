@@ -80,7 +80,7 @@ const mark = async (label) => {
   return seg;
 };
 // Where, within a beat, the music's energy falls: a histogram of the envelope by phase of the beat.
-const BPM = { 'swing-kings': 124, 'drumline-dash': 132, 'bounce-brigade': 118, 'chomp-chorus': 140, 'finale-fever': 150 }[GAME] || 124;   // finale-fever: its start tempo (the ramp is slow over the first seconds)
+const BPM = { 'swing-kings': 124, 'drumline-dash': 132, 'bounce-brigade': 118, 'chomp-chorus': 140, 'finale-fever': 150 }[GAME] || 124;   // finale-fever: not exact (its tempo moves)
 const SPB = 60 / BPM, BINS = 96;
 function hist(seg) {
   const h = new Float64Array(BINS), n = new Float64Array(BINS);
@@ -136,9 +136,9 @@ if (a.error) { console.log('FAIL ' + a.error); fail = true; }
 else {
   const err = wrap(sh - a.dctx);
   console.log(`pause ${(a.dctx * 1000).toFixed(0)} ms of audio time; measured grid move ${(wrap(sh) * 1000).toFixed(0)} ms; expected ${(wrap(a.dctx) * 1000).toFixed(0)} ms`);
-  // finale-fever's tempo ramps, so a constant-tempo beat histogram cannot say anything exact about it: report only.
+  // finale-fever's tempo moves (hymn clips on tempo curves), so a constant-tempo beat histogram cannot say anything exact about it: report only.
   const exact = GAME !== 'finale-fever';
-  console.log(`${!exact ? 'INFO' : Math.abs(err) < 0.015 ? 'PASS' : 'FAIL'} resume error (envelope) ${(err * 1000).toFixed(1)} ms (< 15 ms${exact ? '' : '; not asserted: the tempo ramps'})`);
+  console.log(`${!exact ? 'INFO' : Math.abs(err) < 0.015 ? 'PASS' : 'FAIL'} resume error (envelope) ${(err * 1000).toFixed(1)} ms (< 15 ms${exact ? '' : '; not asserted: the tempo moves'})`);
   console.log(`${Math.abs(a.e) < 0.015 ? 'PASS' : 'FAIL'} resume error (JS sources) ${(a.e * 1000).toFixed(1)} ms (< 15 ms)`);
   console.log(`${a.spread < 0.005 ? 'PASS' : 'FAIL'} one copy of the music plays after the resume (sources differ by ${(a.spread * 1000).toFixed(1)} ms)`);
   if (a.spread >= 0.005) fail = true;

@@ -41,16 +41,6 @@ namespace Bonanza.Core.Tests
             Assert.IsFalse(InputMap.IsBack("left"));
         }
 
-        [Test]
-        public void FinaleLanesFoldLikeTheWeb()
-        {
-            Assert.AreEqual("left", InputMap.FinaleLane("up"));
-            Assert.AreEqual("right", InputMap.FinaleLane("down"));
-            Assert.AreEqual("right", InputMap.FinaleLane("b"));
-            Assert.AreEqual("a", InputMap.FinaleLane("a"));
-            Assert.AreEqual("left", InputMap.FinaleLane("left"));
-        }
-
         static List<string> Run(StickDpad s, params (float x, float y)[] samples)
         {
             var log = new List<string>();
