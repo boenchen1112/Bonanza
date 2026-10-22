@@ -178,6 +178,46 @@ namespace Bonanza.Look
                 .Set(PF.Bloom, 0.75f).Set(PF.BloomThreshold, 1.3f).Set(PF.Saturation, 1.1f));
 
             // Chomp Chorus: purple midnight kitchen, acid-lime highlights.
+            // Bounce Brigade (the hymn meter) climbs a stair of columns above a sea of cloud, one sky per level:
+            // Easy at dawn, Medium in full day, Hard at vespers. Clouds are the ground: Ground is their shadow tone
+            // (the shadow tint is derived from it), the fill from below is the light bounced off the cloud sea.
+            _all["bounce-brigade-easy"] = Make(_base, p => p
+                .Set(PC.SkyTop, 0x3a5cc6).Set(PC.SkyMid, 0x8ba2ee).Set(PC.SkyBot, 0xffc49a)
+                .Set(PC.Sun, 0xfff0cc).Set(PD.SunDir, 0.34f, 0.13f, -1).Set(PF.SunStrength, 0.9f).Set(PF.SunSize, 0.26f)
+                .Set(PC.Ground, 0x8a7fb8).Set(PC.GroundAlt, 0xb3a6d6).Set(PC.GroundRim, 0xffe3a8)
+                .Set(PC.Band, 0x6a78c8).Set(PC.BandAlt, 0x9aa6e6)
+                .Set(PC.Accent, 0xffc23d).Set(PC.Accent2, 0x2f9bff).Set(PC.Accent3, 0xff4f9a)
+                .SetCrowd(0xffffff, 0xfff1e0, 0xf0f0ff)
+                .Set(PC.Key, 0xfff0dc).Set(PD.KeyDir, -0.5f, 0.72f, 0.48f).Set(PF.KeyIntensity, 2.45f)
+                .Set(PC.FillSky, 0x7f84f2).Set(PC.FillGround, 0xffc6b4).Set(PF.FillIntensity, 1.3f)
+                .Set(PC.Rim, 0xffdcae).Set(PD.RimDir, 0.55f, 0.35f, -0.75f).Set(PF.RimStrength, 1.25f)
+                .Set(PC.Fog, 0xf4c8b4).Set(PF.FogNear, 30).Set(PF.FogFar, 170)
+                .Set(PF.Bloom, 0.55f).Set(PF.BloomThreshold, 1.45f).Set(PF.Exposure, 1.0f).Set(PF.Saturation, 1.12f).Set(PF.Vignette, 0.3f));
+            _all["bounce-brigade-medium"] = Make(_base, p => p
+                .Set(PC.SkyTop, 0x1a4fd4).Set(PC.SkyMid, 0x4a92f2).Set(PC.SkyBot, 0xbcdfff)
+                .Set(PC.Sun, 0xfffbec).Set(PD.SunDir, 0.28f, 0.3f, -1).Set(PF.SunStrength, 0.85f).Set(PF.SunSize, 0.22f)
+                .Set(PC.Ground, 0x6f8fc8).Set(PC.GroundAlt, 0x9fbbe8).Set(PC.GroundRim, 0xfff2b0)
+                .Set(PC.Band, 0x3f74c8).Set(PC.BandAlt, 0x76a6ea)
+                .Set(PC.Accent, 0xffc23d).Set(PC.Accent2, 0x2f9bff).Set(PC.Accent3, 0xff4f9a)
+                .SetCrowd(0xffffff, 0xf4f8ff, 0xfffaf0)
+                .Set(PC.Key, 0xfffaf0).Set(PD.KeyDir, -0.42f, 0.8f, 0.42f).Set(PF.KeyIntensity, 2.9f)
+                .Set(PC.FillSky, 0x6d8eff).Set(PC.FillGround, 0xe8f0ff).Set(PF.FillIntensity, 1.35f)
+                .Set(PC.Rim, 0xffffff).Set(PD.RimDir, 0.5f, 0.4f, -0.75f).Set(PF.RimStrength, 1.1f)
+                .Set(PC.Fog, 0xc0deff).Set(PF.FogNear, 30).Set(PF.FogFar, 170)
+                .Set(PF.Bloom, 0.5f).Set(PF.BloomThreshold, 1.5f).Set(PF.Exposure, 1.04f).Set(PF.Saturation, 1.14f).Set(PF.Vignette, 0.28f));
+            _all["bounce-brigade-hard"] = Make(_base, p => p
+                .Set(PC.SkyTop, 0x1a1552).Set(PC.SkyMid, 0x51399a).Set(PC.SkyBot, 0xff9472)
+                .Set(PC.Sun, 0xffc68a).Set(PD.SunDir, 0.3f, 0.08f, -1).Set(PF.SunStrength, 1.0f).Set(PF.SunSize, 0.3f)
+                .Set(PC.Ground, 0x5a3f86).Set(PC.GroundAlt, 0x7a5aa6).Set(PC.GroundRim, 0xffc68a)
+                .Set(PC.Band, 0x45307e).Set(PC.BandAlt, 0x7048a8)
+                .Set(PC.Accent, 0xffc23d).Set(PC.Accent2, 0x2f9bff).Set(PC.Accent3, 0xff4f9a)
+                .SetCrowd(0xfff0f0, 0xffe6d0, 0xf0e6ff)
+                .Set(PC.Key, 0xffd9b4).Set(PD.KeyDir, -0.55f, 0.62f, 0.5f).Set(PF.KeyIntensity, 2.3f)
+                .Set(PC.FillSky, 0x7a70e0).Set(PC.FillGround, 0xc48ab0).Set(PF.FillIntensity, 1.25f)
+                .Set(PC.Rim, 0xffa86e).Set(PD.RimDir, 0.6f, 0.3f, -0.75f).Set(PF.RimStrength, 1.25f)
+                .Set(PC.Fog, 0xc98ea2).Set(PF.FogNear, 28).Set(PF.FogFar, 160)
+                .Set(PF.Bloom, 0.6f).Set(PF.BloomThreshold, 1.4f).Set(PF.Exposure, 1.02f).Set(PF.Saturation, 1.1f).Set(PF.Vignette, 0.36f));
+
             _all["chomp-chorus"] = Make(_base, p => p
                 .Set(PC.SkyTop, 0x110226).Set(PC.SkyMid, 0x3f0e5e).Set(PC.SkyBot, 0xb03bb0)
                 .Set(PC.Sun, 0xff9ae0).Set(PD.SunDir, 0.1f, -0.08f, -1).Set(PF.SunStrength, 0.8f).Set(PF.SunSize, 0.3f)
