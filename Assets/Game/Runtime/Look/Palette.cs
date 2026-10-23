@@ -250,6 +250,84 @@ namespace Bonanza.Look
                 .Set(PC.Rim, 0xffb45a).Set(PF.RimStrength, 1.05f)
                 .Set(PC.Fog, 0x63102a).Set(PF.FogNear, 14).Set(PF.FogFar, 64)
                 .Set(PF.Bloom, 1.1f).Set(PF.BloomThreshold, 1.35f).Set(PF.Exposure, 1.1f));
+
+            // Finale Fever (the tempo game) plays from the orchestra platform of a concert hall, looking out through the
+            // proscenium at a dark house. One look per excerpt: Easy a golden matinee, Medium a sapphire evening gala,
+            // Hard the crimson grand finale. The house stays dark (fog and fill low: the darks carry the frame), the stage
+            // is lit by a strong key. Each has a "-hush" twin (the baton is hidden: lights down, a cool moon spot) and a
+            // "-red" twin (one heart left: the room turns red), and "-red-hush" for both at once.
+            var ffEasy = Make(_base, p => p
+                .Set(PC.SkyTop, 0x0c0604).Set(PC.SkyMid, 0x1c0d08).Set(PC.SkyBot, 0x3a1a0e)
+                .Set(PC.Sun, 0xffc070).Set(PD.SunDir, 0, 0.3f, -1).Set(PF.SunStrength, 0f).Set(PF.SunSize, 0.2f)
+                .Set(PC.Ground, 0x5a2e18).Set(PC.GroundAlt, 0x7a4424).Set(PC.GroundRim, 0xffc95a)
+                .Set(PC.Band, 0x7a1626).Set(PC.BandAlt, 0xa42634)
+                .Set(PC.Accent, 0xffcf6a).Set(PC.Accent2, 0xff8a3c).Set(PC.Accent3, 0x6fd0ff)
+                .SetCrowd(0xffcf6a, 0xff8a5c, 0xe86a8a, 0xfff0d0, 0x8ac8ff)
+                .Set(PC.Key, 0xfff0d6).Set(PD.KeyDir, -0.45f, 0.78f, 0.5f).Set(PF.KeyIntensity, 2.75f)
+                .Set(PC.FillSky, 0xd99a62).Set(PC.FillGround, 0x2a0e08).Set(PF.FillIntensity, 0.62f)
+                .Set(PC.Rim, 0xffc070).Set(PD.RimDir, 0.55f, 0.4f, -0.75f).Set(PF.RimStrength, 1.2f).Set(PF.RimPower, 2.4f)
+                .Set(PC.Fog, 0x1a0a06).Set(PF.FogNear, 15).Set(PF.FogFar, 50).Set(PF.FogHeight, 0.25f).Set(PF.FogHeightY, 5f)
+                .Set(PF.Bloom, 0.7f).Set(PF.BloomThreshold, 1.45f).Set(PF.Exposure, 1.06f).Set(PF.Saturation, 1.12f).Set(PF.Vignette, 0.55f));
+            var ffMedium = Make(_base, p => p
+                .Set(PC.SkyTop, 0x02040e).Set(PC.SkyMid, 0x060a20).Set(PC.SkyBot, 0x101a40)
+                .Set(PC.Sun, 0x9fb8ff).Set(PD.SunDir, 0, 0.3f, -1).Set(PF.SunStrength, 0f).Set(PF.SunSize, 0.2f)
+                .Set(PC.Ground, 0x3a2030).Set(PC.GroundAlt, 0x553048).Set(PC.GroundRim, 0xffd27a)
+                .Set(PC.Band, 0x1a2a6e).Set(PC.BandAlt, 0x2c48a8)
+                .Set(PC.Accent, 0xffd27a).Set(PC.Accent2, 0x6fd8ff).Set(PC.Accent3, 0xff6fae)
+                .SetCrowd(0x6fd8ff, 0xffd27a, 0xb08cff, 0xf0f4ff, 0xff8ab8)
+                .Set(PC.Key, 0xf4f2ff).Set(PD.KeyDir, -0.4f, 0.82f, 0.45f).Set(PF.KeyIntensity, 2.85f)
+                .Set(PC.FillSky, 0x6f82ff).Set(PC.FillGround, 0x080a20).Set(PF.FillIntensity, 0.7f)
+                .Set(PC.Rim, 0x8fd4ff).Set(PD.RimDir, 0.55f, 0.4f, -0.75f).Set(PF.RimStrength, 1.4f).Set(PF.RimPower, 2.4f)
+                .Set(PC.Fog, 0x060a1e).Set(PF.FogNear, 15).Set(PF.FogFar, 50).Set(PF.FogHeight, 0.25f).Set(PF.FogHeightY, 5f)
+                .Set(PF.Bloom, 0.75f).Set(PF.BloomThreshold, 1.4f).Set(PF.Exposure, 1.05f).Set(PF.Saturation, 1.15f).Set(PF.Vignette, 0.58f));
+            var ffHard = Make(_base, p => p
+                .Set(PC.SkyTop, 0x080102).Set(PC.SkyMid, 0x180306).Set(PC.SkyBot, 0x3a0810)
+                .Set(PC.Sun, 0xff6a3c).Set(PD.SunDir, 0, 0.3f, -1).Set(PF.SunStrength, 0f).Set(PF.SunSize, 0.2f)
+                .Set(PC.Ground, 0x34120e).Set(PC.GroundAlt, 0x4e1a12).Set(PC.GroundRim, 0xffb03a)
+                .Set(PC.Band, 0x5a0814).Set(PC.BandAlt, 0x8a0e20)
+                .Set(PC.Accent, 0xffb03a).Set(PC.Accent2, 0xff5a3c).Set(PC.Accent3, 0x6fd0ff)
+                .SetCrowd(0xffb03a, 0xff5a3c, 0xff3a6a, 0xfff0d0, 0xffd27a)
+                .Set(PC.Key, 0xffe2c2).Set(PD.KeyDir, -0.35f, 0.88f, 0.35f).Set(PF.KeyIntensity, 3.0f)
+                .Set(PC.FillSky, 0xff5a3c).Set(PC.FillGround, 0x160204).Set(PF.FillIntensity, 0.55f)
+                .Set(PC.Rim, 0xff7a3c).Set(PD.RimDir, 0.6f, 0.35f, -0.75f).Set(PF.RimStrength, 1.6f).Set(PF.RimPower, 2.2f)
+                .Set(PC.Fog, 0x140204).Set(PF.FogNear, 14).Set(PF.FogFar, 46).Set(PF.FogHeight, 0.3f).Set(PF.FogHeightY, 5f)
+                .Set(PF.Bloom, 0.85f).Set(PF.BloomThreshold, 1.35f).Set(PF.Exposure, 1.05f).Set(PF.Saturation, 1.18f).Set(PF.Vignette, 0.62f));
+            foreach (var kv in new[] { ("easy", ffEasy), ("medium", ffMedium), ("hard", ffHard) })
+            {
+                string n = "finale-fever-" + kv.Item1;
+                _all[n] = kv.Item2;
+                _all[n + "-hush"] = Make(kv.Item2, FfHush);
+                _all[n + "-red"] = Make(kv.Item2, FfRed);
+                _all[n + "-red-hush"] = Make(_all[n + "-red"], FfHush);
+            }
+        }
+
+        /// Finale Fever's hush: the baton is hidden and the hall holds its breath. The key drops to a cool moonlit spot,
+        /// the fill nearly out, the room deeper and greyer.
+        static void FfHush(Palette p)
+        {
+            p[PC.Key] = Color.Lerp(p[PC.Key], Palette.Hex(0xa8c0ff), 0.55f);
+            p[PF.KeyIntensity] *= 0.6f;
+            p[PF.FillIntensity] *= 0.45f;
+            p[PC.Rim] = Color.Lerp(p[PC.Rim], Palette.Hex(0x9fc4ff), 0.7f);
+            p[PC.Fog] = p[PC.Fog] * 0.55f;
+            p[PF.FogFar] *= 0.8f;
+            p[PF.Exposure] *= 0.9f;
+            p[PF.Saturation] *= 0.78f;
+            p[PF.Vignette] = Mathf.Min(1, p[PF.Vignette] + 0.25f);
+        }
+
+        /// Finale Fever's last heart: the room turns red (the web's SURVIVE grade).
+        static void FfRed(Palette p)
+        {
+            p[PC.Key] = Color.Lerp(p[PC.Key], Palette.Hex(0xff5a50), 0.45f);
+            p[PC.FillSky] = Palette.Hex(0xff2a3c);
+            p[PC.FillGround] = Palette.Hex(0x200204);
+            p[PC.Rim] = Palette.Hex(0xff3a4a);
+            p[PC.Fog] = Color.Lerp(p[PC.Fog], Palette.Hex(0x3a0408), 0.75f);
+            p[PC.Band] = Color.Lerp(p[PC.Band], Palette.Hex(0x5a0610), 0.6f);
+            p[PF.Saturation] = Mathf.Max(p[PF.Saturation], 1.15f);
+            p[PF.Vignette] = Mathf.Min(1, p[PF.Vignette] + 0.12f);
         }
 
         // ------------------------------------------------------------ colour maths

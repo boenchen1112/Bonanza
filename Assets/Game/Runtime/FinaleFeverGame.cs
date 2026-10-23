@@ -1,7 +1,8 @@
-// Finale Fever, the tempo game, in grey boxes on the shared look kit: tap on every beat of a hymn while its
-// tempo moves under you (gentle ramps, then ups and downs, then jumps and held notes), and in places with the
-// conductor's baton hidden, keep the beat by ear. The rules live in Bonanza.Core (TempoRound, TempoCurve); this is
-// the stage, the sound and the callouts. No rule logic lives here.
+// Finale Fever, the tempo game: tap on every beat of a hymn while its tempo moves under you (gentle ramps, then ups
+// and downs, then jumps and held notes), and in places with the conductor's baton hidden, keep the beat by ear. The
+// rules live in Bonanza.Core (TempoRound, TempoCurve); this file is the wiring, the sound and the round's events.
+// The stage (a concert hall seen from the orchestra: the maestro on his podium, the timpani section, the house) is
+// FinaleFeverSet.cs, the HUD (tempo gauge, timing meter, hearts, line pips) FinaleFeverHud.cs. No rule logic lives there.
 //
 // The music is a rendered clip per excerpt (Tools/hymns/render-hymns.mjs: the hymn's melody laid on the excerpt's
 // tempo curve, the very curve the round judges against), decoded in Load() and played through Host.PlayClip like
@@ -12,7 +13,7 @@
 //   Slot          the excerpt on screen (its Curve, Beats, Level, Name)   Beat           curve beats since the excerpt's first beat (fractional; negative in the count-in)
 //   CurveBpm      the tempo as heard now                                  PulseHidden    true while the stroke that lands next has no baton: draw no beat cue at all
 //   Hearts        hearts left (0 = SURVIVE)                               LastCall / LastVerdict / LastErrMs / TapSerial  the last tap (TapSerial counts up on every judged tap)
-// The stage reads them in Update(); nothing here depends on art.
+// The stage and the HUD read them in Update().
 
 using System.Collections.Generic;
 using System.Linq;
@@ -23,13 +24,14 @@ using UnityEngine;
 
 namespace Bonanza
 {
-    public sealed class FinaleFeverGame : Minigame
+    public sealed partial class FinaleFeverGame : Minigame
     {
         public override string Id => "finale-fever";
         public override string Title => "FINALE FEVER";
         public override string Blurb => "Stay on the beat while the tempo moves.";
         public override bool OwnsMusic => true;   // the hymns' tempo clips (HymnData), through Host.PlayClip
         protected override bool UseLook => true;
+        protected override string PaletteName => PaletteFor(HymnLevel.Easy);
         public override bool UseCanvasHud => true;
         public override string Controls => "A hymn plays and the tempo moves: speeding up, slowing down, jumping, holding a note.\nSPACE / click / tap on EVERY beat. Each tap says EARLY, LATE or ON.\nSometimes the baton disappears: keep the beat by ear.\nThree hearts: a line you mostly miss costs one, a clean line wins one back.";
 
@@ -37,24 +39,19 @@ namespace Bonanza
         const double TapGain = 0.12;          // the tap tick's gain
         const double PreRoll = 0.5;           // the clip is handed to the music deck this long before its first beat
         const int LeadBeats = 4;              // count-in beats before the first excerpt (the later ones get TempoRound.GapBeats)
-        const double ResultHold = 1.4;        // seconds the last callout stays up before the results card
+        const double ResultHold = 3.2;        // seconds of finale (the bow, the ovation, the lean gauge) before the results card
 
-        static Vector3 W(float x, float y, float z) => new Vector3(x, y, -z);   // the web's z, flipped
-        static readonly Vector3 PodiumPos = W(0, 0, 1.6f);
-        static readonly Vector3 PlayerPos = W(2.9f, 0, -0.4f);
-        static readonly Vector3 RingPos = W(0, 0.03f, 0.1f);
-        static readonly Color Gold = Hex(0xffd93d), Red = Hex(0xff5d73), Lime = Hex(0x9ee87a), Sky = Hex(0x6fd0ff), Orange = Hex(0xff8a3c);
+        static readonly Color Gold = Hex(0xffd93d), Red = Hex(0xff5d73);
 
         TempoRound _round;
         HymnData _data;
         readonly AudioClip[] _clips = new AudioClip[TempoRound.ExcerptCount];
         IReadOnlyList<int> _ids;
-        bool _playing;
+        bool _playing, _resultOut;
         double _now, _doneAt = -1;
         int _musicSlot = -1, _stoppedSlot = -1;
         int _tickCursor;
         readonly List<CountTick> _ticks = new List<CountTick>();
-        int _hiddenSeen = -1;
         bool _surviveShown;
 
         struct CountTick { public double Time; public int Accent; public bool Say; public string Text; }
@@ -130,15 +127,18 @@ namespace Bonanza
         {
             LoadHymns();   // first: a build without the private hymns fails here, before the stage is built
             BuildStage();
-            Look.Fx.SetGroundY(0);
-            Look.Fx.SetFocus(W(0, 1.5f, 0.5f));
+            BuildHud();
             Look.Fx.Prewarm();   // touch every FX material now: a first-use shader link mid-round would push a tap out of its window
             _round.Tapped += OnTapped;
             _round.Missed += OnMissed;
             _round.HeartLost += OnHeartLost;
             _round.HeartGained += OnHeartGained;
             _round.ExcerptStarted += OnExcerptStarted;
+            _round.LineClosed += OnLineClosed;
+            _round.RoundDone += OnRoundDone;
         }
+
+        static string PaletteFor(HymnLevel level) => "finale-fever-" + level.ToString().ToLowerInvariant();
 
         /// The tempo pool, the three excerpts and their clips (decoded now, never mid-round).
         void LoadHymns()
@@ -177,10 +177,9 @@ namespace Bonanza
             _now = now;
             _playing = true;
             BuildTicks();
-            Ui.ShowScoreboard();
-            Ui.Outs(0);
-            Ui.Hint("<color=#ffe58a>SPACE</color> / click / tap on <color=#ffe58a>EVERY BEAT</color> · the tempo will move");
-            Ui.Banner(Title, "tap every beat", Gold, 1.4f);
+            BeginStage();
+            BeginHud();
+            BuildShots();
         }
 
         public override void Press(string action, double time)
@@ -189,7 +188,7 @@ namespace Bonanza
             time += Save.OffsetMs / 1000.0;
             Host.PlaySfx("tick", time, gain: (float)TapGain);
             _round.Press(action, time);
-            _playerHop = 1;
+            StagePressed();
         }
 
         public override void Tick(double now, float dt)
@@ -199,7 +198,8 @@ namespace Bonanza
             DriveMusic(now);
             DriveTicks(now);
             Follow(now);
-            UpdateHud();
+            UpdateScore();
+            DriveShots(now);
         }
 
         public override Outcome Result()
@@ -208,12 +208,35 @@ namespace Bonanza
             if (_doneAt < 0) { _doneAt = _now; Host.PlaySfx(_round.Survived ? "impact" : "fanfare", _now); }
             if (_now - _doneAt < ResultHold) return null;
             _playing = false;
+            _resultOut = true;
             return _round.Result(_ids);
         }
 
         public override IEnumerable<KeyValuePair<string, double>> TestChart()
         {
-            foreach (var p in _round.PerfectPresses()) yield return new KeyValuePair<string, double>(p.Action, p.Time);
+            if (!ShotMode("ffmiss"))
+            {
+                foreach (var p in _round.PerfectPresses()) yield return new KeyValuePair<string, double>(p.Action, p.Time);
+                yield break;
+            }
+            // Capture only (?ffmiss in the URL, never in a gate): a sloppy bot that leans EARLY / LATE and drops whole
+            // lines, so the heart loss, the red room, SURVIVE and a heart won back can be photographed.
+            foreach (var s in _round.Slots)
+                foreach (var b in s.Beats)
+                {
+                    bool drop = (s.Index == 0 && b.Line == 1) || (s.Index == 1 && (b.Line == 0 || b.Line == 2)) || (s.Index == 2 && b.Line == 1);
+                    if (drop) continue;
+                    double good = BeatWindow.GoodMs(b.Length) / 1000.0;
+                    double off = b.Index % 3 == 1 ? -0.5 * good : b.Index % 3 == 2 ? 0.45 * good : 0;
+                    yield return new KeyValuePair<string, double>("a", b.Time + off);
+                }
+        }
+
+        protected override void OnDestroy()
+        {
+            foreach (var c in _clips) if (c != null) c.UnloadAudioData();
+            DestroyStage();
+            base.OnDestroy();
         }
 
         // ------------------------------------------------------------ the round's clock, sound
@@ -239,7 +262,7 @@ namespace Bonanza
             {
                 var t = _ticks[_tickCursor++];
                 Host.CountTick(t.Time, t.Accent);
-                if (t.Say && t.Time > now - 0.2) Ui.Countdown(t.Text);
+                if (t.Say && t.Time > now - 0.2) Ui.Countdown(t.Text, 0.42f);
             }
         }
 
@@ -273,18 +296,32 @@ namespace Bonanza
             CurveBpm = s.Curve.BpmAt(Beat);
             int landing = (int)System.Math.Floor(Beat) + 1;   // the stroke now in the air lands on this beat
             PulseHidden = landing >= 0 && landing < s.Beats.Count && s.Beats[landing].Hidden && now >= s.StartTime - 1e-9;
-            if (PulseHidden && _hiddenSeen != k * 1000 + landing && (landing == 0 || !s.Beats[landing - 1].Hidden))
-            {
-                _hiddenSeen = k * 1000 + landing;
-                Ui.Popup("BY EAR", Sky, 0.5f, 0.2f, 0.9f, 1.4f);
-            }
         }
+
+        /// The palette the hall should be in now: the excerpt's level, red on the last heart (or none), hushed while the
+        /// baton is hidden.
+        string MoodPalette()
+        {
+            var s = Slot;
+            int lvl = s != null ? (int)s.Level : 0;
+            bool red = _round != null && _round.Started && Hearts <= 1 && !_round.Done;
+            bool hush = PulseHidden && _playing && !_round.Done;
+            return PaletteNames[lvl * 4 + (red ? 2 : 0) + (hush ? 1 : 0)];
+        }
+
+        static readonly string[] PaletteNames =
+        {
+            "finale-fever-easy", "finale-fever-easy-hush", "finale-fever-easy-red", "finale-fever-easy-red-hush",
+            "finale-fever-medium", "finale-fever-medium-hush", "finale-fever-medium-red", "finale-fever-medium-red-hush",
+            "finale-fever-hard", "finale-fever-hard-hush", "finale-fever-hard-red", "finale-fever-hard-red-hush",
+        };
 
         // ------------------------------------------------------------ round events
 
         void OnExcerptStarted(TempoSlot slot)
         {
-            Ui.Banner($"{slot.Index + 1} / {TempoRound.ExcerptCount}", slot.Level.ToString().ToUpperInvariant(), Gold, 1.3f);
+            StageExcerpt(slot);
+            HudExcerpt(slot);
         }
 
         void OnTapped(TempoBeat b)
@@ -294,11 +331,8 @@ namespace Bonanza
             LastErrMs = b.ErrMs;
             TapSerial++;
             MusicJudged(true);
-            string word = b.Call == TapCall.On ? "ON" : b.Call == TapCall.Early ? "EARLY" : "LATE";
-            var col = b.Call == TapCall.On ? Lime : b.Call == TapCall.Early ? Sky : Orange;
-            Ui.Popup(word, col, 0.5f, 0.62f, b.Call == TapCall.On ? 1.05f : 0.9f, 0.55f);
-            if (b.Call == TapCall.On) Look.Fx.Ring(RingPos, Gold);
-            _ringPulse = b.Call == TapCall.On ? 1 : 0.45f;
+            StageTapped(b);
+            HudTapped(b);
         }
 
         void OnMissed(TempoBeat b)
@@ -307,87 +341,124 @@ namespace Bonanza
             LastVerdict = Verdict.Miss;
             TapSerial++;
             MusicJudged(false);
-            Ui.Popup("MISS", Red, 0.5f, 0.62f, 0.9f, 0.55f);
             Host.PlaySfx("miss", _now);
+            StageMissed(b);
+            HudMissed(b);
+        }
+
+        void OnLineClosed(TempoLine line)
+        {
+            StageLine(line);
+            HudLine(line);
         }
 
         void OnHeartLost(int left)
         {
-            Ui.Outs(3 - left);
             Host.PlaySfx(left == 0 ? "impact" : "miss", _now);
+            StageHeart(-1, left);
+            HudHeart(-1, left);
+            Shot("heartloss", 0.3);
+            if (left == 1) Shot("red", 1.8);
             if (_round.Survived && left == 0 && !_surviveShown)
             {
                 _surviveShown = true;
-                Ui.Banner("SURVIVE!", "keep the beat", Red, 1.6f);
+                Ui.Banner("SURVIVE!", "NO HEARTS LEFT - KEEP THE BEAT", Red, 1.8f, plate: true, y: 0.36f);
+                Shot("survive", 0.45);
+                Shot("survivelater", 3.0);
             }
         }
 
         void OnHeartGained(int left)
         {
-            Ui.Outs(3 - left);
-            Ui.Popup("HEART +1", Lime, 0.5f, 0.3f, 0.9f, 0.9f);
             Host.PlaySfx("coin", _now);
+            StageHeart(+1, left);
+            HudHeart(+1, left);
+            Shot("heartgain", 0.35);
         }
 
-        void UpdateHud()
+        void OnRoundDone()
+        {
+            StageFinale();
+            HudFinale();
+            Shot("finale", 1.5);
+            Shot("finalelate", 2.9);
+        }
+
+        void UpdateScore()
         {
             Ui.Score(Mathf.RoundToInt((float)(_round.Accuracy * 1000)));
             Ui.Combo(_round.Combo);
             Ui.Accuracy((float)_round.Accuracy);
-            if (ExcerptIndex > 0 || Beat >= 16) Ui.HideHint();
-        }
-
-        // ------------------------------------------------------------ stage (greybox: a podium, a baton, a ring, you)
-
-        Transform _baton, _batonPivot, _player, _ring;
-        Material _ringMat, _batonMat;
-        float _ringPulse, _playerHop;
-
-        void BuildStage()
-        {
-            Look.Rig.Frame(W(0.4f, 1.6f, 0.8f), 9.2f, 2.4f, 0.0f, 45, 3f, immediate: true);
-            Prim(PrimitiveType.Plane, new Vector3(0, 0, 0), new Vector3(3, 1, 2), Hex(0x2c0820));
-            Prim(PrimitiveType.Cylinder, new Vector3(PodiumPos.x, 0.3f, PodiumPos.z), new Vector3(2.4f, 0.3f, 2.4f), Hex(0x5e0d28));
-            var maestro = new GameObject("Maestro").transform;
-            maestro.SetParent(transform, false);
-            maestro.localPosition = PodiumPos + new Vector3(0, 0.6f, 0);
-            Prim(PrimitiveType.Capsule, new Vector3(0, 1.0f, 0), new Vector3(0.7f, 1.0f, 0.7f), Hex(0x3d4bff), maestro);
-            Prim(PrimitiveType.Sphere, new Vector3(0, 2.3f, 0), Vector3.one * 0.62f, Hex(0xc9d0ff), maestro);
-            _batonPivot = new GameObject("BatonPivot").transform;
-            _batonPivot.SetParent(maestro, false);
-            _batonPivot.localPosition = new Vector3(0.55f, 1.55f, -0.35f);
-            _batonMat = Mat(Color.white, lift: 0.8f);
-            _baton = Prim(PrimitiveType.Cube, new Vector3(0, 0.55f, 0), new Vector3(0.07f, 1.1f, 0.07f), _batonMat, _batonPivot).transform;
-            _ringMat = Mat(new Color(0.4f, 0.3f, 0.35f), lift: 0.2f);
-            _ring = Prim(PrimitiveType.Cylinder, RingPos, new Vector3(1.9f, 0.02f, 1.9f), _ringMat).transform;
-            _player = new GameObject("Player").transform;
-            _player.SetParent(transform, false);
-            _player.localPosition = PlayerPos;
-            Prim(PrimitiveType.Capsule, new Vector3(0, 0.75f, 0), new Vector3(0.7f, 0.75f, 0.7f), Hex(0xff5d3a), _player);
-            Prim(PrimitiveType.Sphere, new Vector3(0, 1.75f, 0), Vector3.one * 0.62f, Hex(0xffc2a8), _player);
         }
 
         void Update()
         {
+            if (_round == null || !_round.Started || _round.Slots.Count == 0) return;
             float dt = LookRig.VisualDt(Time.deltaTime);
-            if (_round == null || _round.Slots.Count == 0 || _baton == null) return;
-            bool show = _playing && !PulseHidden;
-            float p = (float)(Beat - System.Math.Floor(Beat));            // 0 just after a beat .. 1 at the next
-            // the baton: struck low on the beat, thrown up, and falling back to land on the next one; gone when hidden
-            float lift = Mathf.Sin(Mathf.PI * Mathf.Pow(p, 0.7f));
-            _baton.gameObject.SetActive(show);
-            _batonPivot.localRotation = Quaternion.Euler(0, 0, Mathf.Lerp(-8, 62, lift));
-            // The beat the stage keeps (the camera nudge, the surfaces' lift) stops with the baton: a hidden stretch has no cue at all.
-            Look.BeatPulse = show ? Mathf.Pow(1 - p, 3) * 0.6f : 0;
-            if (show && Beat >= 0) Look.TickBeat(Beat);
-            _ringPulse = Damp(_ringPulse, 0, 7, dt);
-            float rs = 1 + _ringPulse * 0.3f + (show ? Mathf.Pow(1 - p, 3) * 0.08f : 0);
-            _ring.localScale = new Vector3(1.9f * rs, 0.02f, 1.9f * rs);
-            _ringMat.SetColor("_BaseColor", Color.Lerp(new Color(0.4f, 0.3f, 0.35f), Gold, Mathf.Clamp01(_ringPulse)));
-            _playerHop = Damp(_playerHop, 0, 9, dt);
-            _player.localPosition = PlayerPos + new Vector3(0, _playerHop * 0.18f, 0);
+            UpdateStage(dt);
+            UpdateHud(dt);
         }
 
-        // The HUD is on the canvas (UseCanvasHud): no DrawHud.
+        // ------------------------------------------------------------ capture marks (?ffshot in the URL only)
+        //
+        // The visual review photographs the moments that matter (count-in, a steady line, a ramp, a jump, a fermata, a
+        // hidden stretch, a heart lost, SURVIVE, an excerpt change, the finale). The game prints "[FFSHOT] <tag>" at each
+        // and the capture script screenshots on the line. Nothing is printed without the flag.
+
+        struct ShotMark { public double T; public string Tag; }
+        readonly List<ShotMark> _shots = new List<ShotMark>();
+        bool _shotOn;
+
+        static bool ShotMode(string flag)
+        {
+            string u = Application.absoluteURL;
+            return !string.IsNullOrEmpty(u) && u.Contains(flag);
+        }
+
+        void Shot(string tag, double delay)
+        {
+            if (_shotOn) _shots.Add(new ShotMark { T = _now + delay, Tag = tag + "-" + ExcerptIndex });
+        }
+
+        void BuildShots()
+        {
+            _shotOn = ShotMode("ffshot");
+            if (!_shotOn) return;
+            var s0 = _round.Slots[0];
+            _shots.Add(new ShotMark { T = s0.StartTime - 2.3 * s0.Curve.LengthOf(0), Tag = "count" });
+            foreach (var s in _round.Slots)
+            {
+                string L = s.Level.ToString().ToLowerInvariant();
+                _shots.Add(new ShotMark { T = s.StartTime + s.Curve.TimeAt(5.3), Tag = L + "-steady" });
+                if (s.Index > 0) _shots.Add(new ShotMark { T = s.StartTime - 1.2 * s.Curve.LengthOf(0), Tag = L + "-excerpt" });
+                if (s.HiddenStretches.Count > 0)
+                {
+                    var h = s.HiddenStretches[0];
+                    _shots.Add(new ShotMark { T = s.StartTime + s.Curve.TimeAt(h.First + 1.5), Tag = L + "-hidden" });
+                }
+                double at = 0;
+                bool ramp = false, jump = false, ferm = false;
+                foreach (var g in s.Curve.Segments)
+                {
+                    if (g.Kind == TempoKind.Ramp && !ramp && g.Beats >= 6 && at > 6) { ramp = true; _shots.Add(new ShotMark { T = s.StartTime + s.Curve.TimeAt(at + g.Beats * 0.6 + 0.3), Tag = L + "-ramp" }); }
+                    if (g.Kind == TempoKind.Jump && !jump && at > 6) { jump = true; _shots.Add(new ShotMark { T = s.StartTime + s.Curve.TimeAt(at - 1.6), Tag = L + "-jumpahead" }); _shots.Add(new ShotMark { T = s.StartTime + s.Curve.TimeAt(at + 1.3), Tag = L + "-jump" }); }
+                    if (g.Kind == TempoKind.Fermata && !ferm) { ferm = true; _shots.Add(new ShotMark { T = s.StartTime + s.Curve.TimeAt(at + 0.5), Tag = L + "-fermata" }); }
+                    at += g.Beats;
+                }
+            }
+        }
+
+        void DriveShots(double now)
+        {
+            if (!_shotOn) return;
+            for (int i = _shots.Count - 1; i >= 0; i--)
+            {
+                if (_shots[i].T > now) continue;
+                Debug.Log("[FFSHOT] " + _shots[i].Tag);
+                _shots.RemoveAt(i);
+            }
+        }
+
+        // The HUD is on the canvas (UseCanvasHud, FinaleFeverHud.cs): no DrawHud.
     }
 }

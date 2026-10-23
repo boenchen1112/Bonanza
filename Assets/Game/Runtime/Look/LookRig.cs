@@ -119,6 +119,11 @@ namespace Bonanza.Look
             return Env;
         }
 
+        /// Opt-in: set the set's beat (the crowd's bounce phase) this frame WITHOUT the camera nudge, the env pulse or
+        /// the tempo estimate TickBeat makes. For a stretch where the game shows no beat at all (Finale Fever's hush):
+        /// the crowd sways on whatever slow, unmusical beat the game feeds it.
+        public void DriveEnvBeat(double beat) { _envBeat = beat; _tickFrame = Time.frameCount; }
+
         /// The env's beat follows TickBeat while the game ticks, and runs on at the last tempo after (results).
         void TrackEnvBeat(double beat)
         {
