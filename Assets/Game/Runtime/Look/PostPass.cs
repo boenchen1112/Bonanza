@@ -31,6 +31,9 @@ namespace Bonanza.Look
         public static bool BloomOn => Active && Bloom > 0.001f && RenderQuality.Level.Tier != QualityTier.Low;
         /// Wide (1/8 res) halo, High tier only.
         public static bool Wide => RenderQuality.Level.Tier == QualityTier.High;
+        /// Opt-in edge smoothing in the composite (0 = off, the default): a game whose silhouettes stair-step at a
+        /// reduced render scale (Bounce Brigade's clouds) sets it while it runs and puts it back to 0 when it ends.
+        public static float EdgeAA;
     }
 
     public sealed class PostPass : ScriptableRenderPass
@@ -132,7 +135,8 @@ namespace Bonanza.Look
             }
 
             // Composite into the camera colour. With bloom off the bloom inputs are bound to black.
-            Raster(rg, "Bonanza Composite", m, 3, copy, res.activeColorTexture, a, b, default, bloomActive: PostState.BloomOn);
+            Raster(rg, "Bonanza Composite", m, 3, copy, res.activeColorTexture, a, b,
+                   new Vector4(1f / desc.width, 1f / desc.height, PostState.EdgeAA, 0), bloomActive: PostState.BloomOn);
         }
 
         static void Raster(RenderGraph rg, string name, Material m, int pass, TextureHandle src, TextureHandle dst,

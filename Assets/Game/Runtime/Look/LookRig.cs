@@ -169,6 +169,9 @@ namespace Bonanza.Look
             _rp = UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline as UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset;
         }
 
+        /// Move the shadow focus circle (a stage that travels, like Bounce Brigade's stair); radius unchanged.
+        public void MoveShadowFocus(Vector3 centre) => _focusCentre = centre;
+
         /// A mesh that casts the key's shadow (everything else on a look-kit stage does not).
         public static void ShadowCaster(GameObject go, bool on = true)
         {

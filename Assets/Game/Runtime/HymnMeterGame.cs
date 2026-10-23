@@ -199,6 +199,37 @@ namespace Bonanza
             return _round.Result(_ids);
         }
 
+        /// The results card shows this game's own numbers, not the judge's (it has no PERFECT/GREAT/GOOD or combo):
+        /// bars found, firsts (a party only), the share of the early bonus kept, the average time to lock a right
+        /// answer, and the longest run of right answers.
+        public override List<KeyValuePair<string, string>> ResultsStats(Outcome o)
+        {
+            if (_round == null || !_round.Done) return null;
+            int found = 0, firsts = 0, streak = 0, best = 0, locks = 0;
+            double got = 0, ceil = 0, lockSum = 0;
+            foreach (var s in _round.Slots)
+            {
+                var j = s.Judgement;
+                if (j == null) continue;
+                var me = j.Results[0];
+                got += j.HumanPoints; ceil += HymnRound.CeilingPoints(s);
+                if (me.Correct)
+                {
+                    found++; streak++; best = System.Math.Max(best, streak);
+                    if (j.Winner == 0) firsts++;
+                    if (!double.IsInfinity(me.SubmitTime)) { lockSum += me.SubmitTime - s.WindowStart; locks++; }
+                }
+                else streak = 0;
+            }
+            var inv = System.Globalization.CultureInfo.InvariantCulture;
+            var list = new List<KeyValuePair<string, string>> { new KeyValuePair<string, string>("BARS FOUND", $"{found}/{_round.Slots.Count}") };
+            if (_round.CpuCount > 0) list.Add(new KeyValuePair<string, string>("FIRSTS", $"{firsts}/{_round.Slots.Count}"));
+            list.Add(new KeyValuePair<string, string>("BONUS KEPT", ceil > 0 ? Mathf.RoundToInt((float)(100 * got / ceil)) + "%" : "-"));
+            list.Add(new KeyValuePair<string, string>("AVG LOCK", locks > 0 ? (lockSum / locks).ToString("0.0", inv) + "S" : "-"));
+            list.Add(new KeyValuePair<string, string>("STREAK", best.ToString(inv)));
+            return list;
+        }
+
         public override IEnumerable<KeyValuePair<string, double>> TestChart()
         {
             foreach (var p in _round.PerfectPresses()) yield return new KeyValuePair<string, double>(p.Action, p.Time);
@@ -236,7 +267,7 @@ namespace Bonanza
         {
             _layoutSlot = slot.Index;
             Debug.Log($"[HYMN] start {slot.Index} {slot.Name} pattern={slot.Pattern} level={slot.Level} beats={slot.Beats.Count}");
-            Look.SetPalette(PaletteFor(slot.Level), 2.2f);
+            if (Look.Palette.Name != PaletteFor(slot.Level)) Look.SetPalette(PaletteFor(slot.Level), 2.2f);
             HudStarted(slot);
         }
 
@@ -253,6 +284,8 @@ namespace Bonanza
             Debug.Log($"[HYMN] judged {slot.Index} correct={me.Correct} post={me.PostReveal} winner={j.Winner} points={j.HumanPoints:0}");
             if (!me.Correct) Host.PlaySfx("miss", _now + 0.01);
             MusicJudged(me.Correct);
+            // the sky turns toward the next excerpt's level during the gap, so it has arrived when the hymn begins
+            if (slot.Index + 1 < _round.Slots.Count) Look.SetPalette(PaletteFor(_round.Slots[slot.Index + 1].Level), 2.2f);
             StageJudged(slot, j);
             HudJudged(slot, j);
         }

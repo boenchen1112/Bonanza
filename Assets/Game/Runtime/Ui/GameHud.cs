@@ -89,7 +89,7 @@ namespace Bonanza.HudKit
         {
             public RectTransform Rt; public TextMeshProUGUI Main, Sub; public CanvasGroup Group;
             public Image Plate, PlateRim; public float SubSize;
-            public bool Live, Held; public float Age, Life;
+            public bool Live, Held; public float Age, Life, Scale = 1;
         }
 
         // ------------------------------------------------------------ build
@@ -310,6 +310,7 @@ namespace Bonanza.HudKit
             foreach (var p in _pops) { p.Live = false; p.Rt.gameObject.SetActive(false); }
             _banner.Live = false; _banner.Rt.gameObject.SetActive(false);
             if (_results != null) _results.Hide();
+            HidePause();
         }
 
         /// Soft dark scrims behind the top-left and top-right readouts (off by default; Clear turns them off).
@@ -425,10 +426,11 @@ namespace Bonanza.HudKit
         /// `plate`: a dark backing slab, the sub line twice the size in gold, and the words held at full strength until
         /// the last 12% (an instruction the player must read mid-round, over a bright set). Off = the web's banner.
         /// `y`: the banner's centre, 0..1 from the top (0.5 = the middle, as the web).
-        public void Banner(string text, string sub = null, Color? color = null, float life = 1.6f, bool plate = false, float y = 0.5f)
+        /// `scale`: the whole banner's size (1 = the shared look; a game that calls out over its playfield may go smaller).
+        public void Banner(string text, string sub = null, Color? color = null, float life = 1.6f, bool plate = false, float y = 0.5f, float scale = 1)
         {
             var b = _banner;
-            b.Live = true; b.Age = 0; b.Life = Mathf.Max(0.05f, life); b.Held = plate;
+            b.Live = true; b.Age = 0; b.Life = Mathf.Max(0.05f, life); b.Held = plate; b.Scale = scale;
             UiKit.SetFill(b.Main, color ?? Color.white);
             b.Main.text = text;
             b.Sub.text = sub ?? "";
@@ -603,8 +605,167 @@ namespace Bonanza.HudKit
             float inT = Mathf.Clamp01(t / (b.Held ? 0.1f : 0.18f)), outT = Mathf.Clamp01((t - hold) / (1 - hold));
             bool calm = Settings.ReduceMotion;
             float s = calm ? 1 : UiKit.BackOut(inT) * (1 - outT * 0.2f);
-            b.Rt.localScale = Vector3.one * s;
+            b.Rt.localScale = Vector3.one * s * b.Scale;
             b.Group.alpha = (calm ? Mathf.Clamp01(t / 0.1f) : 1) * (1 - outT);
+        }
+            // ------------------------------------------------------------ pause menu
+
+        // The pause menu in the shared kit: a dimmed scene, a rounded dark panel with a gold rim, PAUSED in the display
+        // face, the choices as pills (the selected one gold), key hints under them; and the count back in as a big
+        // gold number. The host drives it every frame it is paused (Pause / PauseCount) and hides it otherwise.
+        RectTransform _pauseRt, _pausePanel;
+        CanvasGroup _pauseGroup;
+        Image _pauseDim;
+        TextMeshProUGUI _pauseCount;
+        readonly List<RectTransform> _pauseRows = new List<RectTransform>();
+        readonly List<Image> _pauseFill = new List<Image>(), _pauseRim = new List<Image>(), _pauseGlow = new List<Image>();
+        readonly List<UiGradient> _pauseGrad = new List<UiGradient>();
+        readonly List<TextMeshProUGUI> _pauseText = new List<TextMeshProUGUI>();
+        string[] _pauseItems;
+        int _pauseShownIndex = -1, _pauseShownCount = -1;
+        float _pauseAge, _pauseSel;
+        public const float PauseRowW = 340, PauseRowH = 50, PauseRowStep = 62;
+
+        void BuildPause(string[] items)
+        {
+            if (_pauseRt != null) Destroy(_pauseRt.gameObject);
+            _pauseRows.Clear(); _pauseFill.Clear(); _pauseRim.Clear(); _pauseGlow.Clear(); _pauseGrad.Clear(); _pauseText.Clear();
+            _pauseItems = items;
+            _pauseRt = UiKit.Rect("Pause", _root); UiKit.Stretch(_pauseRt);
+            _pauseRt.SetAsLastSibling();
+            _pauseGroup = _pauseRt.gameObject.AddComponent<CanvasGroup>();
+            _pauseGroup.blocksRaycasts = false; _pauseGroup.interactable = false;
+            _pauseDim = UiKit.Box(_pauseRt, "Dim", new Color(8 / 255f, 7 / 255f, 20 / 255f, 0.62f));
+            UiKit.Stretch(_pauseDim.rectTransform);
+
+            float h = 104 + items.Length * PauseRowStep + 58;
+            _pausePanel = UiKit.Rect("Panel", _pauseRt);
+            UiKit.Place(_pausePanel, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 6), new Vector2(440, h));
+            var shadow = UiKit.Box(_pausePanel, "Shadow", new Color(0, 0, 0, 0.55f), UiKit.Pill, true, 22f);
+            UiKit.Stretch(shadow.rectTransform); shadow.rectTransform.anchoredPosition = new Vector2(0, -8);
+            var body = UiKit.Box(_pausePanel, "Body", Color.white, UiKit.Pill, true, 22f);
+            UiKit.Stretch(body.rectTransform);
+            body.gameObject.AddComponent<UiGradient>().Set(UiKit.Panel, UiKit.Panel2);
+            var rim = UiKit.Box(_pausePanel, "Rim", new Color(UiKit.Gold.r, UiKit.Gold.g, UiKit.Gold.b, 0.85f), UiKit.PillRing(2.4f * 24f / 22f), true, 22f);
+            UiKit.Stretch(rim.rectTransform);
+            var title = UiKit.Text(_pausePanel, "Title", TextStyle.Title, 30f, UiKit.Gold, TextAlignmentOptions.Center);
+            UiKit.Place(title.rectTransform, new Vector2(0.5f, 1), new Vector2(0.5f, 0.5f), new Vector2(0, -52), new Vector2(400, 60));
+            title.text = "PAUSED";
+            for (int i = 0; i < items.Length; i++)
+            {
+                var row = UiKit.Rect("Item" + i, _pausePanel);
+                UiKit.Place(row, new Vector2(0.5f, 1), new Vector2(0.5f, 0.5f), new Vector2(0, -(104 + PauseRowH / 2 + i * PauseRowStep)), new Vector2(PauseRowW, PauseRowH));
+                var glow = UiKit.Box(row, "Glow", new Color(1, 0.85f, 0.4f, 0), UiKit.Soft);
+                UiKit.Place(glow.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(PauseRowW + 120, PauseRowH + 80));
+                var fill = UiKit.Box(row, "Fill", Color.white, UiKit.Pill, true, 16f);
+                UiKit.Stretch(fill.rectTransform);
+                var grad = fill.gameObject.AddComponent<UiGradient>();
+                var r = UiKit.Box(row, "Rim", Color.white, UiKit.PillRing(2f * 24f / 16f), true, 16f);
+                UiKit.Stretch(r.rectTransform);
+                var t = UiKit.Text(row, "Text", TextStyle.Display, 17f, Color.white, TextAlignmentOptions.Center);
+                UiKit.Stretch(t.rectTransform);
+                t.text = items[i];
+                _pauseRows.Add(row); _pauseFill.Add(fill); _pauseRim.Add(r); _pauseGlow.Add(glow); _pauseGrad.Add(grad); _pauseText.Add(t);
+            }
+            // key hints
+            var hints = UiKit.Rect("Hints", _pausePanel);
+            UiKit.Place(hints, new Vector2(0.5f, 0), new Vector2(0.5f, 0.5f), new Vector2(0, 32), new Vector2(400, 24));
+            (string key, string label)[] hs = { ("ARROWS", "select"), ("ENTER", "choose"), ("ESC", "resume") };
+            var widths = new float[hs.Length];
+            float total = 0;
+            var built = new List<(RectTransform, float)>();
+            foreach (var (key, label) in hs)
+            {
+                var chip = UiKit.Rect("Hint", hints);
+                var kt = UiKit.Text(chip, "Key", TextStyle.Label, 9f, UiKit.Ink, TextAlignmentOptions.Center, italic: false);
+                kt.text = key; kt.characterSpacing = 4; kt.ForceMeshUpdate();
+                float kw = Mathf.Max(30, kt.preferredWidth + 14);
+                var kf = UiKit.Box(chip, "KeyFill", UiKit.Gold, UiKit.Pill, true, 8f);
+                kf.transform.SetAsFirstSibling();
+                UiKit.Place(kf.rectTransform, new Vector2(0, 0.5f), new Vector2(0, 0.5f), Vector2.zero, new Vector2(kw, 20));
+                UiKit.Place(kt.rectTransform, new Vector2(0, 0.5f), new Vector2(0, 0.5f), Vector2.zero, new Vector2(kw, 20));
+                var lt = UiKit.Text(chip, "Label", TextStyle.Label, 9f, UiKit.Dim, TextAlignmentOptions.MidlineLeft, italic: false);
+                lt.text = label; lt.characterSpacing = 4; lt.ForceMeshUpdate();
+                float lw = lt.preferredWidth + 4;
+                UiKit.Place(lt.rectTransform, new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(kw + 7, 0), new Vector2(lw, 20));
+                float w = kw + 7 + lw;
+                built.Add((chip, w)); total += w;
+            }
+            total += 22 * (hs.Length - 1);
+            float x = -total / 2;
+            foreach (var (chip, w) in built)
+            {
+                UiKit.Place(chip, new Vector2(0.5f, 0.5f), new Vector2(0, 0.5f), new Vector2(x, 0), new Vector2(w, 22));
+                x += w + 22;
+            }
+            _pauseCount = UiKit.Text(_pauseRt, "Count", TextStyle.Title, 96f, UiKit.CountGold, TextAlignmentOptions.Center);
+            UiKit.Place(_pauseCount.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 60), new Vector2(400, 220));
+            _pauseShownIndex = -1; _pauseShownCount = -1;
+        }
+
+        /// The pause menu this frame: `items` (cached by the caller), `index` the selected one; `count` > 0 shows the
+        /// count back in instead of the menu.
+        public void Pause(string[] items, int index, int count)
+        {
+            if (_pauseRt == null || _pauseItems != items) BuildPause(items);
+            if (!_pauseRt.gameObject.activeSelf) { _pauseRt.gameObject.SetActive(true); _pauseAge = 0; _pauseSel = 0; _pauseShownIndex = -1; }
+            float dt = Time.unscaledDeltaTime;
+            bool calm = Settings.ReduceMotion;
+            _pauseAge += dt;
+            bool counting = count > 0;
+            _pausePanel.gameObject.SetActive(!counting);
+            _pauseDim.color = new Color(8 / 255f, 7 / 255f, 20 / 255f, counting ? 0.3f : 0.62f);
+            _pauseGroup.alpha = calm ? 1 : Mathf.Clamp01(_pauseAge / 0.12f);
+            if (counting)
+            {
+                if (count != _pauseShownCount) { _pauseShownCount = count; _pauseCount.text = count.ToString(); _pauseSel = 0; }
+                _pauseSel += dt;
+                float k = calm ? 1 : UiKit.BackOut(_pauseSel / 0.22f, 2f);
+                _pauseCount.rectTransform.localScale = Vector3.one * Mathf.LerpUnclamped(1.6f, 1, k);
+                _pauseCount.gameObject.SetActive(true);
+                return;
+            }
+            _pauseShownCount = -1;
+            _pauseCount.gameObject.SetActive(false);
+            _pausePanel.localScale = Vector3.one * (calm ? 1 : Mathf.LerpUnclamped(0.92f, 1, UiKit.BackOut(_pauseAge / 0.22f, 1.8f)));
+            if (index != _pauseShownIndex) { _pauseShownIndex = index; _pauseSel = 0; }
+            _pauseSel += dt;
+            for (int i = 0; i < _pauseRows.Count; i++)
+            {
+                bool on = i == index;
+                if (on)
+                {
+                    _pauseGrad[i].Set(Color.Lerp(UiKit.Gold, Color.white, 0.3f), Color.Lerp(UiKit.Gold, UiKit.Orange, 0.45f));
+                    _pauseRim[i].color = Color.white;
+                    UiKit.SetFill(_pauseText[i], UiKit.Ink, false);
+                    _pauseGlow[i].color = new Color(1, 0.82f, 0.35f, 0.45f);
+                    float pop = calm ? 1 : UiKit.BackOut(_pauseSel / 0.18f, 2.2f);
+                    _pauseRows[i].localScale = Vector3.one * Mathf.LerpUnclamped(0.96f, 1.04f, pop);
+                }
+                else
+                {
+                    _pauseGrad[i].Set(new Color(1, 1, 1, 0.1f), new Color(1, 1, 1, 0.04f));
+                    _pauseRim[i].color = new Color(1, 1, 1, 0.22f);
+                    UiKit.SetFill(_pauseText[i], Color.white, false);
+                    _pauseGlow[i].color = new Color(1, 0.82f, 0.35f, 0);
+                    _pauseRows[i].localScale = Vector3.one;
+                }
+            }
+        }
+
+        public void HidePause()
+        {
+            if (_pauseRt != null && _pauseRt.gameObject.activeSelf) _pauseRt.gameObject.SetActive(false);
+        }
+
+        /// Row i of the pause menu in IMGUI screen coordinates (y down), for the host's mouse / touch targets.
+        static readonly Vector3[] _corners = new Vector3[4];
+        public Rect PauseRowScreen(int i)
+        {
+            if (_pauseRt == null || i < 0 || i >= _pauseRows.Count) return Rect.zero;
+            var c = _corners;
+            _pauseRows[i].GetWorldCorners(c);
+            return new Rect(c[0].x, Screen.height - c[1].y, c[2].x - c[0].x, c[1].y - c[0].y);
         }
     }
 }

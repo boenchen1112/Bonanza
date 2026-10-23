@@ -45,7 +45,7 @@ namespace Bonanza
         bool _lastLocked;
 
         sealed class KeyCap { public RectTransform Rt; public Image Fill, Rim, Icon; public TextMeshProUGUI Label; public float Flash; public Color Color; }
-        readonly KeyCap[] _keys = new KeyCap[6];   // down left right up-hint? no: down, left, right, enter, backspace (+ up unused)
+        readonly KeyCap[] _keys = new KeyCap[6];   // down, left, right, up, enter, backspace
 
         // excerpt pips + level
         readonly Image[] _pips = new Image[HymnRound.ExcerptCount], _pipRims = new Image[HymnRound.ExcerptCount];
@@ -203,7 +203,10 @@ namespace Bonanza
             _gauge = UiKit.Rect("Gauge", root);
             UiKit.Place(_gauge, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -88), new Vector2(380, 30));
             _gaugeGroup = _gauge.gameObject.AddComponent<CanvasGroup>();
-            _gaugeLabel = Label(_gauge, "Label", "EARLY BONUS", 9f, UiKit.LabelInk, TextAlignmentOptions.MidlineRight, 10);
+            // a dark pill under the whole row, so both end labels read at full contrast over any sky
+            var gback = UiKit.Box(_gauge, "Back", new Color(0.05f, 0.03f, 0.14f, UiKit.DarkAlpha(0.5f)), UiKit.Pill, true, 14);
+            Centre(gback.rectTransform, new Vector2(4, -2), new Vector2(380 + 2 * 150, 28));
+            _gaugeLabel = Label(_gauge, "Label", "EARLY BONUS", 9.5f, Color.white, TextAlignmentOptions.MidlineRight, 10);
             Centre(_gaugeLabel.rectTransform, new Vector2(-196, -2), new Vector2(160, 16));
             _gaugeLabel.rectTransform.pivot = new Vector2(1, 0.5f);
             _gaugeTrack = UiKit.Box(_gauge, "Track", new Color(0.05f, 0.03f, 0.14f, UiKit.DarkAlpha(0.6f)), UiKit.Pill, true, 7);
@@ -215,7 +218,7 @@ namespace Bonanza
             fr.gameObject.AddComponent<UiGradient>().Set(Color.Lerp(Gold, Color.white, 0.4f), Color.Lerp(Gold, UiKit.Orange, 0.5f));
             _cloudIcon = UiKit.Box(_gauge, "Cloud", Color.white, CloudSprite());
             Centre(_cloudIcon.rectTransform, new Vector2(0, -2), new Vector2(34, 34));
-            _gaugeMark = Label(_gauge, "Mark", "CLOUD LIFTS", 8f, new Color(1, 1, 1, 0.8f), TextAlignmentOptions.MidlineLeft, 10);
+            _gaugeMark = Label(_gauge, "Mark", "CLOUD LIFTS", 9.5f, Color.white, TextAlignmentOptions.MidlineLeft, 10);
             Centre(_gaugeMark.rectTransform, new Vector2(200, -2), new Vector2(160, 16));
             _gaugeMark.rectTransform.pivot = new Vector2(0, 0.5f);
         }
@@ -262,20 +265,21 @@ namespace Bonanza
         void BuildLegend(RectTransform root)
         {
             var row = UiKit.Rect("Legend", root);
-            UiKit.Place(row, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0, 16), new Vector2(900, 30));
-            string[] keys = { "down", "left", "right", null, null };
-            string[] labels = { "4 BEATS", "3 BEATS", "2 BEATS", "LOCK", "CLEAR" };
-            string[] caps = { null, null, null, "ENTER", "BACKSPACE" };
-            float[] widths = { 116, 116, 116, 122, 158 };
+            UiKit.Place(row, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0, 16), new Vector2(1000, 30));
+            // the beat keys start a bar of 4, 3 or 2 beats; UP is the bar's last beat in every pattern
+            string[] keys = { "down", "left", "right", "up", null, null };
+            string[] labels = { "4 BEATS", "3 BEATS", "2 BEATS", "LAST BEAT", "LOCK", "CLEAR" };
+            string[] caps = { null, null, null, null, "ENTER", "BACKSPACE" };
+            float[] widths = { 112, 112, 112, 128, 118, 154 };
             float total = 0; foreach (var w in widths) total += w; total += 10 * (widths.Length - 1) + 18;
             float x = -total / 2;
-            for (int i = 0; i < 5; i++)
+            for (int i = 0; i < 6; i++)
             {
-                if (i == 3) x += 18;   // a little air between the beat keys and the commands
+                if (i == 4) x += 18;   // a little air between the beat keys and the commands
                 var k = new KeyCap();
                 k.Rt = UiKit.Rect("Key" + i, row);
                 Centre(k.Rt, new Vector2(x + widths[i] / 2, 0), new Vector2(widths[i], 28));
-                k.Color = keys[i] != null ? KeyColor(keys[i]) : (i == 3 ? Gold : UiKit.Dim);
+                k.Color = keys[i] != null ? KeyColor(keys[i]) : (i == 4 ? Gold : UiKit.Dim);
                 k.Fill = UiKit.Box(k.Rt, "Fill", new Color(0.04f, 0.03f, 0.13f, UiKit.DarkAlpha(0.55f)), UiKit.Pill, true, 14);
                 UiKit.Stretch(k.Fill.rectTransform);
                 k.Rim = UiKit.Box(k.Rt, "Rim", new Color(k.Color.r, k.Color.g, k.Color.b, 0.55f), UiKit.PillRing(2f * 24f / 14f), true, 14);
@@ -336,9 +340,9 @@ namespace Bonanza
         float _bannerLife;
 
         /// The host's banner (one per slot: a new one replaces the one on screen); the bonus gauge steps aside while it shows.
-        void Banner(string text, string sub, Color color, float life, bool plate = false, float y = 0.225f)
+        void Banner(string text, string sub, Color color, float life, bool plate = false, float y = 0.2f, float scale = 0.72f)
         {
-            Ui.Banner(text, sub, color, life, plate, y);
+            Ui.Banner(text, sub, color, life, plate, y, scale);
             _bannerLife = life;
         }
 
@@ -346,7 +350,7 @@ namespace Bonanza
         {
             _hudAlpha = 0;
             Ui.ShowScoreboard();
-            Banner(Title, Blurb, Gold, 1.6f, y: 0.225f);
+            Banner(Title, Blurb, Gold, 1.6f, y: 0.3f, scale: 1);
         }
 
         void HudStarted(HymnSlot slot)
@@ -366,11 +370,11 @@ namespace Bonanza
             if (me.Correct)
             {
                 string sub = me.PostReveal ? $"+{pts}  -  AFTER THE REVEAL: 1/4" : j.Winner == 0 ? $"+{pts}  -  FIRST!" : $"+{pts}";
-                Banner(me.PostReveal ? "RIGHT" : "RIGHT!", sub, me.PostReveal ? UiKit.Cream : Gold, 2.1f, plate: true, y: 0.225f);
+                Banner(me.PostReveal ? "RIGHT" : "RIGHT!", sub, me.PostReveal ? UiKit.Cream : Gold, 2.1f, plate: true);
             }
             else
             {
-                Banner(me.Submitted ? "NOT QUITE" : "NO ANSWER", meter, me.Submitted ? Coral : UiKit.Dim, 2.1f, plate: true, y: 0.225f);
+                Banner(me.Submitted ? "NOT QUITE" : "NO ANSWER", meter, me.Submitted ? Coral : UiKit.Dim, 2.1f, plate: true);
             }
             var t = _round.Totals();
             Ui.Score(Mathf.RoundToInt((float)t[0]));
@@ -427,13 +431,13 @@ namespace Bonanza
             int right = 0, won = 0;
             foreach (var s in _round.Slots) { if (s.Judgement == null) continue; if (s.Judgement.Results[0].Correct) right++; if (s.Judgement.Winner == 0) won++; }
             string sub = _round.CpuCount > 0 ? $"FIRST ON {won} OF {HymnRound.ExcerptCount}" : right == HymnRound.ExcerptCount ? "EVERY BAR FOUND" : "";
-            Banner($"{right} / {HymnRound.ExcerptCount} RIGHT", sub, right >= 5 ? Gold : right >= 3 ? UiKit.Cream : Coral, 2.9f, plate: true, y: 0.225f);
+            Banner($"{right} / {HymnRound.ExcerptCount} RIGHT", sub, right >= 5 ? Gold : right >= 3 ? UiKit.Cream : Coral, 2.9f, plate: true);
             _summary = 0.001f;
         }
 
         void HudPressed(string action, MeterAnswer ans, int before, bool wasLocked)
         {
-            int ki = action == "down" ? 0 : action == "left" ? 1 : action == "right" ? 2 : action == InputMap.A ? 3 : action == InputMap.B ? 4 : -1;
+            int ki = action == "down" ? 0 : action == "left" ? 1 : action == "right" ? 2 : action == "up" ? 3 : action == InputMap.A ? 4 : action == InputMap.B ? 5 : -1;
             if (ki >= 0) _keys[ki].Flash = 1;
             if (ans == null) return;
             if (action == InputMap.B && before > 0 && ans.Filled == 0) { _clearFlash = 1; _lastFilled = 0; return; }
@@ -509,10 +513,17 @@ namespace Bonanza
                 _gaugeFill.color = Color.Lerp(fc, Color.white, _lockFlash * 0.6f);
                 _gaugeFill.enabled = left > 0.01f;
                 _gaugeMark.text = locked ? (ans.SubmitTime > _round.RevealAt(slot) ? "LOCKED - 1/4" : "LOCKED") : slot.Revealed ? "REVEALED - 1/4" : "CLOUD LIFTS";
-                _gaugeMark.color = locked ? Mint : slot.Revealed ? new Color(0.85f, 0.82f, 1f) : new Color(1, 1, 1, 0.85f);
-                _cloudIcon.color = slot.Revealed ? new Color(1, 1, 1, 0.35f) : Color.white;
-                float halfX = 0;   // the reveal marker sits at the halfway point of the track
-                _cloudIcon.rectTransform.anchoredPosition = new Vector2(halfX, -2 + (slot.Revealed && !reduce ? 6 : 0));
+                _gaugeMark.color = locked ? Mint : slot.Revealed ? new Color(0.9f, 0.86f, 1f) : Color.white;
+                // the reveal marker sits at the halfway point of the track: it trembles as the bonus drains toward it,
+                // and when the cloud lifts on the stage it drifts up off the bar and fades
+                _cloudLift = slot.Revealed ? Mathf.Min(1, _cloudLift + real * 1.4f) : 0;
+                float near = Mathf.Clamp01(1 - Mathf.Abs(left - 0.5f) * 8f);
+                float tremble = reduce || slot.Revealed ? 0 : Mathf.Sin(Time.unscaledTime * 30f) * 1.5f * near;
+                float bob = reduce ? 0 : Mathf.Sin(Time.unscaledTime * 2.2f) * 1.2f;
+                float lift = reduce ? (_cloudLift > 0 ? 1 : 0) : UiKit.EaseOutCubic(_cloudLift);
+                _cloudIcon.color = new Color(1, 1, 1, slot.Revealed ? Mathf.Lerp(1, 0.3f, lift) : 1);
+                _cloudIcon.rectTransform.anchoredPosition = new Vector2(tremble + lift * 10f, -2 + bob + lift * 22f);
+                _cloudIcon.rectTransform.localScale = Vector3.one * (1 + near * 0.15f + lift * 0.2f);
                 _gaugeGroup.alpha = Damp(_gaugeGroup.alpha, _bannerLife > 0.15f ? 0 : _now > slot.WindowEnd + 0.2 ? 0.35f : 1, 10, real);
             }
 
@@ -577,21 +588,21 @@ namespace Bonanza
                     v.Num.color = new Color(1, 1, 1, i == 0 ? 0.75f : 0.4f);
                 }
             }
-            float plateW = rowW + 40;
+            float plateW = Mathf.Max(rowW + 40, _stateW + 56);
             _plateW = Damp(_plateW, Mathf.Max(plateW, 300), 12, real);
             _plate.sizeDelta = new Vector2(_plateW, _plate.sizeDelta.y);
             _plateRim.color = lockedNow ? Color.Lerp(new Color(Gold.r, Gold.g, Gold.b, 0.7f), Color.white, _lockFlash) : _break > 0 ? Color.Lerp(new Color(1, 1, 1, 0.16f), Coral, _break) : new Color(1, 1, 1, 0.16f);
             int code = StateCode(slot, ans);
-            if (code != _stateShown) { _stateShown = code; _stateText.text = StateLine(slot, ans); }
+            if (code != _stateShown) { _stateShown = code; _stateText.text = StateLine(slot, ans); _stateText.ForceMeshUpdate(); _stateW = _stateText.preferredWidth; }
             _stateText.color = lockedNow ? Gold : _break > 0.3f ? Coral : UiKit.Cream;
 
             // ---- legend
-            for (int i = 0; i < 5; i++)
+            for (int i = 0; i < 6; i++)
             {
                 var k = _keys[i];
                 k.Flash = Mathf.Max(0, k.Flash - real * 5f);
-                bool hint = (i == 3 && full && !lockedNow) || (i == 4 && ans != null && ans.Filled > 0 && !lockedNow);
-                bool dim = lockedNow || (i < 3 && ans != null && ans.Filled > 0) || (i == 3 && !full) || (i == 4 && (ans == null || ans.Filled == 0));
+                bool hint = (i == 4 && full && !lockedNow) || (i == 5 && ans != null && ans.Filled > 0 && !lockedNow);
+                bool dim = lockedNow || (i < 3 && ans != null && ans.Filled > 0) || (i == 3 && (ans == null || ans.Filled == 0 || full)) || (i == 4 && !full) || (i == 5 && (ans == null || ans.Filled == 0));
                 float glow = Mathf.Max(k.Flash, hint ? 0.45f + 0.35f * Mathf.Exp(-3.5f * BeatPhase) : 0);
                 var kc = k.Color;
                 k.Rim.color = new Color(kc.r, kc.g, kc.b, (dim ? 0.25f : 0.6f) + 0.4f * glow);
@@ -606,6 +617,7 @@ namespace Bonanza
         }
 
         int _stripShown = -1, _stateShown = -1;
+        float _stateW, _cloudLift;
 
         /// What the state line says, as a number, so the text is rebuilt only when it changes.
         int StateCode(HymnSlot slot, MeterAnswer a)

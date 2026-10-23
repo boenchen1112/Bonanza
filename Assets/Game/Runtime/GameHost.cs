@@ -646,7 +646,8 @@ namespace Bonanza
                 Title = _game.Title, Rank = o.Rank, Score = o.Score, Accuracy = (float)o.Accuracy,
                 Perfect = o.Perfect, Great = o.Great, Good = o.Good, Miss = o.Miss, MaxCombo = o.MaxCombo,
             };
-            foreach (var kv in o.Extras) d.Extras.Add(kv);
+            d.Stats = _game != null ? _game.ResultsStats(o) : null;
+            if (d.Stats == null) foreach (var kv in o.Extras) d.Extras.Add(kv);
             // One sticker, the rank first. A first-ever D is a record, not worth a sticker.
             if ((_newScore || _newRank) && o.Rank != "D" && o.Score > 0) d.Badge = _newRank ? "NEW RANK!" : "NEW BEST!";
             if (_party != null)
@@ -1044,6 +1045,10 @@ namespace Bonanza
 
             if (_mode == Mode.Title || _mode == Mode.Menu || _mode == Mode.Options || _mode == Mode.Roster || _mode == Mode.PartyHub)
                 EnsureTitleMusic();
+            // the pause menu lives on the canvas (shared HUD kit); OnGUI keeps only its click targets
+            if (_mode == Mode.Paused && _game != null)
+                Ui.Pause(PauseItems, _pauseIndex, _resumeLeft > 0 ? Mathf.Max(1, Mathf.CeilToInt(_resumeLeft / _resumeSpb)) : 0);
+            else Ui.HidePause();
             _music.Tick(_mode == Mode.Paused);
             RenderQuality.Tick(Time.unscaledDeltaTime, GraphicsPhase());
         }
@@ -1084,7 +1089,8 @@ namespace Bonanza
         // seeded per party / round index / slot (PartySession.RecordRound), and the index only moves when a
         // round is recorded, so playing it again re-rolls nothing. QUIT leaves the round unrecorded: in a
         // party that is back to the hub with the same round offered again, otherwise the Free Play list.
-        string[] PauseItems => _party != null ? new[] { "RESUME", "RESTART", "QUIT TO HUB" } : new[] { "RESUME", "RESTART", "QUIT TO MENU" };
+        static readonly string[] PauseParty = { "RESUME", "RESTART", "QUIT TO HUB" }, PauseSolo = { "RESUME", "RESTART", "QUIT TO MENU" };
+        string[] PauseItems => _party != null ? PauseParty : PauseSolo;
 
         void PauseChoice(int i)
         {
@@ -1510,21 +1516,12 @@ namespace Bonanza
 
                 case Mode.Paused:
                     if (!_game.UseCanvasHud) _game.DrawHud(s);
-                    if (_resumeLeft > 0)
-                    {
-                        int n = Mathf.Max(1, Mathf.CeilToInt(_resumeLeft / _resumeSpb));
-                        Hud.Center(0.38f, n.ToString(), Hud.Big, Hud.Gold, 140);
-                        break;
-                    }
-                    Hud.Dim(0.6f);
-                    Hud.Center(0.2f, "PAUSED", Hud.Big, Hud.Gold, 120);
+                    if (_resumeLeft > 0) break;   // the count back in is drawn on the canvas (Ui.Pause)
                     string[] items = PauseItems;
                     for (int i = 0; i < items.Length; i++)
                     {
-                        var r = new Rect(Screen.width * 0.35f, Screen.height * 0.42f + i * 70 * s, Screen.width * 0.3f, 60 * s);
-                        Hud.Box(r, i == _pauseIndex ? new Color(1, 0.8f, 0.3f, 0.35f) : new Color(1, 1, 1, 0.08f));
-                        Hud.Text(r, items[i], Hud.Mid, i == _pauseIndex ? Hud.Gold : Color.white);
-                        if (GUI.Button(r, GUIContent.none, GUIStyle.none)) { PauseChoice(i); break; }
+                        var r = Ui.PauseRowScreen(i);
+                        if (r.width > 0 && GUI.Button(r, GUIContent.none, GUIStyle.none)) { PauseChoice(i); break; }
                     }
                     break;
 

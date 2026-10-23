@@ -19,6 +19,8 @@ namespace Bonanza.HudKit
         public int Score, Perfect, Great, Good, Miss, MaxCombo;
         public float Accuracy;
         public List<KeyValuePair<string, string>> Extras = new List<KeyValuePair<string, string>>();
+        /// A game's own stat row in place of the judge counts (Minigame.ResultsStats), null = the judge counts.
+        public List<KeyValuePair<string, string>> Stats;
         public List<PartyRow> Party;
         /// (key, label) chips for the continue prompt: ("SPACE", "play again"), ("ESC", "menu").
         public List<KeyValuePair<string, string>> Prompts = new List<KeyValuePair<string, string>>();
@@ -141,8 +143,15 @@ namespace Bonanza.HudKit
 
             // judge counts: a divider, then five cells
             var div = UiKit.Box(_card, "Divider", new Color(1, 1, 1, 0.09f)); Mid(div.rectTransform, 0, statsTop, CardW - 2 * 31, 1);
-            StatRow(0, statsY, StatsAt, new[] { ("PERFECT", d.Perfect.ToString()), ("GREAT", d.Great.ToString()), ("GOOD", d.Good.ToString()),
-                ("MISS", d.Miss.ToString()), ("COMBO", d.MaxCombo.ToString()) }, 24f);
+            if (d.Stats != null)
+            {
+                var cells = new List<(string, string)>();
+                for (int i = 0; i < d.Stats.Count && i < 5; i++) cells.Add((d.Stats[i].Key, d.Stats[i].Value));
+                StatRow(0, statsY, StatsAt, cells.ToArray(), 24f);
+            }
+            else
+                StatRow(0, statsY, StatsAt, new[] { ("PERFECT", d.Perfect.ToString()), ("GREAT", d.Great.ToString()), ("GOOD", d.Good.ToString()),
+                    ("MISS", d.Miss.ToString()), ("COMBO", d.MaxCombo.ToString()) }, 24f);
             if (extraRows > 0)
             {
                 for (int r = 0; r < extraRows; r++)

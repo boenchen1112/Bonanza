@@ -130,6 +130,21 @@ Shader "Bonanza/Composite"
                 }
                 else c = SampleSrc(uv);
 
+                // Opt-in edge smoothing (_BonTexel.z, PostState.EdgeAA): where the luma steps hard against its four
+                // neighbours, blend toward their mean, so a stair-stepped silhouette at a reduced render scale softens.
+                if (_BonTexel.z > 0.0)
+                {
+                    float2 t = _BonTexel.xy;
+                    float3 n0 = SampleSrc(uv + float2(t.x, 0)), n1 = SampleSrc(uv - float2(t.x, 0));
+                    float3 n2 = SampleSrc(uv + float2(0, t.y)), n3 = SampleSrc(uv - float2(0, t.y));
+                    float3 w = float3(0.2126, 0.7152, 0.0722);
+                    float l0 = dot(c, w), la = dot(n0, w), lb = dot(n1, w), lc = dot(n2, w), ld = dot(n3, w);
+                    l0 /= 1.0 + l0; la /= 1.0 + la; lb /= 1.0 + lb; lc /= 1.0 + lc; ld /= 1.0 + ld;
+                    float lmax = max(l0, max(max(la, lb), max(lc, ld))), lmin = min(l0, min(min(la, lb), min(lc, ld)));
+                    float k = saturate((lmax - lmin - 0.04) * 5.0) * 0.55 * _BonTexel.z;
+                    c = lerp(c, (n0 + n1 + n2 + n3 + c) * 0.2, k);
+                }
+
                 // Bloom joins the scene in linear light, before exposure and the curve.
                 float3 bloom = SAMPLE_TEXTURE2D_X_LOD(_BonBloomA, sampler_LinearClamp, uv, 0).rgb
                              + SAMPLE_TEXTURE2D_X_LOD(_BonBloomB, sampler_LinearClamp, uv, 0).rgb * _BonFxParams.y;
