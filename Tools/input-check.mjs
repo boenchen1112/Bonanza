@@ -11,7 +11,7 @@ import path from 'node:path';
 import { chromium } from 'playwright';
 
 const DIR = process.argv[2];
-const PORT = 7963;
+const PORT = Number(process.env.PORT || 7963);
 const TYPES = { '.html': 'text/html', '.js': 'application/javascript', '.css': 'text/css',
   '.wasm': 'application/wasm', '.data': 'application/octet-stream', '.png': 'image/png', '.ico': 'image/x-icon' };
 

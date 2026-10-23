@@ -16,7 +16,7 @@ const OUT = process.argv[3];
 const QUERY = process.argv[4] || '';
 const WAIT_LOG = process.argv[5] || '';
 const WAIT_S = Number(process.argv[6] || 120);
-const PORT = 7961;
+const PORT = Number(process.env.PORT || 7961);
 const TYPES = { '.html': 'text/html', '.js': 'application/javascript', '.css': 'text/css',
   '.wasm': 'application/wasm', '.data': 'application/octet-stream', '.png': 'image/png', '.ico': 'image/x-icon' };
 

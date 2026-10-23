@@ -17,7 +17,7 @@ import path from 'node:path';
 import { chromium } from 'playwright';
 
 const DIR = process.argv[2];
-const PORT = 7964;
+const PORT = Number(process.env.PORT || 7964);
 const IDLE = 8.5, HOLD = 3.2, BEAT = 60 / 112;
 const IDS = fs.readFileSync(new URL('../Assets/Tests/EditMode/Golden/title-reel-games.txt', import.meta.url), 'utf8')
   .split('\n').filter((l) => l && !l.startsWith('#')).map((l) => l.split(' ')[1]);

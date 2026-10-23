@@ -15,7 +15,7 @@ import { chromium } from 'playwright';
 
 const DIR = process.argv[2];
 const OUT = process.argv[3] || 'Captures/flow';
-const PORT = 7963;
+const PORT = Number(process.env.PORT || 7963);
 const TYPES = { '.html': 'text/html', '.js': 'application/javascript', '.css': 'text/css',
   '.wasm': 'application/wasm', '.data': 'application/octet-stream', '.png': 'image/png', '.ico': 'image/x-icon' };
 

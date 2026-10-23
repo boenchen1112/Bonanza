@@ -20,7 +20,7 @@ import { chromium } from 'playwright';
 
 const DIR = process.argv[2];
 const OUT = process.argv[3] || 'Captures/fault';
-const PORT = 7966;
+const PORT = Number(process.env.PORT || 7966);
 const TYPES = { '.html': 'text/html', '.js': 'application/javascript', '.css': 'text/css',
   '.wasm': 'application/wasm', '.data': 'application/octet-stream', '.png': 'image/png', '.ico': 'image/x-icon' };
 
