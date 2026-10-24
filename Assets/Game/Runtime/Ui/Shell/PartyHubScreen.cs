@@ -125,10 +125,10 @@ namespace Bonanza.Shell
             _tileRt = UiKit.Rect("TileHolder", _card);
             UiKit.Place(_tileRt, new Vector2(0, 1), new Vector2(0.5f, 0.5f), new Vector2(26 + 70, -60 - 70), new Vector2(140, 140));
             _title = UiKit.Text(_card, "Title", TextStyle.Display, 32f, Color.white, TextAlignmentOptions.Left);
-            _title.textWrappingMode = TextWrappingModes.Normal;
-            _title.enableAutoSizing = true; _title.fontSizeMin = 16f; _title.fontSizeMax = UiKit.FontSizeForCap(32f);
+            _title.textWrappingMode = TextWrappingModes.NoWrap;   // the game's name on one line
+            _title.enableAutoSizing = true; _title.fontSizeMin = 18f; _title.fontSizeMax = UiKit.FontSizeForCap(32f);
             _title.overflowMode = TextOverflowModes.Truncate;
-            UiKit.Place(_title.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(188, -60), new Vector2(CardW - 188 - 20, 84));
+            UiKit.Place(_title.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(188, -74), new Vector2(CardW - 188 - 12, 56));
             _blurb = UiKit.Text(_card, "Blurb", TextStyle.Label, 15f, UiKit.Cream, TextAlignmentOptions.TopLeft, italic: false, upper: false);
             _blurb.textWrappingMode = TextWrappingModes.Normal;
             UiKit.Place(_blurb.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(188, -150), new Vector2(CardW - 188 - 20, 56));
@@ -214,7 +214,7 @@ namespace Bonanza.Shell
             UiKit.Place(r.Sub.rectTransform, new Vector2(0, 0), new Vector2(0, 0), new Vector2(129, 11), new Vector2(190, 20));
             // YOU tag
             r.YouRt = UiKit.Rect("You", r.Inner);
-            UiKit.Place(r.YouRt, new Vector2(0, 1), new Vector2(0.5f, 0.5f), new Vector2(88, -62), new Vector2(40, 20));
+            UiKit.Place(r.YouRt, new Vector2(0, 1), new Vector2(0.5f, 0.5f), new Vector2(88, -70), new Vector2(40, 20));
             r.YouFill = UiKit.Box(r.YouRt, "Fill", Gold, UiKit.Pill, true, 20);
             UiKit.Stretch(r.YouFill.rectTransform);
             r.You = UiKit.Text(r.YouRt, "T", TextStyle.Display, 12f, Ink);
