@@ -30,6 +30,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Bonanza.Core;
 using Bonanza.HudKit;
+using Bonanza.Shell;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.LowLevel;
@@ -102,6 +103,10 @@ namespace Bonanza
         bool _confirmReset;
         float _autoWait;
         bool _perfTip;
+        /// The uGUI shell (title today) and the living backdrop behind every shell screen.
+        public ShellHost Shell { get; private set; }
+        ShellBackdrop _hall;
+        int _hallFreeFrames;
 
         /// The party's lineup while a party runs; null in free play.
         public IList<PartyPlayer> Lineup => _party?.Players;
@@ -352,6 +357,94 @@ namespace Bonanza
         public TitleState Title { get; } = new TitleState(Games.Select(g => g.Id).ToList());
         bool _titleWas;
 
+        // ------------------------------------------------------------ shell backdrop + uGUI title
+
+        static bool ShellMode(Mode m) => m == Mode.Title || m == Mode.Menu || m == Mode.Options || m == Mode.Roster || m == Mode.PartyHub;
+
+        /// The IMGUI screens still on the placeholder dim less over the live hall so it shows through.
+        float ShellDim(float a) => _hall != null && _hall.Live ? Mathf.Min(a, 0.5f) : a;
+
+        string PoseFor(Mode m) => m switch
+        {
+            Mode.Title => Title.Attract ? "attract" : "title",
+            Mode.Menu => "freeplay",
+            Mode.Roster => "roster",
+            Mode.PartyHub => "hub",
+            Mode.Options => "options",
+            _ => "title",
+        };
+
+        void HallSuspend()
+        {
+            if (_hall != null) _hall.Suspend();
+            Shell?.HideNow();
+            _hallFreeFrames = 0;
+        }
+
+        /// Keep the backdrop and the uGUI title in step with the mode: on for shell screens once no game owns the
+        /// camera, off (camera handed back) the moment a game opens. Never in an autoplay run: those test the games.
+        void ShellSync()
+        {
+            // The gate counts: the hall is built and drawn behind it, so its first-frame hitches land before the title
+            // music's kicks are scheduled, not on the first beat.
+            bool gate = _mode == Mode.Gate && _boot.Kind != SceneKind.Game;
+            bool want = !Autoplay && (ShellMode(_mode) || gate) && _gameGo == null && _game == null;
+            if (want) _hallFreeFrames++; else _hallFreeFrames = 0;
+            if (want && _hallFreeFrames >= 2)
+            {
+                if (_hall == null) _hall = ShellBackdrop.Create(transform);
+                if (Shell.Backdrop == null) Shell.AttachBackdrop(_hall);
+                if (!_hall.Live) _hall.Resume(PoseFor(_mode), true);
+                else _hall.SetPose(PoseFor(_mode));
+                if (_mode == Mode.Title) { if (Shell.Current != Shell.Title) Shell.Show(Shell.Title, null); }
+                else if (Shell.Current != null) Shell.Hide();
+                if (_mode != Mode.Title) _hall.Tick(0, false, 0);
+            }
+            else if (!want)
+            {
+                if (_hall != null && _hall.Live && !ShellMode(_mode) && !gate) HallSuspend();
+                if (Shell.Current != null && _mode != Mode.Title) Shell.Hide();
+            }
+        }
+
+        /// Push the title's state into the uGUI view and tell the backdrop the beat.
+        void FeedTitle()
+        {
+            var st = Save.Stats;
+            var lines = Records.StatsLines(st.Rounds, Records.BestOverall(Games.Select(e => new KeyValuePair<string, GameRecord>(e.Title, Save.Get(e.Id)))));
+            var e = Title.Attract ? Find(Title.CurrentGameId) : null;
+            Shell.Title.View = new TitleView
+            {
+                Focus = _titleIndex,
+                Attract = Title.Attract,
+                GameTitle = e?.Title, GameBlurb = e?.Blurb,
+                Progress = Title.StepProgress,
+                Beat = Title.OnGrid ? Title.Beat : 0,
+                BeatPulse = Title.OnGrid ? Title.BeatPulse : 0,
+                Records1 = lines[0], Records2 = lines[1],
+                Records3 = st.Rounds > 0 ? $"{st.Notes} NOTES   {st.Parties} PARTIES   {st.Wins} WINS" : null,
+                PerfTip = _perfTip,
+            };
+            if (_hall != null && _hall.Live) _hall.Tick(Title.Beat, Title.OnGrid, Title.OnGrid ? Title.BeatPulse : 0);
+        }
+
+        /// Invisible IMGUI click targets over the uGUI buttons (the ResultsCard pattern), plus the title's click rules:
+        /// a click wakes the reel and is consumed, any other click only resets the idle timer.
+        void TitleTargets()
+        {
+            if (Event.current.type == EventType.MouseDown)
+            {
+                if (Title.Attract) { TitleReelPress("a"); Event.current.Use(); }
+                else Title.Reel.Press("click", false);
+            }
+            if (Title.Attract || !Shell.Interactive || Shell.Current != Shell.Title) return;
+            for (int i = 0; i < Shell.ButtonCount; i++)
+            {
+                var r = Shell.ButtonScreen(i);
+                if (r.width > 0 && GUI.Button(r, GUIContent.none, GUIStyle.none)) TitleChoice(i);
+            }
+        }
+
         /// The title's kick on every beat and its tick on every fourth (web title.js onBeat), scheduled ahead on the
         /// title music's own grid, and the beat the logo bounces on.
         long _beatDone = long.MinValue;
@@ -446,6 +539,7 @@ namespace Bonanza
 #endif
             _clock = GetComponent<AudioClock>();
             Ui = GameHud.Create(transform);
+            Shell = ShellHost.Create(transform);
             var args = Environment.GetCommandLineArgs();
             string url = Application.absoluteURL ?? "";
             var uo = UrlParams.Parse(url);
@@ -560,6 +654,7 @@ namespace Bonanza
         {
             CloseGame();
             Ui.Clear();
+            HallSuspend();
             _entry = e;
             _outcome = null;
             Debug.Log($"[SHELL] open game={e.Id} from={_from ?? "-"}");
@@ -858,6 +953,7 @@ namespace Bonanza
             if (_mode != Mode.Playing) DropNonPresses();
 
             if (_mode != Mode.Title) _titleWas = false;
+            ShellSync();
             switch (_mode)
             {
                 case Mode.Gate:
@@ -891,7 +987,7 @@ namespace Bonanza
                         else if (p.Action == "a") { TitleChoice(_titleIndex); break; }
                     }
                     _presses.Clear();
-                    if (_mode == Mode.Title) { TitleReelFrame(); TitleBeats(); }
+                    if (_mode == Mode.Title) { TitleReelFrame(); TitleBeats(); FeedTitle(); }
                     break;
 
                 case Mode.Menu:
@@ -1427,7 +1523,7 @@ namespace Bonanza
                     break;
 
                 case Mode.Menu:
-                    Hud.Dim(0.85f);
+                    Hud.Dim(ShellDim(0.85f));
                     Hud.Center(0.08f, "FREE PLAY", Hud.Big, Hud.Gold, 100);
                     for (int i = 0; i < Games.Count; i++)
                     {
@@ -1447,33 +1543,11 @@ namespace Bonanza
                     break;
 
                 case Mode.Title:
-                    Hud.Dim(0.85f);
-                    // A click wakes the reel and is consumed (never also an item); any other click only resets the idle timer.
-                    if (Event.current.type == EventType.MouseDown)
-                    {
-                        if (Title.Attract) { TitleReelPress("a"); Event.current.Use(); }
-                        else Title.Reel.Press("click", false);
-                    }
-                    DrawTitleLogo(s);
-                    for (int i = 0; i < TitleItems.Length; i++)
-                        if (MenuRow(i, 0.4f, TitleItems[i], null, i == _titleIndex, s) && !Title.Attract) TitleChoice(i);
-                    var st = Save.Stats;
-                    var statLines = Records.StatsLines(st.Rounds, Records.BestOverall(Games.Select(e => new KeyValuePair<string, GameRecord>(e.Title, Save.Get(e.Id)))));
-                    Hud.Center(0.74f, statLines[0] + "\n" + statLines[1], Hud.Small, Color.white, 80);
-                    if (st.Rounds > 0)
-                        Hud.Center(0.82f, $"{st.Notes} NOTES   {st.Parties} PARTIES   {st.Wins} WINS", Hud.Small, new Color(1, 1, 1, 0.7f), 40);
-                    Hud.Center(0.9f, "UP/DOWN to choose   SPACE / click to select", Hud.Small, new Color(1, 1, 1, 0.7f), 40);
-                    if (_perfTip)
-                    {
-                        Hud.Dim(0.6f);
-                        Hud.Center(0.2f, "RUNNING SLOW ON THIS MACHINE", Hud.Mid, Hud.Gold, 60);
-                        Hud.Center(0.3f, "Graphics are already at their lowest. Try: power mode Best performance,\nplay plugged in, update your graphics driver, and set your browser to\nHigh performance in the system graphics settings.\n\n(any key to close)", Hud.Small, Color.white, 160);
-                    }
-                    if (Title.Attract) DrawTitleReel(s);
+                    TitleTargets();
                     break;
 
                 case Mode.Options:
-                    Hud.Dim(0.85f);
+                    Hud.Dim(ShellDim(0.85f));
                     Hud.Center(0.08f, "OPTIONS", Hud.Big, Hud.Gold, 100);
                     for (int i = 0; i < OptionRows.Length; i++)
                     {
@@ -1499,7 +1573,7 @@ namespace Bonanza
                 case Mode.Roster: DrawRoster(s); break;
 
                 case Mode.PartyHub:
-                    Hud.Dim(0.88f);
+                    Hud.Dim(ShellDim(0.88f));
                     DrawPartyHub(s);
                     break;
 
@@ -1581,7 +1655,7 @@ namespace Bonanza
         {
             if (_roster == null) return;
             var r = _roster;
-            Hud.Dim(0.85f);
+            Hud.Dim(ShellDim(0.85f));
             string head, sub, hint;
             switch (r.Stage)
             {
@@ -1643,50 +1717,7 @@ namespace Bonanza
             Hud.Center(0.9f, hint, Hud.Small, new Color(1, 1, 1, 0.7f), 40);
         }
 
-        /// The wordmark: each letter pops on the title music's beat, lagging a little behind its neighbour (web title.js).
-        void DrawTitleLogo(float s)
-        {
-            const string word = "BONANZA";
-            double amp = Settings.ReduceMotion ? 0.35 : 1;
-            double beat = Title.Beat;
-            var widths = new float[word.Length];
-            float total = 0;
-            for (int i = 0; i < word.Length; i++) { widths[i] = Hud.Big.CalcSize(new GUIContent(word[i].ToString())).x + 4 * s; total += widths[i]; }
-            float x = (Screen.width - total) / 2, y = Screen.height * 0.14f, h = 120 * s;
-            var pivot = new Vector2(Screen.width / 2f, y + h / 2);
-            var saved = GUI.matrix;
-            float logo = (float)TitleBeat.LogoScale(beat, amp);
-            GUIUtility.ScaleAroundPivot(new Vector2(logo, logo), pivot);
-            var outer = GUI.matrix;
-            for (int i = 0; i < word.Length; i++)
-            {
-                TitleBeat.Letter(beat, i, amp, out double sc, out double lift, out double tilt);
-                var r = new Rect(x, y + (float)lift * s, widths[i], h);
-                var c = new Vector2(r.center.x, r.center.y);
-                GUI.matrix = outer;
-                GUIUtility.ScaleAroundPivot(new Vector2((float)sc, (float)sc), c);
-                GUIUtility.RotateAroundPivot((float)tilt, c);
-                Hud.Text(r, word[i].ToString(), Hud.Big, Hud.Gold);
-                x += widths[i];
-            }
-            GUI.matrix = saved;
-        }
 
-        /// Placeholder attract card: the game on show, how far through its hold, and the way out. The visual phase draws
-        /// the real card from Title.CurrentGameId and Title.StepProgress.
-        void DrawTitleReel(float s)
-        {
-            var e = Find(Title.CurrentGameId);
-            if (e == null) return;
-            Hud.Dim(0.55f);
-            float pulse = Title.BeatPulse;
-            Hud.Center(0.34f, e.Title, Hud.Big, Hud.Gold, 120);
-            Hud.Center(0.48f, e.Blurb, Hud.Mid, Color.white, 60);
-            var bar = new Rect(Screen.width * 0.3f, Screen.height * 0.6f, Screen.width * 0.4f, 10 * s);
-            Hud.Box(bar, new Color(1, 1, 1, 0.2f));
-            Hud.Box(new Rect(bar.x, bar.y, bar.width * Title.StepProgress, bar.height), Hud.Gold);
-            Hud.Center(0.9f, "PRESS ANY BUTTON", Hud.Mid, new Color(1, 1, 1, 0.45f + 0.55f * pulse), 60);
-        }
 
         bool MenuRow(int i, float y0, string label, string value, bool sel, float s, float pitch = 80, float height = 66, bool grey = false, float width = 0.44f)
         {

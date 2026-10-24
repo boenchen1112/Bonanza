@@ -119,6 +119,20 @@ namespace Bonanza.Look
                 .Set(PC.FillSky, 0x8ea6ff).Set(PC.FillGround, 0x4a2050)
                 .Set(PC.Fog, 0x3a1f68).Set(PF.FogNear, 18).Set(PF.FogFar, 70).Set(PF.Bloom, 0.95f));
 
+            // Shell hall: the shared backdrop behind the title and the menus. A plum concert hall at showtime, warm
+            // honey key, gilt and crimson, a pink rim on the heads of the house.
+            _all["shell-hall"] = Make(_base, p => p
+                .Set(PC.SkyTop, 0x0d0620).Set(PC.SkyMid, 0x2a1050).Set(PC.SkyBot, 0x7a2a58)
+                .Set(PC.Sun, 0xffc06a).Set(PD.SunDir, 0, 0.1f, -1).Set(PF.SunStrength, 0.5f).Set(PF.SunSize, 0.2f)
+                .Set(PC.Ground, 0x3a1a30).Set(PC.GroundAlt, 0x5a2a3a).Set(PC.GroundRim, 0xffd93d)
+                .Set(PC.Band, 0x4a1a48).Set(PC.BandAlt, 0x7a2a58)
+                .Set(PC.Accent, 0xffd93d).Set(PC.Accent2, 0x59e2ff).Set(PC.Accent3, 0xff6bd6)
+                .Set(PC.Key, 0xffe2b0).Set(PD.KeyDir, -0.5f, 0.7f, 0.5f).Set(PF.KeyIntensity, 2.3f)
+                .Set(PC.FillSky, 0xb090ff).Set(PC.FillGround, 0x5a2048).Set(PF.FillIntensity, 1.0f)
+                .Set(PC.Rim, 0xff9ad8).Set(PD.RimDir, 0.5f, 0.3f, -0.8f).Set(PF.RimStrength, 1.0f)
+                .Set(PC.Fog, 0x2a0f45).Set(PF.FogNear, 14).Set(PF.FogFar, 58)
+                .Set(PF.Bloom, 1.0f).Set(PF.BloomThreshold, 1.0f).Set(PF.Exposure, 1.0f).Set(PF.Vignette, 0.5f));
+
             // Swing Kings: floodlit dusk ballpark. Turf green, sodium-lamp key.
             _all["swing-kings"] = Make(_base, p => p
                 .Set(PC.SkyTop, 0x08163f).Set(PC.SkyMid, 0x1d3f86).Set(PC.SkyBot, 0xff9a5c)
