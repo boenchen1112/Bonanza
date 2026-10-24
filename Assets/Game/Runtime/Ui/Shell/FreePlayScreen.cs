@@ -151,7 +151,7 @@ namespace Bonanza.Shell
 
             // NEW: a tilted gold tag over the top corner
             c.NewRt = UiKit.Rect("New", c.Inner);
-            UiKit.Place(c.NewRt, new Vector2(1, 1), new Vector2(0.5f, 0.5f), new Vector2(-40, -34), new Vector2(64, 28));
+            UiKit.Place(c.NewRt, new Vector2(1, 1), new Vector2(0.5f, 0.5f), new Vector2(-30, -10), new Vector2(64, 28));
             c.NewRt.localRotation = Quaternion.Euler(0, 0, 10);
             var ns = UiKit.Box(c.NewRt, "Shadow", new Color(0, 0, 0, 0.5f), UiKit.Pill, true, 28);
             UiKit.Place(ns.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -3), new Vector2(66, 30));
@@ -270,7 +270,7 @@ namespace Bonanza.Shell
                     }
                     else
                     {
-                        UiKit.Place(c.NewRt, new Vector2(1, 1), new Vector2(0.5f, 0.5f), new Vector2(-40, -34), new Vector2(64, 28));
+                        UiKit.Place(c.NewRt, new Vector2(1, 1), new Vector2(0.5f, 0.5f), new Vector2(-30, -10), new Vector2(64, 28));
                         c.NewRt.localRotation = Quaternion.Euler(0, 0, 10);
                     }
                     c.NoRecRt.gameObject.SetActive(!small);
@@ -286,7 +286,7 @@ namespace Bonanza.Shell
                     var rc = UiKit.RankColor(d.Rank);
                     bool ranked = d.Rank != "-" && !string.IsNullOrEmpty(d.Rank);
                     c.RankFill.color = ranked ? rc : new Color(1, 1, 1, 0.14f);
-                    c.Rank.text = ranked ? d.Rank : "?";
+                    c.Rank.text = ranked ? d.Rank : "-";
                     c.Rank.color = ranked ? Ink : new Color(UiKit.Cream.r, UiKit.Cream.g, UiKit.Cream.b, 0.8f);
                     var rt = c.RankFill.rectTransform;
                     c.BestLabel.text = "BEST";
@@ -335,7 +335,7 @@ namespace Bonanza.Shell
             string label = _count > 0 ? "PLAY " + cards[focus].Title : "PLAY";
             DriveButton(_play, input, PlayBtn, true, label, "SPACE", dt, red, age - 0.6f, !small);
             DriveButton(_back, input, BackBtn, false, "BACK", "ESC", dt, red, age - 0.9f, !small);
-            _play.Rt.anchoredPosition = new Vector2(0, small ? -498 : -520);
+            _play.Rt.anchoredPosition = new Vector2(0, small ? -508 : -538);
             _play.Rt.sizeDelta = new Vector2(small ? 400 : 430, 62);
             _play.Label.rectTransform.anchoredPosition = new Vector2(small ? 0 : -42, 1);
             _play.Label.rectTransform.sizeDelta = new Vector2((small ? 400 : 430) - (small ? 24 : 112), 72);

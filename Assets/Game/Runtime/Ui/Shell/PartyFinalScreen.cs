@@ -26,8 +26,8 @@ namespace Bonanza.Shell
         public PartyFinalView View;
         public const int AgainBtn = 0, MenuBtn = 1;
         /// Where the stage figure stands (reference px), read by the host to place the cast.
-        public const float FigureFeet = 464f, FigureHeight = 290f, ColW = 190, ColStep = 204, BaseY = 548;
-        static readonly float[] BlockH = { 92, 78, 66, 56 };
+        public const float FigureFeet = 456f, FigureHeight = 262f, ColW = 190, ColStep = 204, BaseY = 548;
+        static readonly float[] BlockH = { 108, 80, 62, 48 };
         static readonly int[][] ColOf = { new[] { 0 }, new[] { 1, 0 }, new[] { 1, 0, 2 }, new[] { 1, 0, 2, 3 } };
 
         /// The single winner's cast index, or -1 (tie: medals, no live figure).
@@ -213,9 +213,9 @@ namespace Bonanza.Shell
                 c.YouRt.gameObject.SetActive(you);
                 // portrait: sits on the block (the single winner stands on stage instead)
                 bool figure = win && single;
-                float fsz = win && !single ? 128 : 76;
+                float fsz = win ? (single ? 88 : 128) : 62;
                 float fy = -(BaseY - h) + fsz * 0.5f - 10;
-                if (figure) { cx -= 82; fsz = 64; fy = -(BaseY - h) - 4; }
+                if (figure) { cx -= 92; fy = -(BaseY - h) - 6; }
                 float fa = red ? shown : UiKit.Clamp01((rise - 0.3f) * 2f);
                 SetFace(c.Face, d.Char, View.Cast, new Vector2(cx, fy), fsz, fa);
                 if (win && !single && i < 2)
@@ -242,11 +242,11 @@ namespace Bonanza.Shell
                 float rel = View.Cast != null ? View.Cast.FigureRel : 1f;
                 float headY = FigureFeet - FigureHeight * rel;
                 float bob = red ? 0 : Mathf.Sin(now * 2.6f) * 3f;
-                _crownB.anchoredPosition = new Vector2(ColCenter(order, 0, n), -(headY + 6 + 14 - (View.Cast != null ? View.Cast.HopRef : 0f)) + bob);
+                _crownB.anchoredPosition = new Vector2(ColCenter(order, 0, n), -(headY + 6 - (View.Cast != null ? View.Cast.HopRef : 0f)) + bob);
                 _crownB.localScale = Vector3.one * (1.0f * Mathf.Clamp01(pop));
                 _crownB.localRotation = Quaternion.Euler(0, 0, red ? 0 : Mathf.Sin(now * 1.3f) * 4f);
-                _trophy.anchoredPosition = new Vector2(ColCenter(order, 0, n) + 190, -(FigureFeet - 110) + (red ? 0 : Mathf.Sin(now * 2f) * 6f));
-                _trophy.localScale = Vector3.one * (1.0f * Mathf.Clamp01(pop));
+                _trophy.anchoredPosition = new Vector2(ColCenter(order, 0, n) + 112, -(FigureFeet - 150) + (red ? 0 : Mathf.Sin(now * 2f) * 6f));
+                _trophy.localScale = Vector3.one * (0.8f * Mathf.Clamp01(pop));
             }
             else
             {

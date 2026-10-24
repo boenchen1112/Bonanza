@@ -644,7 +644,7 @@ namespace Bonanza
             }
             else o.TakeRepeat();
             string gfx = _optIndex == (int)Opt.Graphics
-                ? $"Now drawing at {RenderQuality.Level.Scale:0.##}x, {RenderQuality.Level.Tier.ToString().ToUpperInvariant()}{(RenderQuality.Auto ? " (auto: " + RenderQuality.Reason + ")" : "")}"
+                ? $"Running at {RenderQuality.Level.Tier.ToString().ToUpperInvariant()} quality{(RenderQuality.Auto ? " (auto: " + RenderQuality.Reason + ")" : "")}"
                 : null;
             o.View = new OptionsView
             {
@@ -1716,13 +1716,24 @@ namespace Bonanza
         void DrawDead()
         {
             var c = GUI.color;
-            GUI.color = new Color(0.02f, 0.02f, 0.04f, 1);
-            GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
+            float W = Screen.width, H = Screen.height;
+            GUI.color = new Color(0.07f, 0.03f, 0.16f, 1);
+            GUI.DrawTexture(new Rect(0, 0, W, H), Texture2D.whiteTexture);
+            var pr = new Rect(W * 0.12f, H * 0.2f, W * 0.76f, H * 0.6f);
+            GUI.color = new Color(0.14f, 0.08f, 0.28f, 1);
+            GUI.DrawTexture(pr, Texture2D.whiteTexture);
+            GUI.color = new Color(1f, 0.82f, 0.3f, 1);
+            GUI.DrawTexture(new Rect(pr.x, pr.y, pr.width, Mathf.Max(3, H / 120)), Texture2D.whiteTexture);
             GUI.color = Color.white;
             if (_deadStyle == null)
                 _deadStyle = new GUIStyle(GUI.skin.label) { fontSize = Mathf.Max(14, Screen.height / 28), alignment = TextAnchor.MiddleCenter, wordWrap = true };
-            GUI.Label(new Rect(Screen.width * 0.1f, 0, Screen.width * 0.8f, Screen.height),
-                "BONANZA STOPPED\n\n" + (LastError ?? "unknown error") + "\n\nReload the page to try again.", _deadStyle);
+            var old = _deadStyle.normal.textColor;
+            _deadStyle.normal.textColor = new Color(1f, 0.82f, 0.3f);
+            GUI.Label(new Rect(pr.x, pr.y + pr.height * 0.12f, pr.width, pr.height * 0.2f), "BONANZA STOPPED", _deadStyle);
+            _deadStyle.normal.textColor = new Color(1f, 0.96f, 0.86f);
+            GUI.Label(new Rect(pr.x + pr.width * 0.05f, pr.y + pr.height * 0.34f, pr.width * 0.9f, pr.height * 0.4f), LastError ?? "unknown error", _deadStyle);
+            GUI.Label(new Rect(pr.x, pr.y + pr.height * 0.76f, pr.width, pr.height * 0.16f), "Reload the page to try again.", _deadStyle);
+            _deadStyle.normal.textColor = old;
             GUI.color = c;
         }
 
@@ -1807,6 +1818,7 @@ namespace Bonanza
             {
                 case Mode.Gate:
                     Hud.Dim(0.85f);
+                    Hud.Box(new Rect(Screen.width * 0.2f, Screen.height * 0.2f, Screen.width * 0.6f, Screen.height * 0.6f), new Color(0.14f, 0.08f, 0.28f, 0.9f));
                     Hud.Center(0.3f, "BONANZA", Hud.Big, Hud.Gold, 120);
                     Hud.Center(0.55f, "CLICK / TAP / SPACE TO START", Hud.Mid, Color.white);
                     if (_gatePressed && !_clock.Running)

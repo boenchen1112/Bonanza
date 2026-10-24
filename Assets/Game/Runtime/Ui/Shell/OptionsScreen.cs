@@ -358,14 +358,14 @@ namespace Bonanza.Shell
 
             // ---- the help panel
             float pe = red ? 1 : UiKit.EaseOutCubic((age - 0.4f) / 0.4f);
-            _panelGroup.alpha = UiKit.Clamp01(pe * 1.4f) * (red ? shown : 1) * (v.Confirm ? 0.5f : 1);
+            _panelGroup.alpha = UiKit.Clamp01(pe * 1.4f) * (red ? shown : 1) * (v.Confirm ? 0.7f : 1);
             string head, body = Help(v, out head);
             _helpHead.text = head; _helpText.text = body;
             _helpHead.fontSize = UiKit.FontSizeForCap(12f * ts);
             _helpText.fontSize = UiKit.FontSizeForCap(13f * ts * (small ? 0.95f : 1f));
             _helpText.enableAutoSizing = false;
             _panel.sizeDelta = new Vector2(ColW, 148);
-            _hint.text = v.Confirm ? "LEFT / RIGHT  CHOOSE     SPACE  CONFIRM     ESC  CANCEL" : "UP / DOWN  CHOOSE     LEFT / RIGHT  ADJUST";
+            _hint.text = v.Confirm ? "LEFT / RIGHT  CHOOSE     SPACE  CONFIRM     ESC  CANCEL" : v.Focus >= 6 ? "UP / DOWN  CHOOSE     SPACE  SELECT" : "UP / DOWN  CHOOSE     LEFT / RIGHT  ADJUST";
             _hintGroup.alpha = UiKit.Clamp01((age - 0.5f) * 3f) * (red ? shown : 1) * (small ? 0 : 1);
             DriveButton(_back, input, BackBtn, v.Focus == 7, "BACK", "ESC", dt, red, age - 0.9f, !small);
             if (small) _back.Inner.localScale *= 1.3f;
@@ -435,7 +435,7 @@ namespace Bonanza.Shell
             r.Focus = Damp(r.Focus, foc ? 1 : 0, red ? 40 : 14, dt);
             r.Hover = Damp(r.Hover, hovRow == i ? 1 : 0, red ? 40 : 18, dt);
             float enter = red ? 1 : UiKit.BackOut((age - 0.1f - i * 0.05f) / 0.45f);
-            float dim = View.Confirm && i != 6 ? 0.4f : 1f;
+            float dim = View.Confirm && i != 6 ? 0.6f : 1f;
             r.Group.alpha = UiKit.Clamp01(enter * 2f) * (red ? Shown : 1) * dim;
             r.Rt.anchoredPosition = new Vector2(r.X, -r.Y + (red ? 0 : (1 - Mathf.Min(1, enter)) * -26f));
             r.Rt.sizeDelta = new Vector2(ColW, RowH);
@@ -511,7 +511,7 @@ namespace Bonanza.Shell
                 bool hov = !confirm && input.Hover == idx;
                 sg.Hover = Damp(sg.Hover, hov ? 1 : 0, red ? 40 : 18, dt);
                 sg.Press = Damp(sg.Press, hov && input.Pressed ? 1 : 0, red ? 60 : 30, dt);
-                sg.Sel = Damp(sg.Sel, sel == i ? 1 : 0, red ? 40 : 16, dt);
+                sg.Sel = Damp(sg.Sel, sel == i || (hov && input.Pressed) ? 1 : 0, red ? 40 : 16, dt);
                 Color top = Color.Lerp(new Color(0.09f, 0.05f, 0.21f, 0.95f), new Color(0.24f, 0.17f, 0.50f, 0.97f), sg.Hover);
                 Color bot = Color.Lerp(new Color(0.04f, 0.02f, 0.12f, 0.95f), new Color(0.13f, 0.08f, 0.32f, 0.97f), sg.Hover);
                 Color gtop = Color.Lerp(UiKit.Hex(0xffe27a), Color.white, 0.35f * sg.Hover), gbot = Color.Lerp(UiKit.Hex(0xff9a2e), UiKit.Hex(0xffd36a), 0.5f * sg.Hover);
