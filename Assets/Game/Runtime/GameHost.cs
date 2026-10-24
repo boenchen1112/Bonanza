@@ -100,7 +100,7 @@ namespace Bonanza
         Rng _rosterRng;
         /// Free Play's solo pick (web session.players for mode 'free'); null until a roster step ran.
         public IList<PartyPlayer> FreeCast { get; private set; }
-        bool _confirmReset;
+        bool _confirmReset, _confirmYes;   // the reset confirm step, and which button its focus is on (KEEP first)
         float _autoWait;
         bool _perfTip;
         /// The uGUI shell (title today) and the living backdrop behind every shell screen.
@@ -616,6 +616,8 @@ namespace Bonanza
                     }).ToArray();
                 }
             }
+            int pc = Shell.FreePlay.TakePressCard();   // pressing a card focuses it (and the PLAY pill follows); the click then plays
+            if (pc >= 0 && pc < cards.Length && pc != _menuIndex) { _menuIndex = pc; ShellSfx("ui"); }
             Shell.FreePlay.View = new FreePlayView { Focus = _menuIndex, Cards = cards };
         }
 
@@ -646,7 +648,7 @@ namespace Bonanza
                 : null;
             o.View = new OptionsView
             {
-                Focus = _optIndex, Confirm = _confirmReset, Music = Settings.Music, Sfx = Settings.Sfx, Offset = Settings.OffsetMs,
+                Focus = _optIndex, Confirm = _confirmReset, ConfirmYes = _confirmYes, Music = Settings.Music, Sfx = Settings.Sfx, Offset = Settings.OffsetMs,
                 Reduce = Settings.ReduceMotionOption, ReduceSystem = Settings.ReduceMotion, Graphics = (int)Settings.Graphics,
                 Swing = (int)Settings.SwingInputChoice, CameraAvail = Settings.CameraInputAvailable, GfxLine = gfx,
             };
@@ -1298,8 +1300,9 @@ namespace Bonanza
                         if (p.Action == "click") continue;
                         if (_confirmReset)
                         {
-                            // Anything but SPACE cancels.
-                            if (p.Action == "a") { Save.ResetProgress(Games.Select(e => e.Id)); ShellSfx("fanfare"); }
+                            // LEFT / RIGHT choose YES or KEEP (KEEP first), SPACE takes the focused one, anything else cancels.
+                            if (p.Action == "left" || p.Action == "right") { _confirmYes = p.Action == "left"; ShellSfx("ui"); continue; }
+                            if (p.Action == "a" && _confirmYes) { Save.ResetProgress(Games.Select(e => e.Id)); ShellSfx("fanfare"); }
                             else ShellSfx("uiBack");
                             _confirmReset = false;
                             continue;
@@ -1611,7 +1614,7 @@ namespace Bonanza
             _optIndex = row;
             switch ((Opt)row)
             {
-                case Opt.Reset: _confirmReset = true; ShellSfx("uiBack"); break;
+                case Opt.Reset: _confirmReset = true; _confirmYes = false; ShellSfx("uiBack"); break;
                 case Opt.Back: ShellSfx("uiBack"); _mode = Mode.Title; break;
                 case Opt.Reduce: case Opt.Graphics: case Opt.Swing: AdjustOption(row, 1); break;
             }
