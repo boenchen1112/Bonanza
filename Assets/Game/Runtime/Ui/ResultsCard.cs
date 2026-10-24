@@ -33,6 +33,8 @@ namespace Bonanza.HudKit
         public string LeanLabel;
         /// Opt-in: how dark the dim under the card is (default 0.68), so a game can keep its scene readable behind the card.
         public float DimAlpha = 0.68f;
+        /// Opt-in: the stat row's label size in px (0 = the shared 7.9) in near-white, for a card that is read at a glance.
+        public float StatLabelPx;
         public List<PartyRow> Party;
         /// (key, label) chips for the continue prompt: ("SPACE", "play again"), ("ESC", "menu").
         public List<KeyValuePair<string, string>> Prompts = new List<KeyValuePair<string, string>>();
@@ -43,7 +45,8 @@ namespace Bonanza.HudKit
         // web results.js timeline (s)
         public const float CountAt = 0.3f, CountS = 0.9f, StatsAt = 0.45f, StampAt = 1.3f, PartyAt = 1.65f, PromptAt = 0.7f;
 
-        const float CardW = 600, Pad = 30.7f;
+        const float Pad = 30.7f;
+        float CardW = 600;   // 660 for a card with its own larger stat labels (the five columns need the room)
 
         RectTransform _root, _card, _rankBox, _badge, _prompt;
         // The prompts that have a key (SPACE play again, ESC menu) are buttons inside the card; the host keeps only
@@ -60,6 +63,7 @@ namespace Bonanza.HudKit
         bool _built;
         float _t = -1, _stampAt, _badgeAt;
         Color _rankColor;
+        float _statLabelPx;
 
         sealed class Item { public RectTransform Rt; public CanvasGroup Group; public float At; public Vector2 Pos; }
 
@@ -93,6 +97,8 @@ namespace Bonanza.HudKit
             _group.alpha = 1;
             _score = d.Score; _lastShown = -1;
             _rankColor = UiKit.RankColor(d.Rank);
+            _statLabelPx = d.StatLabelPx;
+            CardW = d.StatLabelPx > 0 ? 660 : 600;
 
             // the dim sits under the card: the scene behind stays, darker
             _dim = UiKit.Box(_root, "Dim", new Color(8 / 255f, 7 / 255f, 20 / 255f, d.DimAlpha));
@@ -275,7 +281,8 @@ namespace Bonanza.HudKit
             var labelOnly = new List<KeyValuePair<string, string>>();
             foreach (var pr in d.Prompts) if (string.IsNullOrEmpty(pr.Key)) labelOnly.Add(pr);
             _prompt = UiKit.Rect("Prompt", _root);
-            UiKit.Place(_prompt, new Vector2(1, 0), new Vector2(1, 0), new Vector2(-1280 * 0.032f, 720 * 0.034f), new Vector2(400, 24));
+            // a centred card keeps its prompts centred under it (the page's fullscreen icon sits in the bottom-right corner)
+            if (!d.Centered) UiKit.Place(_prompt, new Vector2(1, 0), new Vector2(1, 0), new Vector2(-1280 * 0.032f, 720 * 0.034f), new Vector2(400, 24));
             _promptGroup = _prompt.gameObject.AddComponent<CanvasGroup>(); _promptGroup.alpha = 0;
             float px = 0;
             // lay the chips out right to left
@@ -299,6 +306,7 @@ namespace Bonanza.HudKit
                 UiKit.Stretch(kt.rectTransform);
                 px += kw + 18;
             }
+            if (d.Centered) UiKit.Place(_prompt, new Vector2(0.5f, 0), new Vector2(1, 0), new Vector2((px - 18f) / 2f, 720 * 0.034f), new Vector2(400, 24));
             _built = true;
             Reveal(0);
         }
@@ -335,8 +343,8 @@ namespace Bonanza.HudKit
                 n.rectTransform.anchorMin = n.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
                 n.rectTransform.sizeDelta = new Vector2(colW, 30); n.rectTransform.anchoredPosition = new Vector2(0, 8);
                 n.text = cells[i].value;
-                var l = UiKit.Text(cell, "L", TextStyle.Label, 11f * 0.72f, UiKit.Dim, TextAlignmentOptions.Center, italic: false);
-                l.characterSpacing = 8f;
+                var l = UiKit.Text(cell, "L", TextStyle.Label, _statLabelPx > 0 ? _statLabelPx : 11f * 0.72f, _statLabelPx > 0 ? new Color(0.93f, 0.94f, 0.98f) : UiKit.Dim, TextAlignmentOptions.Center, italic: false);
+                l.characterSpacing = _statLabelPx > 0 ? 0f : 8f;
                 l.rectTransform.anchorMin = l.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
                 l.rectTransform.sizeDelta = new Vector2(colW, 16); l.rectTransform.anchoredPosition = new Vector2(0, -12);
                 l.text = cells[i].label;

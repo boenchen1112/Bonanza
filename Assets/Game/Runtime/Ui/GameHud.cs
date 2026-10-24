@@ -54,7 +54,9 @@ namespace Bonanza.HudKit
         TextMeshProUGUI _outsLabel;
         readonly List<Lamp> _lamps = new List<Lamp>();
         int _outsShown, _outsTotal = 3;
-        float _outsFresh, _lampPop;
+        float _outsFresh, _lampPop, _outsPulse;
+        /// Opt-in (default off): every lit out lamp carries a red X that stamps in when the out is taken.
+        public bool OutMarks;
         int _lampPopIndex = -1;
         CanvasGroup _outsGroup;
 
@@ -77,7 +79,7 @@ namespace Bonanza.HudKit
         BannerView _banner;
         RectTransform _top;   // above everything the HUD owns (results card sits in it)
 
-        sealed class Lamp { public RectTransform Rt; public Image Fill, Ring, Glow; public bool On; }
+        sealed class Lamp { public RectTransform Rt; public Image Fill, Ring, Glow; public TextMeshProUGUI Mark; public float MarkAge = 9; public bool On; }
 
         sealed class Pop
         {
@@ -203,7 +205,9 @@ namespace Bonanza.HudKit
                 var gr = glow.rectTransform; gr.anchorMin = gr.anchorMax = new Vector2(0.5f, 0.5f); gr.sizeDelta = new Vector2(36, 36);
                 var fill = UiKit.Box(rt, "Fill", UiKit.Hex(0x2a3550), UiKit.Disc); UiKit.Stretch(fill.rectTransform);
                 var ring = UiKit.Box(rt, "Ring", new Color(1, 1, 1, 0.25f), UiKit.Ring); UiKit.Stretch(ring.rectTransform);
-                _lamps.Add(new Lamp { Rt = rt, Fill = fill, Ring = ring, Glow = glow });
+                var mark = UiKit.Text(rt, "Mark", TextStyle.Display, 17f, Color.white, TextAlignmentOptions.Center);
+                UiKit.Stretch(mark.rectTransform); mark.text = "X"; mark.gameObject.SetActive(false);
+                _lamps.Add(new Lamp { Rt = rt, Fill = fill, Ring = ring, Glow = glow, Mark = mark });
             }
             LayoutOuts();
         }
@@ -386,7 +390,8 @@ namespace Bonanza.HudKit
             else _outsGroup.alpha = 1;
             if (total != _outsTotal) SetLamps(total);
             spent = Mathf.Clamp(spent, 0, total);
-            if (spent > _outsShown && !Settings.ReduceMotion) { _lampPopIndex = spent - 1; _lampPop = 0; }
+            if (spent > _outsShown && !Settings.ReduceMotion && !OutMarks) { _lampPopIndex = spent - 1; _lampPop = 0; }
+            if (spent > _outsShown && OutMarks && spent - 1 < _lamps.Count) _lamps[spent - 1].MarkAge = 0;
             if (spent == 0 && _outsShown >= total)
             {
                 _outsLabel.text = "NEW INNING"; _outsFresh = 1.8f;
@@ -415,7 +420,28 @@ namespace Bonanza.HudKit
                 l.Fill.color = on ? UiKit.Coral : UiKit.Hex(0x2a3550);
                 l.Ring.color = new Color(1, 1, 1, on ? 0.55f : 0.25f);
                 l.Glow.color = new Color(UiKit.Coral.r, UiKit.Coral.g, UiKit.Coral.b, on ? 0.75f : 0f);
+                if (l.Mark != null) { l.Mark.gameObject.SetActive(OutMarks && on); if (!on) l.MarkAge = 9; }
             }
+        }
+
+        /// The pill swells and settles twice (the side is retired); a calm player gets a colour flash instead.
+        public void OutsPulse() { _outsPulse = 1.3f; }
+
+        static Color OutsFillBase => new Color(12 / 255f, 8 / 255f, 32 / 255f, UiKit.DarkAlpha(0.55f));
+        Image _stageDim;
+        /// Opt-in: a dark wash over the scene under the HUD (0 = off), for a held moment such as SIDE RETIRED.
+        public void StageDim(float alpha)
+        {
+            if (_stageDim == null)
+            {
+                if (alpha <= 0.001f) return;
+                _stageDim = UiKit.Box(_root, "StageDim", new Color(8 / 255f, 7 / 255f, 20 / 255f, 0));
+                UiKit.Stretch(_stageDim.rectTransform);
+                _stageDim.raycastTarget = false;
+                _stageDim.transform.SetAsFirstSibling();
+            }
+            _stageDim.color = new Color(8 / 255f, 7 / 255f, 20 / 255f, Mathf.Clamp01(alpha));
+            if (_stageDim.gameObject.activeSelf != alpha > 0.001f) _stageDim.gameObject.SetActive(alpha > 0.001f);
         }
 
         /// The instruction bar. Rich text allowed: "<color=#ffe58a>SPACE</color> / tap ...".
@@ -587,6 +613,24 @@ namespace Bonanza.HudKit
                 if (_lampPop >= 0.16f) _lampPopIndex = -1;
             }
             if (_outsFresh > 0) { _outsFresh -= dt; if (_outsFresh <= 0) EndFresh(); }
+            if (OutMarks)
+                foreach (var l in _lamps)
+                {
+                    if (l.Mark == null || !l.Mark.gameObject.activeSelf || l.MarkAge > 1) continue;
+                    l.MarkAge += dt;
+                    float k = calm ? 1 : Mathf.Clamp01(l.MarkAge / 0.2f);
+                    l.Mark.rectTransform.localScale = Vector3.one * (calm ? 1 : Mathf.Lerp(3.4f, 1f, UiKit.BackOut(k)));
+                    l.Mark.alpha = Mathf.Clamp01(k * 1.6f);
+                }
+            if (_outsPulse > 0)
+            {
+                _outsPulse = Mathf.Max(0, _outsPulse - dt);
+                float w = Mathf.Sin(_outsPulse / 1.3f * Mathf.PI * 4f);
+                _outsRt.localScale = Vector3.one * (calm ? 1f : 1f + 0.3f * Mathf.Max(0, w));
+                _outsBorder.color = Color.Lerp(new Color(1, 1, 1, UiKit.LightAlpha(0.14f)), new Color(1f, 0.3f, 0.4f, 1f), Mathf.Max(0, w));
+                _outsFill.color = Color.Lerp(OutsFillBase, new Color(0.55f, 0.1f, 0.2f, 0.95f), Mathf.Max(0, w) * 0.8f);
+                if (_outsPulse <= 0) { _outsRt.localScale = Vector3.one; _outsFill.color = OutsFillBase; if (_outsFresh <= 0) EndFresh(); else _outsBorder.color = new Color(1, 229 / 255f, 138 / 255f, 0.8f); }
+            }
 
             if (_hintHiding && _hintFade > 0) { _hintFade = Mathf.Max(0, _hintFade - dt / 0.6f); _hintGroup.alpha = _hintFade; }
 
