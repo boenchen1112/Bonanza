@@ -1547,6 +1547,16 @@ namespace Bonanza
         void DrawResults(float s)
         {
             if (_party != null || _resultsT < ResultsLock || Autoplay) return;
+            if (_game != null && _game.ResultsChipsClickable)
+            {
+                // invisible click targets over the card's centred SPACE / ESC chips
+                float cs = Screen.height / 720f, cx = Screen.width * 0.5f, cy = Screen.height - 54 * cs;
+                var a2 = new Rect(cx - 130 * cs, cy, 130 * cs, 36 * cs);
+                var m2 = new Rect(cx + 6 * cs, cy, 100 * cs, 36 * cs);
+                if (GUI.Button(a2, GUIContent.none, GUIStyle.none)) Open(_entry);
+                else if (GUI.Button(m2, GUIContent.none, GUIStyle.none)) LeaveRound();
+                return;
+            }
             var again = new Rect(Screen.width * 0.25f, Screen.height * 0.9f, Screen.width * 0.2f, 50 * s);
             var menu = new Rect(Screen.width * 0.55f, Screen.height * 0.9f, Screen.width * 0.2f, 50 * s);
             Hud.Box(again, new Color(1, 1, 1, 0.12f)); Hud.Text(again, "AGAIN", Hud.Small, Color.white);

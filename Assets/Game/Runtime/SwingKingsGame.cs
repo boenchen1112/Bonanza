@@ -22,6 +22,7 @@ using UnityEngine;
 
 namespace Bonanza
 {
+    [DefaultExecutionOrder(500)]   // after the look rig's LateUpdate, which re-pushes the palette colour onto the batter
     public sealed partial class SwingKingsGame : Minigame
     {
         public override string Id => "swing-kings";
@@ -113,7 +114,7 @@ namespace Bonanza
         // HUD (canvas: Ui). Presentation only; it ages on real time.
         float _dim;                     // eased stage-light dim while SIDE RETIRED holds
         float _finishPush;              // slow push-in on the batter through the finish
-        double _fbSplitAt = -1, _fbLiveAt = -1; string _fbLevel;   // the free-bars counter and the live stinger (clocked off the bar line)
+        double _fbSplitAt = -1, _fbLiveAt = -1; bool _fbSplitArmed, _fbLiveArmed; string _fbLevel;   // the free-bars counter and the live stinger (clocked off the bar line)
         float _outsClear;               // seconds until the lamps reset after the side is retired
         bool _hintHidden;
         float _camPush, _camLift;
@@ -540,15 +541,16 @@ namespace Bonanza
             UpdateSet(dt, _round != null ? _round.BeatAt(_now) : 0);
             _dim = Damp(_dim, _outsClear > 0 ? 1 : 0, _outsClear > 0 ? 6f : 2.5f, Time.deltaTime);
             Look.Dim = Settings.ReduceMotion ? _dim * 0.5f : _dim;
+            Ui.StageDim(_dim * (Settings.ReduceMotion ? 0.28f : 0.45f));   // SIDE RETIRED: the whole stage visibly dims behind the HUD
             if (_finishShown) _finishPush = Mathf.Min(1, _finishPush + Time.deltaTime / 5f);
-            if (_fbSplitAt > 0 && _now >= _fbSplitAt)
+            if (_fbSplitArmed && _now >= _fbSplitAt)
             {
-                _fbSplitAt = -1;
+                _fbSplitArmed = false;
                 Ui.Banner("FREE BAR 2/2", "LISTEN FOR THE DOWNBEAT", new Color(0.62f, 0.9f, 1f), Mathf.Max(1f, (float)(_fbLiveAt - _now) * 0.8f), plate: true, y: 0.73f, scale: 0.5f);
             }
-            if (_fbLiveAt > 0 && _now >= _fbLiveAt)
+            if (_fbLiveArmed && _now >= _fbLiveAt)
             {
-                _fbLiveAt = -1;
+                _fbLiveArmed = false;
                 Ui.Banner("PLAY BALL!", null, Bonanza.HudKit.UiKit.Gold, 0.8f, plate: true, y: 0.72f, scale: 0.8f);
             }
             // "SIDE RETIRED" holds all three lamps, then the count starts over (web _outsClear).
@@ -611,7 +613,7 @@ namespace Bonanza
             // Low and small, off the ball's arc (the flight crosses the upper frame). The counter changes and the live
             // stinger lands at times with a per-hymn jitter, never on the bar line: they must not show where the downbeat is.
             float jit = ((slot.Index * 37) % 11) / 100f;
-            _fbSplitAt = _now + free * (0.30 + jit); _fbLiveAt = _now + free * (0.62 + jit);
+            _fbSplitAt = _now + free * (0.30 + jit); _fbLiveAt = _now + free * (0.62 + jit); _fbSplitArmed = _fbLiveArmed = true;
             Ui.Banner("FREE BAR 1/2", $"HYMN {slot.Index + 1}/{DownbeatRound.ExcerptCount} · {level} · LISTEN FOR THE DOWNBEAT",
                 new Color(0.62f, 0.9f, 1f), Mathf.Max(1f, free * (0.30f + jit)), plate: true, y: 0.73f, scale: 0.5f);
             SkvLog($"ev=excerpt k={slot.Index} free={free:F2}");
@@ -634,6 +636,8 @@ namespace Bonanza
 
         /// The shared card's opt-ins: centred, a filled rank tile in the rank colour with its glow, the sticker on it,
         /// and stat labels in near-white at a readable size.
+        public override bool ResultsChipsClickable => true;
+
         public override void ResultsStyle(Bonanza.HudKit.ResultsData d)
         {
             d.Centered = true; d.RankFilled = true; d.BadgeOnRank = true; d.StatLabelPx = 12f;
@@ -734,8 +738,17 @@ namespace Bonanza
         {
             if (!_pitchBalls.TryGetValue(p, out var b)) return;
             // Sailed past into the backstop net, with a puff.
-            Look.Fx.Burst(b.Go.transform.position, 8, Hex(0x9fd8ff), 3, life: 0.4f);
-            _netHit = 1;
+            // The ball thuds into the net: the mesh bulges hard, a dust puff and a spray of white flecks.
+            var np = b.Go.transform.position;
+            Look.Fx.Burst(np, Settings.ReduceMotion ? 5 : 12, Hex(0xf2f6ff), 3.4f, life: 0.45f);
+            if (_smoke != null)
+            {
+                var sm = _smoke.Begin();
+                sm.Pos(np).Dir(new Vector3(-0.4f, 0.6f, 0)); sm.Cone = 0.8f; sm.Speed = 1.4f; sm.Jitter = 0.06f; sm.Grav = 0.2f; sm.Drag = 3f; sm.Fade = PFade.QuadOut;
+                sm.Color(new Color(0.62f, 0.6f, 0.7f)); sm.Alpha = 0.55f; sm.Size = 0.38f; sm.Life = 0.5f; sm.S0 = 0.5f; sm.S1 = 1.6f;
+                _smoke.Emit(Settings.ReduceMotion ? 1 : 3);
+            }
+            _netHit = 1.6f;
             b.Trail?.Release();
             FreeBall(b.Go);
             ClearPips(p);
@@ -836,15 +849,10 @@ namespace Bonanza
                 fx.Impact(Contact, dirV, Hex(0xff7a1a), roomy ? 10 : 6, 15, 0.26f, 0.16f, scale);
                 fx.Flare(Contact, Hex(0xff9a3a) * 0.8f, 0.85f * scale, 0.2f, 0.4f, 2.0f);
                 fx.Impact(Contact, Vector3.up, Hex(0xffe0a0), roomy ? 14 : 10, 15, 0.18f, 1f, scale * 0.7f);
-                // one quick gold shockwave off the bat (short-lived: the next pitch is already on its way)
-                fx.Ring(Contact, Hex(0xffc24a), 0.26f, 0.3f, 2.3f * scale, 0.2f, 0.03f, 0.01f, 0.8f, overlay: true);
+                // (no ring round the batter: the bat's own arc stays lit as a ribbon for a beat)
+                _batTrailHold = 0.4f;
                 fx.Burst(Contact + dirV * 0.2f, roomy ? 14 : 10, Hex(0xffd35a), 9f, 0.12f, 0.5f, -6f, dirV, 0.5f);
                 // The grand slam's shockwave and its echo reach well below the bat: overlay rings the field can't slice flat.
-                if (fin)
-                {
-                    fx.Ring(Contact, tierColor, 0.5f, 0.4f, 4.2f * scale, 0.2f, wobble: 0.004f, overlay: true);
-                    fx.Ring(Contact, Hex(0xffd35a), 0.7f, 0.2f, 2.6f * scale, 0.14f, wobble: 0.004f, overlay: true);
-                }
             }
             var rig = Look.Rig;
             if (!c.IsDemo) rig.Shake(big ? 0.12f : 0.05f, new Vector3(dir.x, 0.5f, 0));
@@ -922,6 +930,8 @@ namespace Bonanza
             }
             else fx.Callout(word, sub, Contact + new Vector3(1.0f, 1.3f, 0), bomb ? Hex(0xff6a3a) : swung ? Hex(0xff5d8a) : Hex(0xff8a3c), bomb ? 0.9f : 0.8f, life, 0.4f);
             _camPush = 0.25f;
+            // the crisp K stamp, left of the plate (a looking or swinging strike; a bomb has its own burst)
+            if (!bomb && !sideRetired) Ui.PopupAt(Camera.main, Contact + new Vector3(-1.1f, 0.9f, -0.2f), "K", Hex(0xff5d8a), 2.1f, 0.75f);
         }
 
         /// Takes the pitch's ball off the field (it is gone: hit, blown up) and returns where it was.

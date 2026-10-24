@@ -37,7 +37,8 @@ namespace Bonanza.HudKit
         // web results.js timeline (s)
         public const float CountAt = 0.3f, CountS = 0.9f, StatsAt = 0.45f, StampAt = 1.3f, PartyAt = 1.65f, PromptAt = 0.7f;
 
-        const float CardW = 600, Pad = 30.7f;
+        const float Pad = 30.7f;
+        float CardW = 600;   // 660 for a card with its own larger stat labels (the five columns need the room)
 
         RectTransform _root, _card, _rankBox, _badge, _prompt;
         Image _dim;
@@ -83,6 +84,7 @@ namespace Bonanza.HudKit
             _score = d.Score; _lastShown = -1;
             _rankColor = UiKit.RankColor(d.Rank);
             _statLabelPx = d.StatLabelPx;
+            CardW = d.StatLabelPx > 0 ? 660 : 600;
 
             // the dim sits under the card: the scene behind stays, darker
             _dim = UiKit.Box(_root, "Dim", new Color(8 / 255f, 7 / 255f, 20 / 255f, 0.68f));
@@ -215,7 +217,8 @@ namespace Bonanza.HudKit
 
             // continue prompt (bottom right of the screen)
             _prompt = UiKit.Rect("Prompt", _root);
-            UiKit.Place(_prompt, new Vector2(1, 0), new Vector2(1, 0), new Vector2(-1280 * 0.032f, 720 * 0.034f), new Vector2(400, 24));
+            // a centred card keeps its prompts centred under it (the page's fullscreen icon sits in the bottom-right corner)
+            if (!d.Centered) UiKit.Place(_prompt, new Vector2(1, 0), new Vector2(1, 0), new Vector2(-1280 * 0.032f, 720 * 0.034f), new Vector2(400, 24));
             _promptGroup = _prompt.gameObject.AddComponent<CanvasGroup>(); _promptGroup.alpha = 0;
             float px = 0;
             // lay the chips out right to left
@@ -239,6 +242,7 @@ namespace Bonanza.HudKit
                 UiKit.Stretch(kt.rectTransform);
                 px += kw + 18;
             }
+            if (d.Centered) UiKit.Place(_prompt, new Vector2(0.5f, 0), new Vector2(1, 0), new Vector2((px - 18f) / 2f, 720 * 0.034f), new Vector2(400, 24));
             _built = true;
             Reveal(0);
         }

@@ -137,18 +137,21 @@ namespace Bonanza
             f.Pos(at + Vector3.up * 0.18f); f.Color(new Color(0.85f, 0.55f, 0.1f)); f.Size = 0.6f; f.Life = 0.2f; f.Speed = 1.2f;   // the cap: bright yellow-orange, not white
             _fire.Emit(soft ? 1 : 3);
             fx.Burst(at, Mathf.RoundToInt(10 * k), Hex(0xff9a3a), 7f, 0.09f, 0.45f, -10f);
-            // chunky shards: three casing pieces, one brass
+            // chunky shards: casing pieces, one brass, thrown wide
             var e = _debris.Begin();
-            e.Pos(at); e.Cone = 1; e.Speed = 6f; e.Size = 0.28f; e.Life = 0.7f;
+            e.Pos(at); e.Cone = 1; e.Speed = 7f; e.Size = 0.34f; e.Life = 0.8f;
             foreach (var c in Casing) { e.Color(c); _debris.Emit(1); }
-            // smoke: a dark purple-grey puff in two flat bands (a deep base, a lighter cap rolling over it)
+            e.Size = 0.26f; e.Color(Casing[0]); _debris.Emit(soft ? 0 : 1);
+            // smoke: a purple-grey puff in three flat bands (a deep base, a mid band, a pale cap rolling over them)
             var s = _smoke.Begin();
-            s.Pos(at + new Vector3(0.1f, 0.1f, 0.1f)).Dir(new Vector3(0.3f, 1, 0.4f)); s.Cone = 0.5f; s.Speed = 2.2f; s.Jitter = 0.15f;
-            s.Grav = 1.0f; s.Drag = 2.6f; s.Fade = PFade.Hold;
-            s.Color(new Color(0.16f, 0.12f, 0.22f)); s.Alpha = 1f; s.Size = 0.85f; s.Life = 0.8f; s.S0 = 0.5f; s.S1 = 1.9f;
+            s.Pos(at + new Vector3(0.1f, 0.05f, 0.1f)).Dir(new Vector3(0.3f, 1, 0.4f)); s.Cone = 0.5f; s.Speed = 2.0f; s.Jitter = 0.18f;
+            s.Grav = 0.8f; s.Drag = 2.6f; s.Fade = PFade.Hold;
+            s.Color(new Color(0.2f, 0.15f, 0.28f)); s.Alpha = 1f; s.Size = 1.25f; s.Life = 0.95f; s.S0 = 0.55f; s.S1 = 1.9f;
             _smoke.Emit(soft ? 3 : 6);
-            s.Pos(at + new Vector3(0.1f, 0.35f, 0.1f)); s.Color(new Color(0.36f, 0.3f, 0.46f)); s.Alpha = 0.9f; s.Size = 0.6f; s.Life = 0.65f; s.Speed = 1.6f;
-            _smoke.Emit(soft ? 2 : 4);
+            s.Pos(at + new Vector3(0.1f, 0.4f, 0.1f)); s.Color(new Color(0.42f, 0.36f, 0.52f)); s.Alpha = 1f; s.Size = 0.95f; s.Life = 0.85f; s.Speed = 1.5f;
+            _smoke.Emit(soft ? 2 : 5);
+            s.Pos(at + new Vector3(0.05f, 0.75f, 0.1f)); s.Color(new Color(0.62f, 0.58f, 0.7f)); s.Alpha = 0.95f; s.Size = 0.7f; s.Life = 0.7f; s.Speed = 1.1f;
+            _smoke.Emit(soft ? 1 : 3);
             // the batter is sooted and dizzy for a moment
             _sootT = 0.9f; _sootStar = 0;
             Look.Rig.DoFlash(soft ? 0.02f : 0.05f, Hex(0xff8a50));   // a brief warm blink, never white
@@ -165,9 +168,6 @@ namespace Bonanza
             if (_batterMat == null) return;
             if (_sootT <= 0) return;
             _sootT -= dt;
-            _batterBase = Look.Palette.Live[PC.Batter];
-            float k = Mathf.Clamp01(_sootT / 0.9f);
-            _batterMat.SetColor("_BaseColor", Color.Lerp(_batterBase, new Color(0.07f, 0.06f, 0.08f), Mathf.Min(1, k * 2.2f)));
             _sootStar -= dt;
             if (_sootStar <= 0 && !Calm)
             {
@@ -178,8 +178,19 @@ namespace Bonanza
                 st.Pos(head).Dir(Vector3.up); st.Cone = 0.2f; st.Speed = 0.6f; st.Size = 0.14f; st.Life = 0.45f; st.Color(new Color(1f, 0.82f, 0.25f));
                 _debris.Emit(1);
             }
-            if (_sootT <= 0) _batterMat.SetColor("_BaseColor", _batterBase);
         }
+
+        /// The soot colour goes on after the look rig has pushed the palette colour for the frame (execution order), and
+        /// the frame the soot ends puts the palette colour back.
+        void LateUpdate()
+        {
+            if (_batterMat == null || !(_sootT > 0 || _sootOn)) return;
+            _batterBase = Look.Palette.Live[PC.Batter];
+            float k = Mathf.Clamp01(_sootT / 0.9f);
+            _sootOn = _sootT > 0;
+            _batterMat.SetColor("_BaseColor", _sootOn ? Color.Lerp(_batterBase, new Color(0.07f, 0.06f, 0.08f), Mathf.Min(1, k * 2.2f)) : _batterBase);
+        }
+        bool _sootOn;
 
         // ------------------------------------------------------------ fizzle
 
@@ -189,10 +200,11 @@ namespace Bonanza
         void BombFizzle(Vector3 at)
         {
             var d = AcquireDud();
-            at = new Vector3(at.x, Mathf.Max(at.y, 0.5f), at.z);
+            // the ball has flown on past the plate by the time it is let go: reveal the bomb AT the plate, in front of the batter
+            at = new Vector3(PlatePos.x - 0.15f, 0.6f, PlatePos.z - 0.35f);
             d.Live = true; d.Boom = false; d.T = 0; d.Life = 0.38f; d.P = at; d.Bounced = false; d.Scale = 0.46f;
             // a hop out past the plate toward the camera, so the dud is seen in the foreground, not hidden by the batter
-            d.V = new Vector3(1.1f, 1.4f, -3.6f);
+            d.V = new Vector3(0.3f, 1.3f, -3.4f);
             d.Axis = Vector3.Cross(Vector3.up, new Vector3(d.V.x, 0, d.V.z)).normalized; d.Spin = 480;
             d.NextSpark = 0;
             d.Go.position = at; d.Go.localScale = Vector3.one * d.Scale; d.Go.rotation = Quaternion.Euler(0, 0, -30);

@@ -74,6 +74,8 @@ namespace Bonanza
         public virtual List<KeyValuePair<string, string>> ResultsStats(Outcome o) => null;
         /// Opt-in results card looks (ResultsData.Centered / RankFilled / BadgeOnRank / Pips); the default changes nothing.
         public virtual void ResultsStyle(ResultsData d) { }
+        /// Opt-in: the results card's own SPACE / ESC chips are the click targets (no grey AGAIN / MENU buttons).
+        public virtual bool ResultsChipsClickable => false;
         public virtual void OnResume() { }
         /// The tempo the pause menu counts back in at.
         public virtual double SecondsPerBeat => 0.5;

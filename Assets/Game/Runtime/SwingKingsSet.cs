@@ -499,7 +499,8 @@ namespace Bonanza
                 _cardMat = EnvKit.Surface(_env, Color.white, null, null, rim: 0.3f, pulse: 0.03f, bands: 2, twoSided: true);
                 var cb = new MeshBuilder();
                 var rng = new System.Random(0x5ea7);
-                Color[] fans = { Lin(0xffe066), Lin(0x7fe7ff), Lin(0xff5d7a), Lin(0xeeeeff), Lin(0xb28cff) };
+                // muted silhouettes (a bean body and a head), not bright rectangles: they read as a crowd in the dark seats
+                Color[] fans = { Lin(0x6c5a86), Lin(0x4f6a86), Lin(0x86566a), Lin(0x76766f), Lin(0x5a5f8c) };
                 const int Seg = 70;
                 for (int k = 0; ; k++)
                 {
@@ -509,10 +510,13 @@ namespace Bonanza
                     {
                         if (rng.NextDouble() > gap * 0.9f) continue;
                         float a = a0 + arc * (i + 0.5f) / Seg;
-                        float t = Tone(a) * 0.62f;
+                        float t = Tone(a) * 0.7f;
                         var c = fans[rng.Next(fans.Length)];
-                        cb.Shell(r - 0.3f, r - 0.3f, 0.62f, 1, a, arc / Seg * 0.5f,
-                            Matrix4x4.Translate(new Vector3(0, YAt(r) + 0.42f, cz)), new Color(c.r * t, c.g * t, c.b * t, 1), Vector2.one, inward: true);
+                        var col = new Color(c.r * t, c.g * t, c.b * t, 1);
+                        var at = new Vector3(Mathf.Sin(a) * (r - 0.3f), YAt(r) + 0.2f, cz + Mathf.Cos(a) * (r - 0.3f));
+                        float h = 0.9f + (float)rng.NextDouble() * 0.25f;
+                        cb.Sphere(0.24f, 8, 5, Matrix4x4.Translate(at + Vector3.up * 0.28f * h), col, new Vector3(1f, 1.35f * h, 0.8f));
+                        cb.Sphere(0.15f, 8, 5, Matrix4x4.Translate(at + Vector3.up * 0.78f * h), col, Vector3.one);
                     }
                 }
                 if (cb.Count > 0) EnvKit.Static(_env, "StandCards", transform, cb, _cardMat).receiveShadows = false;
@@ -985,7 +989,7 @@ namespace Bonanza
             tpl.P.Add(Vector3.zero); tpl.N.Add(Vector3.up); tpl.C.Add(Color.white); tpl.UV.Add(Vector2.zero);
             foreach (var v in rim) { tpl.P.Add(v * 0.7f); tpl.N.Add(Vector3.up); tpl.C.Add(new Color(0.5f, 0.42f, 0.3f)); tpl.UV.Add(Vector2.zero); }
             for (int k = 0; k < 4; k++) tpl.Tri(c0, c0 + 1 + (k + 1) % 4, c0 + 1 + k);
-            var m = EnvKit.Surface(_env, Color.white, null, null, rim: 0f, pulse: 0.2f, lift: 1.6f, bands: 1);
+            var m = EnvKit.Surface(_env, Color.white, null, null, rim: 0f, pulse: 0f, lift: 1.6f, bands: 1);   // no beat pulse: every pip is the same on every beat
             m.SetFloat("_ShadowRecv", 0);
             _pips = new MeshBatch("Pips", transform, tpl, PipMax, m);
             _pips.Renderer.receiveShadows = false;
@@ -1070,13 +1074,11 @@ namespace Bonanza
                 // The last step lands on the plate: the reticle marks it, not a pip.
                 if (i >= steps - 1) { _pipBase[i] = 0; continue; }
                 double u = (i + 1) / (double)steps;
-                double off = u * p.Lead;
-                bool whole = System.Math.Abs(off - System.Math.Round(off)) < 0.08;
                 var at = Sample(p, u);
                 var ahead = Sample(p, u + 0.02) - at; ahead.y = 0;
                 _pipPos[i] = new Vector3(at.x, 0.035f, at.z);
                 _pipRot[i] = Quaternion.LookRotation(ahead.sqrMagnitude > 1e-6f ? ahead.normalized : Vector3.right) * Quaternion.Euler(0, -90, 0);
-                _pipBase[i] = whole ? 1.35f : 0.9f;   // whole beats bigger
+                _pipBase[i] = 1.1f;   // one size for every pip: the diamond must not count the bar or the beat
                 _pipPop[i] = 0;
             }
             _pipCount = steps;
@@ -1087,7 +1089,7 @@ namespace Bonanza
         {
             if (p != _pipOwner || i < 0 || i >= _pipCount) return;
             if (i == _pipCount - 1) { _reticlePop = 1; return; }
-            _pipPop[i] = 1; _pipBase[i] *= 0.5f;   // flash, then recede: passed markers do not hang as glowing discs
+            return;   // static markers: a pop or a fade would make the diamond's size and brightness differ between frames
         }
 
         void ClearPips(Pitch p)
@@ -1169,10 +1171,9 @@ namespace Bonanza
                 for (int i = 0; i < _pipCount; i++)
                 {
                     _pipPop[i] = Damp(_pipPop[i], 0, 7, dt);
-                    float s = _pipBase[i] * (1 + _pipPop[i] * 1.2f);
+                    float s = _pipBase[i];
                     _pips.Matrix[i] = Matrix4x4.TRS(_pipPos[i], _pipRot[i], new Vector3(s, 1, s));
-                    float glow = 1 + _pipPop[i] * 2.5f + (_pipBase[i] >= 1.3f ? 0.35f : 0);
-                    _pips.Tint[i] = PipCol.linear * glow;
+                    _pips.Tint[i] = PipCol.linear;
                 }
                 _pips.Flush();
             }
@@ -1199,13 +1200,13 @@ namespace Bonanza
             _nightK = Damp(_nightK, _nightGoal, 1.4f, dt);
             float n = _nightK;
             float flicker = 1 + Mathf.Sin(Time.time * 23f) * 0.015f;
-            for (int i = 0; i < _flareMats.Length; i++) _flareMats[i].SetFloat(IdIntensity, (n * 2.0f * flicker + Look.BeatPulse * n * 0.4f) * (i == 0 ? 0.08f : 1));   // the near head sits by the score: a faint lamp that cannot bloom beside the HUD
+            for (int i = 0; i < _flareMats.Length; i++) _flareMats[i].SetFloat(IdIntensity, (n * 2.0f * flicker + Look.BeatPulse * n * 0.4f) * (i == 0 ? 0f : 1));   // the near head sits by the score: a faint lamp that cannot bloom beside the HUD
             for (int i = 0; i < _flareMatsR.Length; i++) _flareMatsR[i].SetFloat(IdIntensity, n * 2.2f * flicker + Look.BeatPulse * n * 0.3f);
             // the floods carry the night: warm pools on the plate and the mound
             for (int i = 0; i < _poolMats.Length; i++) _poolMats[i].SetFloat(IdIntensity, n * 0.6f * (1 + Look.BeatPulse * 0.04f));   // warm, never a white hot spot on the plate
             for (int i = 0; i < _beamMats.Length; i++)
             {
-                _beamMats[i].SetFloat(IdIntensity, n * 0.13f * flicker);
+                _beamMats[i].SetFloat(IdIntensity, n * 0.065f * flicker);   // half the haze the cones laid over the stands
                 bool on = n > 0.01f;   // no blended cone over the frame by day (the shader is linked by the near cones)
                 if (_beamR[i].enabled != on) _beamR[i].enabled = on;
             }
@@ -1227,12 +1228,12 @@ namespace Bonanza
             // the night turf keeps its clumps and mow texture under the floods (flat teal read as a painted floor)
             if (_turfMat) _turfMat.SetFloat("_MapStrength", Mathf.Lerp(0.72f, 1.0f, n));
             if (_ledMat) _ledMat.SetColor("_BaseColor", Color.Lerp(LedDay, LedNight, n) * (1 + Look.BeatPulse * 0.25f));
-            _env?.Spotlights?.SetLevel(Mathf.Lerp(0.03f, 0.008f, n), Mathf.Lerp(0.04f, 0.014f, n));   // at night the cones read from the towers to the pools, without a milky veil over the crowd
+            _env?.Spotlights?.SetLevel(Mathf.Lerp(0.03f, 0.004f, n), Mathf.Lerp(0.04f, 0.007f, n));   // at night the cones read from the towers to the pools, without a milky veil over the crowd
             // the bowl falls dark toward the walls at night; the floods and the rim light carry the crowd
             if (_env?.Crowd != null) _env.Crowd.O.StandColor = Color.Lerp(StandDay, StandNight, n);
             if (_rowsMat) _rowsMat.SetColor("_BaseColor", Color.Lerp(StandDay, StandNight, n));
-            _env?.Crowd?.SetTint(Color.Lerp(Color.white, new Color(0.58f, 0.62f, 0.84f), n));   // the crowd's lit side is lifted so it reads against the haze; the pools stay the brightest thing
-            if (_cardMat) _cardMat.SetColor("_BaseColor", Color.Lerp(Color.white, new Color(0.58f, 0.62f, 0.84f), n));
+            _env?.Crowd?.SetTint(Color.Lerp(Color.white, new Color(0.9f, 0.93f, 1.12f), n));   // the crowd's lit side is lifted so it reads against the haze; the pools stay the brightest thing
+            if (_cardMat) _cardMat.SetColor("_BaseColor", Color.Lerp(Color.white, new Color(0.9f, 0.93f, 1.12f), n));
 
             // stand-in: hop on a hit, slump on a miss (the character replaces this; the cues stay)
             _batterHop = Damp(_batterHop, 0, 5, dt);

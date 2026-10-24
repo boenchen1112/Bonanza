@@ -418,6 +418,23 @@ namespace Bonanza.HudKit
         /// The pill swells and settles twice (the side is retired); a calm player gets a colour flash instead.
         public void OutsPulse() { _outsPulse = 1.3f; }
 
+        static Color OutsFillBase => new Color(12 / 255f, 8 / 255f, 32 / 255f, UiKit.DarkAlpha(0.55f));
+        Image _stageDim;
+        /// Opt-in: a dark wash over the scene under the HUD (0 = off), for a held moment such as SIDE RETIRED.
+        public void StageDim(float alpha)
+        {
+            if (_stageDim == null)
+            {
+                if (alpha <= 0.001f) return;
+                _stageDim = UiKit.Box(_root, "StageDim", new Color(8 / 255f, 7 / 255f, 20 / 255f, 0));
+                UiKit.Stretch(_stageDim.rectTransform);
+                _stageDim.raycastTarget = false;
+                _stageDim.transform.SetAsFirstSibling();
+            }
+            _stageDim.color = new Color(8 / 255f, 7 / 255f, 20 / 255f, Mathf.Clamp01(alpha));
+            if (_stageDim.gameObject.activeSelf != alpha > 0.001f) _stageDim.gameObject.SetActive(alpha > 0.001f);
+        }
+
         /// The instruction bar. Rich text allowed: "<color=#ffe58a>SPACE</color> / tap ...".
         public void Hint(string rich)
         {
@@ -600,9 +617,10 @@ namespace Bonanza.HudKit
             {
                 _outsPulse = Mathf.Max(0, _outsPulse - dt);
                 float w = Mathf.Sin(_outsPulse / 1.3f * Mathf.PI * 4f);
-                _outsRt.localScale = Vector3.one * (calm ? 1f : 1f + 0.16f * Mathf.Max(0, w));
-                _outsBorder.color = Color.Lerp(new Color(1, 1, 1, UiKit.LightAlpha(0.14f)), new Color(1f, 0.3f, 0.4f, 0.95f), Mathf.Max(0, w));
-                if (_outsPulse <= 0) { _outsRt.localScale = Vector3.one; EndFresh(); }
+                _outsRt.localScale = Vector3.one * (calm ? 1f : 1f + 0.3f * Mathf.Max(0, w));
+                _outsBorder.color = Color.Lerp(new Color(1, 1, 1, UiKit.LightAlpha(0.14f)), new Color(1f, 0.3f, 0.4f, 1f), Mathf.Max(0, w));
+                _outsFill.color = Color.Lerp(OutsFillBase, new Color(0.55f, 0.1f, 0.2f, 0.95f), Mathf.Max(0, w) * 0.8f);
+                if (_outsPulse <= 0) { _outsRt.localScale = Vector3.one; _outsFill.color = OutsFillBase; if (_outsFresh <= 0) EndFresh(); else _outsBorder.color = new Color(1, 229 / 255f, 138 / 255f, 0.8f); }
             }
 
             if (_hintHiding && _hintFade > 0) { _hintFade = Mathf.Max(0, _hintFade - dt / 0.6f); _hintGroup.alpha = _hintFade; }

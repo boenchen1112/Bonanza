@@ -4,7 +4,8 @@
 // This opens the game (no autoplay, nothing is ever swung, so pitches are never judged early), shoots a
 // matched frame at the same fraction of the flight for balls and for bombs, and pixel-diffs fixed regions
 // (pip, reticle, muzzle ring) ball-vs-bomb against the noise floor of bomb-vs-bomb / ball-vs-ball.
-//   node Tools/downbeat-tell-check.mjs <buildDir> <outPrefix> [query] [perClass]
+//   node Tools/downbeat-tell-check.mjs <buildDir> <outPrefix> [query] [perClass]   (perClass 4 or more: the pip amplitude series needs 8+ beats)
+// Also checks the pip's amplitude: constant in size and brightness over every beat captured at the same flight fraction.
 // env: PORT, VIEWPORT (1280x720), FRACS ("0.12,0.4,0.7" fractions of the launch-to-target time),
 //      REGIONS (JSON {name:[x,y,w,h]} at 1280x720), BOMB_TAMPER=1 (no-op; reserved)
 // Prints per region and fraction: mean abs diff (0-255) cross-class vs same-class, and the count of pixels
@@ -124,7 +125,10 @@ const result = await diffPage.evaluate(async ({ shots, regions, sx, sy }) => {
       const avg = (l, f) => l.length ? l.reduce((s, x) => s + x[f], 0) / l.length : NaN;
       const sb = balls.map(stat), sm = bombs.map(stat);
       const m = (l, k) => l.reduce((t, x) => t + x[k], 0) / l.length;
-      out.push({ region: name, frac, n: [balls.length, bombs.length], cross: [avg(cross, 'mean'), avg(cross, 'over')], same: [avg(same, 'mean'), avg(same, 'over')],
+      // amplitude per beat: every capture at this fraction of the flight, in launch order, as one series
+      const all = [...balls, ...bombs].map(stat);
+      const spread = (k) => (all.length ? Math.max(...all.map((x) => x[k])) - Math.min(...all.map((x) => x[k])) : 0);
+      out.push({ region: name, frac, n: [balls.length, bombs.length], amp: { n: all.length, pxSpread: spread(0), pxMax: all.length ? Math.max(...all.map((x) => x[0])) : 0, lumSpread: spread(1) }, cross: [avg(cross, 'mean'), avg(cross, 'over')], same: [avg(same, 'mean'), avg(same, 'over')],
         px: [m(sb, 0), m(sm, 0)], lum: [m(sb, 1), m(sm, 1)] });
     }
   }
@@ -138,6 +142,13 @@ for (const r of result) {
   const flag = r.cross[0] > r.same[0] * 1.5 + 0.2 || Math.abs(r.px[0] - r.px[1]) > 0.25 * Math.max(r.px[0], r.px[1], 1) + 8 || Math.abs(r.lum[0] - r.lum[1]) > 12;
   if (flag) bad = true;
   console.log(`${r.region.padEnd(8)} ${String(r.frac).padEnd(5)} ${r.n.join(',').padEnd(12)} ${r.cross[0].toFixed(3).padStart(8)} / ${r.cross[1].toFixed(1).padStart(6)}      ${r.same[0].toFixed(3).padStart(8)} / ${r.same[1].toFixed(1).padStart(6)}   ${r.px[0].toFixed(0).padStart(5)}|${r.px[1].toFixed(0).padEnd(5)}   ${r.lum[0].toFixed(0).padStart(4)}|${r.lum[1].toFixed(0).padEnd(4)}  ${flag ? 'TELL?' : 'ok'}`);
+}
+// The midfield diamond must be the same size and brightness on every beat: over 8+ consecutive beats at the same
+// fraction of the flight its gold pixel count and brightness may not wander (they would if it pulsed with the bar).
+for (const r of result.filter((x) => x.region === 'pip')) {
+  const ampBad = r.amp.n < 8 || r.amp.pxSpread > 0.2 * r.amp.pxMax + 6 || r.amp.lumSpread > 10;
+  if (ampBad) bad = true;
+  console.log(`pip amplitude frac ${r.frac}: ${r.amp.n} beats, px spread ${r.amp.pxSpread.toFixed(0)} of ${r.amp.pxMax.toFixed(0)}, lum spread ${r.amp.lumSpread.toFixed(1)}  ${ampBad ? 'VARIES (or under 8 beats)' : 'constant'}`);
 }
 console.log('errors:', errors.length ? errors.join(' | ') : 'none');
 await browser.close();
