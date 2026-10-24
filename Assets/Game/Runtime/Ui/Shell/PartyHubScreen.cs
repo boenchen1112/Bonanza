@@ -35,6 +35,16 @@ namespace Bonanza.Shell
         const float RowW = 440, RowH = 72, RowGap = 10, ColX = 10, Top = 122, CardW = 420, CardH = 360;
         float _startY = 170;
 
+        static string HowTo(string id) => id switch
+        {
+            "swing-kings" => "How to play: tap SPACE on the downbeat of every bar.",
+            "drumline-dash" => "How to play: listen to the drum major, then tap the rhythm back.",
+            "bounce-brigade" => "How to play: find the downbeat, then key in the beat pattern.",
+            "chomp-chorus" => "How to play: tap on the beat when your ringed singer gulps.",
+            "finale-fever" => "How to play: tap every beat as the tempo speeds up and slows.",
+            _ => "",
+        };
+
         sealed class Row
         {
             public RectTransform Rt, Inner; public CanvasGroup Group;
@@ -48,7 +58,7 @@ namespace Bonanza.Shell
 
         readonly Row[] _rows = new Row[4];
         Pill _action, _quit;
-        TextMeshProUGUI _round, _stand, _after, _upNext, _title, _blurb, _race, _last;
+        TextMeshProUGUI _how, _round, _stand, _after, _upNext, _title, _blurb, _race, _last;
         RectTransform _headRt, _pipsRt, _card, _tileRt, _standHead, _lastRt, _rivalsRt;
         CanvasGroup _headGroup, _cardGroup, _standGroup, _lastGroup;
         Image _cardStripe, _cardGlow;
@@ -113,6 +123,10 @@ namespace Bonanza.Shell
             _blurb = UiKit.Text(_card, "Blurb", TextStyle.Label, 15f, UiKit.Cream, TextAlignmentOptions.TopLeft, italic: false, upper: false);
             _blurb.textWrappingMode = TextWrappingModes.Normal;
             UiKit.Place(_blurb.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(188, -150), new Vector2(CardW - 188 - 20, 56));
+            _how = UiKit.Text(_card, "How", TextStyle.Label, 13f, UiKit.Cream, TextAlignmentOptions.TopLeft, italic: false, upper: false);
+            _how.textWrappingMode = TextWrappingModes.Normal;
+            _how.color = new Color(UiKit.Gold.r, UiKit.Gold.g, UiKit.Gold.b, 0.95f);
+            UiKit.Place(_how.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(26, -206), new Vector2(CardW - 52, 38));
             var div = UiKit.Box(_card, "Div", new Color(1, 1, 1, 0.14f), UiKit.Pill, true, 4);
             UiKit.Place(div.rectTransform, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0, 104), new Vector2(CardW - 52, 3));
             _race = UiKit.Text(_card, "Race", TextStyle.Label, 12f, Gold, TextAlignmentOptions.Left, italic: false);
@@ -145,7 +159,7 @@ namespace Bonanza.Shell
             _lastRt = UiKit.Rect("Last", root);
             UiKit.Place(_lastRt, new Vector2(0.5f, 1), new Vector2(0, 1), new Vector2(ColX + 20, -Top - CardH), new Vector2(RowW, 30));
             _lastGroup = _lastRt.gameObject.AddComponent<CanvasGroup>();
-            var lp = UiKit.Box(_lastRt, "Plate", new Color(0.05f, 0.03f, 0.12f, 0.6f), UiKit.Pill, true, 24);
+            var lp = UiKit.Box(_lastRt, "Plate", new Color(0.05f, 0.03f, 0.12f, 0.95f), UiKit.Pill, true, 24);
             UiKit.Stretch(lp.rectTransform);
             _last = UiKit.Text(_lastRt, "Text", TextStyle.Label, 13f, UiKit.Cream, italic: false);
             _last.characterSpacing = 2f;
@@ -191,7 +205,7 @@ namespace Bonanza.Shell
             UiKit.Place(r.Sub.rectTransform, new Vector2(0, 0), new Vector2(0, 0), new Vector2(129, 11), new Vector2(190, 20));
             // YOU tag
             r.YouRt = UiKit.Rect("You", r.Inner);
-            UiKit.Place(r.YouRt, new Vector2(0, 1), new Vector2(0.5f, 0.5f), new Vector2(252, -28), new Vector2(44, 22));
+            UiKit.Place(r.YouRt, new Vector2(0, 1), new Vector2(0.5f, 0.5f), new Vector2(88, -62), new Vector2(40, 20));
             r.YouFill = UiKit.Box(r.YouRt, "Fill", Gold, UiKit.Pill, true, 20);
             UiKit.Stretch(r.YouFill.rectTransform);
             r.You = UiKit.Text(r.YouRt, "T", TextStyle.Display, 12f, Ink);
@@ -270,6 +284,8 @@ namespace Bonanza.Shell
             _upNext.fontSize = 14f * ts;
             _title.text = View.GameTitle ?? "";
             _blurb.text = View.Blurb ?? "";
+            _how.text = small ? "" : HowTo(View.GameId);
+            _how.fontSize = UiKit.FontSizeForCap(12f);
             _blurb.fontSize = UiKit.FontSizeForCap(15f * Mathf.Lerp(1f, 1.3f, small ? 1 : 0));
             if (_tileId != View.GameId)
             {
