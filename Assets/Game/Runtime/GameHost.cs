@@ -1546,7 +1546,26 @@ namespace Bonanza
         /// The card is on the canvas (HudKit/ResultsCard); IMGUI keeps the AGAIN / MENU click targets for mouse and touch.
         void DrawResults(float s)
         {
-            if (_party != null || _resultsT < ResultsLock || Autoplay) return;
+            if (_resultsT < ResultsLock || Autoplay) return;
+            // The canvas card carries its own buttons (SPACE PLAY AGAIN / ESC MENU, or SPACE STANDINGS in a party):
+            // IMGUI only lays invisible click targets over them.
+            var card = Ui.Results;
+            if (card.Visible && card.ButtonCount > 0)
+            {
+                for (int i = 0; i < card.ButtonCount; i++)
+                {
+                    var r = card.ButtonScreen(i);
+                    if (r.width <= 0 || !GUI.Button(r, GUIContent.none, GUIStyle.none)) continue;
+                    if (_resultsT < RevealEnd) { _resultsT = RevealEnd; break; }
+                    ShellSfx("ui");
+                    if (_party != null) ToHub();
+                    else if (i == 0) Open(_entry);
+                    else LeaveRound();
+                    break;
+                }
+                return;
+            }
+            if (_party != null) return;
             var again = new Rect(Screen.width * 0.25f, Screen.height * 0.9f, Screen.width * 0.2f, 50 * s);
             var menu = new Rect(Screen.width * 0.55f, Screen.height * 0.9f, Screen.width * 0.2f, 50 * s);
             Hud.Box(again, new Color(1, 1, 1, 0.12f)); Hud.Text(again, "AGAIN", Hud.Small, Color.white);

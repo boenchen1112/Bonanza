@@ -130,19 +130,30 @@ Shader "Bonanza/Composite"
                 }
                 else c = SampleSrc(uv);
 
-                // Opt-in edge smoothing (_BonTexel.z, PostState.EdgeAA): where the luma steps hard against its four
-                // neighbours, blend toward their mean, so a stair-stepped silhouette at a reduced render scale softens.
+                // Opt-in FXAA (_BonTexel.z, PostState.EdgeAA; FXAA 3.11 "console" form): find the edge direction from the
+                // four diagonal neighbours' luma and blend along it, so stair-stepped silhouettes at a reduced render
+                // scale smooth out. Off (z = 0) for every game that does not ask for it.
                 if (_BonTexel.z > 0.0)
                 {
                     float2 t = _BonTexel.xy;
-                    float3 n0 = SampleSrc(uv + float2(t.x, 0)), n1 = SampleSrc(uv - float2(t.x, 0));
-                    float3 n2 = SampleSrc(uv + float2(0, t.y)), n3 = SampleSrc(uv - float2(0, t.y));
                     float3 w = float3(0.2126, 0.7152, 0.0722);
-                    float l0 = dot(c, w), la = dot(n0, w), lb = dot(n1, w), lc = dot(n2, w), ld = dot(n3, w);
-                    l0 /= 1.0 + l0; la /= 1.0 + la; lb /= 1.0 + lb; lc /= 1.0 + lc; ld /= 1.0 + ld;
-                    float lmax = max(l0, max(max(la, lb), max(lc, ld))), lmin = min(l0, min(min(la, lb), min(lc, ld)));
-                    float k = saturate((lmax - lmin - 0.03) * 6.0) * 0.8 * _BonTexel.z;
-                    c = lerp(c, (n0 + n1 + n2 + n3 + c) * 0.2, k);
+                    float3 m = SampleSrc(uv);
+                    float lNW = dot(SampleSrc(uv + t * float2(-1, -1)), w), lNE = dot(SampleSrc(uv + t * float2(1, -1)), w);
+                    float lSW = dot(SampleSrc(uv + t * float2(-1, 1)), w), lSE = dot(SampleSrc(uv + t * float2(1, 1)), w);
+                    float lM = dot(m, w);
+                    lNW /= 1.0 + lNW; lNE /= 1.0 + lNE; lSW /= 1.0 + lSW; lSE /= 1.0 + lSE; lM /= 1.0 + lM;
+                    float lMin = min(lM, min(min(lNW, lNE), min(lSW, lSE)));
+                    float lMax = max(lM, max(max(lNW, lNE), max(lSW, lSE)));
+                    float2 dir = float2(-((lNW + lNE) - (lSW + lSE)), (lNW + lSW) - (lNE + lSE));
+                    float reduce = max((lNW + lNE + lSW + lSE) * (0.25 / 8.0), 1.0 / 128.0);
+                    float rcpMin = 1.0 / (min(abs(dir.x), abs(dir.y)) + reduce);
+                    dir = clamp(dir * rcpMin, -8.0, 8.0) * t;
+                    float3 a = 0.5 * (SampleSrc(uv + dir * (1.0 / 3.0 - 0.5)) + SampleSrc(uv + dir * (2.0 / 3.0 - 0.5)));
+                    float3 bq = a * 0.5 + 0.25 * (SampleSrc(uv - dir * 0.5) + SampleSrc(uv + dir * 0.5));
+                    float lB = dot(bq, w); lB /= 1.0 + lB;
+                    float3 aa = (lB < lMin || lB > lMax) ? a : bq;
+                    float edge = saturate((lMax - lMin - 0.02) * 12.0);
+                    c = lerp(c, aa, edge * saturate(_BonTexel.z));
                 }
 
                 // Bloom joins the scene in linear light, before exposure and the curve.

@@ -631,7 +631,7 @@ namespace Bonanza
         int _stripShown = -1, _stateShown = -1;
 
         // ------------------------------------------------------------ the verdict callout
-        // Its own slot just under the bonus gauge (the gauge stays visible): a compact dark pill with the verdict and
+        // Its own slot beside the answer plate (the gauge stays visible): a compact dark pill with the verdict and
         // its points, popping in with an overshoot, held, then snapping away (scale, never a fade over the scenery).
         RectTransform _callRt;
         Image _callFill, _callRim;
@@ -642,7 +642,8 @@ namespace Bonanza
         void BuildCallout(RectTransform root)
         {
             _callRt = UiKit.Rect("Callout", root);
-            UiKit.Place(_callRt, new Vector2(0.5f, 1), new Vector2(0.5f, 0.5f), new Vector2(0, -156), new Vector2(360, 64));
+            // beside the answer plate, in the band under the stair: never over the choir or the jumper
+            UiKit.Place(_callRt, new Vector2(0.5f, 0), new Vector2(0, 0.5f), new Vector2(196, 118), new Vector2(360, 64));
             _callFill = UiKit.Box(_callRt, "Fill", new Color(0.04f, 0.03f, 0.13f, UiKit.DarkAlpha(0.82f)), UiKit.Pill, true, 22);
             UiKit.Stretch(_callFill.rectTransform);
             _callRim = UiKit.Box(_callRt, "Rim", Gold, UiKit.PillRing(2.2f * 24f / 22f), true, 22);
