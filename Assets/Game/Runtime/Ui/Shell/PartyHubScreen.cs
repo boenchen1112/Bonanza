@@ -32,8 +32,17 @@ namespace Bonanza.Shell
         public PartyHubView View;
         public const int ActionBtn = 0, QuitBtn = 1;
 
+        public const float RefH = 720f, RefFloor = 486f;
         const float RowW = 440, RowH = 72, RowGap = 10, ColX = 10, Top = 122, CardW = 420, CardH = 360;
         float _startY = 170;
+        float _shift;      // how far the card and the standings step apart to open a stage gap between them
+
+        /// The three leaders standing in the gap between the card and the standings, for the host to put on the stage:
+        /// count (0 when there is no room), the lead's slot, x from the screen centre, feet and height (reference px).
+        public int LineCount { get; private set; }
+        public int LineLead { get; private set; }
+        public readonly float[] LineX = new float[3], LineFeet = new float[3], LineH = new float[3];
+        public readonly int[] LineChar = new int[3];
 
         static string HowTo(string id) => id switch
         {
@@ -241,6 +250,27 @@ namespace Bonanza.Shell
             bool small = Screen.height < 600;
             float ts = small ? 1.45f : 1f;
             bool hasLast = View.RoundsPlayed > 0 && rows[0].LastPlace > 0;
+            {
+                float aspect = Screen.width / (float)Mathf.Max(1, Screen.height);
+                _shift = small ? 0f : Mathf.Clamp(RefH * aspect * 0.5f - 500f, 0f, 90f);
+                int lc = small ? 0 : Mathf.Min(3, rows.Count);
+                LineCount = lc;
+                float half = 30f + _shift;
+                float sp = Mathf.Clamp(half * 0.62f, 34f, 76f), lh = Mathf.Clamp(half * 2.0f, 150f, 238f);
+                // the podium order: second on the left, the leader forward in the middle, third on the right
+                int[] slot = lc == 3 ? new[] { 1, 0, 2 } : lc == 2 ? new[] { 0, 1 } : new[] { 0 };
+                float[] xs = lc == 3 ? new[] { -sp, 0f, sp } : lc == 2 ? new[] { -sp * 0.5f, sp * 0.5f } : new[] { 0f };
+                for (int i = 0; i < lc; i++)
+                {
+                    int rk = slot[i];
+                    LineChar[i] = Mathf.Max(0, Cast.IndexOf(rows[rk].Char));
+                    LineX[i] = xs[i];
+                    bool lead = rk == 0;
+                    LineLead = lead ? i : LineLead;
+                    LineH[i] = lh * (lead ? 1f : 0.86f);
+                    LineFeet[i] = RefFloor + (lead ? 14f : 0f);
+                }
+            }
 
             // ---- header
             float hEnter = red ? 1 : UiKit.EaseOutCubic(age / 0.5f);
@@ -275,7 +305,7 @@ namespace Bonanza.Shell
             // ---- the announcement card
             float cEnter = red ? 1 : UiKit.BackOut((age - 0.2f) / 0.55f);
             _cardGroup.alpha = UiKit.Clamp01(cEnter * 2f) * (red ? shown : 1);
-            _card.anchoredPosition = new Vector2(-ColX - 20 - (1 - Mathf.Min(1, cEnter)) * 80, -Top);
+            _card.anchoredPosition = new Vector2(-ColX - 20 - _shift - (1 - Mathf.Min(1, cEnter)) * 80, -Top);
             _card.localScale = Vector3.one * (0.9f + 0.1f * Mathf.Min(1.05f, cEnter));
             var gc = GameColor(View.GameId);
             _cardStripe.color = gc;
@@ -322,7 +352,7 @@ namespace Bonanza.Shell
             _standGroup.alpha = UiKit.Clamp01(sEnter) * (red ? shown : 1);
             _after.text = hasLast ? $"AFTER ROUND {View.RoundsPlayed}" : "NO ROUNDS YET";
             _stand.fontSize = 15f * ts; _after.fontSize = 13f * ts;
-            _standHead.anchoredPosition = new Vector2(ColX + 20, -(_startY - 38));
+            _standHead.anchoredPosition = new Vector2(ColX + 20 + _shift, -(_startY - 38));
 
             float tCount = 1.0f, tMove = 1.9f;
             float count = !hasLast || red ? 1 : UiKit.EaseOutCubic((age - tCount) / 0.9f);
@@ -340,7 +370,7 @@ namespace Bonanza.Shell
                 float rank = Mathf.LerpUnclamped(d.PrevRank, d.Rank, move);
                 float enter = red ? 1 : UiKit.BackOut((age - 0.15f - d.PrevRank * 0.08f) / 0.45f);
                 r.Group.alpha = UiKit.Clamp01(enter * 2f) * (red ? shown : 1);
-                r.Rt.anchoredPosition = new Vector2(ColX + 20 + (1 - Mathf.Min(1, enter)) * 90, RowY(rank));
+                r.Rt.anchoredPosition = new Vector2(ColX + 20 + _shift + (1 - Mathf.Min(1, enter)) * 90, RowY(rank));
                 float lift = hasLast && !red ? Mathf.Sin(Mathf.Clamp01((age - tMove) / 0.7f) * Mathf.PI) * Mathf.Sign(d.PrevRank - d.Rank) * 0.04f : 0;
                 r.Inner.localScale = Vector3.one * (1 + lift + (you ? 0.015f : 0));
 
@@ -391,15 +421,15 @@ namespace Bonanza.Shell
             _last.text = View.LastLine ?? "";
             _last.fontSize = 13f * ts;
             float ly = RowY(rows.Count) + 6;
-            _lastRt.anchoredPosition = new Vector2(ColX + 20, ly);
+            _lastRt.anchoredPosition = new Vector2(ColX + 20 + _shift, ly);
 
             // ---- buttons
             string label = View.Round == 0 && View.RoundsPlayed == 0 ? (View.Finale ? "START FINALE" : "START ROUND 1")
                          : View.Finale ? "START FINALE" : "NEXT ROUND";
             if (View.Round > 0 && !View.Finale) label = $"START ROUND {View.Round + 1}";
             float bt = age - 0.6f;
-            DriveButton(_action, input, ActionBtn, true, label, "SPACE", dt, red, bt, !small);
-            DriveButton(_quit, input, QuitBtn, false, "QUIT TO MENU", "ESC", dt, red, age - 0.9f, !small);
+            DriveButton(_action, input, ActionBtn, PressFocus != 1, label, "SPACE", dt, red, bt, !small);
+            DriveButton(_quit, input, QuitBtn, PressFocus == 1, "QUIT TO MENU", "ESC", dt, red, age - 0.9f, !small);
             _action.Rt.anchoredPosition = new Vector2(0, -516);
             _quit.Rt.anchoredPosition = new Vector2(-64, 14);
             _quit.Inner.localScale *= Mathf.Lerp(1f, 1.3f, small ? 1 : 0);
