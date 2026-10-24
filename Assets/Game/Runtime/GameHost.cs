@@ -461,7 +461,7 @@ namespace Bonanza
             cast.Show(true);
             float aspect = Mathf.Max(1f, Screen.width / (float)Mathf.Max(1, Screen.height));
             float half = 360f * aspect;
-            bool three = aspect >= 1.7f;
+            bool three = false;   // two figures, one each side: balanced, and clear of the button column
             int n = three ? 3 : 2;
             float hs = Screen.height < 600 ? 0.9f : 1f;
             _tcChar[0] = 1; _tcChar[1] = 0; _tcChar[2] = 2;

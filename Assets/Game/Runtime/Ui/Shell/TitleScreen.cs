@@ -108,14 +108,12 @@ namespace Bonanza.Shell
             _footGroup = _foot.gameObject.AddComponent<CanvasGroup>();
             var plate = UiKit.Box(_foot, "Plaque", new Color(0.05f, 0.03f, 0.12f, 0.97f), UiKit.Pill, true, 24);
             _plaque = plate.rectTransform;
-            UiKit.Place(_plaque, new Vector2(0.5f, 1), new Vector2(0.5f, 1), Vector2.zero, new Vector2(430, 60));
-            var edge = UiKit.Box(_plaque, "Edge", new Color(1, 0.95f, 0.8f, 0.14f), UiKit.PillRing(4), true, 24);
-            UiKit.Stretch(edge.rectTransform);
+            UiKit.Place(_plaque, new Vector2(0.5f, 1), new Vector2(0.5f, 1), Vector2.zero, new Vector2(360, 62));
             _rec1 = UiKit.Text(_plaque, "R1", TextStyle.Label, 15f, UiKit.Cream, italic: false);
-            UiKit.Place(_rec1.rectTransform, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -8), new Vector2(420, 26));
+            UiKit.Place(_rec1.rectTransform, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -9), new Vector2(350, 24));
             _rec1.characterSpacing = 3f;
             _rec2 = UiKit.Text(_plaque, "R2", TextStyle.Label, 15f, Gold, italic: false);
-            UiKit.Place(_rec2.rectTransform, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0, 8), new Vector2(420, 26));
+            UiKit.Place(_rec2.rectTransform, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0, 9), new Vector2(350, 24));
             _rec2.characterSpacing = 3f;
             var hintPlate = UiKit.Box(_foot, "HintPlate", new Color(0.05f, 0.03f, 0.12f, 0.95f), UiKit.Pill, true, 24);
             UiKit.Place(hintPlate.rectTransform, new Vector2(0.5f, 0), new Vector2(0.5f, 0), Vector2.zero, new Vector2(500, 32));
@@ -243,7 +241,7 @@ namespace Bonanza.Shell
                 // the shine: a bright band sweeping along the word every few seconds
                 float sweep = red ? -9 : Mathf.Repeat(Time.unscaledTime * 0.55f, 3.4f) * 3f - 3f;
                 float k = Mathf.Exp(-Mathf.Pow((i - sweep) * 0.9f, 2));
-                var face = Color.Lerp(Gold, Color.white, k * 0.85f);
+                var face = Color.Lerp(Gold, UiKit.Hex(0xfff0a8), k * 0.45f);
                 UiKit.SetFill(l.Front, face);
             }
             _logo.localScale = Vector3.one * (v.Beat > 0 ? 1f + ((float)TitleBeat.LogoScale(v.Beat, amp) - 1f) * (1 - comp) : 1f);
@@ -255,9 +253,9 @@ namespace Bonanza.Shell
 
             // ---- buttons
             _stack.localScale = Vector3.one * Mathf.Lerp(1f, 1.1f, comp);
-            _stack.anchoredPosition = new Vector2(0, Mathf.Lerp(-88, -70, comp));
-            _foot.localScale = Vector3.one * Mathf.Lerp(1f, 1.7f, comp);
-            _foot.anchoredPosition = new Vector2(0, Mathf.Lerp(70, 20, comp));
+            _stack.anchoredPosition = new Vector2(0, Mathf.Lerp(-88, -60, comp));
+            _foot.localScale = Vector3.one * Mathf.Lerp(1f, 1.2f, comp);
+            _foot.anchoredPosition = new Vector2(0, Mathf.Lerp(70, 66, comp));
             _attract.localScale = Vector3.one * Mathf.Lerp(1f, 1.2f, comp);
             _stackGroup.alpha = (1 - _attractAmt) * UiKit.Clamp01((age - 0.15f) * 3f) * (red ? shown : 1);
             _stackGroup.blocksRaycasts = false;
