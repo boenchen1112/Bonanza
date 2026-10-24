@@ -85,9 +85,16 @@ namespace Bonanza.Shell
             _refX = refX; _feetY = feetFromTop; _height = heightPx; _dim = dim;
         }
 
+        /// No figure on stage (the party's podium of medals): portraits keep baking, the glow set is off.
+        public void NoFigure() { _noFigure = true; }
+        bool _noFigure;
+        /// The standing figure's height as a fraction of the height asked for in Place (shorter characters read shorter).
+        public float FigureRel { get; private set; } = 1;
+
         /// Make `castIndex` the figure on stage.
         public void Focus(int castIndex)
         {
+            _noFigure = false;
             if (castIndex == _shown) return;
             bool red = Settings.ReduceMotion;
             if (_shown >= 0 && !red) { _leaving = _shown; _leave = 1; }
@@ -129,7 +136,12 @@ namespace Bonanza.Shell
             }
             StepBake();
             if (!_main) _main = Camera.main;
-            if (!_main || _shown < 0) { SetGlow(false); return; }
+            if (!_main || _shown < 0 || _noFigure)
+            {
+                SetGlow(false);
+                if (_noFigure) { SetAllBodies(false); _leaving = -1; }
+                return;
+            }
             _clock += red ? 0 : dt;
             _enter = Mathf.MoveTowards(_enter, 1, dt / 0.38f);
             _leave = Mathf.MoveTowards(_leave, 0, dt / 0.16f);
@@ -200,6 +212,7 @@ namespace Bonanza.Shell
             float k = m != null && m.Height > 0.1f ? worldH / m.Height : 1f;
             // the shorter ones read a little shorter on stage: scaled by their own height, softened
             float rel = Mathf.Clamp(Mathf.Pow(m != null ? m.Height / 1.9f : 1f, 0.5f), 0.8f, 1.12f);
+            if (animate) FigureRel = rel;
             go.transform.position = _feet + Vector3.up * lift;
             float lean = animate && !Settings.ReduceMotion ? Mathf.Sin(_clock * 1.3f) * 2.2f : 0f;
             go.transform.rotation = Quaternion.Euler(lean * 0.6f, yaw, lean);

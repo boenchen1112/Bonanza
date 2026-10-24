@@ -398,14 +398,19 @@ namespace Bonanza
                 else _hall.SetPose(PoseFor(_mode));
                 if (_mode == Mode.Title) { if (Shell.Current != Shell.Title) Shell.Show(Shell.Title, null); }
                 else if (_mode == Mode.Roster) { if (Shell.Current != Shell.Roster) Shell.Show(Shell.Roster, null); }
+                else if (_mode == Mode.PartyHub && _party != null)
+                {
+                    var scr = _party.Done ? (ShellScreen)Shell.Final : Shell.Hub;
+                    if (Shell.Current != scr) Shell.Show(scr, null);
+                }
                 else if (Shell.Current != null) Shell.Hide();
                 if (_mode != Mode.Title) _hall.Tick(0, false, 0);
-                if (_mode != Mode.Roster && _hall.HasCast) _hall.Cast.Show(false);
+                if (_mode != Mode.Roster && _mode != Mode.PartyHub && _hall.HasCast) _hall.Cast.Show(false);
             }
             else if (!want)
             {
                 if (_hall != null && _hall.Live && !ShellMode(_mode) && !gate) HallSuspend();
-                if (Shell.Current != null && _mode != Mode.Title && _mode != Mode.Roster) Shell.Hide();
+                if (Shell.Current != null && _mode != Mode.Title && _mode != Mode.Roster && _mode != Mode.PartyHub) Shell.Hide();
             }
         }
 
@@ -455,6 +460,116 @@ namespace Bonanza
             {
                 var r = Shell.ButtonScreen(i);
                 if (r.width > 0 && GUI.Button(r, GUIContent.none, GUIStyle.none)) TitleChoice(i);
+            }
+        }
+
+        // ------------------------------------------------------------ party hub + wrap-up (uGUI)
+
+        string _partyAct;      // a click on a hub / wrap-up button: "a" main action, "b" back
+        float _finalPopT;
+
+        /// Push the party's state into the uGUI hub or wrap-up and set the stage for it.
+        void FeedParty()
+        {
+            if (_party == null || _hall == null || !_hall.Live) return;
+            var cast = _hall.Cast;
+            cast.Show(true);
+            var rows = PartyBoard.Build(_party);
+            if (_party.Done)
+            {
+                var head = _party.Headline();
+                string best = PartyBoard.BestRank(_party, out var bestGame);
+                Shell.Final.View = new PartyFinalView
+                {
+                    Headline = head.Title, Tiebreak = head.Tiebreak,
+                    StatLine = PartyBoard.StatLine(_party, rows),
+                    BestLine = best != null ? $"YOUR BEST: {best} AT {Find(bestGame).Title}" : null,
+                    Rows = rows, Cast = cast,
+                };
+                int fc = Shell.Final.FigureChar;
+                if (fc >= 0)
+                {
+                    cast.Place(Shell.Final.FigureX, PartyFinalScreen.FigureFeet, PartyFinalScreen.FigureHeight, false);
+                    cast.Focus(fc);
+                    if ((_finalPopT -= Time.unscaledDeltaTime) <= 0) { _finalPopT = 2.6f; cast.Pop(); }
+                }
+                else cast.NoFigure();
+                return;
+            }
+            var e = Find(_party.CurrentGame);
+            var last = _party.Scores.Count > 0 ? _party.Scores[_party.Scores.Count - 1] : null;
+            string lastLine = null;
+            if (last != null)
+            {
+                var top = last.Players.Where(q => q.Place == 1).Select(q => _party.Players[q.Id].Name).ToList();
+                lastLine = $"{Find(last.Game).Title}: {string.Join(" & ", top)} {(top.Count > 1 ? "tied it" : "took it")}";
+            }
+            Shell.Hub.View = new PartyHubView
+            {
+                Round = _party.Index, Length = _party.Length, Finale = _party.Index == _party.Length - 1,
+                GameId = e.Id, GameTitle = e.Title, Blurb = e.Blurb, Races = e.Id == "drumline-dash",
+                Rows = rows, LastLine = lastLine, RoundsPlayed = _party.Scores.Count, Cast = cast,
+            };
+            cast.NoFigure();
+        }
+
+        /// Invisible IMGUI click targets over the hub / wrap-up buttons: 0 is the main action, 1 is back.
+        void PartyTargets()
+        {
+            if (_party == null || !Shell.Interactive) return;
+            var scr = _party.Done ? (ShellScreen)Shell.Final : Shell.Hub;
+            if (Shell.Current != scr) return;
+            for (int i = 0; i < Shell.ButtonCount; i++)
+            {
+                var rect = Shell.ButtonScreen(i);
+                if (rect.width <= 0 || !GUI.Button(rect, GUIContent.none, GUIStyle.none)) continue;
+                _partyAct = i == 0 ? "a" : "b";
+                break;
+            }
+        }
+
+        /// `?scene=party&debug&partyDemo=<k>`: the party as it stands at a chosen point, for the screenshots. Only with
+        /// `?debug`; fabricates round results (never played), nothing is saved.
+        void ApplyPartyDemo()
+        {
+            if (!_debug || _party == null) return;
+            var m = System.Text.RegularExpressions.Regex.Match(Application.absoluteURL ?? "", @"[?&]partyDemo=([a-z0-9]+)");
+            if (!m.Success) return;
+            int[][] rounds;
+            switch (m.Groups[1].Value)
+            {
+                case "r1": rounds = new int[0][]; break;
+                case "r2": rounds = new[] { new[] { 2, 1, 3, 4 } }; break;
+                case "r3": rounds = new[] { new[] { 2, 1, 3, 4 }, new[] { 3, 1, 2, 4 } }; break;
+                case "last": rounds = new[] { new[] { 2, 1, 3, 4 }, new[] { 3, 1, 2, 4 }, new[] { 2, 3, 1, 4 } }; break;
+                case "lead": rounds = new[] { new[] { 1, 2, 3, 4 }, new[] { 1, 3, 2, 4 }, new[] { 2, 1, 4, 3 } }; break;
+                case "trail": rounds = new[] { new[] { 4, 1, 2, 3 }, new[] { 3, 2, 1, 4 }, new[] { 4, 1, 3, 2 } }; break;
+                case "tie": rounds = new[] { new[] { 1, 2, 3, 4 }, new[] { 2, 1, 3, 4 } }; break;
+                case "win": rounds = new[] { new[] { 2, 1, 3, 4 }, new[] { 3, 1, 2, 4 }, new[] { 2, 1, 4, 3 }, new[] { 1, 2, 3, 4 } }; break;
+                case "youwin": rounds = new[] { new[] { 1, 2, 3, 4 }, new[] { 1, 3, 2, 4 }, new[] { 2, 1, 3, 4 }, new[] { 1, 2, 4, 3 } }; break;
+                case "wintie": rounds = new[] { new[] { 1, 2, 3, 4 }, new[] { 2, 1, 3, 4 }, new[] { 3, 3, 1, 2 }, new[] { 1, 1, 3, 4 } }; break;
+                default: return;
+            }
+            const string RankOf = "SABC";
+            for (int k = 0; k < rounds.Length && k < _party.Length; k++)
+            {
+                var posts = new List<PartyPost>();
+                for (int i = 0; i < _party.Players.Count && i < rounds[k].Length; i++)
+                {
+                    int pl = rounds[k][i];
+                    var pp = _party.Players[i];
+                    int pts = Party.PlacePoints[Mathf.Clamp(pl - 1, 0, Party.PlacePoints.Length - 1)];
+                    posts.Add(new PartyPost { Id = pp.Id, Place = pl, Points = pts, Score = 1000 - pl * 100, Rank = RankOf[Mathf.Clamp(pl - 1, 0, 3)].ToString(), Accuracy = 0.9 });
+                    pp.Points += pts;
+                    if (pl == 1) pp.Wins++;
+                }
+                _party.Scores.Add(new PartyRoundLog { Game = _party.Games[k], Score = 1000, Rank = "A", Players = posts, Sim = _party.Games[k] != "drumline-dash" });
+            }
+            _party.Index = Mathf.Min(rounds.Length, _party.Length);
+            if (_party.Done)
+            {
+                var sp = _party.StandingPlaces();
+                _party.Winners = _party.Standings().Where(q => sp[q.Id] == 1).Select(q => q.Id).ToList();
             }
         }
 
@@ -689,7 +804,7 @@ namespace Bonanza
             {
                 case SceneKind.FreePlay: GoRoute(new Route(ShellNav.FreePlay)); break;
                 case SceneKind.Roster: GoRoute(new Route(ShellNav.Roster, mode: "party")); break;
-                case SceneKind.Party: StartParty(); break;
+                case SceneKind.Party: StartParty(); ApplyPartyDemo(); break;
                 case SceneKind.Options: GoRoute(new Route(ShellNav.Options)); break;
                 case SceneKind.Game: _from = "freeplay"; Open(EntryFor(t.Game)); break;
                 default: _mode = Mode.Title; break;
@@ -1088,17 +1203,35 @@ namespace Bonanza
 
                 case Mode.PartyHub:
                     bool next = Autoplay && (_autoWait -= Time.deltaTime) <= 0;
+                    // The wrap-up ignores input for a moment so a hammered SPACE from the last round cannot skip it.
+                    bool inputLock = !Autoplay && _party != null && _party.Done && Shell.Current == Shell.Final && Shell.Final.Age < 0.8f;
                     while (_presses.Count > 0)
                     {
                         var p = _presses.Dequeue();
-                        if (Autoplay) continue;
+                        if (Autoplay || inputLock) continue;
                         if (p.Action == "a") next = true;
                         else if (InputMap.IsBack(p.Action)) { ShellSfx("uiBack"); EndParty(); break; }
                     }
                     _presses.Clear();
+                    if (_partyAct != null)
+                    {
+                        string act = _partyAct; _partyAct = null;
+                        if (!Autoplay && !inputLock && _mode == Mode.PartyHub)
+                        {
+                            if (act == "a") next = true;
+                            else { ShellSfx("uiBack"); EndParty(); }
+                        }
+                    }
+                    if (_mode == Mode.PartyHub) FeedParty();
                     if (next && _mode == Mode.PartyHub)
                     {
                         if (!Autoplay) ShellSfx("fanfare");
+                        if (_party.Done)
+                        {
+                            // PLAY AGAIN: a fresh party, back at the roster.
+                            if (!Autoplay) { _party = null; CloseGame(); GoRoute(new Route(ShellNav.Roster, mode: "party")); }
+                            break;
+                        }
                         var go = ShellNav.PartyConfirmRoute(_party.Done, _party.CurrentGame);
                         if (go.View == ShellNav.Title) { if (!Autoplay) EndParty(); }
                         else { _from = go.From; Open(Find(go.Game)); }
@@ -1621,10 +1754,7 @@ namespace Bonanza
 
                 case Mode.Roster: RosterTargets(); break;
 
-                case Mode.PartyHub:
-                    Hud.Dim(ShellDim(0.88f));
-                    DrawPartyHub(s);
-                    break;
+                case Mode.PartyHub: PartyTargets(); break;
 
                 case Mode.Rules:
                     Hud.Dim(0.7f);
@@ -1709,61 +1839,5 @@ namespace Bonanza
         }
 
         static readonly string[] PlaceName = { "1ST", "2ND", "3RD", "4TH" };
-
-        /// Between rounds: the standings and what's up next. After the last
-        /// round: the winner and a round-by-round table.
-        void DrawPartyHub(float s)
-        {
-            if (_party == null) return;
-            var places = _party.StandingPlaces();
-            var standings = _party.Standings();
-            var last = _party.Scores.Count > 0 ? _party.Scores[_party.Scores.Count - 1] : null;
-            if (_party.Done)
-            {
-                Hud.Center(0.04f, "PARTY COMPLETE", Hud.Small, Color.white, 40);
-                var head = _party.Headline();
-                Hud.Center(0.1f, head.Title, Hud.Big, Hud.Gold, 100);
-                if (head.Tiebreak != null) Hud.Center(0.25f, head.Tiebreak, Hud.Mid, Color.white, 50);
-            }
-            else
-            {
-                var e = Find(_party.CurrentGame);
-                bool finale = _party.Index == _party.Length - 1;
-                Hud.Center(0.04f, (finale ? "FINAL ROUND   " : "ROUND ") + $"{_party.Index + 1} OF {_party.Length}", Hud.Small, Color.white, 40);
-                Hud.Center(0.1f, e.Title, Hud.Big, Hud.Gold, 100);
-                Hud.Center(0.25f, e.Blurb, Hud.Mid, Color.white, 50);
-                if (last != null)
-                {
-                    var top = last.Players.Where(p => p.Place == 1).Select(p => _party.Players[p.Id].Name).ToList();
-                    Hud.Center(0.31f, $"{Find(last.Game).Title}: {string.Join(" & ", top)} {(top.Count > 1 ? "tied it" : "took it")}", Hud.Small, new Color(1, 1, 1, 0.8f), 40);
-                }
-            }
-
-            // Standings: place, name, points (and what the last round paid).
-            for (int i = 0; i < standings.Count; i++)
-            {
-                var p = standings[i];
-                int pl = places[p.Id];
-                bool tied = standings.Count(q => places[q.Id] == pl) > 1;
-                var row = last?.Players.First(q => q.Id == p.Id);
-                string pts = $"{p.Points} PTS" + (standings.Any(q => q != p && q.Points == p.Points) ? $" / {p.Wins} WIN{(p.Wins == 1 ? "" : "S")}" : "");
-                if (!_party.Done && row != null) pts += $"   +{row.Points}";
-                MenuRow(i, 0.4f, $"{(tied ? "T-" : "")}{PlaceName[pl - 1]}   {p.Name}{(p.IsCpu ? "" : "  (YOU)")}", pts, !p.IsCpu, s);
-            }
-
-            if (_party.Done)
-            {
-                // Round-by-round table: one line per game.
-                var sb = new System.Text.StringBuilder();
-                foreach (var r in _party.Scores)
-                {
-                    sb.Append(Find(r.Game).Title).Append(r.Sim ? "*" : "").Append(":  ");
-                    sb.Append(string.Join("   ", r.Players.Select(q => $"{_party.Players[q.Id].Name} +{q.Points}"))).Append('\n');
-                }
-                if (_party.Scores.Any(r => r.Sim)) sb.Append("* solo game: CPU rivals played off-screen at their skill level");
-                Hud.Center(0.4f + (standings.Count * 80 * s + 10 * s) / Screen.height, sb.ToString(), Hud.Small, new Color(1, 1, 1, 0.85f), 160);
-            }
-            Hud.Center(0.93f, Autoplay ? "(autoplay)" : _party.Done ? "SPACE: done" : "SPACE: start   ESC: quit party", Hud.Mid, Hud.Gold, 50);
-        }
     }
 }

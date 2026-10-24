@@ -61,6 +61,8 @@ namespace Bonanza.Shell
         public ShellBackdrop Backdrop { get; private set; }
         public TitleScreen Title { get; private set; }
         public RosterScreen Roster { get; private set; }
+        public PartyHubScreen Hub { get; private set; }
+        public PartyFinalScreen Final { get; private set; }
         public ShellScreen Current { get; private set; }
 
         RectTransform _root;
@@ -94,6 +96,10 @@ namespace Bonanza.Shell
             Title.BuildInto(_root, "Title");
             Roster = new RosterScreen();
             Roster.BuildInto(_root, "Roster");
+            Hub = new PartyHubScreen();
+            Hub.BuildInto(_root, "PartyHub");
+            Final = new PartyFinalScreen();
+            Final.BuildInto(_root, "PartyFinal");
         }
 
         void Update()
