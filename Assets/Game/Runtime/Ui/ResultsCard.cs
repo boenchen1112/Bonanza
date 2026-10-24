@@ -25,6 +25,10 @@ namespace Bonanza.HudKit
         /// with a glow, the sticker pinned to the stamp, and a row of result pips (one colour per round of the game).
         public bool Centered, RankFilled, BadgeOnRank;
         public List<Color> Pips;
+        /// Opt-in: a lead/lag gauge under the stats (EARLY | ON | LATE with a marker), `Lean` in -1 (early) .. +1 (late)
+        /// of the track's half width, `LeanLabel` the words under it. Null = no gauge (the default).
+        public float? Lean;
+        public string LeanLabel;
         public List<PartyRow> Party;
         /// (key, label) chips for the continue prompt: ("SPACE", "play again"), ("ESC", "menu").
         public List<KeyValuePair<string, string>> Prompts = new List<KeyValuePair<string, string>>();
@@ -99,6 +103,8 @@ namespace Bonanza.HudKit
             if (extraRows > 0) y += 8f + extraRows * 44f;
             float pipsY = y + 8f;
             if (d.Pips != null && d.Pips.Count > 0) y += 34f;
+            float leanY = y + 8f;
+            if (d.Lean.HasValue) y += 56f;
             float partyY0 = y + 8f;
             if (hasParty) y += 8f + 11f + d.Party.Count * 28f;
             y += Pad - 4f;
@@ -188,6 +194,7 @@ namespace Bonanza.HudKit
                 }
                 _items.Add(new Item { Rt = row, Group = g, At = StatsAt + 0.55f, Pos = row.anchoredPosition });
             }
+            if (d.Lean.HasValue) LeanGauge(d.Lean.Value, d.LeanLabel, leanY, StatsAt + 0.6f);
             if (hasParty)
             {
                 var pdiv = UiKit.Box(_card, "PDivider", new Color(1, 1, 1, 0.09f)); Mid(pdiv.rectTransform, 0, partyY0 - 4, CardW - 2 * 31, 1);
@@ -278,6 +285,36 @@ namespace Bonanza.HudKit
                 l.text = cells[i].label;
                 _items.Add(new Item { Rt = cell, Group = g, At = at + i * 0.08f, Pos = cell.anchoredPosition });
             }
+        }
+
+        /// EARLY | ON | LATE across a track, the marker at `lean` (-1..1 of the half width), the words under it.
+        void LeanGauge(float lean, string label, float yTop, float at)
+        {
+            const float W = 380, H = 14;
+            var row = UiKit.Rect("Lean", _card);
+            Mid(row, 0, yTop + 24f, W + 160, 48);
+            var g = row.gameObject.AddComponent<CanvasGroup>(); g.alpha = 0;
+            var track = UiKit.Rect("Track", row);
+            UiKit.Place(track, new Vector2(0.5f, 1), new Vector2(0.5f, 0.5f), new Vector2(0, -12), new Vector2(W, H));
+            var back = UiKit.Box(track, "Back", new Color(0.02f, 0.01f, 0.05f, 0.9f), UiKit.Pill, true, 7f); UiKit.Stretch(back.rectTransform);
+            Color early = UiKit.Hex(0x6fd0ff), late = UiKit.Hex(0xffa04a), on = UiKit.Hex(0xb6f27a);
+            var el = UiKit.Box(track, "Early", new Color(early.r, early.g, early.b, 0.45f), UiKit.Pill, true, 7f);
+            el.rectTransform.anchorMin = Vector2.zero; el.rectTransform.anchorMax = new Vector2(0.5f, 1); el.rectTransform.offsetMin = new Vector2(2, 2); el.rectTransform.offsetMax = new Vector2(0, -2);
+            var lt = UiKit.Box(track, "Late", new Color(late.r, late.g, late.b, 0.45f), UiKit.Pill, true, 7f);
+            lt.rectTransform.anchorMin = new Vector2(0.5f, 0); lt.rectTransform.anchorMax = Vector2.one; lt.rectTransform.offsetMin = new Vector2(0, 2); lt.rectTransform.offsetMax = new Vector2(-2, -2);
+            var oz = UiKit.Box(track, "On", new Color(on.r, on.g, on.b, 0.85f), UiKit.Pill, true, 5f);
+            UiKit.Place(oz.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(W * 0.33f, H - 2));
+            var mid = UiKit.Box(track, "Mid", Color.white); UiKit.Place(mid.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(2, H + 8));
+            var mk = UiKit.Box(track, "Marker", Mathf.Abs(lean) < 0.16f ? on : lean < 0 ? early : late, UiKit.Pill, true, 4f);
+            UiKit.Place(mk.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(Mathf.Clamp(lean, -1, 1) * W / 2, 0), new Vector2(18, 18));
+            mk.rectTransform.localRotation = Quaternion.Euler(0, 0, 45);
+            var le = UiKit.Text(row, "EarlyL", TextStyle.Label, 11f * 0.72f, early, TextAlignmentOptions.MidlineRight, italic: false);
+            UiKit.Place(le.rectTransform, new Vector2(0.5f, 1), new Vector2(1, 0.5f), new Vector2(-W / 2 - 10, -12), new Vector2(80, 18)); le.text = "EARLY"; le.characterSpacing = 6f;
+            var ll = UiKit.Text(row, "LateL", TextStyle.Label, 11f * 0.72f, late, TextAlignmentOptions.MidlineLeft, italic: false);
+            UiKit.Place(ll.rectTransform, new Vector2(0.5f, 1), new Vector2(0, 0.5f), new Vector2(W / 2 + 10, -12), new Vector2(80, 18)); ll.text = "LATE"; ll.characterSpacing = 6f;
+            var lab = UiKit.Text(row, "Label", TextStyle.Label, 12f * 0.72f, UiKit.Dim, TextAlignmentOptions.Center, italic: false);
+            UiKit.Place(lab.rectTransform, new Vector2(0.5f, 1), new Vector2(0.5f, 0.5f), new Vector2(0, -36), new Vector2(W + 140, 18)); lab.text = label ?? ""; lab.characterSpacing = 6f;
+            _items.Add(new Item { Rt = row, Group = g, At = at, Pos = row.anchoredPosition });
         }
 
         void PartyLine(PartyRow r, float yTop, float at)

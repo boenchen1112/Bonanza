@@ -26,7 +26,7 @@ namespace Bonanza
     public sealed partial class FinaleFeverGame
     {
         const float RefW = 1280, RefH = 720;
-        const float TrackW = 500, TrackH = 18;
+        const float TrackW = 360, TrackH = 14;
 
         Canvas _canvas;
         CanvasGroup _hudGroup;
@@ -71,7 +71,7 @@ namespace Bonanza
         readonly float[] _tickX = new float[10], _tickAge = new float[10];
         readonly Color[] _tickCol = new Color[10];
         int _tickNext, _leanShown = int.MinValue;
-        float _diamondX, _diamondPop, _lean01, _leanMs, _finaleK;
+        float _vigA, _diamondX, _diamondPop, _lean01, _leanMs, _finaleK;
         bool _anyTap;
 
         // callout (one slot)
@@ -182,30 +182,138 @@ namespace Bonanza
             _hudGroup.alpha = 0;
             _hudGroup.blocksRaycasts = false; _hudGroup.interactable = false;
             var root = (RectTransform)go.transform;
-            BuildStrip(root);
-            BuildTempo(root);
+            BuildVignette(root);
+            BuildTopBar(root);
+            BuildStrip(_bar);
+            BuildTempo(_bar);
             BuildHearts(root);
             BuildMeter(root);
+            BuildMarkers(root);
             BuildCallout(root);
             BuildChips(root);
+        }
+
+        RectTransform _bar, _youPlate, _earMark;
+        Image _vignette, _earMarkImg, _bpmEar, _bandEar;
+        TextMeshProUGUI _bandText;
+        static Sprite _earSprite, _vigSprite, _hatchSprite;
+
+        /// One bar across the top: the programme on the left, the tempo gauge on the right (one plate, 60 px).
+        void BuildTopBar(RectTransform root)
+        {
+            _bar = UiKit.Rect("TopBar", root);
+            UiKit.Place(_bar, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -10), new Vector2(900, 60));
+            Plate(_bar, 22, 0.66f);
+            Rim(_bar, 22, new Color(1f, 0.85f, 0.5f, 0.2f));
+            var div = UiKit.Box(_bar, "Div", new Color(1, 1, 1, 0.14f));
+            Centre(div.rectTransform, new Vector2(-202, 0), new Vector2(2, 40));
+        }
+
+        /// A soft red frame over the whole screen for the last heart (and SURVIVE): it breathes slowly, never on the beat.
+        void BuildVignette(RectTransform root)
+        {
+            if (!_vigSprite) _vigSprite = VignetteSprite();
+            _vignette = UiKit.Box(root, "RedRoom", new Color(0.9f, 0.05f, 0.1f, 0), _vigSprite);
+            UiKit.Stretch(_vignette.rectTransform);
+            _vignette.enabled = false;
+        }
+
+        static Sprite VignetteSprite()
+        {
+            const int n = 128;
+            var t = new Texture2D(n, n, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear, name = "ff-vignette" };
+            var px = new Color32[n * n];
+            for (int y = 0; y < n; y++)
+                for (int x = 0; x < n; x++)
+                {
+                    float u = (x + 0.5f) / n * 2 - 1, v = (y + 0.5f) / n * 2 - 1;
+                    float d = Mathf.Sqrt(u * u * 0.8f + v * v * 1.1f);
+                    float a = Mathf.Clamp01((d - 0.55f) / 0.6f); a = a * a;
+                    px[y * n + x] = new Color32(255, 255, 255, (byte)(a * 255));
+                }
+            t.SetPixels32(px); t.Apply(false, true);
+            return Sprite.Create(t, new Rect(0, 0, n, n), new Vector2(0.5f, 0.5f), 100);
+        }
+
+        /// An ear: a C-shaped rim with the inner curl (y up, facing right).
+        static Sprite EarSprite() => _earSprite ? _earSprite : _earSprite = Coverage(64, (x, y) =>
+        {
+            float ex = x / 0.3f, ey = (y - 0.04f) / 0.42f;
+            float r = ex * ex + ey * ey;
+            bool outer = r < 1 && r > 0.5f && !(x > 0.12f && y < -0.02f && y > -0.3f);
+            float lobe = (x - 0.02f) * (x - 0.02f) / 0.012f + (y + 0.33f) * (y + 0.33f) / 0.01f;
+            float ix = (x + 0.02f) / 0.13f, iy = (y + 0.02f) / 0.2f;
+            float ri = ix * ix + iy * iy;
+            bool inner = ri < 1 && ri > 0.4f && x < 0.08f;
+            return outer || lobe < 1 || inner;
+        }, "ff-ear");
+
+        /// Diagonal hatching for the BY EAR band (tiles).
+        static Sprite HatchSprite()
+        {
+            if (_hatchSprite) return _hatchSprite;
+            const int n = 16;
+            var t = new Texture2D(n, n, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Repeat, filterMode = FilterMode.Bilinear, name = "ff-hatch" };
+            var px = new Color32[n * n];
+            for (int y = 0; y < n; y++)
+                for (int x = 0; x < n; x++)
+                {
+                    int d = (x + y) % 8;
+                    px[y * n + x] = new Color32(255, 255, 255, (byte)(d < 2 ? 200 : 0));
+                }
+            t.SetPixels32(px); t.Apply(false, true);
+            _hatchSprite = Sprite.Create(t, new Rect(0, 0, n, n), new Vector2(0.5f, 0.5f), 100);
+            return _hatchSprite;
+        }
+
+        /// World-anchored marks: the YOU plate over the player's drummer, the ear over the maestro during a hush.
+        void BuildMarkers(RectTransform root)
+        {
+            _youPlate = UiKit.Rect("You", root);
+            Centre(_youPlate, Vector2.zero, new Vector2(78, 28));
+            var f = UiKit.Box(_youPlate, "Fill", UiKit.Hex(0xffd93d), UiKit.Pill, true, 12); UiKit.Stretch(f.rectTransform);
+            Rim(_youPlate, 12, new Color(1, 1, 1, 0.9f));
+            var t = Label(_youPlate, "Text", "YOU", 11f, Ink, TextAlignmentOptions.Midline, 12);
+            UiKit.Stretch(t.rectTransform);
+            var tri = UiKit.Box(_youPlate, "Point", UiKit.Hex(0xffd93d), TriSprite());
+            UiKit.Place(tri.rectTransform, new Vector2(0.5f, 0), new Vector2(0.5f, 1), new Vector2(0, 1), new Vector2(16, 10));
+            tri.rectTransform.localRotation = Quaternion.Euler(0, 0, 180);
+            _earMark = UiKit.Rect("EarMark", root);
+            Centre(_earMark, Vector2.zero, new Vector2(64, 64));
+            var g = UiKit.Box(_earMark, "Glow", new Color(CallEarly.r, CallEarly.g, CallEarly.b, 0.35f), UiKit.Soft);
+            Centre(g.rectTransform, Vector2.zero, new Vector2(110, 110));
+            _earMarkImg = UiKit.Box(_earMark, "Ear", CallEarly, EarSprite());
+            Centre(_earMarkImg.rectTransform, Vector2.zero, new Vector2(56, 56));
+            _earMark.gameObject.SetActive(false);
+        }
+
+        /// A world point as canvas reference pixels (centre origin), or false when it is behind the camera.
+        bool CanvasPoint(Vector3 world, out Vector2 p)
+        {
+            p = Vector2.zero;
+            var cam = Look.Rig?.Camera;
+            if (!cam) return false;
+            var sp = cam.WorldToScreenPoint(transform.TransformPoint(world));
+            if (sp.z <= 0) return false;
+            float k = RefH / Mathf.Max(1, Screen.height);
+            p = new Vector2((sp.x - Screen.width * 0.5f) * k, (sp.y - Screen.height * 0.5f) * k);
+            return true;
         }
 
         void BuildStrip(RectTransform root)
         {
             _strip = UiKit.Rect("Programme", root);
-            UiKit.Place(_strip, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -12), new Vector2(440, 62));
-            Plate(_strip, 22, 0.66f);
-            Rim(_strip, 22, new Color(1f, 0.85f, 0.5f, 0.22f));
+            Centre(_strip, new Vector2(-326, 0), new Vector2(240, 60));
             _levelChip = UiKit.Box(_strip, "LevelChip", Mint, UiKit.Pill, true, 10);
-            Centre(_levelChip.rectTransform, new Vector2(-146, 13), new Vector2(96, 22));
+            Centre(_levelChip.rectTransform, new Vector2(-70, 12), new Vector2(84, 20));
             _levelText = Label(_levelChip.transform, "Level", "EASY", 10f, Ink, TextAlignmentOptions.Midline, 10);
             UiKit.Stretch(_levelText.rectTransform);
             _stripTitle = Label(_strip, "Title", "HYMN 1 / 3", 11.5f, UiKit.Cream, TextAlignmentOptions.MidlineLeft, 8);
-            Centre(_stripTitle.rectTransform, new Vector2(46, 13), new Vector2(270, 22));
+            Centre(_stripTitle.rectTransform, new Vector2(52, 12), new Vector2(148, 20));
             _stripTitle.enableAutoSizing = true; _stripTitle.fontSizeMax = _stripTitle.fontSize; _stripTitle.fontSizeMin = _stripTitle.fontSize * 0.6f;
             _stripTitle.overflowMode = TextOverflowModes.Truncate;
             _pipRow = UiKit.Rect("Lines", _strip);
-            Centre(_pipRow, new Vector2(0, -13), new Vector2(360, 20));
+            Centre(_pipRow, new Vector2(0, -13), new Vector2(230, 20));
             for (int i = 0; i < _pips.Length; i++)
             {
                 var rim = UiKit.Box(_pipRow, "PipRim" + i, new Color(1, 1, 1, 0.45f), UiKit.PillRing(2f * 24f / 7f), true, 7);
@@ -220,21 +328,22 @@ namespace Bonanza
         void BuildTempo(RectTransform root)
         {
             _tempo = UiKit.Rect("Tempo", root);
-            UiKit.Place(_tempo, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -82), new Vector2(600, 78));
-            Plate(_tempo, 22, 0.62f);
-            Rim(_tempo, 22, new Color(1, 1, 1, 0.12f));
+            Centre(_tempo, new Vector2(150, 0), new Vector2(600, 60));
             // the bpm, big
             _bpmText = Label(_tempo, "Bpm", "96", 26f, Color.white, TextAlignmentOptions.MidlineRight, 0, TextStyle.Display);
             Centre(_bpmText.rectTransform, new Vector2(-226, 8), new Vector2(110, 40));
             _bpmText.rectTransform.pivot = new Vector2(1, 0.5f);
             _bpmText.rectTransform.anchoredPosition = new Vector2(-218, 8);
             _bpmUnit = Label(_tempo, "Unit", "BPM", 8f, UiKit.LabelInk, TextAlignmentOptions.MidlineRight, 14);
-            Centre(_bpmUnit.rectTransform, new Vector2(-218, -22), new Vector2(80, 14));
+            Centre(_bpmUnit.rectTransform, new Vector2(-218, -19), new Vector2(80, 14));
             _bpmUnit.rectTransform.pivot = new Vector2(1, 0.5f);
-            _bpmUnit.rectTransform.anchoredPosition = new Vector2(-218, -22);
+            _bpmUnit.rectTransform.anchoredPosition = new Vector2(-218, -19);
+            _bpmEar = UiKit.Box(_tempo, "BpmEar", CallEarly, EarSprite());
+            Centre(_bpmEar.rectTransform, new Vector2(-240, 6), new Vector2(38, 38));
+            _bpmEar.enabled = false;
             // what the tempo is doing
             var div = UiKit.Box(_tempo, "Div", new Color(1, 1, 1, 0.14f));
-            Centre(div.rectTransform, new Vector2(-204, 0), new Vector2(2, 50));
+            Centre(div.rectTransform, new Vector2(-204, 0), new Vector2(2, 40));
             _trendIcon = UiKit.Box(_tempo, "TrendIcon", Color.white, ArrowSprite());
             Centre(_trendIcon.rectTransform, new Vector2(-176, 6), new Vector2(34, 34));
             _trendText = Label(_tempo, "Trend", "STEADY", 12.5f, Color.white, TextAlignmentOptions.MidlineLeft, 6, TextStyle.Display);
@@ -244,10 +353,10 @@ namespace Bonanza
             _trendSub = Label(_tempo, "TrendSub", "A TEMPO", 7.5f, UiKit.LabelInk, TextAlignmentOptions.MidlineLeft, 10);
             _trendSub.rectTransform.anchorMin = _trendSub.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
             _trendSub.rectTransform.pivot = new Vector2(0, 0.5f);
-            _trendSub.rectTransform.anchoredPosition = new Vector2(-152, -18); _trendSub.rectTransform.sizeDelta = new Vector2(150, 14);
+            _trendSub.rectTransform.anchoredPosition = new Vector2(-152, -16); _trendSub.rectTransform.sizeDelta = new Vector2(150, 14);
             // the ribbon of the curve ahead
             var rib = UiKit.Rect("Ribbon", _tempo);
-            Centre(rib, new Vector2(140, 0), new Vector2(290, 58));
+            Centre(rib, new Vector2(140, 0), new Vector2(290, 48));
             var back = UiKit.Box(rib, "Back", new Color(0, 0, 0, 0.35f), UiKit.Pill, true, 10);
             UiKit.Stretch(back.rectTransform);
             var rg = new GameObject("Curve", typeof(RectTransform), typeof(CanvasRenderer), typeof(TempoRibbon));
@@ -256,6 +365,13 @@ namespace Bonanza
             _ribbon.raycastTarget = false;
             var rr = (RectTransform)rg.transform;
             rr.anchorMin = Vector2.zero; rr.anchorMax = Vector2.one; rr.offsetMin = new Vector2(6, 6); rr.offsetMax = new Vector2(-6, -6);
+            // the BY EAR band's label: an ear and the words, placed over the band while it is in view
+            _bandEar = UiKit.Box(rr, "BandEar", new Color(0.75f, 0.92f, 1f, 1), EarSprite());
+            Centre(_bandEar.rectTransform, Vector2.zero, new Vector2(24, 24));
+            _bandText = Label(rr, "BandText", "BY EAR", 7.5f, new Color(0.85f, 0.95f, 1f, 1), TextAlignmentOptions.MidlineLeft, 10);
+            Centre(_bandText.rectTransform, Vector2.zero, new Vector2(80, 14));
+            _bandText.rectTransform.pivot = new Vector2(0, 0.5f);
+            _bandEar.gameObject.SetActive(false); _bandText.gameObject.SetActive(false);
             for (int i = 0; i < _fermataMarks.Length; i++)
             {
                 _fermataMarks[i] = UiKit.Box(rr, "Fermata" + i, Color.white, FermataSprite());
@@ -267,7 +383,7 @@ namespace Bonanza
         void BuildHearts(RectTransform root)
         {
             var row = UiKit.Rect("Hearts", root);
-            UiKit.Place(row, new Vector2(1, 1), new Vector2(1, 1), new Vector2(-24, -84), new Vector2(150, 44));
+            UiKit.Place(row, new Vector2(1, 1), new Vector2(1, 1), new Vector2(-22, -18), new Vector2(150, 44));
             for (int i = 0; i < 3; i++)
             {
                 var h = new HeartView();
@@ -287,7 +403,7 @@ namespace Bonanza
                 _hearts[i] = h;
             }
             _surviveTag = UiKit.Rect("Survive", root);
-            UiKit.Place(_surviveTag, new Vector2(1, 1), new Vector2(1, 1), new Vector2(-24, -132), new Vector2(150, 26));
+            UiKit.Place(_surviveTag, new Vector2(1, 1), new Vector2(1, 1), new Vector2(-22, -66), new Vector2(150, 26));
             Plate(_surviveTag, 12, 0.8f).color = new Color(0.55f, 0.02f, 0.08f, 0.9f);
             Rim(_surviveTag, 12, new Color(1f, 0.5f, 0.5f, 0.6f));
             _surviveText = Label(_surviveTag, "Text", "SURVIVE", 10f, Color.white, TextAlignmentOptions.Midline, 14);
@@ -298,22 +414,21 @@ namespace Bonanza
         void BuildMeter(RectTransform root)
         {
             _meter = UiKit.Rect("Meter", root);
-            UiKit.Place(_meter, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0, 16), new Vector2(620, 92));
+            UiKit.Place(_meter, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0, 10), new Vector2(560, 50));
             _meterPlate = Plate(_meter, 24, 0.66f);
             _meterRim = Rim(_meter, 24, new Color(1, 1, 1, 0.14f));
             _meterTitle = Label(_meter, "Title", "TAP ON EVERY BEAT", 8.5f, UiKit.Cream, TextAlignmentOptions.Midline, 12);
             Centre(_meterTitle.rectTransform, new Vector2(0, 30), new Vector2(560, 16));
+            _meterTitle.gameObject.SetActive(false);   // the state words ride on the lean line under the track
             _earlyLbl = Label(_meter, "Early", "EARLY", 9f, CallEarly, TextAlignmentOptions.MidlineRight, 10);
             Centre(_earlyLbl.rectTransform, new Vector2(-TrackW / 2 - 12, 6), new Vector2(80, 16));
-            _earlyLbl.rectTransform.pivot = new Vector2(1, 0.5f); _earlyLbl.rectTransform.anchoredPosition = new Vector2(-TrackW / 2 + 2, 30);
+            _earlyLbl.rectTransform.pivot = new Vector2(1, 0.5f); _earlyLbl.rectTransform.anchoredPosition = new Vector2(-TrackW / 2 - 12, 8);
             _lateLbl = Label(_meter, "Late", "LATE", 9f, CallLate, TextAlignmentOptions.MidlineLeft, 10);
             Centre(_lateLbl.rectTransform, new Vector2(TrackW / 2 + 12, 6), new Vector2(80, 16));
-            _lateLbl.rectTransform.pivot = new Vector2(0, 0.5f); _lateLbl.rectTransform.anchoredPosition = new Vector2(TrackW / 2 - 2, 30);
-            _earlyLbl.alignment = TextAlignmentOptions.MidlineLeft; _lateLbl.alignment = TextAlignmentOptions.MidlineRight;
-            _earlyLbl.rectTransform.pivot = new Vector2(0, 0.5f); _lateLbl.rectTransform.pivot = new Vector2(1, 0.5f);
+            _lateLbl.rectTransform.pivot = new Vector2(0, 0.5f); _lateLbl.rectTransform.anchoredPosition = new Vector2(TrackW / 2 + 12, 8);
 
             _track = UiKit.Rect("Track", _meter);
-            Centre(_track, new Vector2(0, 6), new Vector2(TrackW, TrackH));
+            Centre(_track, new Vector2(0, 8), new Vector2(TrackW, TrackH));
             var tb = UiKit.Box(_track, "Back", new Color(0.02f, 0.01f, 0.04f, 0.85f), UiKit.Pill, true, 9);
             UiKit.Stretch(tb.rectTransform);
             var el = UiKit.Box(_track, "EarlySide", new Color(CallEarly.r, CallEarly.g, CallEarly.b, 0.28f), UiKit.Pill, true, 9);
@@ -336,37 +451,37 @@ namespace Bonanza
                 t.gameObject.SetActive(false);
             }
             var dia = UiKit.Box(_track, "Diamond", Color.white, UiKit.Pill, true, 4);
-            Centre(dia.rectTransform, Vector2.zero, new Vector2(18, 18));
+            Centre(dia.rectTransform, Vector2.zero, new Vector2(15, 15));
             dia.rectTransform.localRotation = Quaternion.Euler(0, 0, 45);
             _diamond = dia.rectTransform; _diamondImg = dia;
             dia.gameObject.SetActive(false);
             // the lean needle under the track and its words
             var nd = UiKit.Box(_track, "Needle", Color.white, TriSprite());
-            Centre(nd.rectTransform, new Vector2(0, -TrackH / 2 - 8), new Vector2(18, 16));
+            Centre(nd.rectTransform, new Vector2(0, -TrackH / 2 - 6), new Vector2(14, 12));
             _needle = nd.rectTransform; _needleImg = nd;
             _leanText = Label(_meter, "Lean", "", 8.5f, UiKit.LabelInk, TextAlignmentOptions.Midline, 10);
-            Centre(_leanText.rectTransform, new Vector2(0, -32), new Vector2(560, 16));
+            Centre(_leanText.rectTransform, new Vector2(0, -15), new Vector2(520, 14));
         }
 
         void BuildCallout(RectTransform root)
         {
             _callout = UiKit.Rect("Callout", root);
-            UiKit.Place(_callout, new Vector2(0.5f, 0), new Vector2(0.5f, 0.5f), new Vector2(250, 170), new Vector2(200, 58));   // beside the podium, over the player's drum side: never on the maestro
+            Centre(_callout, new Vector2(330, 0), new Vector2(200, 58));   // anchored each frame over the player's drummer (above the YOU plate)
             _callPlate = Plate(_callout, 24, 0.7f);
             _callRim = Rim(_callout, 24, Color.white);
             _callText = Label(_callout, "Word", "", 22f, Color.white, TextAlignmentOptions.Midline, 4, TextStyle.Display);
             Centre(_callText.rectTransform, new Vector2(0, 2), new Vector2(400, 44));
-            _callMs = Label(_callout, "Ms", "", 8f, UiKit.LabelInk, TextAlignmentOptions.Midline, 10);
+            _callMs = Label(_callout, "Ms", "", 12f, UiKit.LabelInk, TextAlignmentOptions.Midline, 8, TextStyle.Display);
             _callMs.rectTransform.anchorMin = _callMs.rectTransform.anchorMax = new Vector2(0.5f, 0);
             _callMs.rectTransform.pivot = new Vector2(0.5f, 1);
-            _callMs.rectTransform.anchoredPosition = new Vector2(0, -4); _callMs.rectTransform.sizeDelta = new Vector2(200, 14);
+            _callMs.rectTransform.anchoredPosition = new Vector2(0, -2); _callMs.rectTransform.sizeDelta = new Vector2(200, 22);
             _callout.gameObject.SetActive(false);
         }
 
         void BuildChips(RectTransform root)
         {
             _chipRow = UiKit.Rect("Rivals", root);
-            UiKit.Place(_chipRow, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -172), new Vector2(600, 30));
+            UiKit.Place(_chipRow, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -80), new Vector2(600, 30));
             _chipGroup = _chipRow.gameObject.AddComponent<CanvasGroup>();
             _chipGroup.alpha = 0;
             for (int i = 0; i < 4; i++)
@@ -391,7 +506,8 @@ namespace Bonanza
         void BeginHud()
         {
             Ui.ShowScoreboard();
-            Ui.Banner(Title, "TAP EVERY BEAT - THE TEMPO WILL MOVE", Gold, 1.8f, plate: true, y: 0.33f, scale: 0.85f);
+            Ui.ShowAccuracy(false);   // the score IS the accuracy here; the corner belongs to the hearts
+            Ui.Banner(Title, "TAP EVERY BEAT - THE TEMPO WILL MOVE", Gold, 1.8f, plate: true, y: BannerY, scale: 0.7f);
             int n = _round.Slots.Count;
             _bpmLo = new double[n]; _bpmHi = new double[n]; _fermBpm = new double[n][];
             for (int k = 0; k < n; k++)
@@ -430,7 +546,7 @@ namespace Bonanza
         {
             _stripPulse = 1;
             if (slot.Index > 0)
-                Ui.Banner($"HYMN {slot.Index + 1} / {TempoRound.ExcerptCount}", slot.Level == HymnLevel.Medium ? "MEDIUM - UP AND DOWN" : "HARD - JUMPS AND HOLDS", LevelColor(slot.Level), 1.4f, plate: true, y: 0.33f, scale: 0.78f);
+                Ui.Banner($"HYMN {slot.Index + 1} / {TempoRound.ExcerptCount}", slot.Level == HymnLevel.Medium ? "MEDIUM - UP AND DOWN" : "HARD - JUMPS AND HOLDS", LevelColor(slot.Level), 1.4f, plate: true, y: BannerY, scale: 0.7f);
         }
 
         void HudTapped(TempoBeat b)
@@ -457,6 +573,7 @@ namespace Bonanza
             UiKit.SetFill(_callText, c);
             _callText.text = word;
             _callMs.text = ms;
+            UiKit.SetFill(_callMs, Color.Lerp(c, Color.white, 0.2f));
             _callText.ForceMeshUpdate();
             float w = Mathf.Max(150, _callText.preferredWidth + 56);
             _callout.sizeDelta = new Vector2(w, 58);
@@ -513,7 +630,7 @@ namespace Bonanza
             string tier = _round.Tier;
             string head = _round.Survived ? "YOU SURVIVED" : tier == "METRONOME" ? "BRAVISSIMO!" : "BRAVO!";
             string sub = tier == "METRONOME" ? "NOT ONE BEAT MISSED" : _round.Survived ? "THE RANK STOPS AT B" : $"{_round.Miss} BEATS MISSED";
-            Ui.Banner(head, sub, _round.Survived ? CallMiss : Gold, 2.9f, plate: true, y: 0.3f, scale: 0.85f);
+            Ui.Banner(head, sub, _round.Survived ? CallMiss : Gold, 2.9f, plate: true, y: BannerY, scale: 0.75f);
             _finaleK = 0.001f;
             _meterTitle.text = "YOUR AVERAGE OVER THE ROUND";
             _leanMs = (float)_round.BiasMs;
@@ -574,7 +691,10 @@ namespace Bonanza
         internal bool RibbonJumpAt(int k, int i) => i >= 0 && i < _jumpAt[k].Length && _jumpAt[k][i];
         internal bool RibbonBarStart(int k, int i) => i >= 0 && i < _round.Slots[k].Beats.Count && _round.Slots[k].Beats[i].BarPosition == 0;
 
-        static Color LevelColor(HymnLevel l) => l == HymnLevel.Easy ? Mint : l == HymnLevel.Medium ? UiKit.Hex(0x7fc8ff) : UiKit.Hex(0xff6a5a);
+        static Color LevelColor(HymnLevel l) => l == HymnLevel.Easy ? UiKit.Hex(0xffd27a) : l == HymnLevel.Medium ? UiKit.Hex(0x7ff0e0) : UiKit.Hex(0xff5a4a);
+
+        /// Banners sit above the maestro's hair (screen y 0.2 = 144 px), under the top bar.
+        const float BannerY = 0.215f;
 
         // ------------------------------------------------------------ per frame
 
@@ -643,7 +763,13 @@ namespace Bonanza
             if (hidden) code = 99;
             if (!_playing || _round.Done) code = 98;
             int shownBpm = hidden ? -1 : bpm;
-            if (shownBpm != _bpmShown) { _bpmShown = shownBpm; _bpmText.text = shownBpm < 0 ? "- -" : shownBpm.ToString(); }
+            if (shownBpm != _bpmShown)
+            {
+                _bpmShown = shownBpm;
+                _bpmText.text = shownBpm < 0 ? "" : shownBpm.ToString();   // hidden: an ear, not a blank number
+                _bpmEar.enabled = shownBpm < 0;
+                _bpmUnit.text = shownBpm < 0 ? "LISTEN" : "BPM";
+            }
             if (code * 10 + inBeats != _trendShown)
             {
                 _trendShown = code * 10 + inBeats;
@@ -664,7 +790,21 @@ namespace Bonanza
                     m.color = UiKit.Gold;
                 }
             for (int i = fm; i < _fermataMarks.Length; i++) if (_fermataMarks[i].gameObject.activeSelf) _fermataMarks[i].gameObject.SetActive(false);
-
+            // the BY EAR band in view gets its ear and its words (at the band's visible start)
+            bool band = false;
+            foreach (var h in s.HiddenStretches)
+            {
+                double b0 = System.Math.Max(beat - 2, h.First), b1 = System.Math.Min(beat + 14, h.Last + 1);
+                if (b1 - b0 < 1.2) continue;
+                var p0 = _ribbon.PointAt(b0, 0);
+                _bandEar.rectTransform.anchoredPosition = new Vector2(p0.x + 16, 0);
+                _bandText.rectTransform.anchoredPosition = new Vector2(p0.x + 30, 0);
+                _bandText.gameObject.SetActive(_ribbon.PointAt(b1, 0).x - p0.x > 90);
+                band = true;
+                break;
+            }
+            if (_bandEar.gameObject.activeSelf != band) _bandEar.gameObject.SetActive(band);
+            if (!band && _bandText.gameObject.activeSelf) _bandText.gameObject.SetActive(false);
             // ---- hearts
             int hearts = Hearts;
             for (int i = 0; i < 3; i++)
@@ -719,32 +859,53 @@ namespace Bonanza
             }
             bool showLean = _anyTap || _finaleK > 0;
             _needleImg.enabled = showLean;
-            _needle.anchoredPosition = new Vector2(Damp(_needle.anchoredPosition.x, _lean01 * TrackW / 2, 8, real), -TrackH / 2 - 9);
+            _needle.anchoredPosition = new Vector2(Damp(_needle.anchoredPosition.x, _lean01 * TrackW / 2, 8, real), -TrackH / 2 - 6);
             _needleImg.color = Mathf.Abs(_lean01) < 0.12f ? CallOn : _lean01 < 0 ? CallEarly : CallLate;
             int lean = Mathf.RoundToInt(_leanMs);
-            int leanCode = showLean ? lean : int.MaxValue;
+            int state = _finaleK > 0 ? 3 : hidden ? 2 : Beat < 0 && !_anyTap ? 1 : 0;
+            int leanCode = (showLean ? lean : 100000) * 10 + state;
             if (leanCode != _leanShown)
             {
                 _leanShown = leanCode;
                 int a = Mathf.Abs(lean);
-                _leanText.text = !showLean ? "" : _finaleK > 0 ? (a == 0 ? "DEAD ON THE BEAT" : (lean < 0 ? $"AHEAD OF THE BEAT BY {a} MS" : $"BEHIND THE BEAT BY {a} MS"))
-                    : (Mathf.Abs(_lean01) < 0.12f ? $"LEANING: CENTRED ({(lean > 0 ? "+" : "")}{lean} MS)" : lean < 0 ? $"LEANING: EARLY {a} MS" : $"LEANING: LATE {a} MS");
-            }
-            if (_finaleK <= 0)
-            {
-                string title = Beat < 0 ? "TAP ON EVERY BEAT" : hidden ? "BY EAR - KEEP THE BEAT GOING" : "ON THE BEAT";
-                if (_meterTitle.text != title) _meterTitle.text = title;
-                _meterTitle.color = hidden ? CallEarly : UiKit.Cream;
+                string words = !showLean ? "" : Mathf.Abs(_lean01) < 0.12f ? $"CENTRED {(lean > 0 ? "+" : "")}{lean} MS" : lean < 0 ? $"EARLY {a} MS" : $"LATE {a} MS";
+                _leanText.text = state == 3 ? (a == 0 ? "YOUR AVERAGE: DEAD ON THE BEAT" : (lean < 0 ? $"YOUR AVERAGE: AHEAD BY {a} MS" : $"YOUR AVERAGE: BEHIND BY {a} MS"))
+                    : state == 2 ? "BY EAR - KEEP THE BEAT GOING" + (showLean ? "   LEAN " + words : "")
+                    : state == 1 ? "TAP ON EVERY BEAT"
+                    : "LEAN " + words;
+                UiKit.SetFill(_leanText, state == 2 ? CallEarly : UiKit.LabelInk, false);
             }
             _meterRim.color = Color.Lerp(new Color(1, 1, 1, 0.14f), new Color(CallEarly.r, CallEarly.g, CallEarly.b, 0.6f), hh);
             if (_finaleK > 0)
             {
                 _finaleK = Mathf.Min(1, _finaleK + real * 1.6f);
                 float e = reduce ? 1 : UiKit.EaseOutCubic(_finaleK);
-                _meter.anchoredPosition = new Vector2(0, Mathf.Lerp(16, 40, e));
-                _meter.localScale = Vector3.one * Mathf.Lerp(1, 1.18f, e);
+                _meterRim.color = Color.Lerp(new Color(1, 1, 1, 0.14f), new Color(UiKit.Gold.r, UiKit.Gold.g, UiKit.Gold.b, 0.8f), e);
                 _diamond.gameObject.SetActive(false);
             }
+
+            // ---- world marks: YOU over the player's drummer, the callout above it, the ear over the maestro in a hush
+            if (CanvasPoint(SeatAt[0] + new Vector3(0, 2.25f, 0), out var yp))
+            {
+                _youPlate.anchoredPosition = yp + new Vector2(0, reduce ? 0 : Mathf.Sin(_time * 2f) * 2f);
+                _callout.anchoredPosition = yp + new Vector2(0, 80);
+            }
+            _youPlate.gameObject.SetActive(!_resultOut && _finaleK <= 0);
+            bool ear = hh > 0.05f;
+            if (_earMark.gameObject.activeSelf != ear) _earMark.gameObject.SetActive(ear);
+            if (ear && CanvasPoint(PodiumAt + new Vector3(0.9f, PodiumH + 3.25f, 0), out var ep))
+            {
+                _earMark.anchoredPosition = ep;
+                float br = reduce ? 0.85f : 0.7f + 0.3f * Mathf.Sin(_time * 3.1f);   // breathes on its own clock, not the beat
+                _earMarkImg.color = new Color(CallEarly.r, CallEarly.g, CallEarly.b, hh * br);
+                _earMark.localScale = Vector3.one * (0.85f + 0.15f * hh);
+            }
+            // the red room: a slow red frame on the last heart, deeper with none
+            bool red = _playing && !_round.Done && Hearts <= 1;
+            float vgoal = !red ? 0 : (Hearts == 0 ? 0.55f : 0.4f) + (reduce ? 0 : 0.12f * Mathf.Sin(_time * 2.4f));
+            _vigA = Damp(_vigA, vgoal, 3, real);
+            _vignette.enabled = _vigA > 0.01f;
+            if (_vignette.enabled) _vignette.color = new Color(0.85f, 0.04f, 0.08f, _vigA);
 
             // ---- callout (one slot: a new tap replaces it)
             if (_callLife > 0)
@@ -869,6 +1030,19 @@ namespace Bonanza
                 Quad(vh, new Vector2(X(s), r.yMin), new Vector2(X(e), r.yMax), Band);
                 // a dashed top so the band reads as "the curve goes on, unseen"
                 for (double d = s; d < e - 0.2; d += 0.5) Quad(vh, new Vector2(X(d), r.yMax - 3), new Vector2(X(System.Math.Min(e, d + 0.25)), r.yMax - 1), new Color(0.6f, 0.85f, 1f, 0.7f));
+                // hatching: the band is a deliberate stretch (by ear), not missing data
+                float xs = X(s), xe = X(e), slant = r.height * 0.55f;
+                for (float x = xs - slant; x < xe; x += 9f)
+                {
+                    float x0 = Mathf.Max(xs, x), x1 = Mathf.Min(xe, x + 3f);
+                    float t0 = Mathf.Max(xs, x + slant), t1 = Mathf.Min(xe, x + 3f + slant);
+                    if (x1 <= x0 && t1 <= t0) continue;
+                    int i = vh.currentVertCount;
+                    var hc = new Color(0.55f, 0.8f, 1f, 0.22f);
+                    vh.AddVert(new Vector3(x0, r.yMin), hc, Vector2.zero); vh.AddVert(new Vector3(t0, r.yMax - 4), hc, Vector2.zero);
+                    vh.AddVert(new Vector3(Mathf.Max(t0, t1), r.yMax - 4), hc, Vector2.zero); vh.AddVert(new Vector3(Mathf.Max(x0, x1), r.yMin), hc, Vector2.zero);
+                    vh.AddTriangle(i, i + 1, i + 2); vh.AddTriangle(i, i + 2, i + 3);
+                }
             }
             // the curve: fill and line, skipping the hidden beats and the stretch past the end
             float prevX = 0, prevY = 0; bool have = false;

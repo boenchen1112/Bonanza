@@ -171,12 +171,12 @@ namespace Bonanza
             _env.AddCrowd(new EnvCrowd.Options
             {
                 Style = EnvCrowd.FigureStyle.Figure, Stands = EnvCrowd.StandStyle.Risers, Poses = true, PoseKinds = 4,
-                Rows = 6, PerRow = 26, RowGrow = 3, Radius = 13.2f, RowDepth = 1.6f, RowRise = 0.66f, Arc = Mathf.PI * 0.6f,
+                Rows = 6, PerRow = 26, RowGrow = 3, Radius = 13.2f, RowDepth = 1.6f, RowRise = 0.66f, Arc = Mathf.PI * 0.5f,
                 Scale = 1.75f, Center = new Vector3(0, StallsY + 0.05f, -3.2f), RiserY = StallsY - 0.2f, RisersFollowRows = true,
-                PaletteMix = 0.4f, BrightMin = 0.3f, BrightMax = 0.52f, Deepen = 1.45f, Energy = 0.12f, Rim = 0.8f, FogMul = 1f,
+                PaletteMix = 0.3f, BrightMin = 0.28f, BrightMax = 0.46f, Deepen = 1.2f, Energy = 0.06f, Rim = 1.3f, FogMul = 1f,
                 Seed = 0xf1a1e, RiserLights = true,
             });
-            _env.Crowd.SetEnergy(0.12f);
+            _env.Crowd.SetEnergy(0.06f);
 
             BuildPlatform();
             BuildHouse();
@@ -438,49 +438,96 @@ namespace Bonanza
             }
         }
 
-        // ---- the podium: velvet top, gilt bands, a glowing ring; the music stand beside it with a lamp on the score
+        // ---- the podium: two lacquered mahogany tiers with thin brass trims and a velvet top, one emissive ring at its
+        //      foot that pulses on the beat; a crimson rug under it; the music stand with its score page lit.
 
-        Material _podRingMat, _standLampMat;
+        Material _podRingMat, _standLampMat, _poolMat, _playerPoolMat, _haloBackMat;
+        Transform _playerPool;
 
         void BuildPodium()
         {
-            var velvet = Surf(L(0.55f, 0.05f, 0.1f), rim: 1.4f, pulse: 0.04f, bands: 3, softness: 0.35f);
-            var wood = Surf(L(0.22f, 0.08f, 0.06f), rim: 0.8f, pulse: 0.03f, bands: 3);
-            var gilt = Surf(L(1f, 0.76f, 0.34f), rim: 1.2f, pulse: 0.06f, lift: 0.1f, bands: 3);
+            var velvet = Surf(L(0.5f, 0.04f, 0.09f), rim: 1.5f, pulse: 0.03f, bands: 3, softness: 0.35f);
+            var lacquer = Surf(L(0.36f, 0.12f, 0.07f), rim: 1.6f, pulse: 0.02f, lift: 0.01f, bands: 4, softness: 0.14f);
+            var brass = Surf(L(0.95f, 0.7f, 0.32f), rim: 1.4f, pulse: 0.03f, lift: 0.04f, bands: 4, softness: 0.14f);
+            float h1 = PodiumH * 0.5f;
             var b = new MeshBuilder();
-            b.Shell(PodiumR, PodiumR + 0.12f, PodiumH, 40, 0, Mathf.PI * 2, Matrix4x4.Translate(new Vector3(0, PodiumH / 2, 0)), Color.white, Vector2.one);
-            Part("PodiumSide", transform, b, wood, PodiumAt, cast: false);
+            // the lower tier, wider, and the upper one stepped in (mahogany, a soft bevel at each top edge)
+            b.Shell(PodiumR + 0.22f, PodiumR + 0.28f, h1, 48, 0, Mathf.PI * 2, Matrix4x4.Translate(new Vector3(0, h1 / 2, 0)), Color.white, Vector2.one);
+            b.Disc(PodiumR + 0.22f, 48, Matrix4x4.Translate(new Vector3(0, h1, 0)), Color.white * 0.85f);
+            b.Shell(PodiumR, PodiumR + 0.03f, PodiumH - h1, 48, 0, Mathf.PI * 2, Matrix4x4.Translate(new Vector3(0, h1 + (PodiumH - h1) / 2, 0)), Color.white, Vector2.one);
+            Part("PodiumTiers", transform, b, lacquer, PodiumAt);
             b = new MeshBuilder();
-            b.Disc(PodiumR, 40, Matrix4x4.Translate(new Vector3(0, PodiumH, 0)), Color.white);
+            b.Disc(PodiumR - 0.02f, 48, Matrix4x4.Translate(new Vector3(0, PodiumH + 0.002f, 0)), Color.white);
             Part("PodiumTop", transform, b, velvet, PodiumAt);
             b = new MeshBuilder();
-            b.Torus(PodiumR + 0.01f, 0.05f, 5, 48, Mathf.PI * 2, Matrix4x4.TRS(new Vector3(0, PodiumH - 0.02f, 0), Quaternion.Euler(90, 0, 0), Vector3.one), Color.white);
-            b.Torus(PodiumR + 0.12f, 0.06f, 5, 48, Mathf.PI * 2, Matrix4x4.TRS(new Vector3(0, 0.05f, 0), Quaternion.Euler(90, 0, 0), Vector3.one), Color.white);
-            b.Shell(PodiumR + 0.065f, PodiumR + 0.075f, 0.06f, 48, 0, Mathf.PI * 2, Matrix4x4.Translate(new Vector3(0, PodiumH * 0.55f, 0)), Color.white, Vector2.one);
-            Part("PodiumGilt", transform, b, gilt, PodiumAt);
-            _podRingMat = AddMat(L(1f, 0.55f, 0.4f), 0.5f, 0.3f, 0);
+            b.Torus(PodiumR + 0.005f, 0.028f, 5, 56, Mathf.PI * 2, Matrix4x4.TRS(new Vector3(0, PodiumH, 0), Quaternion.Euler(90, 0, 0), Vector3.one), Color.white);
+            b.Torus(PodiumR + 0.225f, 0.024f, 5, 56, Mathf.PI * 2, Matrix4x4.TRS(new Vector3(0, h1, 0), Quaternion.Euler(90, 0, 0), Vector3.one), Color.white);
+            Part("PodiumBrass", transform, b, brass, PodiumAt);
+            _podRingMat = AddMat(L(1f, 0.7f, 0.4f), 0.6f, 0.3f, 0);
             b = new MeshBuilder();
-            b.Torus(PodiumR + 0.32f, 0.035f, 4, 64, Mathf.PI * 2, Matrix4x4.TRS(new Vector3(0, 0.012f, 0), Quaternion.Euler(90, 0, 0), new Vector3(1, 1, 0.3f)), Color.white);
+            b.Torus(PodiumR + 0.42f, 0.03f, 4, 72, Mathf.PI * 2, Matrix4x4.TRS(new Vector3(0, 0.012f, 0), Quaternion.Euler(90, 0, 0), new Vector3(1, 1, 0.3f)), Color.white);
             Part("PodiumRing", transform, b, _podRingMat, PodiumAt);
+            // the rug: crimson with a gold border, under the podium and the inlay
+            var rug = Surf(L(0.32f, 0.03f, 0.06f), rim: 0.3f, pulse: 0.02f, bands: 2, softness: 0.5f);
+            b = new MeshBuilder();
+            b.Disc(2.85f, 64, Matrix4x4.Translate(new Vector3(0, 0.003f, 0)), Color.white);
+            b.Torus(2.85f, 0.05f, 3, 72, Mathf.PI * 2, Matrix4x4.TRS(new Vector3(0, 0.004f, 0), Quaternion.Euler(90, 0, 0), new Vector3(1, 1, 0.1f)), L(0.9f, 0.62f, 0.24f) * 1.6f);
+            Part("Rug", transform, b, rug, PodiumAt);
 
-            // the stand: a post, a raked desk (its back to us), the score's lamp glowing over the top edge
+            // the stand: a post and a raked desk turned three quarters to us, the score open on it, lit by its lamp
             var stand = new MeshBuilder();
-            var dark = L(0.07f, 0.05f, 0.06f);
+            var dark = L(0.06f, 0.045f, 0.05f);
             stand.Shell(0.03f, 0.045f, 1.15f, 8, 0, Mathf.PI * 2, Matrix4x4.Translate(new Vector3(0, 0.575f, 0)), dark, Vector2.one);
             stand.Box(Matrix4x4.TRS(new Vector3(0, 1.2f, 0), Quaternion.Euler(-28, 0, 0), new Vector3(0.95f, 0.62f, 0.04f)), dark);
-            stand.Box(Matrix4x4.TRS(new Vector3(0, 0.9f, -0.12f), Quaternion.Euler(-28, 0, 0), new Vector3(0.95f, 0.05f, 0.12f)), L(1f, 0.74f, 0.3f));
+            stand.Box(Matrix4x4.TRS(new Vector3(0, 0.92f, -0.13f), Quaternion.Euler(-28, 0, 0), new Vector3(0.95f, 0.05f, 0.1f)), L(1f, 0.74f, 0.3f));
             for (int i = 0; i < 3; i++)
             {
                 float a = i / 3f * Mathf.PI * 2;
                 stand.Box(Matrix4x4.TRS(new Vector3(Mathf.Cos(a) * 0.18f, 0.05f, Mathf.Sin(a) * 0.18f), Quaternion.Euler(0, -a * Mathf.Rad2Deg, 0), new Vector3(0.4f, 0.03f, 0.04f)), dark);
             }
-            var standR = Part("MusicStand", transform, stand, Surf(Color.white, rim: 1.4f, pulse: 0.02f, bands: 3), new Vector3(-1.7f, 0, 2.9f), cast: true);
-            standR.transform.localRotation = Quaternion.Euler(0, 200, 0);
+            var standAt = new Vector3(-1.85f, 0, 2.7f);
+            var standR = Part("MusicStand", transform, stand, Surf(Color.white, rim: 1.4f, pulse: 0.02f, bands: 3), standAt, cast: true);
+            standR.transform.localRotation = Quaternion.Euler(0, 145, 0);   // the score's face turned toward us and the maestro
+            // the open score: two cream pages with staff lines, warm and a touch emissive (the lamp lights them)
+            var page = new MeshBuilder();
+            foreach (float sx in new[] { -1f, 1f })
+            {
+                var m = Matrix4x4.TRS(new Vector3(sx * 0.22f, 1.21f, -0.035f), Quaternion.Euler(-28, sx * -6, 0), Vector3.one);
+                page.Box(m * Matrix4x4.Scale(new Vector3(0.42f, 0.54f, 0.008f)), L(1f, 0.95f, 0.82f) * 1.15f);
+                for (int l = 0; l < 6; l++)
+                    page.Box(m * Matrix4x4.TRS(new Vector3(0, 0.2f - l * 0.075f, -0.006f), Quaternion.identity, new Vector3(0.34f, 0.006f, 0.002f)), L(0.25f, 0.18f, 0.14f));
+            }
+            var pr = Part("Score", transform, page, Surf(Color.white, rim: 0.3f, pulse: 0.02f, lift: 0.3f, bands: 2, softness: 0.5f), standAt);
+            pr.transform.localRotation = standR.transform.localRotation;
             var lamp = new MeshBuilder();
-            lamp.Sphere(0.07f, 8, 5, Matrix4x4.Translate(new Vector3(0, 1.58f, 0.05f)), Color.white, new Vector3(3.2f, 0.6f, 1));
-            _standLampMat = AddMat(L(1f, 0.86f, 0.6f), 1.6f, 0.5f, 0);
-            var lr = Part("StandLamp", transform, lamp, _standLampMat, new Vector3(-1.7f, 0, 2.9f));
-            lr.transform.localRotation = Quaternion.Euler(0, 200, 0);
+            lamp.Box(Matrix4x4.TRS(new Vector3(0, 1.53f, -0.2f), Quaternion.Euler(-28, 0, 0), new Vector3(0.36f, 0.04f, 0.06f)), Color.white);
+            _standLampMat = AddMat(L(1f, 0.86f, 0.6f), 1.4f, 0.4f, 0);
+            var lr = Part("StandLamp", transform, lamp, _standLampMat, standAt);
+            lr.transform.localRotation = standR.transform.localRotation;
+
+            // light pools: a warm spot on the floor round the podium, a gold one under the player's drummer
+            var q = new MeshBuilder();
+            q.Surface(1, 1, (u, v) => (new Vector3(u - 0.5f, 0, v - 0.5f), Vector3.up), Matrix4x4.identity, Color.white, Vector2.one);
+            var qm = Own(q.ToMesh("Pool"));
+            _poolMat = GlowCard(new Color(1f, 0.85f, 0.6f), 0.16f, 1.4f); _poolMat.SetFloat("_Billboard", 0);
+            var pool = EnvKit.Renderer("PodiumPool", transform, qm, _poolMat);
+            pool.transform.localPosition = PodiumAt + new Vector3(0, 0.02f, -0.3f); pool.transform.localScale = new Vector3(6.5f, 1, 5f);
+            _playerPoolMat = GlowCard(new Color(1f, 0.82f, 0.3f), 0.3f, 1.3f); _playerPoolMat.SetFloat("_Billboard", 0);
+            var pp = EnvKit.Renderer("PlayerPool", transform, qm, _playerPoolMat);
+            pp.transform.localPosition = SeatAt[0] + new Vector3(-0.3f, 0.02f, 0.2f); pp.transform.localScale = new Vector3(3.4f, 1, 3.4f);
+            _playerPool = pp.transform;
+
+            // separation: a soft dark wash on the stalls right behind the maestro, and a warm back-glow round his shoulders
+            var blob = Own(new Material(Resources.Load<Material>("Look/Blob")));
+            blob.SetFloat("_Strength", 0.55f);
+            var bq = new MeshBuilder();
+            bq.Surface(1, 1, (u, v) => (new Vector3(u - 0.5f, v - 0.5f, 0), Vector3.back), Matrix4x4.identity, Color.white, Vector2.one);
+            var bqm = Own(bq.ToMesh("Wash"));
+            var wash = EnvKit.Renderer("MaestroWash", transform, bqm, blob);
+            wash.transform.localPosition = new Vector3(0, 3.0f, 10.5f); wash.transform.localScale = new Vector3(8f, 9f, 1);
+            _haloBackMat = GlowCard(new Color(1f, 0.78f, 0.5f), 0.1f, 1.2f);
+            var hb = EnvKit.Renderer("MaestroBackGlow", transform, bqm, _haloBackMat);
+            hb.transform.localPosition = PodiumAt + new Vector3(0, PodiumH + 2.1f, 0.6f); hb.transform.localScale = new Vector3(3.6f, 3.6f, 1);
         }
 
         // ------------------------------------------------------------ the maestro
@@ -494,7 +541,7 @@ namespace Bonanza
 
         void BuildMaestro()
         {
-            var mat = Surf(Color.white, rim: 1.25f, pulse: 0.04f, lift: 0.02f, bands: 3, softness: 0.24f, fog: 0.5f);
+            var mat = Surf(Color.white, rim: 1.9f, pulse: 0.04f, lift: 0.03f, bands: 3, softness: 0.24f, fog: 0.3f);   // a strong warm rim: he stands off the dark house
             _mRoot = new GameObject("Maestro").transform;
             _mRoot.SetParent(transform, false);
             _mRoot.localPosition = PodiumAt + new Vector3(0, PodiumH, 0);
@@ -634,12 +681,12 @@ namespace Bonanza
             // the baton: ivory shaft with a cork grip, along +z of its own transform; a glowing tip
             _mBaton = new GameObject("Baton").transform; _mBaton.SetParent(_mRoot, false);
             var bat = new MeshBuilder();
-            bat.Shell(0.018f, 0.036f, 0.8f, 8, 0, Mathf.PI * 2, Matrix4x4.TRS(new Vector3(0, 0, 0.45f), Quaternion.Euler(90, 0, 0), Vector3.one), L(1f, 0.97f, 0.9f), Vector2.one);
+            bat.Shell(0.026f, 0.05f, 0.8f, 8, 0, Mathf.PI * 2, Matrix4x4.TRS(new Vector3(0, 0, 0.45f), Quaternion.Euler(90, 0, 0), Vector3.one), L(1f, 0.97f, 0.9f), Vector2.one);
             bat.Sphere(0.045f, 8, 6, Matrix4x4.Translate(new Vector3(0, 0, 0.04f)), L(0.7f, 0.5f, 0.32f), new Vector3(1, 1, 1.5f));
             Part("BatonMesh", _mBaton, bat, mat, Vector3.zero, cast: true);
             _tipMat = AddMat(L(1f, 0.9f, 0.6f), 1.6f, 0.5f, 0);
             var tip = new MeshBuilder();
-            tip.Sphere(0.06f, 8, 6, Matrix4x4.identity, Color.white, Vector3.one);
+            tip.Sphere(0.085f, 10, 7, Matrix4x4.identity, Color.white, Vector3.one);
             _mTip = Part("BatonTip", _mBaton, tip, _tipMat, new Vector3(0, 0, 0.86f)).transform;
 
             Look.Blob(_mRoot, 0.8f, 0.5f, PodiumH, 0);
@@ -660,8 +707,6 @@ namespace Bonanza
 
         readonly Drummer[] _drummers = new Drummer[4];
         MeshBatch _heads;
-        Transform _youMark;
-        Material _youMat;
         static readonly Vector3[] SeatAt = { new Vector3(3.05f, 0, 0.75f), new Vector3(-3.05f, 0, 0.75f), new Vector3(-5.1f, 0, 3.1f), new Vector3(5.1f, 0, 3.1f) };
 
         void BuildTimpani()
@@ -713,11 +758,6 @@ namespace Bonanza
             }
             HeadsFlush();
 
-            // a small marker over the player's drummer
-            _youMat = AddMat(L(1f, 0.85f, 0.24f), 1.4f, 0.2f, 0);
-            var m = new MeshBuilder();
-            m.Cone(0.16f, 0.3f, 4, Matrix4x4.TRS(Vector3.zero, Quaternion.Euler(180, 45, 0), new Vector3(1, 1, 0.5f)), Color.white);
-            _youMark = Part("YouMark", transform, m, _youMat, SeatAt[0] + new Vector3(0, 2.3f, 0)).transform;
         }
 
         void BuildDrummer(Drummer d, Material mat, int s)
@@ -843,7 +883,7 @@ namespace Bonanza
 
         // ------------------------------------------------------------ events
 
-        float _hush, _joy, _frown, _shake, _finale, _time, _strikeGlow, _lean, _crowdBeat, _lastDrive;
+        float _redK, _hush, _joy, _frown, _shake, _finale, _time, _strikeGlow, _lean, _crowdBeat, _lastDrive;
         int _lastBeatWhole = int.MinValue, _comboHyped;
         string _mood;
 
@@ -906,7 +946,14 @@ namespace Bonanza
             _env.Crowd.Cheer(1.4f);
             _env.Crowd.SetEnergy(0.9f);
             _env.Spotlights?.Chase(1f, 0.1f);
-            if (!Settings.ReduceMotion) Look.Fx.Confetti(new Vector3(0, 9, 9), 70, new[] { new Color(1f, 0.85f, 0.35f), new Color(1f, 0.4f, 0.45f), Color.white }, 4f, 0.2f, 0.16f, 3.2f);
+            if (!Settings.ReduceMotion)
+            {
+                // the ovation: paper from both balcony tiers and two cannons from the flies over the stage
+                var cols = new[] { new Color(1f, 0.85f, 0.35f), new Color(1f, 0.4f, 0.45f), Color.white, new Color(0.5f, 0.8f, 1f) };
+                foreach (float x in new[] { -7f, 0f, 7f }) Look.Fx.Confetti(new Vector3(x, 4.2f, 13.5f), 40, cols, 5f, 0.6f, 0.2f, 3.2f);
+                Look.Fx.ConfettiCannon(new Vector3(-6.5f, 8.5f, 5.5f), new Vector3(0.55f, -0.35f, -0.5f), 60, 9f, 0.18f, 2.6f, 0.45f);
+                Look.Fx.ConfettiCannon(new Vector3(6.5f, 8.5f, 5.5f), new Vector3(-0.55f, -0.35f, -0.5f), 60, 9f, 0.18f, 2.6f, 0.45f);
+            }
         }
 
         // ------------------------------------------------------------ per frame
@@ -950,7 +997,7 @@ namespace Bonanza
             _lastBeatWhole = whole;
 
             // crowd energy: the combo warms the house; a hush hushes it
-            float energy = _finale > 0 ? 0.9f : hidden ? 0.02f : 0.1f + 0.35f * Mathf.Clamp01(_round.Combo / 48f);
+            float energy = _finale > 0 ? 0.9f : hidden ? 0.0f : 0.04f + 0.22f * Mathf.Clamp01(_round.Combo / 64f);   // mostly seated and listening: arms down, a few up
             _env.Crowd.SetEnergy(energy);
 
             UpdateMaestro(dt, hidden);
@@ -972,7 +1019,7 @@ namespace Bonanza
             return pos == 0 ? new Vector2(0, 0) : pos == n - 1 ? new Vector2(-0.14f, 0.13f) : new Vector2(pos % 2 == 1 ? 0.3f : -0.45f, 0.05f);
         }
 
-        static readonly Vector3 PlaneR = new Vector3(-0.3f, 1.22f, -0.58f);
+        static readonly Vector3 PlaneR = new Vector3(-0.34f, 1.02f, -0.58f);   // the beat plane sits at his waist: the arc stays under his chin
         Vector3 _handR, _handL, _batonDir = new Vector3(0, 0.3f, -1);
         bool _batonShown = true;
 
@@ -1009,7 +1056,7 @@ namespace Bonanza
             }
 
             // the stroke: rebound up out of ictus a, float, fall (accelerating) into ictus b
-            float H = Mathf.Clamp(0.2f + 0.36f * (len - 0.4f), 0.18f, 0.48f);
+            float H = Mathf.Clamp(0.16f + 0.26f * (len - 0.4f), 0.14f, 0.34f);
             Vector2 pos;
             float ictusFlash;
             if (waiting)
@@ -1023,7 +1070,7 @@ namespace Bonanza
                 // the hold: up to the top quickly, held there (a slow small circle), then the cut-off falls into b
                 float rise = Mathf.SmoothStep(0, 1, Mathf.Clamp01(u / 0.16f));
                 float fall = Mathf.Clamp01((u - 0.84f) / 0.16f);
-                var top = new Vector2(a.x - 0.08f + Mathf.Sin(u * 7f) * 0.025f, a.y + 0.62f + Mathf.Cos(u * 7f) * 0.02f);
+                var top = new Vector2(a.x - 0.22f + Mathf.Sin(u * 7f) * 0.025f, a.y + 0.48f + Mathf.Cos(u * 7f) * 0.02f);
                 pos = Vector2.Lerp(Vector2.Lerp(a, top, rise), bpt, fall * fall);
                 ictusFlash = Mathf.Exp(-u * 30f);
             }
@@ -1043,8 +1090,8 @@ namespace Bonanza
             if (waiting) leftTarget = new Vector3(0.32f, 1.25f, -0.42f);
 
             // the hush: baton away, right hand on the heart, left hand cupped to the ear, eyes shut
-            var restR = new Vector3(-0.12f, 1.42f, -0.48f);
-            var earL = new Vector3(0.44f, 2.12f, -0.12f);
+            var restR = new Vector3(-0.1f, 1.38f, -0.5f);      // right hand on his heart
+            var earL = new Vector3(0.64f, 2.0f, -0.08f);       // left hand cupped beside the ear, out to the side (not on the head)
             float hh = _hush;
             handTarget = Vector3.Lerp(handTarget, restR, hh);
             leftTarget = Vector3.Lerp(leftTarget, earL, hh);
@@ -1101,11 +1148,11 @@ namespace Bonanza
             PlaceSeg(_mUpper[1], shL, elbowL); PlaceSeg(_mFore[1], elbowL, hl);
             _mHand[0].localPosition = hr; _mHand[1].localPosition = hl;
             _mHand[0].localRotation = Quaternion.LookRotation(hr - elbowR);
-            _mHand[1].localRotation = Quaternion.LookRotation(hl - elbowL) * Quaternion.Euler(0, 0, fermata ? 90 : 0);
+            _mHand[1].localRotation = Quaternion.Slerp(Quaternion.LookRotation(hl - elbowL) * Quaternion.Euler(0, 0, fermata ? 90 : 0), Quaternion.Euler(0, -70, 0), _hush);   // a cupped palm turned to the ear
 
             // the baton: out of the right hand along the forearm, tipped up and toward us; it whips a little ahead of the hand
             var fdir = (hr - elbowR).normalized;
-            var want = (fdir + new Vector3(-0.4f, 0.65f, -0.3f)).normalized;   // out to his right and up: long in the frame, not end-on
+            var want = (fdir + new Vector3(-0.75f, 0.3f, -0.35f)).normalized;   // out to his right and up: long in the frame, not end-on
             if (!waiting && hh < 0.5f)
             {
                 float whip = Mathf.Sin(Mathf.PI * Mathf.Pow(u, 0.62f));
@@ -1180,7 +1227,8 @@ namespace Bonanza
                         if ((roll != null || section) && hit && !b.Hidden && _now - (b.Time + err) < 0.2)
                         {
                             d.Strike = 1; d.Side = d.Side == 0 ? 1 : -d.Side;
-                            d.Flash = 0.55f; d.FlashColor = Color.Lerp(SeatColorFor(k), Color.white, 0.3f);
+                            d.Flash = 0.85f; d.FlashColor = Color.Lerp(SeatColorFor(k), Color.white, 0.2f);
+                            Look.Fx.Ring(d.Drum + new Vector3(0, 0.02f, 0), d.FlashColor, 0.3f, 0.35f, 0.95f, 0.08f, 0.015f, 0.02f, 0.6f, Vector3.up);
                         }
                         d.Cursor++;
                     }
@@ -1208,13 +1256,6 @@ namespace Bonanza
                 d.Mouth.localScale = new Vector3(1, open * (1 - d.Sad * 0.5f), 1);
             }
             HeadsFlush();
-            if (_youMark)
-            {
-                float y = 2.35f + (reduce ? 0 : Mathf.Sin(_time * 2.1f) * 0.06f);
-                _youMark.localPosition = SeatAt[0] + new Vector3(0, y, 0);
-                _youMark.localRotation = Quaternion.Euler(0, _time * 60f, 0);
-                _youMat.SetFloat("_Intensity", Mathf.Lerp(1.4f, 0.5f, _hush) * (_finale > 0 ? 0.3f : 1));
-            }
         }
 
         // ---- the practicals: candles, sconces, footlights, the podium ring
@@ -1231,12 +1272,22 @@ namespace Bonanza
             _footMat.SetFloat("_Intensity", Mathf.Lerp(1.2f + pulse * 0.9f, 0.25f, hh));
             _lipMat.SetFloat("_Intensity", Mathf.Lerp(1.0f + pulse * 0.6f, 0.2f, hh));
             _podRingMat.SetFloat("_Intensity", Mathf.Lerp(0.45f + pulse * 0.9f, 0.2f, hh));
-            _standLampMat.SetFloat("_Intensity", 1.6f);
-            // the house sits in the dark: its listeners graded down, further in a hush, up for the ovation
-            float tint = Mathf.Lerp(0.8f, 0.42f, hh) * (_finale > 0 ? 1.25f : 1);
-            _env.Crowd.SetTint(new Color(tint, tint, tint, 1));
+            _standLampMat.SetFloat("_Intensity", 1.4f);
+            // the house sits in the dark: its listeners graded down to near silhouettes (rim-lit), further in a hush, up for
+            // the ovation; on the last heart they drain to a grey-red
+            bool red = _round.Started && Hearts <= 1 && !_round.Done;
+            _redK = Damp(_redK, red ? 1 : 0, 2.5f, dt);
+            float tint = Mathf.Lerp(0.5f, 0.24f, hh) * (_finale > 0 ? 1.6f : 1);
+            var tc = Color.Lerp(new Color(tint, tint, tint, 1), new Color(tint * 0.9f, tint * 0.42f, tint * 0.42f, 1), _redK);
+            _env.Crowd.SetTint(tc);
+            int lvl = Slot != null ? (int)Slot.Level : 0;
             var spot = _env.Spotlights;
-            if (spot != null) spot.SetLevel(Mathf.Lerp(0.03f, 0.05f, hh), hidden ? 0 : 0.025f);
+            float spotBase = lvl == 2 ? 0.075f : lvl == 1 ? 0.045f : 0.035f;   // the finale's beams cut harder
+            if (spot != null) spot.SetLevel(Mathf.Lerp(spotBase, spotBase * 1.2f, hh), hidden ? 0 : 0.03f);
+            _poolMat.SetFloat("_Intensity", 0.16f + pulse * 0.05f * (1 - hh));
+            _playerPoolMat.SetFloat("_Intensity", Mathf.Lerp(0.32f, 0.14f, hh) + _drummers[0].Flash * 0.25f);
+            _playerPoolMat.SetColor("_Color", Color.Lerp(new Color(1f, 0.82f, 0.3f), _drummers[0].FlashColor, _drummers[0].Flash * 0.6f));
+            _haloBackMat.SetFloat("_Intensity", Mathf.Lerp(0.1f, 0.14f, hh));
             var cam = Look.Rig?.Camera;
             if (cam)
                 for (int c = 0; c < 3; c++) _halos[c].rotation = Quaternion.LookRotation(_halos[c].position - cam.transform.position);
@@ -1248,14 +1299,13 @@ namespace Bonanza
         {
             bool reduce = Settings.ReduceMotion;
             float k = reduce ? 0.3f : 1;
-            var target = CamTarget + new Vector3(0, 0.15f * _hush * k, 0);
-            float dist = CamDist - 1.4f * _hush * k;
-            float height = CamHeight - 0.15f * _hush * k;
-            float fov = CamFov - 2f * _hush * k;
+            // the hush is lighting only: the frame holds wide, every drummer stays in it
+            var target = CamTarget;
+            float dist = CamDist, height = CamHeight, fov = CamFov;
             if (_finale > 0)
             {
                 float f = Mathf.SmoothStep(0, 1, Mathf.Clamp01(_finale / 2.5f));
-                dist += 2.2f * f * k; height += 0.6f * f * k; target += new Vector3(0, 0.6f * f * k, 1.0f * f * k);
+                dist += 0.7f * f * k; height += 0.2f * f * k; target += new Vector3(0, 0.25f * f * k, 0.2f * f * k);
             }
             Look.Rig.Frame(target, dist, height, 0, fov, 2.2f, snap);
         }

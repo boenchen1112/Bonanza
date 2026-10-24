@@ -228,6 +228,25 @@ namespace Bonanza
             };
         }
 
+        /// The card centred with a filled rank stamp, one pip per excerpt (gold clean, mint kept, coral a heart lost in it),
+        /// and the round's lead / lag as an EARLY | ON | LATE gauge (ResultsCard's opt-in options).
+        public override void ResultsStyle(Bonanza.HudKit.ResultsData d)
+        {
+            d.Centered = true; d.RankFilled = true; d.BadgeOnRank = true;
+            if (_round == null) return;
+            d.Pips = new List<Color>();
+            foreach (var s in _round.Slots)
+            {
+                bool lost = false, missed = false;
+                foreach (var l in s.Lines) { if (l.HeartDelta < 0) lost = true; if (l.Misses > 0) missed = true; }
+                d.Pips.Add(lost ? Hex(0xff5d73) : missed ? Hex(0x7df0a0) : Hex(0xffd93d));
+            }
+            double good = BeatWindow.GoodMs(0.6);
+            d.Lean = Mathf.Clamp((float)(_round.BiasMs / good), -1, 1);
+            int ms = Mathf.RoundToInt((float)System.Math.Abs(_round.BiasMs));
+            d.LeanLabel = ms == 0 ? "YOUR AVERAGE: DEAD ON THE BEAT" : _round.BiasMs < 0 ? $"YOUR AVERAGE: {ms} MS AHEAD OF THE BEAT" : $"YOUR AVERAGE: {ms} MS BEHIND THE BEAT";
+        }
+
         public override IEnumerable<KeyValuePair<string, double>> TestChart()
         {
             if (!ShotMode("ffmiss"))
@@ -278,7 +297,7 @@ namespace Bonanza
             {
                 var t = _ticks[_tickCursor++];
                 Host.CountTick(t.Time, t.Accent);
-                if (t.Say && t.Time > now - 0.2) Ui.Countdown(t.Text, 0.42f);
+                if (t.Say && t.Time > now - 0.2) Ui.Countdown(t.Text, 0.215f);
             }
         }
 
@@ -378,7 +397,7 @@ namespace Bonanza
             if (_round.Survived && left == 0 && !_surviveShown)
             {
                 _surviveShown = true;
-                Ui.Banner("SURVIVE!", "NO HEARTS LEFT - KEEP THE BEAT", Red, 1.6f, plate: true, y: 0.33f, scale: 0.8f);
+                Ui.Banner("SURVIVE!", "NO HEARTS LEFT - KEEP THE BEAT", Red, 1.6f, plate: true, y: 0.215f, scale: 0.7f);
                 Shot("survive", 0.45);
                 Shot("survivelater", 3.0);
             }

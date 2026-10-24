@@ -301,6 +301,7 @@ namespace Bonanza.HudKit
         {
             _boardOn = false;
             _board.alpha = 0;
+            ShowAccuracy(true);
             CornerScrims(false);
             _scoreTarget = -1; _scoreDrawn = -1; _scoreShown = 0; _comboDrawn = -1; _accDrawn = -1; _comboValue = 0;
             _comboGroup.alpha = 0;
@@ -317,6 +318,14 @@ namespace Bonanza.HudKit
         public void CornerScrims(bool on)
         {
             foreach (var sc in _scrims) if (sc) sc.gameObject.SetActive(on);
+        }
+
+        /// Opt-in: hide the accuracy readout (top right) for a game whose score already IS its accuracy and that uses
+        /// the corner for something else (Finale Fever's hearts). Clear() shows it again.
+        public void ShowAccuracy(bool on)
+        {
+            if (_accLabel) _accLabel.gameObject.SetActive(on);
+            if (_acc) _acc.gameObject.SetActive(on);
         }
 
         /// Show the score, combo and accuracy block (hidden until a game asks for it).

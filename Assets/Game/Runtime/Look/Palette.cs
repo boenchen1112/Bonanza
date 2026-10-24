@@ -272,29 +272,29 @@ namespace Bonanza.Look
                 .Set(PC.Fog, 0x1a0a06).Set(PF.FogNear, 11).Set(PF.FogFar, 40).Set(PF.FogHeight, 0.25f).Set(PF.FogHeightY, 5f)
                 .Set(PF.Bloom, 0.7f).Set(PF.BloomThreshold, 1.45f).Set(PF.Exposure, 1.06f).Set(PF.Saturation, 1.12f).Set(PF.Vignette, 0.55f));
             var ffMedium = Make(_base, p => p
-                .Set(PC.SkyTop, 0x02040e).Set(PC.SkyMid, 0x060a20).Set(PC.SkyBot, 0x101a40)
-                .Set(PC.Sun, 0x9fb8ff).Set(PD.SunDir, 0, 0.3f, -1).Set(PF.SunStrength, 0f).Set(PF.SunSize, 0.2f)
-                .Set(PC.Ground, 0x3a1828).Set(PC.GroundAlt, 0x5c2236).Set(PC.GroundRim, 0xffd27a)
-                .Set(PC.Band, 0x1a2a6e).Set(PC.BandAlt, 0x2c48a8)
-                .Set(PC.Accent, 0xffd27a).Set(PC.Accent2, 0x6fd8ff).Set(PC.Accent3, 0xff6fae)
-                .SetCrowd(0x6fd8ff, 0xffd27a, 0xb08cff, 0xf0f4ff, 0xff8ab8)
-                .Set(PC.Key, 0xf4f2ff).Set(PD.KeyDir, -0.4f, 0.82f, 0.45f).Set(PF.KeyIntensity, 2.85f)
-                .Set(PC.FillSky, 0x6f82ff).Set(PC.FillGround, 0x080a20).Set(PF.FillIntensity, 0.5f)
-                .Set(PC.Rim, 0x8fd4ff).Set(PD.RimDir, 0.55f, 0.4f, -0.75f).Set(PF.RimStrength, 1.4f).Set(PF.RimPower, 2.4f)
-                .Set(PC.Fog, 0x060a1e).Set(PF.FogNear, 11).Set(PF.FogFar, 40).Set(PF.FogHeight, 0.25f).Set(PF.FogHeightY, 5f)
+                .Set(PC.SkyTop, 0x02060a).Set(PC.SkyMid, 0x06121a).Set(PC.SkyBot, 0x0e2a30)
+                .Set(PC.Sun, 0x8ff0e0).Set(PD.SunDir, 0, 0.3f, -1).Set(PF.SunStrength, 0f).Set(PF.SunSize, 0.2f)
+                .Set(PC.Ground, 0x261a3a).Set(PC.GroundAlt, 0x3e2a5e).Set(PC.GroundRim, 0x7ff0e0)
+                .Set(PC.Band, 0x2a1a5e).Set(PC.BandAlt, 0x3e2a86)
+                .Set(PC.Accent, 0x7ff0e0).Set(PC.Accent2, 0xc08cff).Set(PC.Accent3, 0xffd27a)
+                .SetCrowd(0x5fd8d0, 0xa08cff, 0x7fb0ff, 0xe0f0ff, 0xd08ce0)
+                .Set(PC.Key, 0xe6fff8).Set(PD.KeyDir, -0.4f, 0.82f, 0.45f).Set(PF.KeyIntensity, 2.85f)
+                .Set(PC.FillSky, 0x3fb8c8).Set(PC.FillGround, 0x0a0618).Set(PF.FillIntensity, 0.5f)
+                .Set(PC.Rim, 0x9f8cff).Set(PD.RimDir, 0.55f, 0.4f, -0.75f).Set(PF.RimStrength, 1.5f).Set(PF.RimPower, 2.4f)
+                .Set(PC.Fog, 0x04121a).Set(PF.FogNear, 11).Set(PF.FogFar, 36).Set(PF.FogHeight, 0.25f).Set(PF.FogHeightY, 5f)
                 .Set(PF.Bloom, 0.75f).Set(PF.BloomThreshold, 1.4f).Set(PF.Exposure, 1.05f).Set(PF.Saturation, 1.15f).Set(PF.Vignette, 0.58f));
             var ffHard = Make(_base, p => p
-                .Set(PC.SkyTop, 0x080102).Set(PC.SkyMid, 0x180306).Set(PC.SkyBot, 0x3a0810)
+                .Set(PC.SkyTop, 0x050001).Set(PC.SkyMid, 0x100204).Set(PC.SkyBot, 0x2a0408)
                 .Set(PC.Sun, 0xff6a3c).Set(PD.SunDir, 0, 0.3f, -1).Set(PF.SunStrength, 0f).Set(PF.SunSize, 0.2f)
-                .Set(PC.Ground, 0x34120e).Set(PC.GroundAlt, 0x4e1a12).Set(PC.GroundRim, 0xffb03a)
-                .Set(PC.Band, 0x5a0814).Set(PC.BandAlt, 0x8a0e20)
-                .Set(PC.Accent, 0xffb03a).Set(PC.Accent2, 0xff5a3c).Set(PC.Accent3, 0x6fd0ff)
-                .SetCrowd(0xffb03a, 0xff5a3c, 0xff3a6a, 0xfff0d0, 0xffd27a)
-                .Set(PC.Key, 0xffe2c2).Set(PD.KeyDir, -0.35f, 0.88f, 0.35f).Set(PF.KeyIntensity, 3.0f)
-                .Set(PC.FillSky, 0xff5a3c).Set(PC.FillGround, 0x160204).Set(PF.FillIntensity, 0.45f)
-                .Set(PC.Rim, 0xff7a3c).Set(PD.RimDir, 0.6f, 0.35f, -0.75f).Set(PF.RimStrength, 1.6f).Set(PF.RimPower, 2.2f)
-                .Set(PC.Fog, 0x140204).Set(PF.FogNear, 11).Set(PF.FogFar, 38).Set(PF.FogHeight, 0.3f).Set(PF.FogHeightY, 5f)
-                .Set(PF.Bloom, 0.85f).Set(PF.BloomThreshold, 1.35f).Set(PF.Exposure, 1.05f).Set(PF.Saturation, 1.18f).Set(PF.Vignette, 0.62f));
+                .Set(PC.Ground, 0x1c0606).Set(PC.GroundAlt, 0x2c0a0a).Set(PC.GroundRim, 0xffb03a)
+                .Set(PC.Band, 0x48040e).Set(PC.BandAlt, 0x780a18)
+                .Set(PC.Accent, 0xffb03a).Set(PC.Accent2, 0xff3a2a).Set(PC.Accent3, 0xffe0a0)
+                .SetCrowd(0xff6a4a, 0xffb03a, 0xc02a3a, 0xffe0c0, 0x8a2030)
+                .Set(PC.Key, 0xffe6c8).Set(PD.KeyDir, -0.3f, 0.9f, 0.32f).Set(PF.KeyIntensity, 3.2f)
+                .Set(PC.FillSky, 0xff3a2a).Set(PC.FillGround, 0x0c0102).Set(PF.FillIntensity, 0.32f)
+                .Set(PC.Rim, 0xff8a3c).Set(PD.RimDir, 0.6f, 0.35f, -0.75f).Set(PF.RimStrength, 1.7f).Set(PF.RimPower, 2.0f)
+                .Set(PC.Fog, 0x080001).Set(PF.FogNear, 10).Set(PF.FogFar, 32).Set(PF.FogHeight, 0.35f).Set(PF.FogHeightY, 5f)
+                .Set(PF.Bloom, 0.9f).Set(PF.BloomThreshold, 1.3f).Set(PF.Exposure, 1.04f).Set(PF.Saturation, 1.2f).Set(PF.Vignette, 0.66f));
             foreach (var kv in new[] { ("easy", ffEasy), ("medium", ffMedium), ("hard", ffHard) })
             {
                 string n = "finale-fever-" + kv.Item1;
@@ -310,8 +310,8 @@ namespace Bonanza.Look
         static void FfHush(Palette p)
         {
             p[PC.Key] = Color.Lerp(p[PC.Key], Palette.Hex(0xa8c0ff), 0.55f);
-            p[PF.KeyIntensity] *= 0.6f;
-            p[PF.FillIntensity] *= 0.45f;
+            p[PF.KeyIntensity] *= 0.85f;   // the maestro stays lit: the hush is the house going dark, not the stage
+            p[PF.FillIntensity] *= 0.4f;
             p[PC.Rim] = Color.Lerp(p[PC.Rim], Palette.Hex(0x9fc4ff), 0.7f);
             p[PC.Fog] = p[PC.Fog] * 0.55f;
             p[PF.FogFar] *= 0.8f;
@@ -323,14 +323,15 @@ namespace Bonanza.Look
         /// Finale Fever's last heart: the room turns red (the web's SURVIVE grade).
         static void FfRed(Palette p)
         {
-            p[PC.Key] = Color.Lerp(p[PC.Key], Palette.Hex(0xff5a50), 0.45f);
-            p[PC.FillSky] = Palette.Hex(0xff2a3c);
+            p[PC.Key] = Color.Lerp(p[PC.Key], Palette.Hex(0xff4a44), 0.6f);
+            p[PC.FillSky] = Palette.Hex(0xff1a30);
+            p[PF.FillIntensity] = Mathf.Max(p[PF.FillIntensity], 0.6f);
             p[PC.FillGround] = Palette.Hex(0x200204);
             p[PC.Rim] = Palette.Hex(0xff3a4a);
             p[PC.Fog] = Color.Lerp(p[PC.Fog], Palette.Hex(0x3a0408), 0.75f);
             p[PC.Band] = Color.Lerp(p[PC.Band], Palette.Hex(0x5a0610), 0.6f);
-            p[PF.Saturation] = Mathf.Max(p[PF.Saturation], 1.15f);
-            p[PF.Vignette] = Mathf.Min(1, p[PF.Vignette] + 0.12f);
+            p[PF.Saturation] = Mathf.Max(p[PF.Saturation], 1.2f);
+            p[PF.Vignette] = Mathf.Min(1, p[PF.Vignette] + 0.25f);
         }
 
         // ------------------------------------------------------------ colour maths
