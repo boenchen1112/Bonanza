@@ -133,7 +133,7 @@ namespace Bonanza.Shell
             _clock += red ? 0 : dt;
             _enter = Mathf.MoveTowards(_enter, 1, dt / 0.38f);
             _leave = Mathf.MoveTowards(_leave, 0, dt / 0.16f);
-            _pop = Mathf.MoveTowards(_pop, 0, dt / 0.5f);
+            _pop = Mathf.MoveTowards(_pop, 0, dt / 0.75f);
             _fade = Mathf.MoveTowards(_fade, _dim ? 1 : 0, dt / 0.3f);
 
             // where the feet go: the ray through the wanted screen point onto the deck
@@ -159,10 +159,13 @@ namespace Bonanza.Shell
                 else Pose(_leaving, yaw - 30f * (1 - _leave), worldH, Mathf.Lerp(0.0f, 1f, _leave), 1f, 0, false);
             }
             float e = UiKit.BackOut(_enter, 2.1f);
-            float hop = Mathf.Sin(Mathf.Clamp01(1 - _pop) * Mathf.PI) * _pop * 0.14f;
-            float squash = 1 + 0.07f * Mathf.Sin(Mathf.Clamp01(1 - _pop) * Mathf.PI) * (_pop > 0 ? 1 : 0);
+            float pk = Mathf.Clamp01(1 - _pop);
+            float hop = Mathf.Sin(Mathf.Min(1f, pk * 1.6f) * Mathf.PI) * (_pop > 0 ? 1 : 0) * 0.2f;
+            float twirl = red ? 0 : UiKit.EaseOutCubic(Mathf.Clamp01(pk * 1.25f)) * 360f * (_pop > 0 ? 1 : 0);
+            if (_pop <= 0) twirl = 0;
+            float squash = 1 + 0.09f * Mathf.Sin(Mathf.Clamp01(1 - _pop) * Mathf.PI * 3f) * _pop;
             float sc = Mathf.Lerp(0.55f, 1f, e) * Mathf.Lerp(1f, 0.82f, _fade);
-            Pose(_shown, yaw + sway + (1 - Mathf.Clamp01(_enter)) * 40f, worldH, sc * Mathf.Clamp01(_enter * 4f + (red ? 1 : 0)), 1f / squash, hop * worldH, true);
+            Pose(_shown, yaw + sway + twirl + (1 - Mathf.Clamp01(_enter)) * 40f, worldH, sc * Mathf.Clamp01(_enter * 4f + (red ? 1 : 0)), 1f / squash, hop * worldH, true);
 
             // glow set: pool on the boards, halo behind the figure
             var rim = _tint;
@@ -198,7 +201,8 @@ namespace Bonanza.Shell
             // the shorter ones read a little shorter on stage: scaled by their own height, softened
             float rel = Mathf.Clamp(Mathf.Pow(m != null ? m.Height / 1.9f : 1f, 0.5f), 0.8f, 1.12f);
             go.transform.position = _feet + Vector3.up * lift;
-            go.transform.rotation = Quaternion.Euler(0, yaw, 0);
+            float lean = animate && !Settings.ReduceMotion ? Mathf.Sin(_clock * 1.3f) * 2.2f : 0f;
+            go.transform.rotation = Quaternion.Euler(lean * 0.6f, yaw, lean);
             float s = k * scale * rel;
             go.transform.localScale = new Vector3(s / Mathf.Sqrt(squashY), s * squashY, s / Mathf.Sqrt(squashY));
             if (animate && m != null) m.Step(Settings.ReduceMotion ? 0 : Time.unscaledDeltaTime);

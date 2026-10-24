@@ -465,7 +465,7 @@ namespace Bonanza
             var cast = _hall.Cast;
             cast.Show(true);
             Shell.Roster.View = new RosterView { R = _roster, Flash = _rosterFlash, ShakeT = _rosterShakeT, ShakeCard = _rosterShakeCard, Cast = cast };
-            cast.Place(238f, 498f, 332f, _roster.Stage == RosterStage.Lineup);
+            cast.Place(220f, 490f, 332f, _roster.Stage == RosterStage.Lineup);
             cast.Focus(Shell.Roster.FocusChar);
         }
 

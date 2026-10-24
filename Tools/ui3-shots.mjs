@@ -28,7 +28,7 @@ const S = [
   { n: 'seats-full', w: 1280, h: 720, keys: [A, R, A], wait: 5 },
   { n: 'taken', w: 1280, h: 720, keys: [A, A, 'Escape', 'Escape'], wait: 1 },
   { n: 'hover-card', w: 1280, h: 720, keys: [A], wait: 2, hover: [265, 300] },
-  { n: 'hover-action', w: 1280, h: 720, wait: 2, hover: [880, 205] },
+  { n: 'hover-action', w: 1280, h: 720, wait: 2, hover: [878, 535] },
   { n: 'reduced', w: 1280, h: 720, keys: [A, R], wait: 4, reduced: true },
   { n: 'low', w: 1280, h: 720, keys: [A, R], wait: 5, q: 'low' },
   { n: '4x3', w: 1024, h: 768, keys: [A, R], wait: 5 },
