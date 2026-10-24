@@ -27,7 +27,7 @@ namespace Bonanza.Shell
         public const int AgainBtn = 0, MenuBtn = 1;
         /// Where the stage figure stands (reference px), read by the host to place the cast.
         public const float FigureFeet = 458f, FigureHeight = 236f, ColW = 190, ColStep = 204, BaseY = 548;
-        static readonly float[] BlockH = { 108, 80, 62, 48 };
+        static readonly float[] BlockH = { 108, 84, 62, 48 };
         static readonly int[][] ColOf = { new[] { 0 }, new[] { 1, 0 }, new[] { 1, 0, 2 }, new[] { 1, 0, 2, 3 } };
 
         /// The single winner's cast index, or -1 (tie: medals, no live figure).
@@ -38,7 +38,7 @@ namespace Bonanza.Shell
         sealed class Col
         {
             public RectTransform Rt; public CanvasGroup Group;
-            public Image Fill, Ring, Shine;
+            public Image Fill, Ring, Shine, YouFill;
             public TextMeshProUGUI Num, Name, Pts, You;
             public RectTransform YouRt;
             public Face Face;
@@ -128,8 +128,8 @@ namespace Bonanza.Shell
             UiKit.Place(c.Pts.rectTransform, new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(64, -12), new Vector2(124, 20));
             c.YouRt = UiKit.Rect("You", c.Rt);
             UiKit.Place(c.YouRt, new Vector2(1, 1), new Vector2(0.5f, 0.5f), new Vector2(-34, 0), new Vector2(48, 22));
-            var yf = UiKit.Box(c.YouRt, "Fill", Gold, UiKit.Pill, true, 22);
-            UiKit.Stretch(yf.rectTransform);
+            c.YouFill = UiKit.Box(c.YouRt, "Fill", Gold, UiKit.Pill, true, 22);
+            UiKit.Stretch(c.YouFill.rectTransform);
             c.You = UiKit.Text(c.YouRt, "T", TextStyle.Display, 12f, Ink);
             c.You.text = "YOU";
             UiKit.Place(c.You.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 1), new Vector2(50, 22));
@@ -213,9 +213,22 @@ namespace Bonanza.Shell
                 c.YouRt.gameObject.SetActive(you);
                 // portrait: sits on the block (the single winner stands on stage instead)
                 bool figure = win && single;
-                float fsz = win ? (single ? 88 : 128) : 62;
-                float fy = -(BaseY - h) + fsz * 0.5f - 10;
-                if (figure) { cx -= 92; fy = -(BaseY - h) - 6; }
+                float fsz = win ? (single ? 80 : 112) : 62;
+                float fy = -(BaseY - h) + fsz * 0.5f - 2;
+                if (figure) { cx -= 70; fy = -(BaseY - h) + 14; }
+                float cardCx = ColCenter(order, i, n);
+                float faceBottom = -fy + fsz * 0.5f - (BaseY - h);       // how far the avatar reaches into the card
+                // the YOU tag sits under the player's own avatar, inside the card; on a short card it moves to the right end
+                bool low = h < 75f;
+                float tagX = low ? cardCx + ColW * 0.5f - 30 : Mathf.Clamp(cx, cardCx - ColW * 0.5f + 26, cardCx + ColW * 0.5f - 26);
+                c.YouRt.anchoredPosition = new Vector2(tagX - cardCx - ColW * 0.5f, low ? -h * 0.5f : -(Mathf.Max(faceBottom, 0) + 12));
+                c.YouRt.sizeDelta = new Vector2(44, 20);
+                float shift = you && !low ? 4f : 0f;
+                c.Name.rectTransform.anchoredPosition = new Vector2(64, 11 - shift);
+                c.Pts.rectTransform.anchoredPosition = new Vector2(64, -12 - shift);
+                c.Num.rectTransform.anchoredPosition = new Vector2(8, figure ? -10 : 1);
+                c.YouFill.color = win ? new Color(0.16f, 0.06f, 0.0f) : Gold;   // a dark tag on the gold card
+                c.You.color = win ? Gold : Ink;
                 float fa = red ? shown : UiKit.Clamp01((rise - 0.3f) * 2f);
                 SetFace(c.Face, d.Char, View.Cast, new Vector2(cx, fy), fsz, fa);
                 if (win && !single && i < 2)
@@ -223,8 +236,8 @@ namespace Bonanza.Shell
                     float cs = 0.9f * (fsz / 120f);
                     var cr = _crowns[i];
                     cr.gameObject.SetActive(true);
-                    cr.anchoredPosition = new Vector2(cx, fy + fsz * 0.5f - 4);
-                    float bob = red ? 0 : Mathf.Sin(now * 2.4f + i) * 3f;
+                    cr.anchoredPosition = new Vector2(cx, fy + fsz * 0.5f - 28);
+                    float bob = red ? 0 : Mathf.Sin(now * 2.4f + i) * 1.5f;
                     cr.anchoredPosition += new Vector2(0, bob);
                     cr.localScale = Vector3.one * (cs * Mathf.Clamp01(UiKit.BackOut((age - 1.2f - i * 0.15f) / 0.5f)));
                     cr.localRotation = Quaternion.Euler(0, 0, i == 0 ? -6 : 6);
@@ -241,26 +254,26 @@ namespace Bonanza.Shell
             {
                 float rel = View.Cast != null ? View.Cast.FigureRel : 1f;
                 float headY = FigureFeet - FigureHeight * rel;
-                float bob = red ? 0 : Mathf.Sin(now * 2.6f) * 3f;
-                _crownB.anchoredPosition = new Vector2(ColCenter(order, 0, n), -(headY + 6 - (View.Cast != null ? View.Cast.HopRef : 0f)) + bob);
+                float bob = red ? 0 : Mathf.Sin(now * 2.6f) * 1.5f;
+                _crownB.anchoredPosition = new Vector2(ColCenter(order, 0, n), -(headY + 20 - (View.Cast != null ? View.Cast.HopRef : 0f)) + bob);
                 _crownB.localScale = Vector3.one * (1.0f * Mathf.Clamp01(pop));
                 _crownB.localRotation = Quaternion.Euler(0, 0, red ? 0 : Mathf.Sin(now * 1.3f) * 4f);
                 // held up in the raised right hand when the cheer has the arms up, else beside the figure
                 Vector2 hand = default;
                 bool held = View.Cast != null && View.Cast.TryHandRef(out hand);
                 if (held)
-                    _trophy.anchoredPosition = new Vector2(hand.x - 18f, -(hand.y + 22f));
+                    _trophy.anchoredPosition = new Vector2(hand.x - 36f, -Mathf.Max(hand.y + 22f, 192f));   // never up into the headline band
                 else
-                    _trophy.anchoredPosition = new Vector2(ColCenter(order, 0, n) + 112, -(FigureFeet - 150) + (red ? 0 : Mathf.Sin(now * 2f) * 6f));
-                _trophy.localScale = Vector3.one * ((held ? 0.58f : 0.8f) * Mathf.Clamp01(pop));
+                    _trophy.anchoredPosition = new Vector2(ColCenter(order, 0, n) + 112, -(FigureFeet - 120) + (red ? 0 : Mathf.Sin(now * 2f) * 6f));
+                _trophy.localScale = Vector3.one * ((held ? 0.52f : 0.8f) * Mathf.Clamp01(pop));
             }
             else
             {
-                float ty = -(BaseY - BlockH[0]) + 52;
+                float ty = -(BaseY - BlockH[0]) + 66;
                 float mx = 0;
                 for (int k = 0; k < winners; k++) mx += ColCenter(order, k, n) / winners;
                 _trophy.anchoredPosition = new Vector2(mx, ty + (red ? 0 : Mathf.Sin(now * 2f) * 5f));
-                _trophy.localScale = Vector3.one * (0.7f * Mathf.Clamp01(pop));
+                _trophy.localScale = Vector3.one * (0.55f * Mathf.Clamp01(pop));
             }
             _trophy.localRotation = Quaternion.Euler(0, 0, red ? 0 : Mathf.Sin(now * 1.4f) * 3f);
 
@@ -286,7 +299,7 @@ namespace Bonanza.Shell
             // ---- stat plate
             float se = red ? 1 : UiKit.EaseOutCubic((age - 1.0f) / 0.5f);
             _statGroup.alpha = UiKit.Clamp01(se) * (red ? shown : 1);
-            _stat.text = View.StatLine ?? "";
+            _stat.text = !single ? $"TIED ON {rows[0].Points} PTS" : View.StatLine ?? "";
             _best.text = View.BestLine ?? "";
             _best.gameObject.SetActive(!string.IsNullOrEmpty(View.BestLine));
             bool hasBest = !string.IsNullOrEmpty(View.BestLine);
