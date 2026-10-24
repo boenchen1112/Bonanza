@@ -425,6 +425,8 @@ namespace Bonanza
                 _titleLines = Records.StatsLines(st.Rounds, Records.BestOverall(Games.Select(g => new KeyValuePair<string, GameRecord>(g.Title, Save.Get(g.Id)))));
                 _titleR3 = st.Rounds > 0 ? $"{st.Notes} NOTES   {st.Parties} PARTIES   {st.Wins} WINS" : null;
             }
+            int pb = Shell.Title.TakePressButton();   // pressing a button focuses it; the click then fires
+            if (pb >= 0 && pb < TitleItems.Length && !Title.Attract && pb != _titleIndex) { _titleIndex = pb; ShellSfx("ui"); }
             string gid = Title.Attract ? Title.CurrentGameId : null;
             var e = gid != null ? Find(gid) : null;
             int gi = 0;

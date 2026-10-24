@@ -129,17 +129,16 @@ namespace Bonanza.Shell
             b.Focus = Damp(b.Focus, primary ? 1 : 0, red ? 40 : 14, dt);
             float enter = red ? 1 : UiKit.BackOut(enterT / 0.45f);
             float pulse = primary && !red ? 1 + 0.018f * Mathf.Sin(Time.unscaledTime * 4f) : 1;
-            b.Inner.localScale = Vector3.one * ((1 + 0.07f * b.Hover) * (1 - 0.06f * b.Press) * Mathf.Clamp01(enter) * pulse);
-            Color top = Color.Lerp(new Color(0.11f, 0.06f, 0.27f, 0.96f), new Color(0.27f, 0.19f, 0.55f, 0.97f), b.Hover);
-            Color bot = Color.Lerp(new Color(0.05f, 0.02f, 0.14f, 0.96f), new Color(0.14f, 0.09f, 0.34f, 0.97f), b.Hover);
-            top = Color.Lerp(top, UiKit.Hex(0xffe27a), b.Focus * (1 - 0.35f * b.Hover)); bot = Color.Lerp(bot, UiKit.Hex(0xff9a2e), b.Focus * (1 - 0.35f * b.Hover));
-            top = Color.Lerp(top, Color.white, 0.5f * b.Hover * b.Focus); bot = Color.Lerp(bot, UiKit.Hex(0xffd36a), 0.55f * b.Hover * b.Focus);
+            b.Inner.localScale = Vector3.one * ((1 + 0.04f * b.Hover) * (1 - 0.06f * b.Press) * Mathf.Clamp01(enter) * pulse);
+            Color top = Color.Lerp(new Color(0.11f, 0.06f, 0.27f, 0.96f), new Color(0.15f, 0.09f, 0.34f, 0.97f), b.Hover);
+            Color bot = Color.Lerp(new Color(0.05f, 0.02f, 0.14f, 0.96f), new Color(0.07f, 0.03f, 0.18f, 0.97f), b.Hover);
+            top = Color.Lerp(top, UiKit.Hex(0xffe27a), b.Focus); bot = Color.Lerp(bot, UiKit.Hex(0xff9a2e), b.Focus);
             float dark = 1 - 0.38f * b.Press;
             b.Grad.Set(new Color(top.r * dark, top.g * dark, top.b * dark, top.a), new Color(bot.r * dark, bot.g * dark, bot.b * dark, bot.a));
             Color rim = Color.Lerp(new Color(1, 0.95f, 0.78f, 0.7f), new Color(0.55f, 0.95f, 1f, 1f), b.Hover);
             b.Ring.color = Color.Lerp(rim, new Color(1, 0.98f, 0.82f, 1f), b.Focus);
             b.Label.color = Color.Lerp(Color.white, Ink, b.Focus);
-            b.Glow.color = new Color(1f, 0.75f, 0.25f, Mathf.Min(1f, 0.5f * b.Focus + 0.5f * b.Hover));
+            b.Glow.color = new Color(1f, 0.75f, 0.25f, 0.5f * b.Focus);
             b.Shadow.color = new Color(0, 0, 0, 0.5f * (1 - 0.6f * b.Press));
         }
 

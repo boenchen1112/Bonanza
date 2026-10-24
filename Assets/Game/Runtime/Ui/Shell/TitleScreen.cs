@@ -39,7 +39,7 @@ namespace Bonanza.Shell
 
         sealed class Btn
         {
-            public RectTransform Rt, Inner; public Image Fill, Ring, Glow, Shadow; public TextMeshProUGUI Label;
+            public float OutlineW, OutlineSet = -1; public RectTransform Rt, Inner; public Image Fill, Ring, Glow, Shadow; public TextMeshProUGUI Label;
             public RectTransform Chip; public Image ChipFill; public TextMeshProUGUI ChipText; public UiGradient Grad;
             public float Focus, Hover, Press;
         }
@@ -108,14 +108,14 @@ namespace Bonanza.Shell
             _footGroup = _foot.gameObject.AddComponent<CanvasGroup>();
             var plate = UiKit.Box(_foot, "Plaque", new Color(0.05f, 0.03f, 0.12f, 0.97f), UiKit.Pill, true, 24);
             _plaque = plate.rectTransform;
-            UiKit.Place(_plaque, new Vector2(0.5f, 1), new Vector2(0.5f, 1), Vector2.zero, new Vector2(720, 60));
+            UiKit.Place(_plaque, new Vector2(0.5f, 1), new Vector2(0.5f, 1), Vector2.zero, new Vector2(430, 60));
             var edge = UiKit.Box(_plaque, "Edge", new Color(1, 0.95f, 0.8f, 0.14f), UiKit.PillRing(4), true, 24);
             UiKit.Stretch(edge.rectTransform);
             _rec1 = UiKit.Text(_plaque, "R1", TextStyle.Label, 15f, UiKit.Cream, italic: false);
-            UiKit.Place(_rec1.rectTransform, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -8), new Vector2(700, 26));
+            UiKit.Place(_rec1.rectTransform, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -8), new Vector2(420, 26));
             _rec1.characterSpacing = 3f;
             _rec2 = UiKit.Text(_plaque, "R2", TextStyle.Label, 15f, Gold, italic: false);
-            UiKit.Place(_rec2.rectTransform, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0, 8), new Vector2(700, 26));
+            UiKit.Place(_rec2.rectTransform, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0, 8), new Vector2(420, 26));
             _rec2.characterSpacing = 3f;
             var hintPlate = UiKit.Box(_foot, "HintPlate", new Color(0.05f, 0.03f, 0.12f, 0.95f), UiKit.Pill, true, 24);
             UiKit.Place(hintPlate.rectTransform, new Vector2(0.5f, 0), new Vector2(0.5f, 0), Vector2.zero, new Vector2(500, 32));
@@ -194,6 +194,7 @@ namespace Bonanza.Shell
             UiKit.Stretch(b.Ring.rectTransform);
             b.Label = UiKit.Text(b.Inner, "Label", TextStyle.Display, 25f, Color.white);
             b.Label.text = label;
+            b.OutlineW = b.Label.fontMaterial.GetFloat(ShaderUtilities.ID_OutlineWidth);
             UiKit.Place(b.Label.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 1), new Vector2(400, 64));
             b.Chip = UiKit.Rect("Chip", b.Inner);
             UiKit.Place(b.Chip, new Vector2(1, 0.5f), new Vector2(1, 0.5f), new Vector2(-14, 0), new Vector2(76, 30));
@@ -270,8 +271,8 @@ namespace Bonanza.Shell
                 float pulse = foc && !red ? 1 + v.BeatPulse * 0.025f : 1;
                 b.Inner.localScale = Vector3.one * ((1 + 0.06f * b.Focus + 0.03f * hov) * (1 - 0.07f * b.Press) * pulse);
                 // rest: deep indigo; hover: lifted violet with a cyan rim; focus: gold. Press only darkens the pressed button.
-                Color top = Color.Lerp(new Color(0.11f, 0.06f, 0.27f, 0.96f), new Color(0.27f, 0.19f, 0.55f, 0.97f), hov);
-                Color bot = Color.Lerp(new Color(0.05f, 0.02f, 0.14f, 0.96f), new Color(0.14f, 0.09f, 0.34f, 0.97f), hov);
+                Color top = Color.Lerp(new Color(0.11f, 0.06f, 0.27f, 0.96f), new Color(0.15f, 0.09f, 0.34f, 0.97f), hov);
+                Color bot = Color.Lerp(new Color(0.05f, 0.02f, 0.14f, 0.96f), new Color(0.07f, 0.03f, 0.18f, 0.97f), hov);
                 top = Color.Lerp(top, UiKit.Hex(0xffe27a), b.Focus); bot = Color.Lerp(bot, UiKit.Hex(0xff9a2e), b.Focus);
                 float dark = 1 - 0.38f * b.Press;
                 top = new Color(top.r * dark, top.g * dark, top.b * dark, top.a); bot = new Color(bot.r * dark, bot.g * dark, bot.b * dark, bot.a);
@@ -280,6 +281,8 @@ namespace Bonanza.Shell
                 b.Ring.color = Color.Lerp(rim, new Color(1, 0.98f, 0.82f, 1f), b.Focus);
                 b.Shadow.color = new Color(0, 0, 0, 0.5f * (1 - 0.6f * b.Press));
                 b.Label.color = Color.Lerp(Color.white, UiKit.Hex(0x2a0f45), b.Focus);
+                float ow = b.OutlineW * Mathf.Lerp(1f, 0.35f, b.Focus);   // a thin outline on the gold fill: no smear
+                if (Mathf.Abs(ow - b.OutlineSet) > 0.004f) { b.OutlineSet = ow; b.Label.fontMaterial.SetFloat(ShaderUtilities.ID_OutlineWidth, ow); }
                 b.Glow.color = new Color(1f, 0.75f, 0.25f, 0.55f * b.Focus * (0.8f + 0.2f * v.BeatPulse));
                 b.Chip.localScale = Vector3.one * Mathf.Lerp(0.001f, 1f, b.Focus);
             }

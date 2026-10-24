@@ -343,6 +343,7 @@ namespace Bonanza.Shell
                     hint = party ? "SPACE  START THE PARTY" : "SPACE  PICK A GAME";
                     action = party ? "START PARTY" : "PICK A GAME"; key = "SPACE"; break;
             }
+            if (stage == RosterStage.Lineup && r.Seat[1] == RosterState.Off && r.Seat[2] == RosterState.Off && r.Seat[3] == RosterState.Off) action = "SOLO";   // no rivals: say so
             _head.text = head;
             bool flashing = !string.IsNullOrEmpty(View.Flash);
             _flashA = Damp(_flashA, flashing ? 1 : 0, red ? 40 : 18, dt);
@@ -383,7 +384,7 @@ namespace Bonanza.Shell
                 bool mine = !chars && !lineup && r.Picks[0] != null && Cast.IndexOf(r.Picks[0]) == i;
                 float mineUp = mine ? 0.06f : 0f;
                 c.Inner.localScale = Vector3.one * ((0.7f + 0.3f * Mathf.Min(1.1f, enter)) * (1 + 0.09f * c.Focus + mineUp + 0.035f * c.Hover + hop) * (1 - 0.06f * c.Press));
-                float dim = mine ? 1f : chars ? (taken ? 0.42f : 1f) : (lineup ? 0.5f : 0.55f);
+                float dim = mine ? 1f : chars ? (taken ? 0.42f : 1f) : (by >= 0 ? 1f : 0.45f);   // picked cards stay bright with their badge, the rest step back
                 var port = View.Cast != null ? View.Cast.Portrait(i) : null;
                 c.Portrait.texture = port;
                 float pa = port != null ? 1 : 0;
@@ -435,7 +436,7 @@ namespace Bonanza.Shell
                 _infoBar.color = sYou ? Gold : sOff ? new Color(1, 1, 1, 0.3f) : Color.Lerp(Gold, UiKit.Hex(0xff7a3a), sv * 0.5f);
                 for (int k = 0; k < 3; k++) _swatch[k].gameObject.SetActive(false);
             }
-            else for (int k = 0; k < 3; k++) _swatch[k].gameObject.SetActive(true);
+            else for (int k = 0; k < 3; k++) _swatch[k].gameObject.SetActive(false);   // unexplained colour dots: gone
             _trait.fontSize = 15f * ts; _status.fontSize = 14f * ts;
 
             // ---- seats
@@ -531,17 +532,16 @@ namespace Bonanza.Shell
             b.Focus = Damp(b.Focus, primary && on ? 1 : 0, red ? 40 : 14, dt);
             float enter = red ? 1 : UiKit.BackOut((age - delay) / 0.45f);
             float pulse = primary && on && !red ? 1 + 0.018f * Mathf.Sin(Time.unscaledTime * 4f) : 1;
-            b.Inner.localScale = Vector3.one * ((1 + 0.07f * b.Hover) * (1 - 0.06f * b.Press) * Mathf.Clamp01(enter) * pulse);
-            Color top = Color.Lerp(new Color(0.11f, 0.06f, 0.27f, 0.96f), new Color(0.27f, 0.19f, 0.55f, 0.97f), b.Hover);
-            Color bot = Color.Lerp(new Color(0.05f, 0.02f, 0.14f, 0.96f), new Color(0.14f, 0.09f, 0.34f, 0.97f), b.Hover);
-            top = Color.Lerp(top, UiKit.Hex(0xffe27a), b.Focus * (1 - 0.35f * b.Hover)); bot = Color.Lerp(bot, UiKit.Hex(0xff9a2e), b.Focus * (1 - 0.35f * b.Hover));
-            top = Color.Lerp(top, Color.white, 0.5f * b.Hover * b.Focus); bot = Color.Lerp(bot, UiKit.Hex(0xffd36a), 0.55f * b.Hover * b.Focus);
+            b.Inner.localScale = Vector3.one * ((1 + 0.04f * b.Hover) * (1 - 0.06f * b.Press) * Mathf.Clamp01(enter) * pulse);
+            Color top = Color.Lerp(new Color(0.11f, 0.06f, 0.27f, 0.96f), new Color(0.15f, 0.09f, 0.34f, 0.97f), b.Hover);
+            Color bot = Color.Lerp(new Color(0.05f, 0.02f, 0.14f, 0.96f), new Color(0.07f, 0.03f, 0.18f, 0.97f), b.Hover);
+            top = Color.Lerp(top, UiKit.Hex(0xffe27a), b.Focus); bot = Color.Lerp(bot, UiKit.Hex(0xff9a2e), b.Focus);
             float dark = 1 - 0.38f * b.Press;
             b.Grad.Set(new Color(top.r * dark, top.g * dark, top.b * dark, top.a), new Color(bot.r * dark, bot.g * dark, bot.b * dark, bot.a));
             Color rim = Color.Lerp(new Color(1, 0.95f, 0.78f, 0.7f), new Color(0.55f, 0.95f, 1f, 1f), b.Hover);
             b.Ring.color = Color.Lerp(rim, new Color(1, 0.98f, 0.82f, 1f), b.Focus);
             b.Label.color = Color.Lerp(Color.white, UiKit.Hex(0x2a0f45), b.Focus);
-            b.Glow.color = new Color(1f, 0.75f, 0.25f, Mathf.Min(1f, 0.5f * b.Focus + 0.5f * b.Hover));
+            b.Glow.color = new Color(1f, 0.75f, 0.25f, 0.5f * b.Focus);
             b.Shadow.color = new Color(0, 0, 0, 0.5f * (1 - 0.6f * b.Press));
         }
     }

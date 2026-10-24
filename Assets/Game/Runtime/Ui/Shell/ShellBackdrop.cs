@@ -288,7 +288,7 @@ namespace Bonanza.Shell
             }, Matrix4x4.identity, Color.white, Vector2.one);
             Part("Drapes", transform, b, velvet);
 
-            // gilt fringe under the swags, the tie-back cords and a gilt pelmet board
+            // gilt fringe under the swags
             var g = new MeshBuilder();
             var pts = new Vector3[121];
             for (int i = 0; i <= 120; i++)
@@ -297,10 +297,6 @@ namespace Bonanza.Shell
                 pts[i] = new Vector3(x, SwagY(x) - 0.06f, z - 0.3f);
             }
             g.Tube(pts, 0.1f, 6, Matrix4x4.identity, Color.white);
-            foreach (float side in new[] { -1f, 1f })
-            {
-                g.Tube(new[] { new Vector3(side * (gap + 0.4f), 2.8f, z - 0.4f), new Vector3(side * (gap + 2.4f), 2.9f, z - 0.4f), new Vector3(side * (gap + 4.4f), 2.4f, z - 0.3f) }, 0.07f, 5, Matrix4x4.identity, Color.white);
-            }
             Part("Fringe", transform, g, gold);
         }
 
@@ -580,7 +576,7 @@ namespace Bonanza.Shell
             for (int i = 0; i < _stickAt.Length; i++)
             {
                 float a = still ? 0 : Mathf.Sin(t * 2.6f + _stickPhase[i]) * 0.35f;
-                _sticks.Matrix[i] = hideProps ? Matrix4x4.Scale(Vector3.zero) : Matrix4x4.TRS(_stickAt[i], Quaternion.Euler(0, 0, a * Mathf.Rad2Deg), Vector3.one);
+                _sticks.Matrix[i] = Matrix4x4.Scale(Vector3.zero); if (false) _sticks.Matrix[i] = Matrix4x4.TRS(_stickAt[i], Quaternion.Euler(0, 0, a * Mathf.Rad2Deg), Vector3.one);
                 _sticks.Tint[i] = _stickTint[i] * (0.8f + 0.3f * pulse);
             }
             _sticks.Flush();

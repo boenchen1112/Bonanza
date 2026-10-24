@@ -29,6 +29,10 @@ namespace Bonanza.Shell
         public bool Visible => Root != null && Root.gameObject.activeSelf;
         /// The clickable buttons, in focus order. Rects are read each frame for the host's click targets.
         public readonly List<RectTransform> Buttons = new List<RectTransform>();
+        int _pressButton = -1;
+        internal void NotePress(int i) { _pressButton = i; }
+        /// The button the pointer went down on this frame (focus follows the press, the click then fires), or -1; read once.
+        public int TakePressButton() { int c = _pressButton; _pressButton = -1; return c; }
 
         internal void BuildInto(RectTransform parent, string name)
         {
@@ -122,6 +126,7 @@ namespace Bonanza.Shell
                 if (_leaving.Shown <= 0.001f) { _leaving.SetActive(false); _leaving = null; }
             }
             var inp = ReadInput(Current, red);
+            if (Current != null && inp.Fresh && inp.Hover >= 0) Current.NotePress(inp.Hover);
             if (Current != null && Current.Visible) Current.Tick(dt, inp);
             if (_leaving != null) _leaving.Tick(dt, default);
         }
