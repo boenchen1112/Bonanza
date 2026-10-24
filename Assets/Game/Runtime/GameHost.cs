@@ -489,7 +489,7 @@ namespace Bonanza
                 int fc = Shell.Final.FigureChar;
                 if (fc >= 0)
                 {
-                    cast.Place(Shell.Final.FigureX, PartyFinalScreen.FigureFeet, PartyFinalScreen.FigureHeight, false);
+                    cast.Place(Shell.Final.FigureX, PartyFinalScreen.FigureFeet, PartyFinalScreen.FigureHeight, false); cast.Celebrate();
                     cast.Focus(fc);
                     if ((_finalPopT -= Time.unscaledDeltaTime) <= 0) { _finalPopT = 2.6f; cast.Pop(); }
                 }

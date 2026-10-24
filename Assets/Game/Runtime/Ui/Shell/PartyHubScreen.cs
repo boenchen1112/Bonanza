@@ -127,7 +127,7 @@ namespace Bonanza.Shell
                 _rival[i] = MakeFace(holder, "Face", 44);
                 UiKit.Place(_rival[i].Rt, new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(22, 0), new Vector2(44, 44));
                 _rivalName[i] = UiKit.Text(holder, "Name", TextStyle.Display, 16f, Color.white, TextAlignmentOptions.Left);
-                UiKit.Place(_rivalName[i].rectTransform, new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(50, 1), new Vector2(72, 28));
+                UiKit.Place(_rivalName[i].rectTransform, new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(60, 1), new Vector2(72, 28));
             }
 
             // ---- the standings
@@ -191,7 +191,7 @@ namespace Bonanza.Shell
             UiKit.Place(r.Sub.rectTransform, new Vector2(0, 0), new Vector2(0, 0), new Vector2(129, 11), new Vector2(190, 20));
             // YOU tag
             r.YouRt = UiKit.Rect("You", r.Inner);
-            UiKit.Place(r.YouRt, new Vector2(0, 1), new Vector2(0.5f, 0.5f), new Vector2(88, 1), new Vector2(48, 22));
+            UiKit.Place(r.YouRt, new Vector2(0, 1), new Vector2(0.5f, 0.5f), new Vector2(252, -28), new Vector2(44, 22));
             r.YouFill = UiKit.Box(r.YouRt, "Fill", Gold, UiKit.Pill, true, 20);
             UiKit.Stretch(r.YouFill.rectTransform);
             r.You = UiKit.Text(r.YouRt, "T", TextStyle.Display, 12f, Ink);
@@ -205,7 +205,7 @@ namespace Bonanza.Shell
             UiKit.Place(r.PtsLabel.rectTransform, new Vector2(1, 0.5f), new Vector2(1, 0.5f), new Vector2(-14, -4), new Vector2(40, 18));
             // delta chip
             r.ChipRt = UiKit.Rect("Chip", r.Inner);
-            UiKit.Place(r.ChipRt, new Vector2(1, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-148, 0), new Vector2(54, 30));
+            UiKit.Place(r.ChipRt, new Vector2(1, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-138, 0), new Vector2(50, 30));
             r.ChipFill = UiKit.Box(r.ChipRt, "Fill", UiKit.Hex(0x3fbf5a), UiKit.Pill, true, 30);
             UiKit.Stretch(r.ChipFill.rectTransform);
             r.Chip = UiKit.Text(r.ChipRt, "T", TextStyle.Display, 18f, Color.white);
@@ -338,9 +338,10 @@ namespace Bonanza.Shell
 
                 SetFace(r.Face, d.Char, View.Cast, Vector2.zero, 54, 1);
                 r.Name.text = d.Name;
-                r.Name.fontSize = UiKit.FontSizeForCap(24f * (small ? 1.15f : 1f));
+                r.Name.fontSize = UiKit.FontSizeForCap(24f * (small ? 0.95f : 1f));
                 bool tiedNow = moved && d.Tied;
-                r.Sub.text = tiedNow ? (d.Wins > 0 ? $"LEVEL - {d.Wins} WIN{(d.Wins == 1 ? "" : "S")}" : "LEVEL") : d.Wins > 0 ? $"{d.Wins} WIN{(d.Wins == 1 ? "" : "S")}" : d.IsCpu ? "CPU" : "PLAYER";
+                string wins = d.Wins > 0 ? $"{d.Wins} WIN{(d.Wins == 1 ? "" : "S")}" : "NO WINS";
+                r.Sub.text = View.RoundsPlayed == 0 ? "READY" : tiedNow ? (d.Wins > 0 ? "TIED - " + wins : "TIED") : wins;
                 r.Sub.fontSize = 12f * ts;
                 r.YouRt.gameObject.SetActive(you);
 
@@ -377,8 +378,8 @@ namespace Bonanza.Shell
             _lastRt.anchoredPosition = new Vector2(ColX + 20, ly);
 
             // ---- buttons
-            string label = View.Round == 0 && View.RoundsPlayed == 0 ? (View.Finale ? "START THE FINALE" : "START ROUND 1")
-                         : View.Finale ? "START THE FINALE" : "NEXT ROUND";
+            string label = View.Round == 0 && View.RoundsPlayed == 0 ? (View.Finale ? "START FINALE" : "START ROUND 1")
+                         : View.Finale ? "START FINALE" : "NEXT ROUND";
             if (View.Round > 0 && !View.Finale) label = $"START ROUND {View.Round + 1}";
             float bt = age - 0.6f;
             DriveButton(_action, input, ActionBtn, true, label, "SPACE", dt, red, bt, !small);

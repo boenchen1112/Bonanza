@@ -124,8 +124,8 @@ namespace Bonanza.Shell
             c.Name.enableAutoSizing = true; c.Name.fontSizeMin = 10f; c.Name.fontSizeMax = UiKit.FontSizeForCap(20f);
             UiKit.Place(c.Name.rectTransform, new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(64, 11), new Vector2(120, 26));
             c.Pts = UiKit.Text(c.Rt, "Pts", TextStyle.Label, 13f, UiKit.Cream, TextAlignmentOptions.Left, italic: false);
-            c.Pts.characterSpacing = 2f;
-            UiKit.Place(c.Pts.rectTransform, new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(64, -12), new Vector2(120, 20));
+            c.Pts.characterSpacing = 1f;
+            UiKit.Place(c.Pts.rectTransform, new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(64, -12), new Vector2(124, 20));
             c.YouRt = UiKit.Rect("You", c.Rt);
             UiKit.Place(c.YouRt, new Vector2(1, 1), new Vector2(0.5f, 0.5f), new Vector2(-34, 0), new Vector2(48, 22));
             var yf = UiKit.Box(c.YouRt, "Fill", Gold, UiKit.Pill, true, 22);
@@ -173,7 +173,7 @@ namespace Bonanza.Shell
             float sp = red ? 1 : UiKit.EaseOutCubic((age - 0.5f) / 0.8f);
             FigureX = single ? ColCenter(order, 0, n) : 0;
             _spot.rectTransform.anchoredPosition = new Vector2(FigureX, -300);
-            _spot.color = new Color(1, 0.85f, 0.4f, 0.32f * sp * (red ? 1 : 0.9f + 0.1f * Mathf.Sin(now * 1.7f)));
+            _spot.color = new Color(1, 0.85f, 0.4f, 0.14f * sp * (red ? 1 : 0.9f + 0.1f * Mathf.Sin(now * 1.7f)));
 
             // ---- podium
             for (int i = 0; i < 4; i++)
@@ -200,22 +200,24 @@ namespace Bonanza.Shell
                 Color bot = win ? UiKit.Hex(0xe58a1f) : d.Place == 2 ? UiKit.Hex(0x6b78c4) : d.Place == 3 ? UiKit.Hex(0x9c5a2c) : UiKit.Hex(0x3a3478);
                 g.Set(top, bot);
                 c.Ring.color = you ? new Color(1, 1, 1, 0.95f) : new Color(1, 1, 1, 0.35f);
-                c.Num.text = (d.Tied ? "T" : "") + d.Place;
+                c.Num.text = d.Place.ToString();
                 c.Num.fontSize = UiKit.FontSizeForCap(34f);
                 c.Num.color = win ? new Color(0.45f, 0.2f, 0.02f) : new Color(0.12f, 0.06f, 0.3f);
                 c.Name.text = d.Name;
-                c.Pts.text = $"{d.Points} PTS";
-                c.Pts.fontSize = UiKit.FontSizeForCap(13f * ts);
-                c.Pts.color = win ? new Color(0.3f, 0.12f, 0.02f) : Color.white;
-                c.Name.color = win ? new Color(0.3f, 0.12f, 0.02f) : Color.white;
+                c.Pts.text = d.Tied ? $"TIE - {d.Points} PTS" : $"{d.Points} PTS";
+                c.Pts.fontSize = UiKit.FontSizeForCap(14f * ts);
+                c.Pts.color = win ? new Color(0.16f, 0.06f, 0.0f) : Color.white;
+                c.Name.color = win ? new Color(0.16f, 0.06f, 0.0f) : Color.white;
+                c.Name.fontSizeMax = UiKit.FontSizeForCap(20f * (small ? 1.3f : 1f));
+                c.Name.fontSizeMin = small ? 14f : 10f;
                 c.YouRt.gameObject.SetActive(you);
                 // portrait: sits on the block (the single winner stands on stage instead)
                 bool figure = win && single;
-                c.Face.Rt.gameObject.SetActive(!figure); c.Face.Ring.gameObject.SetActive(!figure);
-                float fsz = win ? 128 : 76;
+                float fsz = win && !single ? 128 : 76;
                 float fy = -(BaseY - h) + fsz * 0.5f - 10;
+                if (figure) { cx -= 82; fsz = 64; fy = -(BaseY - h) - 4; }
                 float fa = red ? shown : UiKit.Clamp01((rise - 0.3f) * 2f);
-                if (!figure) SetFace(c.Face, d.Char, View.Cast, new Vector2(cx, fy), fsz, fa);
+                SetFace(c.Face, d.Char, View.Cast, new Vector2(cx, fy), fsz, fa);
                 if (win && !single && i < 2)
                 {
                     float cs = 0.9f * (fsz / 120f);
@@ -240,7 +242,7 @@ namespace Bonanza.Shell
                 float rel = View.Cast != null ? View.Cast.FigureRel : 1f;
                 float headY = FigureFeet - FigureHeight * rel;
                 float bob = red ? 0 : Mathf.Sin(now * 2.6f) * 3f;
-                _crownB.anchoredPosition = new Vector2(ColCenter(order, 0, n), -(headY + 6) + bob);
+                _crownB.anchoredPosition = new Vector2(ColCenter(order, 0, n), -(headY + 6 + 14 - (View.Cast != null ? View.Cast.HopRef : 0f)) + bob);
                 _crownB.localScale = Vector3.one * (1.0f * Mathf.Clamp01(pop));
                 _crownB.localRotation = Quaternion.Euler(0, 0, red ? 0 : Mathf.Sin(now * 1.3f) * 4f);
                 _trophy.anchoredPosition = new Vector2(ColCenter(order, 0, n) + 190, -(FigureFeet - 110) + (red ? 0 : Mathf.Sin(now * 2f) * 6f));
@@ -282,10 +284,11 @@ namespace Bonanza.Shell
             _best.text = View.BestLine ?? "";
             _best.gameObject.SetActive(!string.IsNullOrEmpty(View.BestLine));
             bool hasBest = !string.IsNullOrEmpty(View.BestLine);
-            _statRt.sizeDelta = new Vector2(560, hasBest ? 50 : 34);
+            _statRt.sizeDelta = new Vector2(560, hasBest ? (small ? 64 : 50) : (small ? 40 : 34));
             _stat.rectTransform.anchoredPosition = new Vector2(0, hasBest ? -5 : -4);
             _stat.fontSize = UiKit.FontSizeForCap(17f * (small ? 1.2f : 1f));
             _best.fontSize = UiKit.FontSizeForCap(12f * ts);
+            _best.rectTransform.anchoredPosition = new Vector2(0, small ? 6 : 5);
             _statRt.anchoredPosition = new Vector2(0, -BaseY - 8 + (1 - se) * -10);
 
             // ---- buttons

@@ -82,11 +82,18 @@ namespace Bonanza.Shell
         /// its height in reference px. `dim`: the figure steps back (a stage with nothing to choose).
         public void Place(float refX, float feetFromTop, float heightPx, bool dim)
         {
+            _celebrate = false;
             _refX = refX; _feetY = feetFromTop; _height = heightPx; _dim = dim;
         }
 
         /// No figure on stage (the party's podium of medals): portraits keep baking, the glow set is off.
         public void NoFigure() { _noFigure = true; }
+
+        bool _celebrate;
+        /// Winner mode: the figure hops to a beat and its glow is dimmed so the face reads. Place() clears it.
+        public void Celebrate() { _celebrate = true; }
+        /// How far the cheer hop lifts the head right now, in reference px.
+        public float HopRef { get; private set; }
         bool _noFigure;
         /// The standing figure's height as a fraction of the height asked for in Place (shorter characters read shorter).
         public float FigureRel { get; private set; } = 1;
@@ -175,9 +182,21 @@ namespace Bonanza.Shell
             float hop = Mathf.Sin(Mathf.Min(1f, pk * 1.6f) * Mathf.PI) * (_pop > 0 ? 1 : 0) * 0.2f;
             float twirl = red ? 0 : UiKit.EaseOutCubic(Mathf.Clamp01(pk * 1.25f)) * 360f * (_pop > 0 ? 1 : 0);
             if (_pop <= 0) twirl = 0;
-            float squash = 1 + 0.09f * Mathf.Sin(Mathf.Clamp01(1 - _pop) * Mathf.PI * 3f) * _pop;
+            HopRef = 0;
+            float cheerYaw = 0, cheerSquash = 1;
+            if (_celebrate && !red)
+            {
+                float ph = _clock * 5.4f;
+                float j = Mathf.Abs(Mathf.Sin(ph));
+                float lift = j * 0.085f;
+                hop += lift;
+                HopRef = lift * _height;
+                cheerYaw = Mathf.Sin(ph * 0.5f) * 14f;
+                cheerSquash = 1 + 0.07f * Mathf.Pow(1 - j, 8);
+            }
+            float squash = cheerSquash * (1 + 0.09f * Mathf.Sin(Mathf.Clamp01(1 - _pop) * Mathf.PI * 3f) * _pop);
             float sc = Mathf.Lerp(0.55f, 1f, e) * Mathf.Lerp(1f, 0.82f, _fade);
-            Pose(_shown, yaw + sway + twirl + (1 - Mathf.Clamp01(_enter)) * 40f, worldH, sc * Mathf.Clamp01(_enter * 4f + (red ? 1 : 0)), 1f / squash, hop * worldH, true);
+            Pose(_shown, yaw + sway + cheerYaw + twirl + (1 - Mathf.Clamp01(_enter)) * 40f, worldH, sc * Mathf.Clamp01(_enter * 4f + (red ? 1 : 0)), 1f / squash, hop * worldH, true);
 
             // glow set: pool on the boards, halo behind the figure
             var rim = _tint;
@@ -190,9 +209,10 @@ namespace Bonanza.Shell
             _haloT.localScale = new Vector3(worldH * 1.7f, worldH * 1.7f, 1);
             var pc = Color.Lerp(rim, Color.white, 0.25f);
             _pool.SetColor("_Color", pc);
-            _pool.SetFloat("_Intensity", 0.75f * a + _pop * 0.5f);
+            float gs = _celebrate ? 0.35f : 1f;
+            _pool.SetFloat("_Intensity", (0.75f * a + _pop * 0.5f) * gs);
             _halo.SetColor("_Color", rim);
-            _halo.SetFloat("_Intensity", 0.38f * a + _pop * 0.4f);
+            _halo.SetFloat("_Intensity", (0.38f * a + _pop * 0.4f) * gs);
         }
 
         void SetGlow(bool on)

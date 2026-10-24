@@ -35,7 +35,7 @@ const S = [
   { n: 'win-21x9', d: 'win', w: 1680, h: 720, wait: 6 },
   { n: 'hub-small', d: 'r3', w: 640, h: 360, wait: 5 },
   { n: 'win-small', d: 'win', w: 640, h: 360, wait: 6 },
-  { n: 'hub-hover', d: 'r3', w: 1280, h: 720, wait: 4, hover: [640, 600] },
+  { n: 'hub-hover', d: 'r3', w: 1280, h: 720, wait: 4, hover: [640, 548] },
   { n: 'win-hover', d: 'win', w: 1280, h: 720, wait: 5, hover: [515, 666] },
 ];
 for (const s of S) {
