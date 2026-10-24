@@ -232,18 +232,21 @@ namespace Bonanza.Shell
                 enter = Mathf.Min(enter, shown > 0 ? 1.2f : 0);
                 double sc = 1, lift = 0, tilt = 0;
                 if (v.Beat > 0) TitleBeat.Letter(v.Beat, i, amp, out sc, out lift, out tilt);
-                float idle = red ? 0 : Mathf.Sin(Time.unscaledTime * 1.6f + i * 0.7f) * 2.2f;
+                // on a short screen the letters stay one height: no per-letter bounce, lift, tilt or bob
+                float calm = 1 - comp;
+                sc = 1 + (sc - 1) * calm; lift *= calm; tilt *= calm;
+                float idle = red ? 0 : Mathf.Sin(Time.unscaledTime * 1.6f + i * 0.7f) * 2.2f * calm;
                 float drop = (1 - enter) * 160f;
                 l.Rt.anchoredPosition = new Vector2(l.X * lscale, -(float)lift * 1.2f * lscale + idle - drop);
                 l.Rt.localScale = Vector3.one * ((float)sc * lscale) * (0.6f + 0.4f * Mathf.Clamp01(enter));
-                l.Rt.localRotation = Quaternion.Euler(0, 0, -(float)tilt + (red ? 0 : Mathf.Sin(Time.unscaledTime * 1.2f + i) * 0.8f));
+                l.Rt.localRotation = Quaternion.Euler(0, 0, -(float)tilt + (red ? 0 : Mathf.Sin(Time.unscaledTime * 1.2f + i) * 0.8f * calm));
                 // the shine: a bright band sweeping along the word every few seconds
                 float sweep = red ? -9 : Mathf.Repeat(Time.unscaledTime * 0.55f, 3.4f) * 3f - 3f;
                 float k = Mathf.Exp(-Mathf.Pow((i - sweep) * 0.9f, 2));
                 var face = Color.Lerp(Gold, Color.white, k * 0.85f);
                 UiKit.SetFill(l.Front, face);
             }
-            _logo.localScale = Vector3.one * (v.Beat > 0 ? (float)TitleBeat.LogoScale(v.Beat, amp) : 1f);
+            _logo.localScale = Vector3.one * (v.Beat > 0 ? 1f + ((float)TitleBeat.LogoScale(v.Beat, amp) - 1f) * (1 - comp) : 1f);
             _logoGlow.color = new Color(1f, 0.62f + 0.12f * v.BeatPulse, 0.25f, (0.34f + 0.16f * v.BeatPulse * amp) * UiKit.Clamp01(shown));
 
             _tagRow.anchoredPosition = new Vector2(0, Mathf.Lerp(54, 96, _attractAmt));
