@@ -404,7 +404,7 @@ namespace Bonanza
                 }
                 else if (Shell.Current != null) Shell.Hide();
                 if (_mode != Mode.Title) _hall.Tick(0, false, 0);
-                if (_mode != Mode.Roster && _mode != Mode.PartyHub && _hall.HasCast) _hall.Cast.Show(false);
+                if (_mode != Mode.Title && _mode != Mode.Roster && _mode != Mode.PartyHub && _hall.HasCast) _hall.Cast.Show(false);
             }
             else if (!want)
             {
@@ -444,7 +444,31 @@ namespace Bonanza
                 Records3 = _titleR3,
                 PerfTip = _perfTip,
             };
-            if (_hall != null && _hall.Live) _hall.Tick(Title.Beat, Title.OnGrid, Title.OnGrid ? Title.BeatPulse : 0);
+            if (_hall != null && _hall.Live)
+            {
+                _hall.Tick(Title.Beat, Title.OnGrid, Title.OnGrid ? Title.BeatPulse : 0);
+                FeedTitleCast();
+            }
+        }
+
+        // the cast on the empty title stage: two beside the logo (a third on wide screens), still under reduced motion
+        readonly int[] _tcChar = new int[3];
+        readonly float[] _tcX = new float[3], _tcFeet = new float[3], _tcH = new float[3];
+        void FeedTitleCast()
+        {
+            var cast = _hall.Cast;
+            if (Title.Attract) { cast.Show(false); return; }
+            cast.Show(true);
+            float aspect = Mathf.Max(1f, Screen.width / (float)Mathf.Max(1, Screen.height));
+            float half = 360f * aspect;
+            bool three = aspect >= 1.7f;
+            int n = three ? 3 : 2;
+            float hs = Screen.height < 600 ? 0.9f : 1f;
+            _tcChar[0] = 1; _tcChar[1] = 0; _tcChar[2] = 2;
+            _tcX[0] = -half * 0.68f; _tcFeet[0] = 612f; _tcH[0] = 300f * hs;
+            _tcX[1] = half * 0.68f; _tcFeet[1] = 612f; _tcH[1] = 300f * hs;
+            _tcX[2] = half * 0.68f - 150f; _tcFeet[2] = 580f; _tcH[2] = 260f * hs;
+            cast.PlaceLineup(n, 1, _tcChar, _tcX, _tcFeet, _tcH);
         }
 
         /// Invisible IMGUI click targets over the uGUI buttons (the ResultsCard pattern), plus the title's click rules:
@@ -475,6 +499,12 @@ namespace Bonanza
             if (_party == null || _hall == null || !_hall.Live) return;
             var cast = _hall.Cast;
             cast.Show(true);
+            {
+                var cur = _party.Done ? (ShellScreen)Shell.Final : Shell.Hub;
+                int pb = cur.TakePressButton();   // pressing a pill moves the gold focus to it
+                if (pb == 0 || pb == 1) { Shell.Hub.PressFocus = pb; Shell.Final.PressFocus = pb; }
+                else if (_presses.Count > 0 && _presses.Peek().Kind == PressKind.Down) { Shell.Hub.PressFocus = -1; Shell.Final.PressFocus = -1; }
+            }
             var rows = PartyBoard.Build(_party);
             if (_party.Done)
             {
@@ -511,7 +541,9 @@ namespace Bonanza
                 GameId = e.Id, GameTitle = e.Title, Blurb = e.Blurb, Races = e.Id == "drumline-dash",
                 Rows = rows, LastLine = lastLine, RoundsPlayed = _party.Scores.Count, Cast = cast,
             };
-            cast.NoFigure();
+            var hub = Shell.Hub;
+            if (hub.LineCount > 0) cast.PlaceLineup(hub.LineCount, hub.LineLead, hub.LineChar, hub.LineX, hub.LineFeet, hub.LineH);
+            else cast.NoFigure();
         }
 
         /// Invisible IMGUI click targets over the hub / wrap-up buttons: 0 is the main action, 1 is back.
@@ -580,9 +612,23 @@ namespace Bonanza
             if (_roster == null || _hall == null || !_hall.Live) return;
             var cast = _hall.Cast;
             cast.Show(true);
+            {
+                int pb = Shell.Roster.TakePressButton();   // pressing a card, seat or pill moves the focus to it
+                var rr = Shell.Roster;
+                if (pb >= 0 && pb < RosterScreen.SeatBase) { if (_roster.Stage == RosterStage.Chars) _roster.Cursor = pb; rr.PressFocus = -1; }
+                else if (pb >= RosterScreen.SeatBase && pb < RosterScreen.ActionBtn) { if (_roster.Stage == RosterStage.Lineup) _roster.SeatSel = pb - RosterScreen.SeatBase; rr.PressFocus = -1; }
+                else if (pb == RosterScreen.ActionBtn) rr.PressFocus = 0;
+                else if (pb == RosterScreen.BackBtn) rr.PressFocus = 1;
+                else if (_presses.Count > 0 && _presses.Peek().Kind == PressKind.Down) rr.PressFocus = -1;
+            }
             Shell.Roster.View = new RosterView { R = _roster, Flash = _rosterFlash, ShakeT = _rosterShakeT, ShakeCard = _rosterShakeCard, Cast = cast };
-            cast.Place(220f, 490f, 332f, _roster.Stage == RosterStage.Lineup);
-            cast.Focus(Shell.Roster.FocusChar);
+            bool tightRoster = Screen.height < 720, smallRoster = Screen.height < 600;
+            float rf = smallRoster ? 464f : 490f, rh = smallRoster ? 250f : tightRoster ? 300f : 332f;
+            int sm = Shell.Roster.StageMode;
+            if (sm == 1) cast.PlaceSpot(RosterScreen.StageXRef, rf, rh);
+            else if (sm == 2) cast.NoFigure();
+            else cast.Place(RosterScreen.StageXRef, rf, rh, _roster.Stage == RosterStage.Lineup);
+            if (sm != 2) cast.Focus(Shell.Roster.FocusChar);
         }
 
         /// Push Free Play's cards (each game's record) and focus into the uGUI view.

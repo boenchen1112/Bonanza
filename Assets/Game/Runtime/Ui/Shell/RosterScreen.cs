@@ -27,11 +27,19 @@ namespace Bonanza.Shell
         public RosterView View;
         /// Cast index on stage, and whether the stage figure steps back; read by the host each frame.
         public int FocusChar { get; private set; }
+        /// What stands on the stage: 0 the focused character, 1 an empty lit floor (an empty seat), 2 a die for a CPU seat
+        /// (nobody is picked yet), read by the host each frame.
+        public int StageMode { get; private set; }
+        RectTransform _stageDie; CanvasGroup _dieGroup; Image[] _dieImgs = new Image[6];
+        float _dieAmt;
+        /// The ref-px point the stage figure stands on.
+        public const float FigureFeet = 490f, FigureHeight = 312f;
 
         public const int CardBase = 0, SeatBase = 8, ActionBtn = 12, BackBtn = 13;
         const float CardW = 112, CardH = 128, CardGap = 10, GridLeft = -450, GridTop = 128;
         const float SeatW = 214, SeatH = 92, SeatGap = 10, SeatTop = 572;
-        const float StageX = 220;
+        const float StageX = 220, SmallSeatTop = 524;
+        public const float StageXRef = StageX;
 
         static readonly Color Gold = UiKit.Hex(0xffd93d), Coral = UiKit.Hex(0xff7a6b), Plate = new Color(0.05f, 0.03f, 0.12f, 0.93f);
 
@@ -118,6 +126,23 @@ namespace Bonanza.Shell
 
             // the seats
             for (int i = 0; i < 4; i++) _seats[i] = MakeSeat(root, i);
+
+            // a big die for the stage when the focused seat is a CPU (nobody picked yet)
+            _stageDie = UiKit.Rect("StageDie", root);
+            UiKit.Place(_stageDie, new Vector2(0.5f, 1), new Vector2(0.5f, 0.5f), new Vector2(StageX, -330), new Vector2(150, 150));
+            _dieGroup = _stageDie.gameObject.AddComponent<CanvasGroup>();
+            _dieImgs[0] = UiKit.Box(_stageDie, "Shadow", new Color(0, 0, 0, 0.35f), UiKit.Pill, true, 24);
+            UiKit.Place(_dieImgs[0].rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -12), new Vector2(150, 150));
+            var dieBody = UiKit.Box(_stageDie, "Body", new Color(1, 1, 1, 0.92f), UiKit.Pill, true, 24);
+            UiKit.Stretch(dieBody.rectTransform);
+            _dieImgs[1] = dieBody;
+            var dpp = new[] { new Vector2(-38, 38), new Vector2(38, 38), new Vector2(0, 0), new Vector2(-38, -38), new Vector2(38, -38) };
+            for (int k = 0; k < 5; k++)
+            {
+                _dieImgs[k + 1 > 5 ? 5 : k + 1] = _dieImgs[k + 1 > 5 ? 5 : k + 1];
+                var pip = UiKit.Box(_stageDie, "Pip" + k, UiKit.Hex(0x2a0f45), UiKit.Disc);
+                UiKit.Place(pip.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), dpp[k], new Vector2(26, 26));
+            }
 
             // main action and back
             _action = MakePill(root, "Action", "CONTINUE", "SPACE", new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(StageX, -506), new Vector2(340, 58), 23f);
@@ -323,12 +348,24 @@ namespace Bonanza.Shell
 
             // ---- which character stands on stage
             int focus = r.Cursor;
+            bool hoverCard = chars && input.Hover >= CardBase && input.Hover < CardBase + 8;
+            if (hoverCard) focus = input.Hover - CardBase;   // the card under the pointer is previewed on the stage and the plate
             if (stage == RosterStage.Cpu || stage == RosterStage.Go)
             {
                 var mine = r.Picks[0];
                 if (mine != null) focus = Cast.IndexOf(mine);
             }
             FocusChar = Mathf.Clamp(focus, 0, Cast.All.Count - 1);
+            // the stage follows the focused seat while choosing rivals: an empty seat is a lit empty floor, a CPU a die
+            int seatMode = 0;
+            if (lineup && r.SeatSel > 0) seatMode = r.Seat[Mathf.Clamp(r.SeatSel, 0, 3)] == RosterState.Off ? 1 : 2;
+            StageMode = seatMode;
+            _dieAmt = Damp(_dieAmt, seatMode == 2 ? 1 : 0, red ? 40 : 14, dt);
+            _dieGroup.alpha = _dieAmt * UiKit.Clamp01(shown * 1.6f);
+            _stageDie.gameObject.SetActive(_dieAmt > 0.01f);
+            _stageDie.anchoredPosition = new Vector2(StageX, -(small ? 300 : 340) + (red ? 0 : Mathf.Sin(Time.unscaledTime * 2f) * 5f));
+            _stageDie.localRotation = Quaternion.Euler(0, 0, red ? -6 : -6 + Mathf.Sin(Time.unscaledTime * 1.3f) * 4f);
+            _stageDie.localScale = Vector3.one * Mathf.Lerp(0.6f, 1f, _dieAmt) * (small ? 0.9f : 1f);
 
             // ---- heading
             string head, sub, hint, action, key;
@@ -418,9 +455,12 @@ namespace Bonanza.Shell
             _infoBar.color = col;
             _swatch[0].color = col; _swatch[1].color = ColorOf(def.Accent); _swatch[2].color = Color.Lerp(col, Color.white, 0.55f);
             float pop = red ? 1 : UiKit.BackOut(_infoT / 0.3f);
-            _name.rectTransform.anchoredPosition = new Vector2(36 + (1 - Mathf.Min(1, pop)) * -14, -12);
+            _name.rectTransform.anchoredPosition = new Vector2(36 + (1 - Mathf.Min(1, pop)) * -14, small ? -4 : -12);
             _infoGroup.alpha = UiKit.Clamp01((age - 0.35f) * 3f) * (red ? shown : 1);
-            _info.anchoredPosition = new Vector2(GridLeft, -(GridTop + 2 * CardH + CardGap + 22));
+            _info.anchoredPosition = new Vector2(GridLeft, -(GridTop + 2 * CardH + CardGap + (small ? 10 : 22)));
+            _info.sizeDelta = new Vector2(478, small ? 64 : 120);
+            _infoBar.rectTransform.sizeDelta = new Vector2(8, small ? 40 : 88);
+            _name.rectTransform.sizeDelta = new Vector2(330, small ? 56 : 60);
             int tb = r.Taken(FocusChar) ? r.TakenBy(FocusChar) : -1;
             _status.text = tb == 0 && !chars ? "YOUR PICK" : tb >= 0 ? "TAKEN BY P" + (tb + 1) : (chars ? "FREE - SPACE TO LOCK IN" : "");
             _status.color = tb > 0 || (tb == 0 && chars) ? Coral : Gold;
@@ -438,6 +478,7 @@ namespace Bonanza.Shell
             }
             else for (int k = 0; k < 3; k++) _swatch[k].gameObject.SetActive(false);   // unexplained colour dots: gone
             _trait.fontSize = 15f * ts; _status.fontSize = 14f * ts;
+            _trait.gameObject.SetActive(!small); _status.gameObject.SetActive(!small);
 
             // ---- seats
             for (int i = 0; i < 4; i++)
@@ -449,7 +490,7 @@ namespace Bonanza.Shell
                 if (hidden) { s.Rt.sizeDelta = Vector2.zero; continue; }
                 s.Rt.sizeDelta = new Vector2(SeatW, SeatH);
                 var pos = SeatPos(!party ? 0 : i, party ? 4 : 1);
-                float seatScale = small ? 1.28f : 1f;
+                float seatScale = small ? 1.2f : 1f;
                 bool off = r.Seat[i] == RosterState.Off;
                 bool you = r.Seat[i] == RosterState.You;
                 bool active = (lineup && r.SeatSel == i) || (chars && r.Active == i);
@@ -461,14 +502,15 @@ namespace Bonanza.Shell
                 s.Pulse = Mathf.MoveTowards(s.Pulse, 0, dt / 0.5f);
                 float enter = red ? 1 : UiKit.BackOut((age - 0.35f - i * 0.07f) / 0.45f);
                 s.Group.alpha = UiKit.Clamp01(enter * 2f) * (red ? shown : 1) * (off ? 0.6f : 1f);
-                s.Rt.anchoredPosition = new Vector2(pos.x * seatScale, pos.y - (1 - Mathf.Min(1, enter)) * 60f - (small ? 4 : 0));
+                s.Rt.anchoredPosition = new Vector2(pos.x * seatScale, pos.y + (small ? SeatTop - SmallSeatTop : 0) - (1 - Mathf.Min(1, enter)) * 60f);
                 s.Rt.localScale = Vector3.one * seatScale;
                 s.Inner.localScale = Vector3.one * ((1 + 0.05f * s.Focus + 0.025f * s.Hover + 0.05f * Mathf.Sin(Mathf.Clamp01(1 - s.Pulse) * Mathf.PI) * (s.Pulse > 0 ? 1 : 0)) * (1 - 0.05f * s.Press));
                 s.Who.text = "P" + (i + 1) + (you ? "  YOU" : off ? "" : "  CPU");
                 s.Who.gameObject.SetActive(!small);
-                s.Kind.text = (small ? "P" + (i + 1) + " " : "") + (you ? "PLAYER" : Levels[r.Seat[i]]);
+                bool chev = lineup && active && i > 0;
+                s.Kind.text = (small && !chev ? "P" + (i + 1) + " " : "") + (you ? "PLAYER" : Levels[r.Seat[i]]);
                 s.Kind.fontSize = small ? 17f : 18f;
-                s.Kind.rectTransform.sizeDelta = new Vector2(small ? 150 : 86, 30);
+                s.Kind.rectTransform.sizeDelta = new Vector2(small ? (chev ? 72 : 150) : 86, 30);
                 s.Kind.rectTransform.anchoredPosition = new Vector2(72, small ? 14 : 2);
                 s.Pick.fontSize = small ? 17f : 13f;
                 s.Kind.color = off ? new Color(1, 1, 1, 0.55f) : Color.white;
@@ -498,7 +540,7 @@ namespace Bonanza.Shell
                     float w = red ? 0 : Mathf.Sin(Time.unscaledTime * 6f) * 2.5f;
                     float ky = small ? 14 : 2;
                     s.ChevL.anchoredPosition = new Vector2(-62 - w, ky); s.ChevR.anchoredPosition = new Vector2(-16 + w, ky);
-                    if (small) { s.ChevL.anchoredPosition = new Vector2(-58 - w, ky); s.ChevR.anchoredPosition = new Vector2(-16 + w, ky); }
+                    if (small) { s.ChevL.anchoredPosition = new Vector2(-48 - w, ky); s.ChevR.anchoredPosition = new Vector2(-14 + w, ky); }
                 }
                 for (int k = 0; k < 3; k++) s.Pips[k].gameObject.SetActive(!(you || off));
                 var ac = Color.Lerp(new Color(0.05f, 0.03f, 0.12f, 0.93f), new Color(0.2f, 0.14f, 0.38f, 0.96f), s.Hover);
@@ -510,15 +552,16 @@ namespace Bonanza.Shell
 
             // ---- action and back
             bool actOn = stage != RosterStage.Cpu;
-            DriveButton(_action, input, ActionBtn, actOn, true, action, key, dt, red, age, 0.6f);
-            DriveButton(_back, input, BackBtn, true, false, "BACK", "X", dt, red, age, 0.8f);
-            _action.Rt.anchoredPosition = new Vector2(StageX, Mathf.Lerp(-506, -516, comp));
-            _action.Rt.sizeDelta = actOn ? new Vector2(340, 58) : Vector2.zero;
+            DriveButton(_action, input, ActionBtn, actOn, PressFocus != 1, action, key, dt, red, age, 0.6f);
+            DriveButton(_back, input, BackBtn, true, PressFocus == 1, "BACK", "X", dt, red, age, 0.8f);
+            _action.Rt.anchoredPosition = new Vector2(StageX, small ? -468 : Mathf.Lerp(-506, -516, comp));
+            _action.Rt.sizeDelta = actOn ? new Vector2(340, small ? 48 : 58) : Vector2.zero;
             _action.Chip.gameObject.SetActive(!string.IsNullOrEmpty(key) && !small);
             _back.Chip.gameObject.SetActive(!small);
             _action.Label.rectTransform.anchoredPosition = new Vector2(small ? 0 : -40, 1);
             _back.Label.rectTransform.anchoredPosition = new Vector2(small ? 0 : -14, 1);
             _back.Rt.anchoredPosition = new Vector2(-72 - 60 * comp, 12 + 6 * comp);
+            if (small) _back.Rt.anchoredPosition = new Vector2(-60, 8);
             _back.Inner.localScale *= Mathf.Lerp(1f, 1.3f, comp);
         }
 
