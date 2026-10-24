@@ -457,6 +457,7 @@ namespace Bonanza.Shell
             float pop = red ? 1 : UiKit.BackOut(_infoT / 0.3f);
             _name.rectTransform.anchoredPosition = new Vector2(36 + (1 - Mathf.Min(1, pop)) * -14, small ? -4 : -12);
             _infoGroup.alpha = UiKit.Clamp01((age - 0.35f) * 3f) * (red ? shown : 1);
+            _info.gameObject.SetActive(!small);   // no room for the plate on a short screen
             _info.anchoredPosition = new Vector2(GridLeft, -(GridTop + 2 * CardH + CardGap + (small ? 10 : 22)));
             _info.sizeDelta = new Vector2(478, small ? 64 : 120);
             _infoBar.rectTransform.sizeDelta = new Vector2(8, small ? 40 : 88);
@@ -508,11 +509,11 @@ namespace Bonanza.Shell
                 s.Who.text = "P" + (i + 1) + (you ? "  YOU" : off ? "" : "  CPU");
                 s.Who.gameObject.SetActive(!small);
                 bool chev = lineup && active && i > 0;
-                s.Kind.text = (small && !chev ? "P" + (i + 1) + " " : "") + (you ? "PLAYER" : Levels[r.Seat[i]]);
-                s.Kind.fontSize = small ? 17f : 18f;
-                s.Kind.rectTransform.sizeDelta = new Vector2(small ? (chev ? 72 : 150) : 86, 30);
+                s.Kind.text = you ? "PLAYER" : Levels[r.Seat[i]];
+                s.Kind.fontSize = small ? (chev ? 19f : 24f) : 18f;
+                s.Kind.rectTransform.sizeDelta = new Vector2(small ? (chev ? 82 : 150) : 86, 30);
                 s.Kind.rectTransform.anchoredPosition = new Vector2(72, small ? 14 : 2);
-                s.Pick.fontSize = small ? 17f : 13f;
+                s.Pick.fontSize = small ? 22f : 13f;
                 s.Kind.color = off ? new Color(1, 1, 1, 0.55f) : Color.white;
                 // face
                 int ci = pickId != null ? Cast.IndexOf(pickId) : -1;
@@ -542,7 +543,14 @@ namespace Bonanza.Shell
                     s.ChevL.anchoredPosition = new Vector2(-62 - w, ky); s.ChevR.anchoredPosition = new Vector2(-16 + w, ky);
                     if (small) { s.ChevL.anchoredPosition = new Vector2(-48 - w, ky); s.ChevR.anchoredPosition = new Vector2(-14 + w, ky); }
                 }
-                for (int k = 0; k < 3; k++) s.Pips[k].gameObject.SetActive(!(you || off));
+                for (int k = 0; k < 3; k++)
+                {
+                    s.Pips[k].gameObject.SetActive(!(you || off));
+                    // short screens: bigger pips (at least 6 real px)
+                    UiKit.Place(s.Pips[k].rectTransform, new Vector2(1, 0), new Vector2(1, 0),
+                        small ? new Vector2(-12 - (2 - k) * 24, 11) : new Vector2(-14 - (2 - k) * 19, 11),
+                        small ? new Vector2(20, 15 + k * 5) : new Vector2(14, 12 + k * 4));
+                }
                 var ac = Color.Lerp(new Color(0.05f, 0.03f, 0.12f, 0.93f), new Color(0.2f, 0.14f, 0.38f, 0.96f), s.Hover);
                 s.Fill.color = Color.Lerp(ac, new Color(0.24f, 0.17f, 0.08f, 0.97f), s.Focus);
                 Color rim = Color.Lerp(new Color(1, 0.95f, 0.8f, 0.2f), new Color(0.55f, 0.95f, 1f, 1f), s.Hover);
