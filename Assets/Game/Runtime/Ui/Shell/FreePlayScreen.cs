@@ -166,6 +166,26 @@ namespace Bonanza.Shell
             return c;
         }
 
+        /// The card's tagline: a short form with an even break (the full line is on the strip of a short screen).
+        static string ShortBlurb(string id, string full)
+        {
+            switch (id)
+            {
+                case "swing-kings": return "One swing.\nOne beat.\nSend it.";
+                case "drumline-dash": return "Hear it.\nHit it back.";
+                case "bounce-brigade": return "Find the downbeat.\nConduct the hymn.";
+                case "chomp-chorus": return "Four singers,\nyou are one.";
+                case "finale-fever": return "Hold the beat\nas the tempo moves.";
+                default: return full ?? "";
+            }
+        }
+
+        static void Counter(RectTransform rt, float centreToAnchor, float lift, float scale)
+        {
+            float d = centreToAnchor + rt.anchoredPosition.y;
+            rt.anchoredPosition += new Vector2(0, -(lift + d * (scale - 1f)));
+        }
+
         public override void Tick(float dt, ShellInput input)
         {
             bool red = input.Reduced;
@@ -249,7 +269,7 @@ namespace Bonanza.Shell
                 float nameY = small ? -128 : -156;
                 UiKit.Place(c.Name.rectTransform, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, nameY), new Vector2(CardW - 14, small ? 62 : 58));
                 c.Blurb.gameObject.SetActive(!small);
-                c.Blurb.text = d.Blurb ?? "";
+                c.Blurb.text = ShortBlurb(d.Id, d.Blurb);
                 UiKit.Place(c.Blurb.rectTransform, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -216), new Vector2(CardW - 12, 78));
                 c.Blurb.enableAutoSizing = true; c.Blurb.fontSizeMax = UiKit.FontSizeForCap(14f); c.Blurb.fontSizeMin = 10f;
                 c.Blurb.overflowMode = TextOverflowModes.Truncate;
@@ -317,6 +337,13 @@ namespace Bonanza.Shell
                         UiKit.Place(c.Best.rectTransform, new Vector2(0.5f, 0), new Vector2(0.5f, 0.5f), new Vector2(0, 14), new Vector2(CardW - 28, 30));
                     }
                 }
+
+                // the card rises and grows when focused; its text does not: shift it back so every baseline is level
+                float lift = c.Inner.anchoredPosition.y, sc = c.Inner.localScale.x;
+                Counter(c.Name.rectTransform, cardH * 0.5f, lift, sc);
+                Counter(c.Blurb.rectTransform, cardH * 0.5f, lift, sc);
+                Counter(c.RecordRt, -cardH * 0.5f, lift, sc);
+                Counter(c.NoRecRt, -cardH * 0.5f, lift, sc);
             }
 
             // ---- the strip (short screens only) and the hint
