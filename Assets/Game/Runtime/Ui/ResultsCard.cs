@@ -24,6 +24,8 @@ namespace Bonanza.HudKit
         /// Opt-in looks (Minigame.ResultsStyle; all off by default): the card centred on screen, a filled rank stamp
         /// with a glow, the sticker pinned to the stamp, and a row of result pips (one colour per round of the game).
         public bool Centered, RankFilled, BadgeOnRank;
+        /// Opt-in: the sticker (NEW RANK! / NEW BEST!) as a flat ribbon under the game's name instead of the tilted corner sticker.
+        public bool BadgeRibbon;
         public List<Color> Pips;
         public List<PartyRow> Party;
         /// (key, label) chips for the continue prompt: ("SPACE", "play again"), ("ESC", "menu").
@@ -38,6 +40,12 @@ namespace Bonanza.HudKit
         const float CardW = 600, Pad = 30.7f;
 
         RectTransform _root, _card, _rankBox, _badge, _prompt;
+        // The prompts that have a key (SPACE play again, ESC menu) are buttons inside the card; the host keeps only
+        // invisible click targets over them (ButtonScreen). Key-less prompts ("autoplay") stay a label bottom right.
+        readonly List<RectTransform> _buttons = new List<RectTransform>();
+        CanvasGroup _buttonGroup;
+        bool _badgeTilt = true;
+        public int ButtonCount => _buttons.Count;
         Image _dim;
         CanvasGroup _group, _promptGroup;
         TextMeshProUGUI _scoreText, _rankText;
@@ -92,6 +100,9 @@ namespace Bonanza.HudKit
             float y = Pad;
             float rankY = y; y += 118.8f + 16f;
             float nameY = y + 18f; y += 37.6f + 8f;
+            bool ribbon = d.BadgeRibbon && !string.IsNullOrEmpty(d.Badge);
+            float ribbonY = y + 12f;
+            if (ribbon) y += 32f;
             float scoreY = y + 17f; y += 33.6f + 25f;
             float statsTop = y; y += 11f + 8.6f;   // border + padding
             float statsY = y; y += 24f + 3f + 11f + 4f;
@@ -102,6 +113,10 @@ namespace Bonanza.HudKit
             float partyY0 = y + 8f;
             if (hasParty) y += 8f + 11f + d.Party.Count * 28f;
             y += Pad - 4f;
+            int keyed = 0;
+            foreach (var pr in d.Prompts) if (!string.IsNullOrEmpty(pr.Key)) keyed++;
+            float buttonsY = y + 10f;
+            if (keyed > 0) y += 68f;
             float h = y;
 
             _card = UiKit.Rect("Card", _root);
@@ -197,8 +212,10 @@ namespace Bonanza.HudKit
             // sticker
             if (!string.IsNullOrEmpty(d.Badge))
             {
-                _badge = UiKit.Rect("Badge", d.BadgeOnRank ? _rankBox : _card);
-                if (d.BadgeOnRank) UiKit.Place(_badge, new Vector2(1, 1), new Vector2(0.5f, 0.5f), new Vector2(34, -4), new Vector2(150, 34));
+                _badge = UiKit.Rect("Badge", d.BadgeOnRank && !ribbon ? _rankBox : _card);
+                _badgeTilt = !ribbon;
+                if (ribbon) Mid(_badge, 0, ribbonY, 200, 26);
+                else if (d.BadgeOnRank) UiKit.Place(_badge, new Vector2(1, 1), new Vector2(0.5f, 0.5f), new Vector2(34, -4), new Vector2(150, 34));
                 else UiKit.Place(_badge, new Vector2(1, 1), new Vector2(0.5f, 0.5f), new Vector2(-CardW * 0.02f, CardW * 0.02f + 8), new Vector2(150, 34));
                 var bf = UiKit.Box(_badge, "Fill", UiKit.Coral, UiKit.Pill, true, 10f); UiKit.Stretch(bf.rectTransform);
                 var bb = UiKit.Box(_badge, "Border", Color.white, UiKit.PillRing(1.8f * 24f / 10f), true, 10f); UiKit.Stretch(bb.rectTransform);
@@ -209,23 +226,61 @@ namespace Bonanza.HudKit
             }
             else _badge = null;
 
-            // continue prompt (bottom right of the screen)
+            // the keyed prompts as buttons inside the card, the first one the primary (gold)
+            _buttons.Clear();
+            if (keyed > 0)
+            {
+                var row = UiKit.Rect("Buttons", _card);
+                Mid(row, 0, buttonsY + 20f, CardW - 2 * Pad, 40);
+                _buttonGroup = row.gameObject.AddComponent<CanvasGroup>(); _buttonGroup.alpha = 0;
+                const float bw = 200, gap = 16;
+                float x0 = -(keyed * bw + (keyed - 1) * gap) / 2 + bw / 2;
+                int bi = 0;
+                foreach (var pr in d.Prompts)
+                {
+                    if (string.IsNullOrEmpty(pr.Key)) continue;
+                    bool primary = bi == 0;
+                    var b = UiKit.Rect("Button" + bi, row);
+                    UiKit.Place(b, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(x0 + bi * (bw + gap), 0), new Vector2(bw, 40));
+                    var bf = UiKit.Box(b, "Fill", Color.white, UiKit.Pill, true, 14f); UiKit.Stretch(bf.rectTransform);
+                    bf.gameObject.AddComponent<UiGradient>().Set(primary ? new Color(1, 0.9f, 0.55f, 0.32f) : new Color(1, 1, 1, 0.1f), primary ? new Color(1, 0.75f, 0.3f, 0.18f) : new Color(1, 1, 1, 0.04f));
+                    var brim = UiKit.Box(b, "Rim", primary ? UiKit.Gold : new Color(1, 1, 1, 0.3f), UiKit.PillRing(2f * 24f / 14f), true, 14f); UiKit.Stretch(brim.rectTransform);
+                    var kt = UiKit.Text(b, "Key", TextStyle.Label, 9.5f, UiKit.Ink, TextAlignmentOptions.Center, italic: false);
+                    kt.text = pr.Key; kt.characterSpacing = 4; kt.ForceMeshUpdate();
+                    float kw = Mathf.Max(34, kt.preferredWidth + 14);
+                    var lt = UiKit.Text(b, "Label", TextStyle.Display, 12f, Color.white, TextAlignmentOptions.MidlineLeft);
+                    lt.text = pr.Value; lt.ForceMeshUpdate();
+                    float total = kw + 9 + lt.preferredWidth, bl = -total / 2;
+                    var kf = UiKit.Box(b, "KeyFill", primary ? UiKit.Gold : UiKit.Dim, UiKit.Pill, true, 8f);
+                    UiKit.Place(kf.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0, 0.5f), new Vector2(bl, 0), new Vector2(kw, 22));
+                    kt.transform.SetAsLastSibling();
+                    UiKit.Place(kt.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0, 0.5f), new Vector2(bl, 0), new Vector2(kw, 22));
+                    UiKit.Place(lt.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0, 0.5f), new Vector2(bl + kw + 9, 0), new Vector2(lt.preferredWidth + 6, 24));
+                    _buttons.Add(b);
+                    bi++;
+                }
+            }
+            else _buttonGroup = null;
+
+            // continue prompt (bottom right of the screen): the key-less prompts only
+            var labelOnly = new List<KeyValuePair<string, string>>();
+            foreach (var pr in d.Prompts) if (string.IsNullOrEmpty(pr.Key)) labelOnly.Add(pr);
             _prompt = UiKit.Rect("Prompt", _root);
             UiKit.Place(_prompt, new Vector2(1, 0), new Vector2(1, 0), new Vector2(-1280 * 0.032f, 720 * 0.034f), new Vector2(400, 24));
             _promptGroup = _prompt.gameObject.AddComponent<CanvasGroup>(); _promptGroup.alpha = 0;
             float px = 0;
             // lay the chips out right to left
-            for (int i = d.Prompts.Count - 1; i >= 0; i--)
+            for (int i = labelOnly.Count - 1; i >= 0; i--)
             {
                 var lab = UiKit.Text(_prompt, "Label", TextStyle.Label, 16f * 0.72f, UiKit.Dim, TextAlignmentOptions.Right, italic: false);
-                lab.text = d.Prompts[i].Value; lab.characterSpacing = 0; lab.ForceMeshUpdate();
+                lab.text = labelOnly[i].Value; lab.characterSpacing = 0; lab.ForceMeshUpdate();
                 lab.rectTransform.anchorMin = lab.rectTransform.anchorMax = new Vector2(1, 0.5f); lab.rectTransform.pivot = new Vector2(1, 0.5f);
                 lab.rectTransform.sizeDelta = new Vector2(lab.preferredWidth + 4, 20); lab.rectTransform.anchoredPosition = new Vector2(-px, 0);
                 px += lab.preferredWidth + 7;
-                if (string.IsNullOrEmpty(d.Prompts[i].Key)) continue;
+                if (string.IsNullOrEmpty(labelOnly[i].Key)) continue;
                 var key = UiKit.Rect("Key", _prompt);
                 var kt = UiKit.Text(key, "KeyText", TextStyle.Label, 16f * 0.72f, Color.white, TextAlignmentOptions.Center, italic: false);
-                kt.text = d.Prompts[i].Key; kt.characterSpacing = 0; kt.ForceMeshUpdate();
+                kt.text = labelOnly[i].Key; kt.characterSpacing = 0; kt.ForceMeshUpdate();
                 float kw = Mathf.Max(33.6f, kt.preferredWidth + 16f);
                 key.anchorMin = key.anchorMax = new Vector2(1, 0.5f); key.pivot = new Vector2(1, 0.5f);
                 key.sizeDelta = new Vector2(kw, 24); key.anchoredPosition = new Vector2(-px, 0);
@@ -345,13 +400,23 @@ namespace Bonanza.HudKit
                 bg.alpha = UiKit.Clamp01(e / 0.2f);
                 float b = calm ? 1 : UiKit.BackOut(e / 0.28f, 1.6f);
                 _badge.localScale = Vector3.one * (calm ? 1 : Mathf.LerpUnclamped(1.9f, 1, b));
-                _badge.localRotation = Quaternion.Euler(0, 0, -10);
+                _badge.localRotation = Quaternion.Euler(0, 0, _badgeTilt ? -10 : 0);
             }
             _promptGroup.alpha = UiKit.Clamp01((t - PromptAt) / 0.25f);
+            if (_buttonGroup != null) _buttonGroup.alpha = _promptGroup.alpha;
             float breathe = calm ? 1 : 1 + Mathf.Sin(t * 3) * 0.006f;
             _card.localScale = Vector3.one * breathe;
         }
 
         int _lastShown = -1;
+
+        static readonly Vector3[] _corners = new Vector3[4];
+        /// Button i (in the order of the keyed prompts) in IMGUI screen coordinates (y down), for the host's click targets.
+        public Rect ButtonScreen(int i)
+        {
+            if (i < 0 || i >= _buttons.Count || !_buttons[i]) return Rect.zero;
+            _buttons[i].GetWorldCorners(_corners);
+            return new Rect(_corners[0].x, Screen.height - _corners[1].y, _corners[2].x - _corners[0].x, _corners[1].y - _corners[0].y);
+        }
     }
 }

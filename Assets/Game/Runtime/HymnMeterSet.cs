@@ -38,10 +38,11 @@ namespace Bonanza
         const int Banks = 3;                // slot k's steps live in bank k % 3 (one behind, one in play, one ahead)
         const int Extra = 4;                // puffs per bank beyond the steps: landing, lead-in, second lead-in, home
         const float CapW = 1.16f, CapH = 0.42f;
-        const float JumperScale = 1.75f;
+        const float JumperScale = 1.32f;
         // The step pieces are pooled: only the steps within PoolRange of the camera are drawn (at most Pool of them),
         // the per-step state stays indexed by bank and beat.
         const int Pool = 30;
+        const int VeilPool = 18;   // veils are only on screen before a reveal, when the camera is close: fewer are needed
         const float PoolRange = 22f;
         static float StepTop(int h) => 0.08f + (h - 1) * 0.62f;   // 1 -> 0.08, 2 -> 0.70, 3 -> 1.32
 
@@ -191,15 +192,15 @@ namespace Bonanza
             // Playfield clouds take the palette's cloud-top tint (GroundAlt), far clouds and the sea a darker tone
             // (Band, BandAlt): the stair's band is always the brightest value in the frame.
             _cloudMat = Surf(Color.white, rim: 0.9f, pulse: 0.03f, lift: 0.13f, bands: 3, softness: 0.45f);
-            _veilMat = Surf(Color.white, rim: 1.7f, pulse: 0.12f, lift: 0.5f, bands: 3, softness: 0.5f, fog: 0.3f);
+            _veilMat = Surf(Color.white, rim: 2.3f, pulse: 0.12f, lift: 0.46f, bands: 3, softness: 0.55f, fog: 0.3f);   // a soft rim of light
             _stoneMat = Surf(Color.white, rim: 0.9f, pulse: 0.04f, lift: 0.02f, bands: 3, softness: 0.18f);
             _stoneMat.SetFloat("_ShadowRecv", 0);   // fluted shafts would stripe with acne; the plates and clouds take the shadow
             _capMat = Surf(Color.white, rim: 1.1f, pulse: 0.1f, lift: 0.16f, bands: 3, softness: 0.2f);
             _glyphMat = Add(0);
             var noise = Own(NoiseTex(128, 0xb0b0));
             _seaMat = Surf(Color.white, rim: 0.3f, pulse: 0.02f, lift: 0.04f, bands: 2, softness: 0.6f, map: noise, tiling: new Vector2(14, 6), mapStrength: 0.6f);
-            _farMat = Surf(Color.white, rim: 2.0f, pulse: 0, lift: 0.06f, bands: 3, softness: 0.35f, fog: 0.7f);   // silhouettes with a rim of light
-            _horizonMat = Surf(Color.white, rim: 1.6f, pulse: 0, lift: 0.12f, bands: 2, softness: 0.6f, fog: 0.75f);
+            _farMat = Surf(Color.white, rim: 2.0f, pulse: 0, lift: 0.06f, bands: 3, softness: 0.35f, fog: 0.85f);   // silhouettes with a rim of light
+            _horizonMat = Surf(Color.white, rim: 1.6f, pulse: 0, lift: 0.12f, bands: 2, softness: 0.6f, fog: 1f);   // atmospheric falloff
             _ledgeMat = Surf(Color.white, rim: 1.2f, pulse: 0.02f, lift: 0.02f, bands: 3, softness: 0.45f, fog: 0);
             _choirMat = Surf(Color.white, rim: 1.1f, pulse: 0.05f, lift: 0.1f, bands: 3, softness: 0.4f, fog: 0.6f);
             _mouthMat = Surf(Color.white, rim: 0, pulse: 0, lift: 0, bands: 1, softness: 0.2f, fog: 0.6f);
@@ -208,7 +209,7 @@ namespace Bonanza
             Look.Track(_seaMat, PC.Band, 0.95f);
             Look.Track(_farMat, PC.Band, 1.05f);
             Look.Track(_horizonMat, PC.BandAlt, 1.1f);
-            Look.Track(_ledgeMat, PC.Band, 0.8f);
+            Look.Track(_ledgeMat, PC.Band, 1.0f);
 
             BuildSea();
             BuildLayers();
@@ -285,7 +286,7 @@ namespace Bonanza
                 var b = new MeshBuilder();
                 if (L == 0)
                 {
-                    for (int i = 0; i < 28; i++)
+                    for (int i = 0; i < 20; i++)
                     {
                         float x = rng.Next() * W, z;
                         float w, top;
@@ -314,7 +315,7 @@ namespace Bonanza
                             var c = new Vector3(x + (rng.Next() - 0.5f) * w * 0.7f, -1 + t * h, z + (rng.Next() - 0.5f) * 3);
                             b.Sphere(rr, 9, 6, Matrix4x4.Translate(c), Color.white, new Vector3(1.15f, 0.9f, 1));
                         }
-                        Shade(b, start, 1, 0.45f);
+                        Shade(b, start, 0.86f + rng.Next() * 0.26f, 0.45f);   // two or three tints of bank: some lit, some in shade
                     }
                 }
                 else
@@ -331,6 +332,19 @@ namespace Bonanza
                             b.Sphere(w * Mathf.Lerp(0.55f, 0.28f, t), 9, 5, Matrix4x4.Translate(c), Color.white, new Vector3(1.6f, 0.62f, 1));
                         }
                         Shade(b, start, 1, 0.5f);
+                    }
+                    // the farthest layer: faint cloud towers on the horizon, almost lost in the air
+                    for (int i = 0; i < 4; i++)
+                    {
+                        float x = (i + rng.Next() * 0.6f) / 4 * W, z = 175 + rng.Next() * 25;
+                        float h = 22 + rng.Next() * 16, w = 10 + rng.Next() * 8;
+                        int start = b.Count;
+                        for (int k = 0; k < 4; k++)
+                        {
+                            float t = k / 3f;
+                            b.Sphere(w * Mathf.Lerp(0.7f, 0.35f, t), 8, 5, Matrix4x4.Translate(new Vector3(x + (rng.Next() - 0.5f) * w * 0.5f, -4 + t * h, z)), Color.white, new Vector3(1.1f, 0.8f, 1));
+                        }
+                        Shade(b, start, 1.05f, 0.6f);
                     }
                 }
                 var mesh = Own(b.ToMesh("CloudLayer" + L));
@@ -360,11 +374,11 @@ namespace Bonanza
         {
             var rng = new FxRng(0x1ed9e);
             var b = new MeshBuilder();
-            for (int i = 0; i < 16; i++)
+            for (int i = 0; i < 9; i++)
             {
-                float x = (i + rng.Next() * 0.7f) / 16 * LayerW[0];
-                float z = -4.2f - rng.Next() * 1.6f, w = 1.6f + rng.Next() * 1.2f;
-                Puff(b, Matrix4x4.TRS(new Vector3(x, SeaY + 0.25f + rng.Next() * 0.3f, z), Quaternion.Euler(0, rng.Next() * 360, 0), Vector3.one), w, 10, 6, (uint)(i + 501), 0.85f, 4);
+                float x = (i + rng.Next() * 0.7f) / 9 * LayerW[0];
+                float z = -4.2f - rng.Next() * 1.6f, w = 1.15f + rng.Next() * 0.9f;
+                Puff(b, Matrix4x4.TRS(new Vector3(x, SeaY + 0.1f + rng.Next() * 0.2f, z), Quaternion.Euler(0, rng.Next() * 360, 0), Vector3.one), w, 10, 6, (uint)(i + 501), 0.85f, 4);
             }
             var mesh = Own(b.ToMesh("Ledge"));
             mesh.bounds = new Bounds(mesh.bounds.center, mesh.bounds.size + new Vector3(8, 4, 4));
@@ -568,19 +582,18 @@ namespace Bonanza
             // the veil clouds (one per step) and per bank: landing, lead-in, second lead-in, home
             var puff = new MeshBuilder();
             int pv = puff.Count;
-            Puff(puff, Matrix4x4.identity, 1.0f, 11, 7, 7, 1, 4);
-            // a cumulus crown: three round lobes on top, so a veil reads as a cloud, not a bun
-            puff.Sphere(0.34f, 9, 6, Matrix4x4.Translate(new Vector3(-0.26f, -0.38f, -0.05f)), Color.white, Vector3.one);
-            puff.Sphere(0.4f, 9, 6, Matrix4x4.Translate(new Vector3(0.12f, -0.36f, 0.02f)), Color.white, Vector3.one);
-            puff.Sphere(0.28f, 8, 5, Matrix4x4.Translate(new Vector3(0.42f, -0.44f, -0.08f)), Color.white, Vector3.one);
+            Puff(puff, Matrix4x4.identity, 1.0f, 15, 9, 7, 1, 3);
+            // a cumulus crown: round lobes on top, so a veil reads as a cloud, not a bun (finer meshes: they sit in front)
+            puff.Sphere(0.34f, 12, 8, Matrix4x4.Translate(new Vector3(-0.26f, -0.38f, -0.05f)), Color.white, Vector3.one);
+            puff.Sphere(0.4f, 12, 8, Matrix4x4.Translate(new Vector3(0.12f, -0.36f, 0.02f)), Color.white, Vector3.one);
             Shade(puff, pv, 1, 0.74f);   // a veil glows: a lighter underside than the sea's clouds
-            _puffs = new MeshBatch("Veil", transform, puff, Pool + Banks * Extra, _veilMat);
+            _puffs = new MeshBatch("Veil", transform, puff, VeilPool + Banks * Extra, _veilMat);
             _puffs.Renderer.receiveShadows = true;
             // and a soft halo behind each veil cloud: the veils glow and their silhouettes melt into the air
             var halo = new MeshBuilder();
             Card(halo, Matrix4x4.identity);
             _veilGlowMat = GlowCard(new Color(1f, 0.97f, 0.92f), 0.42f, 0.9f);
-            _veilGlow = new MeshBatch("VeilGlow", transform, halo, Pool, _veilGlowMat);
+            _veilGlow = new MeshBatch("VeilGlow", transform, halo, VeilPool, _veilGlowMat);
 
             // the cloud skirt where each column leaves the sea
             var skirt = new MeshBuilder();
@@ -606,8 +619,9 @@ namespace Bonanza
             for (int i = 0; i < Pool; i++)
             {
                 _cols.Matrix[i] = hide; _caps.Matrix[i] = hide; _glyphs.Matrix[i] = hide; _glyphs.Tint[i] = Color.black;
-                _rays.Matrix[i] = hide; _rays.Tint[i] = Color.black; _skirts.Matrix[i] = hide; _veilGlow.Matrix[i] = hide;
+                _rays.Matrix[i] = hide; _rays.Tint[i] = Color.black; _skirts.Matrix[i] = hide;
             }
+            for (int i = 0; i < _veilGlow.Matrix.Length; i++) _veilGlow.Matrix[i] = hide;
             for (int i = 0; i < _puffs.Matrix.Length; i++) _puffs.Matrix[i] = hide;
             _cols.Flush(); _caps.Flush(); _glyphs.Flush(); _puffs.Flush(); _rays.Flush(); _skirts.Flush(); _veilGlow.Flush();
         }
@@ -633,10 +647,10 @@ namespace Bonanza
             var b = new MeshBuilder();
             int s0 = b.Count;
             // a cloud: one round body with three bumps on top, the face on its front
-            b.Sphere(1.1f, 12, 8, Matrix4x4.Translate(new Vector3(0, 1.0f, 0)), Color.white, new Vector3(1.3f, 0.85f, 0.9f));
-            b.Sphere(0.55f, 9, 6, Matrix4x4.Translate(new Vector3(-0.62f, 1.62f, 0.1f)), Color.white, Vector3.one);
-            b.Sphere(0.68f, 9, 6, Matrix4x4.Translate(new Vector3(0.08f, 1.82f, 0.12f)), Color.white, Vector3.one);
-            b.Sphere(0.5f, 9, 6, Matrix4x4.Translate(new Vector3(0.7f, 1.55f, 0.1f)), Color.white, Vector3.one);
+            b.Sphere(1.1f, 18, 12, Matrix4x4.Translate(new Vector3(0, 1.0f, 0)), Color.white, new Vector3(1.3f, 0.85f, 0.9f));
+            b.Sphere(0.55f, 12, 8, Matrix4x4.Translate(new Vector3(-0.62f, 1.62f, 0.1f)), Color.white, Vector3.one);
+            b.Sphere(0.68f, 14, 9, Matrix4x4.Translate(new Vector3(0.08f, 1.82f, 0.12f)), Color.white, Vector3.one);
+            b.Sphere(0.5f, 12, 8, Matrix4x4.Translate(new Vector3(0.7f, 1.55f, 0.1f)), Color.white, Vector3.one);
             b.Sphere(0.55f, 8, 5, Matrix4x4.Translate(new Vector3(-1.15f, 0.55f, 0.1f)), Color.white, Vector3.one);
             b.Sphere(0.5f, 8, 5, Matrix4x4.Translate(new Vector3(1.18f, 0.5f, 0.1f)), Color.white, Vector3.one);
             Shade(b, s0, 1, 0.5f);
@@ -660,7 +674,7 @@ namespace Bonanza
                 b.Box(Matrix4x4.TRS(new Vector3(sx * 0.24f, 0.2f, -1.12f), q, new Vector3(0.5f, 0.05f, 0.06f)), gilt);
             }
             // each singer rides its own little cloud (the choir drifts along with the view)
-            Puff(b, Matrix4x4.TRS(new Vector3(0, 0.32f, 0.1f), Quaternion.identity, new Vector3(1, 0.7f, 1)), 2.3f, 10, 6, 77, 0.95f, 4);
+            Puff(b, Matrix4x4.TRS(new Vector3(0, 0.32f, 0.1f), Quaternion.identity, new Vector3(1, 0.7f, 1)), 2.3f, 13, 8, 77, 0.95f, 4);
             _choir = new MeshBatch("Choir", transform, b, ChoirN, _choirMat);
             _choir.Renderer.receiveShadows = false;
             var m = new MeshBuilder();
@@ -807,7 +821,7 @@ namespace Bonanza
             _hopAt = 0;
             for (int k = 0; k < Banks && k < slots.Count; k++) Assign(k);
             Frame(true);
-            _trail = Look.Fx.Trail(new Color(1f, 0.92f, 0.7f), 0.16f);
+            // no hop trail: at the apex it read as a smear
             int tris = 0, draws = 0;
             foreach (var f in GetComponentsInChildren<MeshFilter>(true))
             {
@@ -1085,7 +1099,7 @@ namespace Bonanza
             {
                 var b = _banks[k];
                 int baseS = k * _cap, baseP = k * (_cap + Extra);
-                for (int j = 0; j < Extra; j++) _puffs.Matrix[Pool + k * Extra + j] = hide;
+                for (int j = 0; j < Extra; j++) _puffs.Matrix[VeilPool + k * Extra + j] = hide;
                 if (b.Slot < 0) continue;
                 var slot = _round.Slots[b.Slot];
                 for (int i = 0; i < b.N; i++)
@@ -1120,19 +1134,24 @@ namespace Bonanza
                     if (!near) continue;
 
                     // the veil: until its burst it sits on its column, glowing softly and bobbing with the beat
-                    if (l < 1 && nv < Pool)
+                    if (l < 1 && nv < VeilPool)
                     {
                         float sq = _puffSquash[pi];
                         float burst = calm ? (1 - l) : (1 + l * 0.45f) * (1 - l * l);   // swells, then is gone
-                        float wob = Mathf.Sin(_time * 1.3f + i * 1.7f) * 0.02f;
+                        // shapes vary (width, depth and turn from a hash of the step, never its height); the drift and the
+                        // breath on each beat are one and the same for every veil
+                        uint vh = (uint)((b.Slot * 131 + i) * 2654435761u);
+                        float vw = 0.96f + ((vh >> 8) & 255) / 255f * 0.2f, vd = 0.94f + ((vh >> 16) & 255) / 255f * 0.18f;
+                        float breath = Mathf.Sin(_time * 1.3f) * 0.02f;
                         var vp = new Vector3(x, PuffTop - sq * 0.08f + beatBob * 0.035f + l * 0.25f, 0);
-                        _puffs.Matrix[nv] = Matrix4x4.TRS(vp, Quaternion.Euler(0, i * 47, 0), new Vector3((1.06f + sq * 0.1f + wob) * burst, (1.0f - sq * 0.16f + beatBob * 0.05f) * burst, 1.06f * burst));
+                        _puffs.Matrix[nv] = Matrix4x4.TRS(vp, Quaternion.Euler(0, (vh & 255) * 1.41f, 0), new Vector3((1.06f * vw + sq * 0.1f + breath) * burst, (1.0f - sq * 0.16f + beatBob * 0.05f + breath * 0.5f) * burst, 1.06f * vd * burst));
                         _veilGlow.Matrix[nv] = Matrix4x4.TRS(new Vector3(x, PuffTop - 0.3f, 0.7f), Quaternion.identity, Vector3.one * 2.3f * burst);
                         float gk = 0.75f + beatBob * 0.25f + l * 1.5f;
                         _veilGlow.Tint[nv] = new Color(gk, gk, gk, 1);
                         nv++;
                     }
-                    if (n >= Pool) continue;
+                    // before its reveal a step draws nothing but its veil: no plate, no column, no skirt (nothing to measure)
+                    if (r <= 0 || n >= Pool) continue;
                     int q = n++;
 
                     // the column: its top follows the plate (under the veil before the reveal)
@@ -1188,11 +1207,11 @@ namespace Bonanza
                     if (!on) continue;
                     float sq = _puffSquash[pi];
                     float w = j == 0 ? 1.45f : 1.15f;
-                    _puffs.Matrix[Pool + k * Extra + j] = Matrix4x4.TRS(new Vector3(b.X0 + p * Pitch, PuffTop - sq * 0.08f, 0), Quaternion.Euler(0, j * 71 + 20, 0), new Vector3(w * (1 + sq * 0.1f), 1.05f - sq * 0.16f, w));
+                    _puffs.Matrix[VeilPool + k * Extra + j] = Matrix4x4.TRS(new Vector3(b.X0 + p * Pitch, PuffTop - sq * 0.08f, 0), Quaternion.Euler(0, j * 71 + 20, 0), new Vector3(w * (1 + sq * 0.1f), 1.05f - sq * 0.16f, w));
                 }
             }
             for (int q = n; q < Pool; q++) { _cols.Matrix[q] = hide; _caps.Matrix[q] = hide; _glyphs.Matrix[q] = hide; _rays.Matrix[q] = hide; _skirts.Matrix[q] = hide; }
-            for (int q = nv; q < Pool; q++) { _puffs.Matrix[q] = hide; _veilGlow.Matrix[q] = hide; }
+            for (int q = nv; q < VeilPool; q++) { _puffs.Matrix[q] = hide; _veilGlow.Matrix[q] = hide; }
             _cols.Flush(); _caps.Flush(); _glyphs.Flush(); _puffs.Flush(); _rays.Flush(); _skirts.Flush(); _veilGlow.Flush();
         }
 
@@ -1224,9 +1243,10 @@ namespace Bonanza
                 float z = ChoirZ + (r2 - 0.5f) * 1.5f;
                 float bob = beat * 0.14f * reduce;
                 float hop = _choirHop * Mathf.Abs(Mathf.Sin(_time * 7f + r1 * 6)) * 0.6f * reduce;
-                float sway = Mathf.Sin(_time * 1.4f + r2 * 6) * 4f * reduce;
+                float sway = Mathf.Sin(_time * (1.1f + r3 * 0.6f) + r2 * 6) * 6f * reduce;   // each singer its own sway
+                float lean = Mathf.Sin(_time * (0.7f + r1 * 0.4f) + r3 * 5) * 7f * reduce;
                 var pos = new Vector3(x, ChoirY + bob + hop, z);
-                var rot = Quaternion.Euler(0, (r1 - 0.5f) * 24, sway);
+                var rot = Quaternion.Euler(0, (r1 - 0.5f) * 24 + lean, sway);
                 var m = Matrix4x4.TRS(pos, rot, new Vector3(s, s * (1 - beat * 0.04f * reduce), s));
                 _choir.Matrix[j] = m;
                 var tint = Color.Lerp(new Color(1, 1, 1), r3 > 0.5f ? new Color(1f, 0.92f, 0.84f) : new Color(0.88f, 0.9f, 1f), Mathf.Abs(r3 - 0.5f) * 2);

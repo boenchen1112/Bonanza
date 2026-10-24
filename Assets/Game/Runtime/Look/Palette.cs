@@ -185,10 +185,10 @@ namespace Bonanza.Look
             // tint), the far clouds (Band, BandAlt) and the fog sit a value step darker and more saturated, the fill from
             // below is a coloured shadow (lilac at dawn, blue by day, plum at vespers) so cloud undersides go dark.
             _all["bounce-brigade-easy"] = Make(_base, p => p   // golden morning: cream clouds, peach far banks, warm light
-                .Set(PC.SkyTop, 0x4a86e0).Set(PC.SkyMid, 0xffcf9c).Set(PC.SkyBot, 0xffb860)
+                .Set(PC.SkyTop, 0x3468cc).Set(PC.SkyMid, 0xb8c4e8).Set(PC.SkyBot, 0xffb45c)
                 .Set(PC.Sun, 0xffe2a0).Set(PD.SunDir, 0.34f, 0.08f, -1).Set(PF.SunStrength, 0.5f).Set(PF.SunSize, 0.16f)
                 .Set(PC.Ground, 0x7a5048).Set(PC.GroundAlt, 0xfff4e0).Set(PC.GroundRim, 0xffd27a)
-                .Set(PC.Band, 0xeeb28e).Set(PC.BandAlt, 0xdca486)
+                .Set(PC.Band, 0xe8ae96).Set(PC.BandAlt, 0xc4a2b4)
                 .Set(PC.Accent, 0xffc23d).Set(PC.Accent2, 0x2f9bff).Set(PC.Accent3, 0xff4f9a)
                 .SetCrowd(0xffffff, 0xfff1e0, 0xf0f0ff)
                 .Set(PC.Key, 0xffe4b4).Set(PD.KeyDir, -0.62f, 0.62f, 0.46f).Set(PF.KeyIntensity, 3.1f)
