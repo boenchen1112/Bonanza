@@ -157,6 +157,7 @@ namespace Bonanza
             BuildAnswer(root);
             BuildLegend(root);
             BuildChips(root);
+            BuildCallout(root);
         }
 
         static TextMeshProUGUI Label(Transform parent, string name, string text, float cap, Color c, TextAlignmentOptions align = TextAlignmentOptions.Center, float spacing = 8, TextStyle style = TextStyle.Label)
@@ -315,21 +316,22 @@ namespace Bonanza
         void BuildChips(RectTransform root)
         {
             _chipRow = UiKit.Rect("Rivals", root);
-            UiKit.Place(_chipRow, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -RefH * 0.375f), new Vector2(600, 30));
+            // the rivals' order stacks down the right edge under the accuracy readout, clear of the jumper and the stair
+            UiKit.Place(_chipRow, new Vector2(1, 1), new Vector2(1, 1), new Vector2(-14, -84), new Vector2(160, 4 * 34));
             _chipGroup = _chipRow.gameObject.AddComponent<CanvasGroup>();
             _chipGroup.alpha = 0;
             for (int i = 0; i < 4; i++)
             {
                 var rt = UiKit.Rect("Chip" + i, _chipRow);
-                Centre(rt, Vector2.zero, new Vector2(130, 28));
+                Centre(rt, Vector2.zero, new Vector2(156, 28));
                 _chipFill[i] = UiKit.Box(rt, "Fill", new Color(0.04f, 0.03f, 0.13f, UiKit.DarkAlpha(0.7f)), UiKit.Pill, true, 14);
                 UiKit.Stretch(_chipFill[i].rectTransform);
                 _chipDot[i] = UiKit.Box(rt, "Dot", Color.white, UiKit.Disc);
-                Centre(_chipDot[i].rectTransform, new Vector2(-50, 0), new Vector2(14, 14));
+                Centre(_chipDot[i].rectTransform, new Vector2(-62, 0), new Vector2(14, 14));
                 _chipText[i] = Label(rt, "Text", "", 9.5f, Color.white, TextAlignmentOptions.MidlineLeft, 8);
                 _chipText[i].rectTransform.anchorMin = _chipText[i].rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
                 _chipText[i].rectTransform.pivot = new Vector2(0, 0.5f);
-                _chipText[i].rectTransform.anchoredPosition = new Vector2(-38, 0); _chipText[i].rectTransform.sizeDelta = new Vector2(110, 18);
+                _chipText[i].rectTransform.anchoredPosition = new Vector2(-50, 0); _chipText[i].rectTransform.sizeDelta = new Vector2(130, 18);
                 _chips[i] = rt;
                 rt.gameObject.SetActive(false);
             }
@@ -370,11 +372,11 @@ namespace Bonanza
             if (me.Correct)
             {
                 string sub = me.PostReveal ? $"+{pts}  -  AFTER THE REVEAL: 1/4" : j.Winner == 0 ? $"+{pts}  -  FIRST!" : $"+{pts}";
-                Banner(me.PostReveal ? "RIGHT" : "RIGHT!", sub, me.PostReveal ? UiKit.Cream : Gold, 2.1f, plate: true);
+                Callout(me.PostReveal ? "RIGHT" : "RIGHT!", sub, me.PostReveal ? UiKit.Cream : Gold, 1.5f);
             }
             else
             {
-                Banner(me.Submitted ? "NOT QUITE" : "NO ANSWER", meter, me.Submitted ? Coral : UiKit.Dim, 2.1f, plate: true);
+                Callout(me.Submitted ? "NOT QUITE" : "NO ANSWER", meter, me.Submitted ? Coral : UiKit.Dim, 1.5f);
             }
             var t = _round.Totals();
             Ui.Score(Mathf.RoundToInt((float)t[0]));
@@ -399,7 +401,7 @@ namespace Bonanza
                     if (!on) continue;
                     int who = order[c];
                     var r = j.Results[who];
-                    _chips[c].anchoredPosition = new Vector2(x0 + c * (w + gap), 0);
+                    _chips[c].anchoredPosition = new Vector2(0, 51 - c * 34f);
                     string name = who == 0 ? "YOU" : CpuName(who);
                     string place = r.Correct ? (c == 0 ? "1ST" : c == 1 ? "2ND" : c == 2 ? "3RD" : "4TH") : r.Submitted ? "WRONG" : "-";
                     _chipText[c].text = $"{name}  {place}";
@@ -431,7 +433,7 @@ namespace Bonanza
             int right = 0, won = 0;
             foreach (var s in _round.Slots) { if (s.Judgement == null) continue; if (s.Judgement.Results[0].Correct) right++; if (s.Judgement.Winner == 0) won++; }
             string sub = _round.CpuCount > 0 ? $"FIRST ON {won} OF {HymnRound.ExcerptCount}" : right == HymnRound.ExcerptCount ? "EVERY BAR FOUND" : "";
-            Banner($"{right} / {HymnRound.ExcerptCount} RIGHT", sub, right >= 5 ? Gold : right >= 3 ? UiKit.Cream : Coral, 2.9f, plate: true);
+            Callout($"{right} / {HymnRound.ExcerptCount} RIGHT", sub, right >= 5 ? Gold : right >= 3 ? UiKit.Cream : Coral, 2.6f);
             _summary = 0.001f;
         }
 
@@ -443,6 +445,14 @@ namespace Bonanza
             if (action == InputMap.B && before > 0 && ans.Filled == 0) { _clearFlash = 1; _lastFilled = 0; return; }
             if (action == InputMap.A && ans.Locked && !wasLocked) { _lockFlash = 1; return; }
             if (ans.Filled > before && ans.Filled > 0) _boxes[ans.Filled - 1].Pop = 1;
+        }
+
+        static Color PipColor(HymnSlot s)
+        {
+            var j = s.Judgement;
+            if (j == null) return new Color(1, 1, 1, 0.12f);
+            var me = j.Results[0];
+            return me.Correct ? (j.Winner == 0 && !me.PostReveal ? Gold : Mint) : me.Submitted ? Coral : new Color(0.55f, 0.55f, 0.7f);
         }
 
         static Color LevelColor(HymnLevel l) => l == HymnLevel.Easy ? Mint : l == HymnLevel.Medium ? Gold : Coral;
@@ -611,12 +621,66 @@ namespace Bonanza
                 k.Rt.localScale = Vector3.one * (1 + (reduce ? 0 : k.Flash * 0.08f));
             }
 
+            UpdateCallout(real);
+
             // ---- rival chips
             _chipLife = Mathf.Max(0, _chipLife - real);
             _chipGroup.alpha = Damp(_chipGroup.alpha, _chipLife > 0 ? 1 : 0, 10, real);
         }
 
         int _stripShown = -1, _stateShown = -1;
+
+        // ------------------------------------------------------------ the verdict callout
+        // Its own slot just under the bonus gauge (the gauge stays visible): a compact dark pill with the verdict and
+        // its points, popping in with an overshoot, held, then snapping away (scale, never a fade over the scenery).
+        RectTransform _callRt;
+        Image _callFill, _callRim;
+        TextMeshProUGUI _callMain, _callSub;
+        float _callAge = -1, _callHold;
+        const float CallIn = 0.16f, CallOut = 0.14f;
+
+        void BuildCallout(RectTransform root)
+        {
+            _callRt = UiKit.Rect("Callout", root);
+            UiKit.Place(_callRt, new Vector2(0.5f, 1), new Vector2(0.5f, 0.5f), new Vector2(0, -156), new Vector2(360, 64));
+            _callFill = UiKit.Box(_callRt, "Fill", new Color(0.04f, 0.03f, 0.13f, UiKit.DarkAlpha(0.82f)), UiKit.Pill, true, 22);
+            UiKit.Stretch(_callFill.rectTransform);
+            _callRim = UiKit.Box(_callRt, "Rim", Gold, UiKit.PillRing(2.2f * 24f / 22f), true, 22);
+            UiKit.Stretch(_callRim.rectTransform);
+            _callMain = UiKit.Text(_callRt, "Main", TextStyle.Title, 24f, Gold, TextAlignmentOptions.Center);
+            UiKit.Place(_callMain.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 8), new Vector2(600, 40));
+            _callSub = Label(_callRt, "Sub", "", 9.5f, UiKit.Gold, TextAlignmentOptions.Center, 8);
+            UiKit.Place(_callSub.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -19), new Vector2(600, 18));
+            _callRt.gameObject.SetActive(false);
+        }
+
+        void Callout(string text, string sub, Color color, float hold)
+        {
+            UiKit.SetFill(_callMain, color);
+            _callMain.text = text;
+            _callSub.text = sub ?? "";
+            _callSub.color = Color.Lerp(color, Color.white, 0.35f);
+            _callRim.color = new Color(color.r, color.g, color.b, 0.9f);
+            _callMain.ForceMeshUpdate(); _callSub.ForceMeshUpdate();
+            float w = Mathf.Max(_callMain.preferredWidth, _callSub.preferredWidth) + 64;
+            _callRt.sizeDelta = new Vector2(Mathf.Max(220, w), string.IsNullOrEmpty(sub) ? 48 : 64);
+            _callAge = 0; _callHold = hold;
+            _callRt.gameObject.SetActive(true);
+        }
+
+        void UpdateCallout(float real)
+        {
+            if (_callAge < 0) return;
+            _callAge += real;
+            float end = CallIn + _callHold + CallOut;
+            if (_callAge >= end) { _callAge = -1; _callRt.gameObject.SetActive(false); return; }
+            bool calm = Settings.ReduceMotion;
+            float sc;
+            if (_callAge < CallIn) sc = calm ? 1 : UiKit.BackOut(_callAge / CallIn, 2.2f);
+            else if (_callAge > CallIn + _callHold) sc = calm ? 1 : 1 - UiKit.EaseOutCubic((_callAge - CallIn - _callHold) / CallOut);
+            else sc = 1;
+            _callRt.localScale = new Vector3(sc, sc, 1);
+        }
         float _stateW, _cloudLift;
 
         /// What the state line says, as a number, so the text is rebuilt only when it changes.

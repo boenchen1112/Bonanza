@@ -72,6 +72,8 @@ namespace Bonanza
         /// The results card's stat row for this game, label -> value (at most five cells), or null for the judge's
         /// PERFECT / GREAT / GOOD / MISS / COMBO row plus the outcome's extras (the default). The [RESULT] line is unchanged.
         public virtual List<KeyValuePair<string, string>> ResultsStats(Outcome o) => null;
+        /// Opt-in results card looks (ResultsData.Centered / RankFilled / BadgeOnRank / Pips); the default changes nothing.
+        public virtual void ResultsStyle(ResultsData d) { }
         public virtual void OnResume() { }
         /// The tempo the pause menu counts back in at.
         public virtual double SecondsPerBeat => 0.5;

@@ -21,6 +21,10 @@ namespace Bonanza.HudKit
         public List<KeyValuePair<string, string>> Extras = new List<KeyValuePair<string, string>>();
         /// A game's own stat row in place of the judge counts (Minigame.ResultsStats), null = the judge counts.
         public List<KeyValuePair<string, string>> Stats;
+        /// Opt-in looks (Minigame.ResultsStyle; all off by default): the card centred on screen, a filled rank stamp
+        /// with a glow, the sticker pinned to the stamp, and a row of result pips (one colour per round of the game).
+        public bool Centered, RankFilled, BadgeOnRank;
+        public List<Color> Pips;
         public List<PartyRow> Party;
         /// (key, label) chips for the continue prompt: ("SPACE", "play again"), ("ESC", "menu").
         public List<KeyValuePair<string, string>> Prompts = new List<KeyValuePair<string, string>>();
@@ -93,6 +97,8 @@ namespace Bonanza.HudKit
             float statsY = y; y += 24f + 3f + 11f + 4f;
             float extraY0 = y + 6f;
             if (extraRows > 0) y += 8f + extraRows * 44f;
+            float pipsY = y + 8f;
+            if (d.Pips != null && d.Pips.Count > 0) y += 34f;
             float partyY0 = y + 8f;
             if (hasParty) y += 8f + 11f + d.Party.Count * 28f;
             y += Pad - 4f;
@@ -100,7 +106,7 @@ namespace Bonanza.HudKit
 
             _card = UiKit.Rect("Card", _root);
             // left 57%, top 44% (web), centred on that point
-            UiKit.Place(_card, new Vector2(0.57f, 0.56f), new Vector2(0.5f, 0.5f), new Vector2(0, 0), new Vector2(CardW, h));
+            UiKit.Place(_card, d.Centered ? new Vector2(0.5f, 0.5f) : new Vector2(0.57f, 0.56f), new Vector2(0.5f, 0.5f), new Vector2(0, 0), new Vector2(CardW, h));
             var shadow = UiKit.Box(_card, "Shadow", new Color(0, 0, 0, 0.55f), UiKit.Pill, true, 18f);
             UiKit.Stretch(shadow.rectTransform); shadow.rectTransform.anchoredPosition = new Vector2(0, -7);
             var body = UiKit.Box(_card, "Body", Color.white, UiKit.Pill, true, 18f);
@@ -115,8 +121,15 @@ namespace Bonanza.HudKit
             // rank stamp: a bordered box, the letter in the rank's colour
             _rankBox = UiKit.Rect("Rank", _card);
             UiKit.Place(_rankBox, new Vector2(0.5f, 1), new Vector2(0.5f, 0.5f), new Vector2(0, -(rankY + 59.4f)), new Vector2(118.8f, 118.8f));
-            var rb = UiKit.Box(_rankBox, "Border", _rankColor, UiKit.PillRing(3f * 24f / 16f), true, 16f); UiKit.Stretch(rb.rectTransform);
-            _rankText = UiKit.Text(_rankBox, "Letter", TextStyle.Display, 54f * 0.7f, _rankColor, TextAlignmentOptions.Center);
+            if (d.RankFilled)
+            {
+                var glow = UiKit.Box(_rankBox, "Glow", new Color(_rankColor.r, _rankColor.g, _rankColor.b, 0.55f), UiKit.Soft);
+                UiKit.Place(glow.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(230, 230));
+                var fill = UiKit.Box(_rankBox, "Fill", Color.white, UiKit.Pill, true, 16f); UiKit.Stretch(fill.rectTransform);
+                fill.gameObject.AddComponent<UiGradient>().Set(Color.Lerp(_rankColor, Color.white, 0.35f), Color.Lerp(_rankColor, Color.black, 0.12f));
+            }
+            var rb = UiKit.Box(_rankBox, "Border", d.RankFilled ? Color.white : _rankColor, UiKit.PillRing(3f * 24f / 16f), true, 16f); UiKit.Stretch(rb.rectTransform);
+            _rankText = UiKit.Text(_rankBox, "Letter", TextStyle.Display, 54f * 0.7f, d.RankFilled ? UiKit.Ink : _rankColor, TextAlignmentOptions.Center);
             UiKit.Stretch(_rankText.rectTransform);
             _rankText.text = d.Rank ?? "-";
             _stampAt = StampAt;
@@ -161,6 +174,20 @@ namespace Bonanza.HudKit
                     StatRow(r, extraY0 + r * 44f + 8f, StatsAt + 0.5f + r * 0.1f, cells.ToArray(), 17f, cells.Count == 5 ? 5 : cells.Count);
                 }
             }
+            if (d.Pips != null && d.Pips.Count > 0)
+            {
+                var row = UiKit.Rect("Pips", _card);
+                Mid(row, 0, pipsY + 12f, d.Pips.Count * 34f, 26);
+                var g = row.gameObject.AddComponent<CanvasGroup>(); g.alpha = 0;
+                for (int i = 0; i < d.Pips.Count; i++)
+                {
+                    var rim = UiKit.Box(row, "PipRim", new Color(1, 1, 1, 0.85f), UiKit.Ring);
+                    UiKit.Place(rim.rectTransform, new Vector2(0, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(17 + i * 34f, 0), new Vector2(24, 24));
+                    var pip = UiKit.Box(rim.transform, "Pip", d.Pips[i], UiKit.Disc);
+                    UiKit.Place(pip.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(16, 16));
+                }
+                _items.Add(new Item { Rt = row, Group = g, At = StatsAt + 0.55f, Pos = row.anchoredPosition });
+            }
             if (hasParty)
             {
                 var pdiv = UiKit.Box(_card, "PDivider", new Color(1, 1, 1, 0.09f)); Mid(pdiv.rectTransform, 0, partyY0 - 4, CardW - 2 * 31, 1);
@@ -170,8 +197,9 @@ namespace Bonanza.HudKit
             // sticker
             if (!string.IsNullOrEmpty(d.Badge))
             {
-                _badge = UiKit.Rect("Badge", _card);
-                UiKit.Place(_badge, new Vector2(1, 1), new Vector2(0.5f, 0.5f), new Vector2(-CardW * 0.02f, CardW * 0.02f + 8), new Vector2(150, 34));
+                _badge = UiKit.Rect("Badge", d.BadgeOnRank ? _rankBox : _card);
+                if (d.BadgeOnRank) UiKit.Place(_badge, new Vector2(1, 1), new Vector2(0.5f, 0.5f), new Vector2(34, -4), new Vector2(150, 34));
+                else UiKit.Place(_badge, new Vector2(1, 1), new Vector2(0.5f, 0.5f), new Vector2(-CardW * 0.02f, CardW * 0.02f + 8), new Vector2(150, 34));
                 var bf = UiKit.Box(_badge, "Fill", UiKit.Coral, UiKit.Pill, true, 10f); UiKit.Stretch(bf.rectTransform);
                 var bb = UiKit.Box(_badge, "Border", Color.white, UiKit.PillRing(1.8f * 24f / 10f), true, 10f); UiKit.Stretch(bb.rectTransform);
                 var bt = UiKit.Text(_badge, "Text", TextStyle.Display, 20f * 0.7f, Color.white, TextAlignmentOptions.Center);

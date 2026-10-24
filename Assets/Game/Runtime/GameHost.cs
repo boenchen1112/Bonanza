@@ -648,6 +648,7 @@ namespace Bonanza
             };
             d.Stats = _game != null ? _game.ResultsStats(o) : null;
             if (d.Stats == null) foreach (var kv in o.Extras) d.Extras.Add(kv);
+            if (_game != null) _game.ResultsStyle(d);
             // One sticker, the rank first. A first-ever D is a record, not worth a sticker.
             if ((_newScore || _newRank) && o.Rank != "D" && o.Score > 0) d.Badge = _newRank ? "NEW RANK!" : "NEW BEST!";
             if (_party != null)
