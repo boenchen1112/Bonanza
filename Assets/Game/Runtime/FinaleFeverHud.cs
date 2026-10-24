@@ -196,7 +196,7 @@ namespace Bonanza
         RectTransform _bar, _youPlate, _earMark;
         Image _vignette, _earMarkImg, _bpmEar, _bandEar;
         TextMeshProUGUI _bandText;
-        static Sprite _earSprite, _vigSprite, _hatchSprite;
+        static Sprite _earSprite, _vigSprite;
 
         /// One bar across the top: the programme on the left, the tempo gauge on the right (one plate, 60 px).
         void BuildTopBar(RectTransform root)
@@ -248,24 +248,6 @@ namespace Bonanza
             return outer || lobe < 1 || inner;
         }, "ff-ear");
 
-        /// Diagonal hatching for the BY EAR band (tiles).
-        static Sprite HatchSprite()
-        {
-            if (_hatchSprite) return _hatchSprite;
-            const int n = 16;
-            var t = new Texture2D(n, n, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Repeat, filterMode = FilterMode.Bilinear, name = "ff-hatch" };
-            var px = new Color32[n * n];
-            for (int y = 0; y < n; y++)
-                for (int x = 0; x < n; x++)
-                {
-                    int d = (x + y) % 8;
-                    px[y * n + x] = new Color32(255, 255, 255, (byte)(d < 2 ? 200 : 0));
-                }
-            t.SetPixels32(px); t.Apply(false, true);
-            _hatchSprite = Sprite.Create(t, new Rect(0, 0, n, n), new Vector2(0.5f, 0.5f), 100);
-            return _hatchSprite;
-        }
-
         /// World-anchored marks: the YOU plate over the player's drummer, the ear over the maestro during a hush.
         void BuildMarkers(RectTransform root)
         {
@@ -276,7 +258,7 @@ namespace Bonanza
             var t = Label(_youPlate, "Text", "YOU", 11f, Ink, TextAlignmentOptions.Midline, 12);
             UiKit.Stretch(t.rectTransform);
             var tri = UiKit.Box(_youPlate, "Point", UiKit.Hex(0xffd93d), TriSprite());
-            UiKit.Place(tri.rectTransform, new Vector2(0.5f, 0), new Vector2(0.5f, 1), new Vector2(0, 1), new Vector2(16, 10));
+            UiKit.Place(tri.rectTransform, new Vector2(0.5f, 0), new Vector2(0.5f, 0.5f), new Vector2(0, -4), new Vector2(16, 10));   // hangs below the plate, never over the word
             tri.rectTransform.localRotation = Quaternion.Euler(0, 0, 180);
             _earMark = UiKit.Rect("EarMark", root);
             Centre(_earMark, Vector2.zero, new Vector2(64, 64));
@@ -471,10 +453,11 @@ namespace Bonanza
             _callRim = Rim(_callout, 24, Color.white);
             _callText = Label(_callout, "Word", "", 22f, Color.white, TextAlignmentOptions.Midline, 4, TextStyle.Display);
             Centre(_callText.rectTransform, new Vector2(0, 2), new Vector2(400, 44));
-            _callMs = Label(_callout, "Ms", "", 12f, UiKit.LabelInk, TextAlignmentOptions.Midline, 8, TextStyle.Display);
+            _callMs = Label(_callout, "Ms", "", 18f, UiKit.LabelInk, TextAlignmentOptions.Midline, 8, TextStyle.Display);
+            // the ms read-out lives INSIDE the plate, under the word (never on the YOU plate below it)
             _callMs.rectTransform.anchorMin = _callMs.rectTransform.anchorMax = new Vector2(0.5f, 0);
-            _callMs.rectTransform.pivot = new Vector2(0.5f, 1);
-            _callMs.rectTransform.anchoredPosition = new Vector2(0, -2); _callMs.rectTransform.sizeDelta = new Vector2(200, 22);
+            _callMs.rectTransform.pivot = new Vector2(0.5f, 0);
+            _callMs.rectTransform.anchoredPosition = new Vector2(0, 5); _callMs.rectTransform.sizeDelta = new Vector2(200, 26);
             _callout.gameObject.SetActive(false);
         }
 
@@ -573,10 +556,12 @@ namespace Bonanza
             UiKit.SetFill(_callText, c);
             _callText.text = word;
             _callMs.text = ms;
-            UiKit.SetFill(_callMs, Color.Lerp(c, Color.white, 0.2f));
+            UiKit.SetFill(_callMs, c);
             _callText.ForceMeshUpdate();
             float w = Mathf.Max(150, _callText.preferredWidth + 56);
-            _callout.sizeDelta = new Vector2(w, 58);
+            bool hasMs = !string.IsNullOrEmpty(ms);
+            _callout.sizeDelta = new Vector2(w, hasMs ? 84 : 58);
+            _callText.rectTransform.anchoredPosition = new Vector2(0, hasMs ? 15 : 2);
             _callRim.color = new Color(c.r, c.g, c.b, 0.85f);
             _callPlate.color = new Color(c.r * 0.16f, c.g * 0.16f, c.b * 0.16f, 0.9f);
             _callLife = 0.75f;
@@ -596,10 +581,10 @@ namespace Bonanza
         void HudLine(TempoLine line)
         {
             string what; Color c;
-            if (line.HeartDelta < 0) { what = $"LINE {line.Index + 1}: HEART LOST"; c = CallMiss; }
-            else if (line.Misses == 0 && line.Top == line.Count) { what = line.HeartDelta > 0 ? $"LINE {line.Index + 1}: HEART BACK" : $"LINE {line.Index + 1}: CLEAN"; c = Gold; }
-            else if (line.Misses == 0) { what = $"LINE {line.Index + 1}: KEPT"; c = Mint; }
-            else { what = $"LINE {line.Index + 1}: {line.Misses} MISSED"; c = Amber; }
+            if (line.HeartDelta < 0) { what = "HEART LOST"; c = CallMiss; }
+            else if (line.Misses == 0 && line.Top == line.Count) { what = line.HeartDelta > 0 ? "HEART BACK" : "LINE CLEAN"; c = Gold; }
+            else if (line.Misses == 0) { what = "LINE KEPT"; c = Mint; }
+            else { what = $"{line.Misses} MISSED"; c = Amber; }
             _toast = what; _toastColor = c; _toastLife = 1.9f;
             _stripTitle.text = what;
             UiKit.SetFill(_stripTitle, c, false);
@@ -609,8 +594,11 @@ namespace Bonanza
 
         int _stripTitleCode = -1;
 
+        float _pulseA; Color _pulseCol;
+
         void HudHeart(int delta, int left)
         {
+            _pulseA = 1; _pulseCol = delta < 0 ? new Color(0.9f, 0.05f, 0.08f) : new Color(1f, 0.8f, 0.3f);
             if (delta < 0)
             {
                 int i = Mathf.Clamp(left, 0, 2);   // the heart that broke
@@ -823,7 +811,10 @@ namespace Bonanza
                 h.Fill.enabled = h.Full || h.Break > 0.5f;
                 h.Fill.color = h.Break > 0 ? Color.Lerp(Color.white, new Color(1, 1, 1, 0.3f), 1 - h.Break) : Color.white;
                 h.Back.color = h.Full ? new Color(0.04f, 0.02f, 0.06f, 0.8f) : new Color(0.25f, 0.2f, 0.3f, 0.55f);
-                h.Glow.color = new Color(1f, 0.25f, 0.3f, last ? 0.35f + 0.25f * Mathf.Sin(_time * 3.6f) : h.Pop * 0.6f + h.Break * 0.5f);
+                h.Glow.color = h.Pop > 0 && h.Break <= 0
+                    ? new Color(1f, 0.85f, 0.45f, Mathf.Min(1, h.Pop * 1.2f))   // a heart won back: a gold burst
+                    : new Color(1f, 0.25f, 0.3f, last ? 0.35f + 0.25f * Mathf.Sin(_time * 3.6f) : h.Pop * 0.6f + h.Break * 0.9f);
+                h.Glow.rectTransform.localScale = Vector3.one * (1 + (reduce ? 0 : 1.6f * (h.Pop + h.Break)));
                 if (h.Shard01 > 0)
                 {
                     h.Shard01 += real * 1.6f;
@@ -885,10 +876,10 @@ namespace Bonanza
             }
 
             // ---- world marks: YOU over the player's drummer, the callout above it, the ear over the maestro in a hush
-            if (CanvasPoint(SeatAt[0] + new Vector3(0, 2.25f, 0), out var yp))
+            if (CanvasPoint(SeatAt[0] + new Vector3(0, 2.7f, 0), out var yp))
             {
                 _youPlate.anchoredPosition = yp + new Vector2(0, reduce ? 0 : Mathf.Sin(_time * 2f) * 2f);
-                _callout.anchoredPosition = yp + new Vector2(0, 80);
+                _callout.anchoredPosition = yp + new Vector2(0, 98);
             }
             _youPlate.gameObject.SetActive(!_resultOut && _finaleK <= 0);
             bool ear = hh > 0.05f;
@@ -904,8 +895,15 @@ namespace Bonanza
             bool red = _playing && !_round.Done && Hearts <= 1;
             float vgoal = !red ? 0 : (Hearts == 0 ? 0.55f : 0.4f) + (reduce ? 0 : 0.12f * Mathf.Sin(_time * 2.4f));
             _vigA = Damp(_vigA, vgoal, 3, real);
-            _vignette.enabled = _vigA > 0.01f;
-            if (_vignette.enabled) _vignette.color = new Color(0.85f, 0.04f, 0.08f, _vigA);
+            // heart moments: a quick frame pulse (red on a loss, gold on a gain), on top of the red room
+            _pulseA = Mathf.Max(0, _pulseA - real * (reduce ? 2.5f : 1.8f));
+            float pa = _pulseA * (reduce ? 0.5f : 0.8f);
+            _vignette.enabled = _vigA > 0.01f || pa > 0.01f;
+            if (_vignette.enabled)
+            {
+                var vc = new Color(0.85f, 0.04f, 0.08f, _vigA);
+                _vignette.color = pa > _vigA ? new Color(_pulseCol.r, _pulseCol.g, _pulseCol.b, pa) : vc;
+            }
 
             // ---- callout (one slot: a new tap replaces it)
             if (_callLife > 0)

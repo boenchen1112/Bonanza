@@ -54,7 +54,7 @@ namespace Bonanza
         readonly List<CountTick> _ticks = new List<CountTick>();
         bool _surviveShown;
 
-        struct CountTick { public double Time; public int Accent; public bool Say; public string Text; }
+        struct CountTick { public double Time; public int Accent; public bool Say; public string Text; public double Len; }
 
         // ------------------------------------------------------------ hooks
 
@@ -233,7 +233,17 @@ namespace Bonanza
         public override void ResultsStyle(Bonanza.HudKit.ResultsData d)
         {
             d.Centered = true; d.RankFilled = true; d.BadgeOnRank = true;
+            d.DimAlpha = 0.34f;   // the stalls stay readable behind the card
             if (_round == null) return;
+            // "vs the maestro": the maestro set every beat, so the comparison is beats set against beats followed (no invented scores)
+            int total = _round.On + _round.Early + _round.Late + _round.Miss;
+            if (total > 0)
+            {
+                d.Extras.Clear();
+                d.Extras.Add(new KeyValuePair<string, string>("MAESTRO SET", total.ToString()));
+                d.Extras.Add(new KeyValuePair<string, string>("YOU FOLLOWED", (total - _round.Miss).ToString()));
+                d.Extras.Add(new KeyValuePair<string, string>("IN STEP", Mathf.RoundToInt(100f * _round.On / total) + "%"));
+            }
             d.Pips = new List<Color>();
             foreach (var s in _round.Slots)
             {
@@ -249,17 +259,19 @@ namespace Bonanza
 
         public override IEnumerable<KeyValuePair<string, double>> TestChart()
         {
-            if (!ShotMode("ffmiss"))
+            bool die = ShotMode("ffdie");
+            if (!ShotMode("ffmiss") && !die)
             {
                 foreach (var p in _round.PerfectPresses()) yield return new KeyValuePair<string, double>(p.Action, p.Time);
                 yield break;
             }
-            // Capture only (?ffmiss in the URL, never in a gate): a sloppy bot that leans EARLY / LATE and drops whole
+            // Capture only (?ffmiss in the URL; ?ffdie drops all of the first excerpt so the hearts run out, never in a gate): a sloppy bot that leans EARLY / LATE and drops whole
             // lines, so the heart loss, the red room, SURVIVE and a heart won back can be photographed.
             foreach (var s in _round.Slots)
                 foreach (var b in s.Beats)
                 {
-                    bool drop = (s.Index == 0 && b.Line == 1) || (s.Index == 1 && (b.Line == 0 || b.Line == 2)) || (s.Index == 2 && b.Line == 1);
+                    bool drop = die ? (s.Index == 0 || (s.Index == 1 && b.Line == 0))
+                        : (s.Index == 0 && b.Line == 1) || (s.Index == 1 && (b.Line == 0 || b.Line == 2)) || (s.Index == 2 && b.Line == 1);
                     if (drop) continue;
                     double good = BeatWindow.GoodMs(b.Length) / 1000.0;
                     double off = b.Index % 3 == 1 ? -0.5 * good : b.Index % 3 == 2 ? 0.45 * good : 0;
@@ -287,7 +299,7 @@ namespace Bonanza
                 int n = s.Index == 0 ? LeadBeats : TempoRound.GapBeats;
                 double len = s.Curve.LengthOf(0);
                 for (int j = n; j >= 1; j--)
-                    _ticks.Add(new CountTick { Time = s.StartTime - j * len, Accent = n - j == 0 ? 0 : 1, Say = s.Index == 0, Text = s.Index == 0 ? j.ToString() : null });
+                    _ticks.Add(new CountTick { Time = s.StartTime - j * len, Accent = n - j == 0 ? 0 : 1, Say = s.Index == 0, Text = s.Index == 0 ? j.ToString() : null, Len = len });
             }
         }
 
@@ -297,7 +309,7 @@ namespace Bonanza
             {
                 var t = _ticks[_tickCursor++];
                 Host.CountTick(t.Time, t.Accent);
-                if (t.Say && t.Time > now - 0.2) Ui.Countdown(t.Text, 0.215f);
+                if (t.Say && t.Time > now - 0.2) Ui.Countdown(t.Text, 0.215f, 1.4f, (float)System.Math.Max(0.3, t.Len - 0.04));   // lasts until the next tick, so it never hides the tempo
             }
         }
 

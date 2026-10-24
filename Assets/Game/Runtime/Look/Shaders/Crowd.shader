@@ -8,7 +8,7 @@
 //   COLOR      rgb = this figure's tint x the baked eye darkness, a = row dim
 //   TEXCOORD0  xyz = root (object space), w = facing yaw (radians, Unity's Euler(0, yaw, 0))
 //   TEXCOORD1  x = beat phase offset, y = 0..1 along the arc (the wave), z = size, w = bounce amount
-//   TEXCOORD2  x = palette crowd slot (0..4), y = brightness, z = arm pose (0 low V, 1 arms up, 2 clap, 3 one fist pumping),
+//   TEXCOORD2  x = palette crowd slot (0..4), y = brightness, z = arm pose (0 low V, 1 arms up, 2 clap, 3 one fist pumping, 4 seated arms down, 5 half-raised wave),
 //              w = which arm this vertex belongs to (-1 left, +1 right, 0 body: never posed)
 // Colour = lerp(pastel, palette crowd slot, _PalMix) x brightness x shade (the eyes stay dark on every body).
 Shader "Bonanza/Crowd"
@@ -98,7 +98,10 @@ Shader "Bonanza/Crowd"
                     else if (pose < 1.5) ang = 1.7 * lerp(0.45, 1.0, e) + h1 * 0.28 * e;
                     else if (pose < 2.5) ang = lerp(1.2, 2.25 - 0.4 * h1, e);
                     // 3: one fist pumping high on the beat, the other arm swinging low (a figure that is not mirrored)
-                    else ang = sx > 0.0 ? lerp(1.5, 2.55 - 0.55 * h1, e) : sin(b * PI * 2.0 + 1.0) * 0.3 * e;
+                    else if (pose < 3.5) ang = sx > 0.0 ? lerp(1.5, 2.55 - 0.55 * h1, e) : sin(b * PI * 2.0 + 1.0) * 0.3 * e;
+                    // 4: seated, arms resting down; 5: a half-raised arm waving slowly
+                    else if (pose < 4.5) ang = 0.03;
+                    else ang = sx > 0.0 ? 0.95 + 0.22 * sin(b * PI * 2.0) * (0.4 + e) : 0.08;
                     ang = lerp(ang, 1.75, saturate(crest * 1.4));   // the wave throws every arm up as it passes
                     ang *= sx;
                     float2 piv = float2(sx * 0.078, 0.559);

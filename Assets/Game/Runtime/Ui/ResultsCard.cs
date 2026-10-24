@@ -29,6 +29,8 @@ namespace Bonanza.HudKit
         /// of the track's half width, `LeanLabel` the words under it. Null = no gauge (the default).
         public float? Lean;
         public string LeanLabel;
+        /// Opt-in: how dark the dim under the card is (default 0.68), so a game can keep its scene readable behind the card.
+        public float DimAlpha = 0.68f;
         public List<PartyRow> Party;
         /// (key, label) chips for the continue prompt: ("SPACE", "play again"), ("ESC", "menu").
         public List<KeyValuePair<string, string>> Prompts = new List<KeyValuePair<string, string>>();
@@ -85,7 +87,7 @@ namespace Bonanza.HudKit
             _rankColor = UiKit.RankColor(d.Rank);
 
             // the dim sits under the card: the scene behind stays, darker
-            _dim = UiKit.Box(_root, "Dim", new Color(8 / 255f, 7 / 255f, 20 / 255f, 0.68f));
+            _dim = UiKit.Box(_root, "Dim", new Color(8 / 255f, 7 / 255f, 20 / 255f, d.DimAlpha));
             UiKit.Stretch(_dim.rectTransform);
 
             bool hasExtras = d.Extras != null && d.Extras.Count > 0;

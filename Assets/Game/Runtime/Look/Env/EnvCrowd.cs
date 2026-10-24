@@ -56,6 +56,9 @@ namespace Bonanza.Look
             public float FrontRowScale = 1;
             /// Poses: how many arm poses to deal (3 = low V, arms up, clap; 4 adds a one-fist pump).
             public int PoseKinds = 3;
+            /// PoseKinds 6 adds two figures that never shout: 4 sits with its arms down (no hop), 5 waves a half-raised arm.
+            /// RowDim: how much darker each row further back is (1 - row * RowDim): the back rows fade toward silhouettes.
+            public float RowDim = 0.055f;
             /// Distance fog on the figures (1 = the palette's; less keeps a far crowd's colour).
             public float FogMul = 1;
             /// Risers: build each step to the height its row stands at (Center.y + r * RowRise), so the lit nosing runs
@@ -172,7 +175,7 @@ namespace Bonanza.Look
                     // Phase: mostly on the beat (a crowd claps together), a few stragglers, plus the optional sweep.
                     float ph = (rng.Next() - 0.5f) * 0.17f + (rng.Next() < 0.08f ? rng.Next() * 0.6f : 0) + u * o.Sweep + r * o.Sweep * 0.1f;
                     prm[k] = new Vector4(ph, u, (0.86f + rng.Next() * 0.34f) * o.Scale * (r == 0 ? o.FrontRowScale : 1), 0.7f + rng.Next() * 0.6f);
-                    float dim = 1 - r * 0.055f;
+                    float dim = 1 - r * o.RowDim;
                     float bright = Mathf.Lerp(o.BrightMin, o.BrightMax, rng.Next()) * dim;
                     // Pose: 0 low V (most), 1 arms up, 2 clapping overhead. Drawn after the colour so the rng stream
                     // (and so every figure's colour and place) is the same with poses on or off.
@@ -183,7 +186,12 @@ namespace Bonanza.Look
                     if (poses)
                     {
                         float pr = Hash01((uint)k * 2654435761u ^ o.Seed);
-                        slot[k].z = o.PoseKinds >= 4 ? (pr < 0.38f ? 0 : pr < 0.6f ? 1 : pr < 0.8f ? 2 : 3) : (pr < 0.55f ? 0 : pr < 0.8f ? 1 : 2);
+                        if (o.PoseKinds >= 6)
+                        {
+                            slot[k].z = pr < 0.2f ? 0 : pr < 0.38f ? 1 : pr < 0.52f ? 2 : pr < 0.62f ? 3 : pr < 0.88f ? 4 : 5;
+                            if (slot[k].z == 4) prm[k].w *= 0.12f;   // seated: it does not hop
+                        }
+                        else slot[k].z = o.PoseKinds >= 4 ? (pr < 0.38f ? 0 : pr < 0.6f ? 1 : pr < 0.8f ? 2 : 3) : (pr < 0.55f ? 0 : pr < 0.8f ? 1 : 2);
                     }
                 }
             }

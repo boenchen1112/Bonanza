@@ -284,17 +284,17 @@ namespace Bonanza.Look
                 .Set(PC.Fog, 0x04121a).Set(PF.FogNear, 11).Set(PF.FogFar, 36).Set(PF.FogHeight, 0.25f).Set(PF.FogHeightY, 5f)
                 .Set(PF.Bloom, 0.75f).Set(PF.BloomThreshold, 1.4f).Set(PF.Exposure, 1.05f).Set(PF.Saturation, 1.15f).Set(PF.Vignette, 0.58f));
             var ffHard = Make(_base, p => p
-                .Set(PC.SkyTop, 0x050001).Set(PC.SkyMid, 0x100204).Set(PC.SkyBot, 0x2a0408)
-                .Set(PC.Sun, 0xff6a3c).Set(PD.SunDir, 0, 0.3f, -1).Set(PF.SunStrength, 0f).Set(PF.SunSize, 0.2f)
-                .Set(PC.Ground, 0x1c0606).Set(PC.GroundAlt, 0x2c0a0a).Set(PC.GroundRim, 0xffb03a)
-                .Set(PC.Band, 0x48040e).Set(PC.BandAlt, 0x780a18)
-                .Set(PC.Accent, 0xffb03a).Set(PC.Accent2, 0xff3a2a).Set(PC.Accent3, 0xffe0a0)
-                .SetCrowd(0xff6a4a, 0xffb03a, 0xc02a3a, 0xffe0c0, 0x8a2030)
-                .Set(PC.Key, 0xffe6c8).Set(PD.KeyDir, -0.3f, 0.9f, 0.32f).Set(PF.KeyIntensity, 3.2f)
-                .Set(PC.FillSky, 0xff3a2a).Set(PC.FillGround, 0x0c0102).Set(PF.FillIntensity, 0.32f)
-                .Set(PC.Rim, 0xff8a3c).Set(PD.RimDir, 0.6f, 0.35f, -0.75f).Set(PF.RimStrength, 1.7f).Set(PF.RimPower, 2.0f)
-                .Set(PC.Fog, 0x080001).Set(PF.FogNear, 10).Set(PF.FogFar, 32).Set(PF.FogHeight, 0.35f).Set(PF.FogHeightY, 5f)
-                .Set(PF.Bloom, 0.9f).Set(PF.BloomThreshold, 1.3f).Set(PF.Exposure, 1.04f).Set(PF.Saturation, 1.2f).Set(PF.Vignette, 0.66f));
+                .Set(PC.SkyTop, 0x030001).Set(PC.SkyMid, 0x0c0105).Set(PC.SkyBot, 0x2a0210)
+                .Set(PC.Sun, 0xff2a3c).Set(PD.SunDir, 0, 0.3f, -1).Set(PF.SunStrength, 0f).Set(PF.SunSize, 0.2f)
+                .Set(PC.Ground, 0x0a0204).Set(PC.GroundAlt, 0x120306).Set(PC.GroundRim, 0xff1f3a)
+                .Set(PC.Band, 0x3a0210).Set(PC.BandAlt, 0x640818)
+                .Set(PC.Accent, 0xff2a42).Set(PC.Accent2, 0xc8102a).Set(PC.Accent3, 0xff9aa6)
+                .SetCrowd(0xd01c34, 0x8a1020, 0xff5a6a, 0x3a0a14, 0xa01830)
+                .Set(PC.Key, 0xffd0cc).Set(PD.KeyDir, -0.3f, 0.9f, 0.32f).Set(PF.KeyIntensity, 3.1f)
+                .Set(PC.FillSky, 0xa00c20).Set(PC.FillGround, 0x0a0102).Set(PF.FillIntensity, 0.26f)
+                .Set(PC.Rim, 0xff2a42).Set(PD.RimDir, 0.6f, 0.35f, -0.75f).Set(PF.RimStrength, 1.9f).Set(PF.RimPower, 2.0f)
+                .Set(PC.Fog, 0x070002).Set(PF.FogNear, 10).Set(PF.FogFar, 32).Set(PF.FogHeight, 0.35f).Set(PF.FogHeightY, 5f)
+                .Set(PF.Bloom, 0.9f).Set(PF.BloomThreshold, 1.3f).Set(PF.Exposure, 1.02f).Set(PF.Saturation, 1.15f).Set(PF.Vignette, 0.7f));
             foreach (var kv in new[] { ("easy", ffEasy), ("medium", ffMedium), ("hard", ffHard) })
             {
                 string n = "finale-fever-" + kv.Item1;

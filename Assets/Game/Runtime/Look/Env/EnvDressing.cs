@@ -161,6 +161,9 @@ namespace Bonanza.Look
         /// Retune the rig at runtime (a game's night switch): resting intensity and the beat flare.
         public void SetLevel(float baseIntensity, float flare) { O.Base = baseIntensity; O.Flare = flare; }
 
+        /// Recolour every cone at runtime (null = the palette accents again).
+        public void SetTint(Color? c) { O.Tint = c; }
+
         public override void Update(float dt, double beat, float time, Palette pal)
         {
             bool calm = Settings.ReduceMotion;
