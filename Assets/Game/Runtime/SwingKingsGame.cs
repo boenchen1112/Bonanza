@@ -105,9 +105,10 @@ namespace Bonanza
         readonly Dictionary<Pitch, Ball> _pitchBalls = new Dictionary<Pitch, Ball>();
         readonly List<HitBall> _hitBalls = new List<HitBall>();
         readonly Stack<GameObject> _ballPool = new Stack<GameObject>();
-        Material _ballMat, _ballOutlineMat;
+        Material _ballMat, _ballOutlineMat, _hitBallMat;
 
         bool _finishShown;
+        DownbeatPitch _lastBall;
 
         // HUD (canvas: Ui). Presentation only; it ages on real time.
         float _outsClear;               // seconds until the lamps reset after the side is retired
@@ -115,7 +116,7 @@ namespace Bonanza
         float _camPush, _camLift;
 
         sealed class Ball { public GameObject Go; public int PipCursor; public TrailHandle Trail; }
-        sealed class HitBall { public GameObject Go; public Vector3 P, V; public float T, Life, GravMul, Fade; public bool Bounce, Slam, Land; public TrailHandle Trail; public Color Color; }
+        sealed class HitBall { public GameObject Go; public Vector3 P, V; public float T, Life, GravMul, Fade, DimK; public bool Bounce, Slam, Land, Dim; public TrailHandle Trail; public Color Color; }
 
         // ------------------------------------------------------------ contract
 
@@ -139,6 +140,8 @@ namespace Bonanza
         public override void Load()
         {
             LoadHymns();   // first: a build without the private hymns fails here, before the stage is built
+            // Every beat pulses alike: the set must never count the bar for the player (the downbeat is for the ear).
+            Look.EvenBeats = true;
             BuildStage();
             var fx = Look.Fx;
             fx.SetGroundY(0);
@@ -200,6 +203,7 @@ namespace Bonanza
         public override void Begin(double now)
         {
             _round.Start(now + LeadIn);   // no count-in: the downbeat is for the ear to find
+            _lastBall = _round.ScoredBalls().LastOrDefault();
             _playing = true;
             _now = now;
             // The HUD (web ui.hud + swingKings/hud.js): score block, outs lamps, the one-line instruction, the title card.
@@ -367,7 +371,7 @@ namespace Bonanza
             UpdateCrowd(beat);
             UpdateArming(beat);
             // The last excerpt ends on a word (web: GAME! and the fanfare).
-            if (!_finishShown && _round.Over) { _finishShown = true; Host.PlaySfx("fanfare", now); _env?.Crowd?.Wave(1, 2); }
+            if (!_finishShown && _round.Over) Finish();
             UpdatePitchBalls(beat);
             UpdateCamera(beat, dt);
             UpdateHud(beat);
@@ -425,7 +429,11 @@ namespace Bonanza
             BuildMachine();
             BuildBatter();
             BuildPips();
+            BuildBombs();
             _ballMat = Mat(Hex(0xfffaf0), lift: 0.55f, rim: 1.2f, pulse: 0.3f);
+            // A struck ball turns hot gold at once: with a pitch leaving on every beat, the only WHITE ball in the air
+            // is the live pitch (the hit one is still climbing when the next is fired).
+            _hitBallMat = Mat(Hex(0xffc94a), lift: 0.9f, rim: 1.4f, pulse: 0.2f);
             _ballOutlineMat = EnvKit.Surface(_env, Hex(0x1a1238), null, null, rim: 0, pulse: 0, bands: 1);
             _ballOutlineMat.SetFloat("_Cull", (float)UnityEngine.Rendering.CullMode.Front);
             _ballOutlineMat.SetFloat("_ShadowRecv", 0);
@@ -462,7 +470,8 @@ namespace Bonanza
             });
             // Calmer blade noise and a touch of lift: the web's turf reads as bright, clean bands.
             var turf = _env.Ground?.Top ? _env.Ground.Top.sharedMaterial : null;
-            if (turf) { turf.SetFloat("_MapStrength", 0.72f); turf.SetFloat("_Lift", 0.05f); }   // the map carries the turf's clumps, cross-mow and breakup patches
+            if (turf) { turf.SetFloat("_MapStrength", 0.72f); turf.SetFloat("_Lift", 0.05f); }
+            _turfMat = turf;   // the map carries the turf's clumps, cross-mow and breakup patches
             _env.AddBanners(new EnvBanners.Options { Count = 20, Radius = 13.5f, Y = 6.7f, Sag = 1.2f, Z = 3, Glow = 2.2f, Whiten = 0.12f, LineRadius = 0.018f, SizeJitter = 0.2f, Span = Mathf.PI * 0.66f });   // ends kept out of the top 130 px HUD corners
             _env.AddCrowd(new EnvCrowd.Options
             {
@@ -521,6 +530,7 @@ namespace Bonanza
             float dt = LookRig.VisualDt(Time.deltaTime);
             if (!_playing) Look.BeatPulse = 0;
             UpdateHitBalls(dt);
+            UpdateBombs(dt);
             UpdateFinaleShow(dt);
             UpdateBat(dt);
             UpdateSet(dt, _round != null ? _round.BeatAt(_now) : 0);
@@ -572,9 +582,55 @@ namespace Bonanza
             }
         }
 
+        /// A new hymn: the free bars start now (no count-in). The banner says so and fades on its own clock, a little
+        /// before the scored bars begin and never on a bar line: its exit must not show where the downbeat is.
         void OnExcerptStarted(DownbeatSlot slot)
         {
-            Ui.Banner($"{slot.Index + 1} / {DownbeatRound.ExcerptCount}", life: 1.3f, sub: slot.Level.ToString().ToUpperInvariant());
+            double firstScored = slot.EndTime;
+            foreach (var q in slot.Pitches) if (!q.IsFree) { firstScored = q.Time; break; }
+            float free = (float)(firstScored - _now);
+            float life = Mathf.Max(2.2f, free * 0.72f + 0.13f);
+            string level = slot.Level.ToString().ToUpperInvariant();
+            Ui.Banner("FREE BARS", $"HYMN {slot.Index + 1}/{DownbeatRound.ExcerptCount} · {level} · LISTEN FOR THE DOWNBEAT",
+                new Color(0.62f, 0.9f, 1f), life, plate: true, y: 0.2f, scale: 0.62f);
+            SkvLog($"ev=excerpt k={slot.Index} free={free:F2}");
+        }
+
+        /// The round is over: the last hymn ends on a word (web: GAME! and the fanfare), the crowd rises and the sky
+        /// over the stands fills with fireworks through the hold before the results card.
+        void Finish()
+        {
+            _finishShown = true;
+            SkvLog("ev=over");
+            Host.PlaySfx("fanfare", _now);
+            _env?.Crowd?.Wave(1, 2);
+            _env?.Crowd?.Hype(1);
+            Look.Fx.ClearBadges();
+            Ui.Banner("GAME!", null, Bonanza.HudKit.UiKit.Gold, 1.7f, scale: 1.1f, y: 0.36f);
+            if (_finaleShow < 0) _finaleShow = 0;
+            Look.Fx.Confetti(new Vector3(-1, 8.5f, 12), 90, null, 4, 0.4f, 0.11f, 3.6f);
+        }
+
+        /// The results card's stat row: what this game is about (finding downbeats, dodging bombs), not the judge counts.
+        public override List<KeyValuePair<string, string>> ResultsStats(Outcome o)
+        {
+            if (_round == null || !_round.Over) return null;
+            int balls = 0, hit = 0, bombs = 0;
+            foreach (var p in _round.Pitches)
+            {
+                if (p.IsFree) continue;
+                if (p.IsBall) { balls++; if (p.Swung) hit++; }
+                else bombs++;
+            }
+            var inv = System.Globalization.CultureInfo.InvariantCulture;
+            return new List<KeyValuePair<string, string>>
+            {
+                new KeyValuePair<string, string>("DOWNBEATS", $"{hit}/{balls}"),
+                new KeyValuePair<string, string>("HOME RUNS", _round.Homers.ToString(inv)),
+                new KeyValuePair<string, string>("BOMBS DODGED", $"{bombs - _round.Bombs}/{bombs}"),
+                new KeyValuePair<string, string>("BOMBS HIT", _round.Bombs.ToString(inv)),
+                new KeyValuePair<string, string>("BEST STREAK", _round.Stats.MaxCombo.ToString(inv)),
+            };
         }
 
         // ------------------------------------------------------------ pitches
@@ -608,28 +664,42 @@ namespace Bonanza
             return go;
         }
 
-        void FreeBall(GameObject go) { go.SetActive(false); go.transform.localScale = Vector3.one * 0.34f; _ballPool.Push(go); }
+        void FreeBall(GameObject go)
+        {
+            go.SetActive(false);
+            go.transform.localScale = Vector3.one * 0.34f;
+            var r = go.GetComponent<MeshRenderer>();
+            if (r.sharedMaterial != _ballMat) r.sharedMaterial = _ballMat;
+            _ballPool.Push(go);
+        }
 
         void OnLaunched(Pitch p)
         {
             // The check harnesses conduct on these: the scored downbeat balls only, numbered from 1 (a bomb never logs).
             var dp = (DownbeatPitch)p;
             if (_mouse && dp.Ordinal > 0) Debug.Log($"[LAUNCH] id={dp.Ordinal} eta={dp.Time - _now:F4}");
+            // (capture harness only, ?inputlog: the kind is in the console, never on screen)
+            SkvLog($"ev=launch ball={(dp.IsBall ? 1 : 0)} free={(dp.IsFree ? 1 : 0)} eta={dp.Time - _now:F4}");
             var b = new Ball { Go = AcquireBall() };
             b.Go.transform.position = Muzzle;
             b.Go.transform.localScale = Vector3.one * 0.34f;
-            b.Trail = Look.Fx.Trail(Hex(0xffe9b0) * 1.15f, 0.14f);   // the hit ball's warm comet tail from release (it takes the tier colour on contact)
-            // A pitch leaves on every beat: only a hit ball that has flown for a while shrinks away now (a home run
-            // keeps its flight into the stands), so the hit never hides the next ball.
-            foreach (var h in _hitBalls) if (h.Fade <= 0 && h.T > 1.1f) h.Fade = 0.0001f;
+            b.Trail = Look.Fx.Trail(PitchTrail, 0.14f);   // every pitch's warm comet tail from release (a hit ball's takes the tier colour)
+            // A pitch leaves on every beat: the hit ball before it gets out of the way now, so only the live pitch reads
+            // as a white ball. A grounder or a liner shrinks away at once; a home run flies on into the stands as a
+            // small gold comet (its trail carries it), never a second white ball.
+            foreach (var h in _hitBalls) if (h.Fade <= 0 && h.T > 0.08f) { if (h.Land) h.Dim = true; else h.Fade = 0.0001f; }
             // Half-beat markers along the flight path: the ball is the metronome.
             SetPips(p);
             _pitchBalls[p] = b;
             FireMachine();
-            // The machine's launch tick, and the demo swing's windup tick with it (web update(): tick 0.16, beginWindup 0.05).
-            Host.PlaySfx("tick", _now, gain: 0.16f);
-            if (p.Kind == PitchKind.Demo) Host.PlaySfx("tick", _now, gain: 0.05f);
+            // The machine's launch tick: on every beat alike, so it is a soft thump under the hymn, not a metronome over it.
+            Host.PlaySfx("tick", _now, gain: LaunchTickGain);
         }
+
+        /// The launch tick's gain (web 0.16 with a pitch every other bar). A pitch now leaves on every beat of the hymn:
+        /// at 0.16 the tick peaked within ~2 dB of the organ's RMS and read as a click track; 0.065 sits ~8 dB under it.
+        const float LaunchTickGain = 0.065f;
+        static readonly Color PitchTrail = new Color(1f, 0.914f, 0.69f) * 1.15f;
 
 
         void OnPassed(Pitch p)
@@ -671,6 +741,9 @@ namespace Bonanza
         {
             StartSwing();
             var p = c.Pitch;
+            SkvLog($"ev=contact v={c.Verdict.ToString().ToLowerInvariant()} err={c.ErrMs:F1} tier={c.Tier.Id} foul={(c.Foul ? 1 : 0)}");
+            // The grand finish: the round's last scored downbeat hit for a home run gets the old grand slam's show.
+            bool fin = p == _lastBall && c.Tier.Id == TierId.Homer && !c.Foul;
             GameObject go; TrailHandle trail = null;
             if (_pitchBalls.TryGetValue(p, out var pb)) { go = pb.Go; trail = pb.Trail; _pitchBalls.Remove(p); }
             else go = AcquireBall();
@@ -685,8 +758,8 @@ namespace Bonanza
             float land = 0;
             if (t.Id == TierId.Homer && !c.Foul && !c.IsDemo)
             {
-                // A home run lands IN the stands, in frame.
-                const float T2 = 1.55f; float g2 = Grav * 0.6f;
+                // A home run lands IN the stands, in frame, within about two beats (a pitch follows on every beat).
+                float T2 = Mathf.Clamp((float)_round.Clock.SpbAt(_now) * 1.9f, 0.85f, 1.35f); float g2 = Grav * 0.6f;
                 float lx = 2.4f + (c.Combo % 5) * 0.6f, lz = -14.0f - (c.Combo % 3) * 0.8f;
                 float ly = 1.9f + Mathf.Max(0, Mathf.Sqrt(lx * lx + (lz + 3) * (lz + 3)) - 11.6f) * 0.53f;
                 var L = W(lx, ly, lz);
@@ -694,9 +767,10 @@ namespace Bonanza
                 land = T2;
             }
             bool big = t.Id == TierId.Homer || t.Id == TierId.Slam;
-            Cue(p.Finale ? BatterCue.Finale : big ? BatterCue.BigHit : BatterCue.Contact, t.Id);
+            Cue(fin ? BatterCue.Finale : big ? BatterCue.BigHit : BatterCue.Contact, t.Id);
             if (big) _flinch = 1;   // PITCH-O watches it go
             var tierColor = Hex(t.Color);
+            go.GetComponent<MeshRenderer>().sharedMaterial = _hitBallMat;
             if (trail == null) trail = Look.Fx.Trail(tierColor, big ? 0.15f : 0.09f);
             else { trail.SetColor(tierColor); trail.SetWidth(big ? 0.15f : 0.09f); }
             _hitBalls.Add(new HitBall
@@ -732,10 +806,13 @@ namespace Bonanza
                 // white) flare on the bat that stays under the bloom's blow-out, and short rays all round.
                 fx.Impact(Contact, dirV, Hex(0xffc24a), roomy ? 16 : 10, 26, 0.34f, 0.07f, scale);
                 fx.Impact(Contact, dirV, Hex(0xff7a1a), roomy ? 10 : 6, 15, 0.26f, 0.16f, scale);
-                fx.Flare(Contact, Hex(0xff9a3a) * 0.75f, 0.68f * scale, 0.16f, 0.4f, 1.9f);
-                fx.Impact(Contact, Vector3.up, Hex(0xffe0a0), roomy ? 14 : 8, 15, 0.18f, 1f, scale * 0.7f);
+                fx.Flare(Contact, Hex(0xff9a3a) * 0.8f, 0.85f * scale, 0.2f, 0.4f, 2.0f);
+                fx.Impact(Contact, Vector3.up, Hex(0xffe0a0), roomy ? 14 : 10, 15, 0.18f, 1f, scale * 0.7f);
+                // one quick gold shockwave off the bat (short-lived: the next pitch is already on its way)
+                fx.Ring(Contact, Hex(0xffc24a), 0.26f, 0.3f, 2.3f * scale, 0.2f, 0.03f, 0.01f, 0.8f, overlay: true);
+                fx.Burst(Contact + dirV * 0.2f, roomy ? 14 : 10, Hex(0xffd35a), 9f, 0.12f, 0.5f, -6f, dirV, 0.5f);
                 // The grand slam's shockwave and its echo reach well below the bat: overlay rings the field can't slice flat.
-                if (p.Finale)
+                if (fin)
                 {
                     fx.Ring(Contact, tierColor, 0.5f, 0.4f, 4.2f * scale, 0.2f, wobble: 0.004f, overlay: true);
                     fx.Ring(Contact, Hex(0xffd35a), 0.7f, 0.2f, 2.6f * scale, 0.14f, wobble: 0.004f, overlay: true);
@@ -750,16 +827,16 @@ namespace Bonanza
             Host.PlaySfx("impact", _now);
             if (!c.IsDemo) Host.PlaySfx(SfxTheory.VerdictSfx(c.Verdict), _now + 0.01);
             if (big) Host.PlaySfx("coin", _now + 0.06);
-            if (p.Finale) Host.PlaySfx("fanfare", _now + 0.1);
+            if (fin) Host.PlaySfx("fanfare", _now + 0.1);
 
             var f = Feel.ForCombo(c.Verdict, c.Combo);
             if (!c.IsDemo)
             {
-                float hs = Mathf.Min(Feel.HitstopMax * 1.6f, f.Hitstop * (big ? 1.9f : 1f) * (p.Finale ? 2.6f : 1f));
+                float hs = Mathf.Min(Feel.HitstopMax * 1.6f, f.Hitstop * (big ? 1.9f : 1f) * (fin ? 2.6f : 1f));
                 // The freeze ends well before the next unjudged note arrives, and is visual only.
                 var dpHit = p as DownbeatPitch;
                 Look.Hitstop(Mathf.Max(0, Mathf.Min(hs, dpHit != null ? (float)(_round.Clock.SpbAt(dpHit.Time) * 0.4) : hs)));   // ends well before the next pitch lands
-                rig.PunchZoom(1 + (big ? 0.14f : 0.035f) * (p.Finale ? 1.6f : 1f));   // a real camera punch on a home run
+                rig.PunchZoom(1 + (big ? 0.14f : 0.035f) * (fin ? 1.6f : 1f));   // a real camera punch on a home run
             }
             _camPush = big ? 1 : 0.45f;
 
@@ -768,13 +845,13 @@ namespace Bonanza
             string word = c.IsDemo ? "LIKE THIS!" : c.Foul ? "FOUL!" : t.Label;
             bool free = p is DownbeatPitch fp && fp.IsFree;   // in the free bars it counts for nothing
             string sub = c.IsDemo ? null : grade + (c.HomerFeet > 0 ? $" \u00B7 {c.HomerFeet} FT" : "") + (free ? " \u00B7 FREE" : "");
-            float life = p.Finale ? 2.4f : c.IsDemo ? 0.7f : Mathf.Min(big ? 1.25f : 0.95f, Mathf.Max(0.55f, gap * 0.8f));
+            float life = fin ? 2.4f : c.IsDemo ? 0.7f : Mathf.Min(big ? 1.25f : 0.95f, Mathf.Max(0.55f, gap * 0.8f));
             // Right of the batter, off the incoming pitch's arc (it comes down from the machine on the left).
             Look.Fx.ClearBadges();
             Look.Fx.Callout(word, sub, Contact + new Vector3(1.15f, 1.75f, 0), tierColor,
                 size: t.Id == TierId.Slam ? 1.75f : big ? 1.05f : 0.8f, life: life, rise: (big ? 1.5f : 0.9f) * (life / (big ? 1.25f : 0.95f)));
 
-            if (p.Finale)
+            if (fin)
             {
                 rig.DoFlash(Feel.FinaleFlash * 0.55f, Hex(0xffd9a0));   // a warm pulse, not a white-out over the batter
                 rig.Shake(Feel.FinaleShake, new Vector3(-1, 0.5f, 0));
@@ -783,10 +860,15 @@ namespace Bonanza
             }
         }
 
-        void OnWhiff(WhiffEvent w) => Strike(w.Pitch, w.Outs, w.SideRetired, w.Swung, w.Swung ? "WHIFF!" : "STRIKE!");
+        void OnWhiff(WhiffEvent w)
+        {
+            SkvLog($"ev={(w.SideRetired ? "retired" : "strike")} outs={w.Outs} swung={(w.Swung ? 1 : 0)}");
+            Strike(w.Pitch, w.Outs, w.SideRetired, w.Swung, w.Swung ? "WHIFF!" : "STRIKE!", w.Swung ? null : "LOOKING · " + w.Outs + (w.Outs == 1 ? " OUT" : " OUTS"));
+        }
 
-        /// A strike, whatever its cause: a ball let go or a bomb swung at. Batter, lamps, crowd, burst and callout.
-        void Strike(Pitch pitch, int outs, bool sideRetired, bool swung, string word)
+        /// A strike, whatever its cause: a ball let go or a bomb swung at. Batter, lamps, crowd, burst and callout
+        /// (one badge: a new one replaces whatever is up).
+        void Strike(Pitch pitch, int outs, bool sideRetired, bool swung, string word, string sub = null, bool bomb = false)
         {
             if (swung) StartSwing();
             Cue(sideRetired ? BatterCue.SideRetired : swung ? BatterCue.Whiff : BatterCue.Strike);
@@ -796,20 +878,24 @@ namespace Bonanza
             _env?.Crowd?.Deflate(sideRetired ? 1.4f : 0.9f);
             if (sideRetired) _env?.Crowd?.Wave(0.55f, 1.4f);
             var fx = Look.Fx;
-            var o = VerdictOpts.Default;
-            o.Combo = 0; o.GroundY = 0; o.Text = false; o.Stage = false;
-            fx.PlayVerdict(Verdict.Miss, Contact, o);
+            if (!bomb)
+            {
+                // (a bomb brings its own burst: the miss burst on top of the fireball read as two things at once)
+                var o = VerdictOpts.Default;
+                o.Combo = 0; o.GroundY = 0; o.Text = false; o.Stage = false;
+                fx.PlayVerdict(Verdict.Miss, Contact, o);
+            }
             float gap = GapAfter(pitch);
-            float life = Mathf.Min(0.9f, Mathf.Max(0.5f, gap * 0.7f));
+            float life = Mathf.Min(0.9f, Mathf.Max(0.55f, gap * 0.7f));
+            fx.ClearBadges();
             if (sideRetired)
             {
                 float retire = Mathf.Max(1.2f, Mathf.Min(1.8f, gap * 0.9f));
                 _outsClear = retire;
-                fx.ClearBadges();
-                fx.Callout("SIDE RETIRED!", "3 OUTS", Contact + new Vector3(1.1f, 1.6f, 0), Hex(0xff4d6a), 1.05f, retire, 0.3f);
+                fx.Callout("SIDE RETIRED!", bomb ? "BOMB · 3 OUTS" : "3 OUTS", Contact + new Vector3(1.1f, 1.6f, 0), Hex(0xff4d6a), 1.05f, retire, 0.3f);
                 Look.Rig.Shake(0.08f, new Vector3(0, -1, 0));
             }
-            else { fx.ClearBadges(); fx.Callout(word, null, Contact + new Vector3(1.0f, 1.3f, 0), swung ? Hex(0xff5d8a) : Hex(0xff8a3c), 0.8f, life, 0.4f); }
+            else fx.Callout(word, sub, Contact + new Vector3(1.0f, 1.3f, 0), bomb ? Hex(0xff6a3a) : swung ? Hex(0xff5d8a) : Hex(0xff8a3c), bomb ? 0.9f : 0.8f, life, 0.4f);
             _camPush = 0.25f;
         }
 
@@ -832,28 +918,36 @@ namespace Bonanza
         void OnExplode(ExplodeEvent e)
         {
             var at = TakeBall(e.Pitch);
-            var fx = Look.Fx;
-            fx.Burst(at, 30, Hex(0xff7a1a), 7, life: 0.55f);
-            fx.Impact(at, Vector3.up, Hex(0xffc24a), 14, 16, scale: 1.1f);
-            fx.Flare(at, Hex(0xff9a3a) * 0.75f, 0.9f, 0.16f, 0.4f, 1.9f);
-            Look.Rig.Shake(e.Free ? 0.05f : 0.1f, new Vector3(0, 0.5f, 0));
+            BombBlast(at, e.Free);
+            SkvLog($"ev=explode free={(e.Free ? 1 : 0)} outs={e.Outs} retired={(e.SideRetired ? 1 : 0)}");
             Host.PlaySfx("impact", _now);
+            Host.PlaySfx("impact", _now + 0.07, gain: 0.8f);   // the bang lands with the burst, after the crack of the bat
             if (e.Free)
             {
                 StartSwing();
-                fx.ClearBadges();
-                fx.Callout("BOMB!", "FREE", Contact + new Vector3(1.0f, 1.3f, 0), Hex(0xffb347), 0.8f, 0.8f, 0.4f);
+                Cue(BatterCue.Whiff);
+                _env?.Crowd?.Deflate(0.5f);
+                Look.Fx.ClearBadges();
+                Look.Fx.Callout("BOMB!", "FREE BAR · NO STRIKE", Contact + new Vector3(1.0f, 1.3f, 0), Hex(0xffb347), 0.8f, 0.85f, 0.4f);
                 return;
             }
-            Strike(e.Pitch, e.Outs, e.SideRetired, true, "BOMB!");
+            Strike(e.Pitch, e.Outs, e.SideRetired, true, "BOMB!", "STRIKE \u00B7 " + e.Outs + (e.Outs == 1 ? " OUT" : " OUTS"), bomb: true);
         }
 
-        /// A bomb let go: it shows itself and goes by, harmlessly (PitchPassed then clears its ball).
+        /// A bomb let go: it shows itself past the plate and drops away as a dud (its ball is gone from the flight now).
         void OnFizzle(DownbeatPitch p)
         {
+            SkvLog("ev=fizzle");
             if (!_pitchBalls.TryGetValue(p, out var b)) return;
-            Look.Fx.Burst(b.Go.transform.position, 6, Hex(0x8f93a3), 2, life: 0.35f);
+            BombFizzle(b.Go.transform.position);
+            b.Trail?.Release();
+            FreeBall(b.Go);
+            _pitchBalls.Remove(p);
+            ClearPips(p);
         }
+
+        /// The capture harness's event lines (only with ?inputlog): when a pitch leaves, what happened to it.
+        void SkvLog(string s) { if (Host.InputLogging) Debug.Log("[SKV] " + s); }
 
         void UpdateHitBalls(float dt)
         {
@@ -877,8 +971,15 @@ namespace Bonanza
                 if (h.Fade > 0)
                 {
                     h.Fade += dt;
-                    h.Go.transform.localScale = Vector3.one * (0.34f * Mathf.Max(0, 1 - h.Fade / 0.16f));
-                    if (h.Fade >= 0.16f) off = true;
+                    h.Go.transform.localScale = Vector3.one * (0.34f * 0.78f * Mathf.Max(0, 1 - h.Fade / 0.12f));
+                    if (h.Fade >= 0.12f) off = true;
+                }
+                else if (h.T < 0.3f && !h.Dim) h.Go.transform.localScale = Vector3.one * (0.34f * Mathf.Lerp(1, 0.78f, h.T / 0.3f));   // flying off: smaller at once
+                else if (h.Dim)
+                {
+                    // a home run under the next pitch: a small gold comet head on its trail, not a white ball
+                    h.DimK = Mathf.Min(1, h.DimK + dt / 0.12f);
+                    h.Go.transform.localScale = Vector3.one * (0.34f * Mathf.Lerp(0.78f, 0.4f, h.DimK));
                 }
                 if (off && h.T < h.Life)
                 {
@@ -1025,6 +1126,7 @@ namespace Bonanza
             foreach (var c in _clips) if (c != null) c.UnloadAudioData();
             Look.Fx?.ConfettiFadeOff();
             if (_traceMesh) Destroy(_traceMesh);
+            DestroyBombs();
             base.OnDestroy();
         }
 

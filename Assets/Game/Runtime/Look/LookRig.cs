@@ -86,6 +86,10 @@ namespace Bonanza.Look
 
         int _lastBeat = int.MinValue;
 
+        /// Opt-in: every beat pulses alike, with no downbeat accent (a game whose play is finding the downbeat by ear
+        /// must not have the set count the bar for the player). Off by default; the rig belongs to one game.
+        public bool EvenBeats;
+
         /// Call once a frame with the audio beat: the camera pushes in a few millimetres on every beat, and the
         /// environment (if any) pulses: downbeats harder than the beats between (web stage.js trackBeat).
         public void TickBeat(double beat)
@@ -94,7 +98,7 @@ namespace Bonanza.Look
             if (beat < 0) { _lastBeat = int.MinValue; return; }
             int whole = (int)System.Math.Floor(beat);
             if (whole == _lastBeat) return;
-            int index = ((whole % 4) + 4) % 4;
+            int index = EvenBeats ? 1 : ((whole % 4) + 4) % 4;
             if (_lastBeat != int.MinValue || whole >= 0) Rig?.Beat(index);
             _lastBeat = whole;
             Env?.Pulse(index == 0 ? 1.25f : 0.8f, index);

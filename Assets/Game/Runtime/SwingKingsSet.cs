@@ -82,7 +82,7 @@ namespace Bonanza
         // between the bowl and the city; their heads light at night like the near ones).
         static readonly Vector3[] TowerRight = { new Vector3(13.5f, 0, 17.5f), new Vector3(-7.6f, 0, 23.2f), new Vector3(5.2f, 0, 24.4f) };
         static readonly float[] TowerRightH = { BankYRight, 10.2f, 10.8f };
-        Material _hazeMat, _rowsMat, _roofMat;
+        Material _hazeMat, _rowsMat, _roofMat, _turfMat;
         Material[] _beamMats = new Material[0];
         Renderer[] _beamR = new Renderer[0];
         Material[] _flareMatsR;
@@ -347,8 +347,8 @@ namespace Bonanza
             var flat = Quaternion.Euler(90, 0, 0);
             _poolMats = new[]
             {
-                Glow("PoolPlate", transform, new Vector3(PlatePos.x - 0.3f, 0.06f, PlatePos.z), 7.6f, Hex(0xfff6e6), false, flat, 0.42f),
-                Glow("PoolMound", transform, new Vector3(MachinePos.x + 0.3f, 0.37f, MachinePos.z), 5.8f, Hex(0xfff6e6), false, flat, 0.42f),
+                Glow("PoolPlate", transform, new Vector3(PlatePos.x - 0.3f, 0.06f, PlatePos.z), 7.6f, Hex(0xffe2b8), false, flat, 0.3f),
+                Glow("PoolMound", transform, new Vector3(MachinePos.x + 0.3f, 0.37f, MachinePos.z), 5.8f, Hex(0xffe2b8), false, flat, 0.3f),
             };
             // The low sun behind the skyline (day): a wide soft glare the bloom carries into the arches.
             _glareMat = Glow("SunGlare", transform, new Vector3(30, 7, 92), 70, Hex(0xffc98a), true, null, 1.2f);
@@ -985,13 +985,34 @@ namespace Bonanza
 
         void ArmMachine(float strength) { _wheelSpinT = Mathf.Max(_wheelSpinT, 26 * strength); }
 
+        /// The shot. PITCH-O fires on every beat of the hymn now (60-160 bpm), so the shot is a pneumatic puff, not a
+        /// gun flash: a soft warm pop at the muzzle and a grey breath of air, scaled down at quick tempos (a big flash
+        /// three times a second strobed), and the same on every beat (the shot must not count the bar).
         void FireMachine()
         {
-            _muzzleFlash = 1; _recoil = 1;
+            float k = TempoK;
+            _muzzleFlash = 0.55f + 0.45f * k; _recoil = 0.6f + 0.4f * k;
             _wheelSpinT = Mathf.Max(_wheelSpinT, 46);
             var fx = Look.Fx;
-            fx.Flare(Muzzle, Hex(0xfff2c0), 0.55f, 0.14f);
-            fx.Burst(Muzzle + new Vector3(0.1f, 0.05f, 0), 6, Hex(0xfff6e0), 2.2f, 0.1f, 0.35f, -2, new Vector3(1, 0.3f, 0), 0.6f);
+            fx.Flare(Muzzle, Hex(0xffe2a8) * 0.6f, 0.3f + 0.1f * k, 0.1f);
+            fx.Burst(Muzzle + new Vector3(0.1f, 0.05f, 0), Settings.ReduceMotion ? 2 : 4, Hex(0xfff6e0), 2.0f, 0.08f, 0.3f, -2, new Vector3(1, 0.3f, 0), 0.6f);
+            if (_smoke != null)
+            {
+                var s = _smoke.Begin();
+                s.Pos(Muzzle + new Vector3(0.12f, 0.03f, 0)).Dir(new Vector3(1, 0.35f, 0)); s.Cone = 0.35f; s.Speed = 2.4f; s.Jitter = 0.04f;
+                s.Color(new Color(0.85f, 0.84f, 0.88f)); s.Alpha = 0.32f; s.Size = 0.26f; s.Life = 0.42f; s.S0 = 0.5f; s.S1 = 1.7f; s.Grav = 0.4f; s.Drag = 4f;
+                _smoke.Emit(2);
+            }
+        }
+
+        /// 1 at a relaxed beat (0.6 s or longer), down to 0 at 160 bpm: how big the per-beat machine motion may be.
+        float TempoK
+        {
+            get
+            {
+                double spb = _round != null && _round.Clock != null ? _round.Clock.SpbAt(_now) : 0.6;
+                return Mathf.Clamp01((float)(spb - 0.375) / (0.6f - 0.375f));
+            }
         }
 
         /// Arm the machine one beat before each launch (web updatePitches: armed at launchBeat - 1).
@@ -1072,30 +1093,35 @@ namespace Bonanza
             bool calm = Settings.ReduceMotion;
 
             // machine
+            // A shot on every beat keeps the wheels spun up: their speed is capped where the three spokes still read
+            // as turning forward at 30 fps (a faster wheel strobed and seemed to run backwards).
             _wheelSpinT = Damp(_wheelSpinT, 0, 1.6f, dt);
-            _wheelSpin += dt * (2 + _wheelSpinT);
+            _wheelSpin += dt * Mathf.Min(2 + _wheelSpinT, calm ? 5f : 11f);
             _mWheels[0].localRotation = Quaternion.Euler(0, 0, _wheelSpin * Mathf.Rad2Deg);
             _mWheels[1].localRotation = Quaternion.Euler(0, 0, -_wheelSpin * Mathf.Rad2Deg);
-            _muzzleFlash = Damp(_muzzleFlash, 0, 9, dt);
-            _recoil = Damp(_recoil, 0, 7, dt);
+            _muzzleFlash = Damp(_muzzleFlash, 0, 14, dt);
+            _recoil = Damp(_recoil, 0, 9, dt);
             _flinch = Damp(_flinch, 0, 4, dt);
-            // idle: a nod on the beat and a little hop off the downbeat (a toy that keeps time)
-            float bob = _playing && !calm ? Mathf.Sin((float)beat * Mathf.PI) * 0.05f : 0;
-            float hopY = _playing && !calm ? Mathf.Abs(Mathf.Sin((float)beat * Mathf.PI)) * 0.045f : 0;
-            float kick = _recoil * (calm ? 0.04f : 0.18f);
-            _mHead.localPosition = new Vector3(-kick, MachinePos.y - MachineRootY + _recoil * 0.03f + hopY, 0);
-            _mHead.localRotation = Quaternion.Euler(0, _flinch * 10, (bob + _recoil * 0.14f - _flinch * 0.1f) * Mathf.Rad2Deg);
-            // recoil squash: short and fat on the shot, then a stretch back (anticipation while armed: a slight crouch)
-            float arm = Mathf.Clamp01(_wheelSpinT / 26);
-            float sq = 1 - _recoil * 0.16f - arm * 0.04f + Look.BeatPulse * (calm ? 0 : 0.025f);
+            // idle: one nod per beat, every beat alike (a toy that keeps time, never the bar). f: 0 at the shot.
+            float f = (float)(beat - System.Math.Floor(beat));
+            float tk = TempoK;
+            float bob = _playing && !calm ? -Mathf.Sin(f * Mathf.PI * 2) * (0.02f + 0.02f * tk) : 0;
+            float hopY = _playing && !calm ? Mathf.Sin(f * Mathf.PI) * (0.015f + 0.025f * tk) : 0;
+            float kick = _recoil * (calm ? 0.03f : 0.08f + 0.07f * tk);
+            _mHead.localPosition = new Vector3(-kick, MachinePos.y - MachineRootY + _recoil * 0.025f + hopY, 0);
+            _mHead.localRotation = Quaternion.Euler(0, _flinch * 10, (bob + _recoil * 0.1f - _flinch * 0.1f) * Mathf.Rad2Deg);
+            // recoil squash on the shot, and the crouch of the next one building through the second half of the beat
+            float arm = _playing ? Mathf.SmoothStep(0, 1, Mathf.InverseLerp(0.45f, 1f, f)) : 0;
+            float sq = 1 - _recoil * (0.06f + 0.06f * tk) - arm * 0.035f;
             _mHead.localScale = new Vector3(1 / Mathf.Sqrt(sq), sq, 1 / Mathf.Sqrt(sq));
-            _muzzleMat.SetFloat(IdIntensity, _muzzleFlash * 1.6f);
-            _muzzleRingMat.SetColor("_BaseColor", MuzzleRingCol * (0.55f + arm * 0.9f + _muzzleFlash * 2.2f));
-            _muzzle.localScale = Vector3.one * 1.5f * (1 + _muzzleFlash * 0.8f);
+            _muzzleMat.SetFloat(IdIntensity, _muzzleFlash * 0.55f);
+            _muzzleRingMat.SetColor("_BaseColor", MuzzleRingCol * (0.6f + arm * 0.35f + _muzzleFlash * 1.1f));
+            _muzzle.localScale = Vector3.one * 0.95f * (1 + _muzzleFlash * 0.4f);
 
-            // face: squint while the wheels spin up, blink shut on the shot, eyes wide on a big hit; pupils on the ball
-            float focus = Mathf.Clamp01(_wheelSpinT / 26);
-            float open = (1 - focus * 0.5f) * (1 - _muzzleFlash * 0.9f) * (1 + _flinch * 0.25f);
+            // face: a light squint as each shot builds, eyes wide on a big hit; pupils on the live ball (no blink on
+            // every shot: at a beat a shot that was a twitch)
+            float focus = arm * 0.6f;
+            float open = (1 - focus * 0.5f) * (1 - _muzzleFlash * 0.2f) * (1 + _flinch * 0.25f);
             Vector3 look = Contact;
             foreach (var kv in _pitchBalls) { look = kv.Value.Go.transform.position; break; }
             if (_hitBalls.Count > 0) look = _hitBalls[_hitBalls.Count - 1].P;
@@ -1104,7 +1130,7 @@ namespace Bonanza
                 _mEyes[i].localScale = new Vector3(1, Mathf.Max(0.08f, open), 1);
                 var d = _mEyes[i].InverseTransformDirection(look - _mEyes[i].position).normalized;
                 var want = new Vector3(Mathf.Clamp(d.x, -1, 1) * 0.075f, Mathf.Clamp(d.y, -1, 1) * 0.06f, -0.075f);
-                _mPupils[i].localPosition = Damp(_mPupils[i].localPosition, want, 14, dt);
+                _mPupils[i].localPosition = Damp(_mPupils[i].localPosition, want, 9, dt);
             }
             _mBrow.localPosition = new Vector3(-0.16f, 0.34f - focus * 0.07f + _flinch * 0.05f, -0.47f);
             _mBrow.localRotation = Quaternion.Euler(0, 0, (-focus * 0.12f + _flinch * 0.1f) * Mathf.Rad2Deg);
@@ -1132,7 +1158,7 @@ namespace Bonanza
                 if (!_reticle.gameObject.activeSelf) _reticle.gameObject.SetActive(true);
                 float rs = (0.8f + _reticleOn * 0.2f) * (1 + _reticlePop * 0.35f) * (1 + Look.BeatPulse * 0.05f);
                 _reticle.localScale = new Vector3(rs, 1, rs);
-                _reticleMat.SetColor("_BaseColor", PipCol.linear * (_reticleOn * 0.75f + _reticlePop * 1.3f));
+                _reticleMat.SetColor("_BaseColor", PipCol.linear * (_reticleOn * 0.75f + _reticlePop * 1.3f) * (1 - 0.45f * _nightK));   // under the night pool it read as a white-hot spot
             }
 
             // backstop net: breeze + the bulge where a ball went in
@@ -1145,13 +1171,13 @@ namespace Bonanza
             _nightK = Damp(_nightK, _nightGoal, 1.4f, dt);
             float n = _nightK;
             float flicker = 1 + Mathf.Sin(Time.time * 23f) * 0.015f;
-            for (int i = 0; i < _flareMats.Length; i++) _flareMats[i].SetFloat(IdIntensity, (n * 2.0f * flicker + Look.BeatPulse * n * 0.4f) * (i == 0 ? 0.6f : 1));
+            for (int i = 0; i < _flareMats.Length; i++) _flareMats[i].SetFloat(IdIntensity, (n * 2.0f * flicker + Look.BeatPulse * n * 0.4f) * (i == 0 ? 0.22f : 1));   // the near head sits by the score: a lit lamp, not a flare
             for (int i = 0; i < _flareMatsR.Length; i++) _flareMatsR[i].SetFloat(IdIntensity, n * 2.2f * flicker + Look.BeatPulse * n * 0.3f);
             // the floods carry the night: warm pools on the plate and the mound
-            for (int i = 0; i < _poolMats.Length; i++) _poolMats[i].SetFloat(IdIntensity, n * 0.9f * (1 + Look.BeatPulse * 0.06f));
+            for (int i = 0; i < _poolMats.Length; i++) _poolMats[i].SetFloat(IdIntensity, n * 0.6f * (1 + Look.BeatPulse * 0.04f));   // warm, never a white hot spot on the plate
             for (int i = 0; i < _beamMats.Length; i++)
             {
-                _beamMats[i].SetFloat(IdIntensity, n * 0.36f * flicker);
+                _beamMats[i].SetFloat(IdIntensity, n * 0.26f * flicker);
                 bool on = n > 0.01f;   // no blended cone over the frame by day (the shader is linked by the near cones)
                 if (_beamR[i].enabled != on) _beamR[i].enabled = on;
             }
@@ -1170,8 +1196,10 @@ namespace Bonanza
             _winMats[2].SetFloat(IdIntensity, (1 - n) * 1.3f);
             _hazeMat.SetColor(IdColor, Color.Lerp(HazeDay, HazeNight, n));
             _hazeMat.SetFloat(IdIntensity, 1);
+            // the night turf keeps its clumps and mow texture under the floods (flat teal read as a painted floor)
+            if (_turfMat) _turfMat.SetFloat("_MapStrength", Mathf.Lerp(0.72f, 1.0f, n));
             if (_ledMat) _ledMat.SetColor("_BaseColor", Color.Lerp(LedDay, LedNight, n) * (1 + Look.BeatPulse * 0.25f));
-            _env?.Spotlights?.SetLevel(Mathf.Lerp(0.03f, 0.042f, n), Mathf.Lerp(0.04f, 0.07f, n));   // at night the cones read from the towers to the pools
+            _env?.Spotlights?.SetLevel(Mathf.Lerp(0.03f, 0.016f, n), Mathf.Lerp(0.04f, 0.028f, n));   // at night the cones read from the towers to the pools, without a milky veil over the crowd
             // the bowl falls dark toward the walls at night; the floods and the rim light carry the crowd
             if (_env?.Crowd != null) _env.Crowd.O.StandColor = Color.Lerp(StandDay, StandNight, n);
             if (_rowsMat) _rowsMat.SetColor("_BaseColor", Color.Lerp(StandDay, StandNight, n));

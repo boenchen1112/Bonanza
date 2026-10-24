@@ -138,7 +138,7 @@ namespace Bonanza.Look
             _all["swing-kings-night"] = Make(_base, p => p
                 .Set(PC.SkyTop, 0x030820).Set(PC.SkyMid, 0x0a1a48).Set(PC.SkyBot, 0x3a2a70)
                 .Set(PC.Sun, 0xb8d4ff).Set(PD.SunDir, 0.35f, -0.08f, -1).Set(PF.SunStrength, 0.14f).Set(PF.SunSize, 0.18f)
-                .Set(PC.Ground, 0x0b3d33).Set(PC.GroundAlt, 0x0f4a3d).Set(PC.GroundRim, 0xd8f0ff)   // dark blue-green turf: the floods' pools carry the light
+                .Set(PC.Ground, 0x10482a).Set(PC.GroundAlt, 0x15573a).Set(PC.GroundRim, 0xd8f0ff)   // deep night green with mow bands that still read: the floods' pools carry the light
                 .Set(PC.Band, 0x0e2458).Set(PC.BandAlt, 0x2346a0)
                 .Set(PC.Accent, 0xffe066).Set(PC.Accent2, 0x7fe7ff).Set(PC.Accent3, 0xff5d7a)
                 .SetCrowd(0xffe066, 0x7fe7ff, 0xff5d7a, 0xffffff, 0xb28cff)
