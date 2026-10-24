@@ -51,6 +51,53 @@ namespace Bonanza.Shell
             _graph.Evaluate(0);
         }
 
+        Transform _lArm, _lFore, _lHand, _rArm, _rFore, _rHand;
+        bool _bound;
+
+        void Bind()
+        {
+            if (_bound) return;
+            _bound = true;
+            foreach (var t in GetComponentsInChildren<Transform>(true))
+            {
+                switch (t.name)
+                {
+                    case "mixamorigLeftArm": _lArm = t; break;
+                    case "mixamorigLeftForeArm": _lFore = t; break;
+                    case "mixamorigLeftHand": _lHand = t; break;
+                    case "mixamorigRightArm": _rArm = t; break;
+                    case "mixamorigRightForeArm": _rFore = t; break;
+                    case "mixamorigRightHand": _rHand = t; break;
+                }
+            }
+        }
+
+        /// The hand a held prop belongs to (the right one), or null for a rig without arm bones.
+        public Transform HeldHand { get { Bind(); return _rHand; } }
+
+        /// A procedural arms-up cheer laid over the pose just evaluated: both arms swing toward up and a little out
+        /// (`amount` 0..1), pumping with `phase`. Call after Pose/Step, every frame it should show (the idle
+        /// re-evaluation resets the bones each time).
+        public void Cheer(float amount, float phase, float pump)
+        {
+            if (amount <= 0.001f) return;
+            Bind();
+            Reach(_lArm, _lFore, _lHand, amount, phase, pump);
+            Reach(_rArm, _rFore, _rHand, amount, phase + 1.7f, pump);
+        }
+
+        void Reach(Transform arm, Transform fore, Transform hand, float amount, float phase, float pump)
+        {
+            if (!arm || !fore || !hand) return;
+            float side = Mathf.Sign(transform.InverseTransformPoint(arm.position).x + 1e-4f);
+            var up = transform.up; var outv = transform.right * side;
+            float p = Mathf.Sin(phase) * pump;
+            var upper = (up * 0.8f + outv * (0.95f + 0.2f * p) - transform.forward * 0.05f).normalized;
+            arm.rotation = Quaternion.Slerp(Quaternion.identity, Quaternion.FromToRotation((fore.position - arm.position).normalized, upper), amount) * arm.rotation;
+            var lower = (up * 1f + outv * (0.4f - 0.3f * p)).normalized;
+            fore.rotation = Quaternion.Slerp(Quaternion.identity, Quaternion.FromToRotation((hand.position - fore.position).normalized, lower), amount) * fore.rotation;
+        }
+
         /// Advance the idle by dt.
         public void Step(float dt) => Pose(_t + dt);
 

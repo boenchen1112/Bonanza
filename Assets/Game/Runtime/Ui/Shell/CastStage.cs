@@ -82,18 +82,52 @@ namespace Bonanza.Shell
         /// its height in reference px. `dim`: the figure steps back (a stage with nothing to choose).
         public void Place(float refX, float feetFromTop, float heightPx, bool dim)
         {
-            _celebrate = false;
+            _celebrate = false; _lineN = 0; _spotOnly = false;
             _refX = refX; _feetY = feetFromTop; _height = heightPx; _dim = dim;
         }
 
+        /// Nobody stands here: just the lit floor and halo where the figure would be (an empty roster seat).
+        public void PlaceSpot(float refX, float feetFromTop, float heightPx)
+        {
+            Place(refX, feetFromTop, heightPx, false); _spotOnly = true;
+        }
+        bool _spotOnly;
+
         /// No figure on stage (the party's podium of medals): portraits keep baking, the glow set is off.
-        public void NoFigure() { _noFigure = true; }
+        public void NoFigure() { _noFigure = true; _lineN = 0; }
+
+        // a standing line-up (the hub's three leaders): each entry a cast index, x from the screen centre, feet and height
+        // in reference px; the lead one is lit and a little taller. Rendered live only while this is asked for.
+        const int MaxLine = 3;
+        readonly int[] _lineChar = new int[MaxLine];
+        readonly float[] _lineX = new float[MaxLine], _lineFeet = new float[MaxLine], _lineH = new float[MaxLine], _lineLit = new float[MaxLine];
+        int _lineN, _lineLead; bool _lineWas;
+        public void PlaceLineup(int count, int lead, int[] chars, float[] x, float[] feetFromTop, float[] heightPx)
+        {
+            _celebrate = false; _noFigure = false;
+            _lineN = Mathf.Clamp(count, 0, MaxLine); _lineLead = lead;
+            for (int i = 0; i < _lineN; i++) { _lineChar[i] = chars[i]; _lineX[i] = x[i]; _lineFeet[i] = feetFromTop[i]; _lineH[i] = heightPx[i]; }
+        }
 
         bool _celebrate;
         /// Winner mode: the figure hops to a beat and its glow is dimmed so the face reads. Place() clears it.
         public void Celebrate() { _celebrate = true; }
         /// How far the cheer hop lifts the head right now, in reference px.
         public float HopRef { get; private set; }
+        float _cheerAmt, _cheerPhase;
+        /// Where the cheering figure's raised right hand is, as a screen point in reference px (x from the screen centre,
+        /// y from the top), or false when no figure is cheering. A held prop sits here.
+        public bool TryHandRef(out Vector2 refPos)
+        {
+            refPos = default;
+            if (!_celebrate || _cheerAmt < 0.5f || _shown < 0 || !_main || _models[_shown] == null || !_bodies[_shown] || !_bodies[_shown].activeSelf) return false;
+            var h = _models[_shown].HeldHand;
+            if (!h) return false;
+            var v = _main.WorldToViewportPoint(h.position);
+            if (v.z <= 0) return false;
+            refPos = new Vector2((v.x - 0.5f) * RefH * Mathf.Max(0.5f, _main.aspect), (1f - v.y) * RefH);
+            return true;
+        }
         bool _noFigure;
         /// The standing figure's height as a fraction of the height asked for in Place (shorter characters read shorter).
         public float FigureRel { get; private set; } = 1;
@@ -143,6 +177,8 @@ namespace Bonanza.Shell
             }
             StepBake();
             if (!_main) _main = Camera.main;
+            if (_lineN > 0 && _main) { UpdateLineup(dt, red); return; }
+            if (_lineWas) { _lineWas = false; SetAllBodies(false); _leaving = -1; }
             if (!_main || _shown < 0 || _noFigure)
             {
                 SetGlow(false);
@@ -169,6 +205,20 @@ namespace Bonanza.Shell
 
             // face the camera, with a slow sway
             var toCam = _main.transform.position - _feet; toCam.y = 0;
+            if (_spotOnly)
+            {
+                SetAllBodies(false); _leaving = -1;
+                SetGlow(true);
+                _poolT.position = _feet + Vector3.up * 0.04f;
+                _poolT.localScale = new Vector3(worldH * 1.5f, worldH * 1.5f, 1);
+                _haloT.position = _feet + Vector3.up * worldH * 0.55f - toCam.normalized * 0.8f;
+                _haloT.localScale = new Vector3(worldH * 1.7f, worldH * 1.7f, 1);
+                _pool.SetColor("_Color", Color.white);
+                _pool.SetFloat("_Intensity", 0.7f * _showAmt);
+                _halo.SetColor("_Color", new Color(1f, 0.85f, 0.55f));
+                _halo.SetFloat("_Intensity", 0.22f * _showAmt);
+                return;
+            }
             float yaw = Mathf.Atan2(toCam.x, toCam.z) * Mathf.Rad2Deg;
             float sway = red ? 0 : Mathf.Sin(_clock * 0.7f) * 9f;
 
@@ -183,6 +233,8 @@ namespace Bonanza.Shell
             float twirl = red ? 0 : UiKit.EaseOutCubic(Mathf.Clamp01(pk * 1.25f)) * 360f * (_pop > 0 ? 1 : 0);
             if (_pop <= 0) twirl = 0;
             HopRef = 0;
+            _cheerAmt = Mathf.MoveTowards(_cheerAmt, _celebrate ? 1f : 0f, red ? 1f : dt / 0.35f);
+            _cheerPhase = _clock * 5.4f;
             float cheerYaw = 0, cheerSquash = 1;
             if (_celebrate && !red)
             {
@@ -215,6 +267,56 @@ namespace Bonanza.Shell
             _halo.SetFloat("_Intensity", (0.38f * a + _pop * 0.4f) * gs);
         }
 
+        void UpdateLineup(float dt, bool red)
+        {
+            _lineWas = true; _leaving = -1; _cheerAmt = 0;
+            _clock += red ? 0 : dt;
+            float aspect = Mathf.Max(0.5f, _main.aspect);
+            var used = new bool[8];
+            Vector3 leadFeet = Vector3.zero, leadToCam = Vector3.forward; float leadH = 0; Color leadCol = Color.white; bool haveLead = false;
+            for (int k = 0; k < _lineN; k++)
+            {
+                int ci = Mathf.Clamp(_lineChar[k], 0, 7);
+                Ensure(ci);
+                var body = _bodies[ci];
+                if (!body) continue;
+                used[ci] = true;
+                bool fresh = !body.activeSelf;
+                var ray = _main.ViewportPointToRay(new Vector3(0.5f + _lineX[k] / (RefH * aspect), 1f - _lineFeet[k] / RefH, 0));
+                if (Mathf.Abs(ray.direction.y) < 1e-3f) continue;
+                float t = -ray.origin.y / ray.direction.y;
+                if (t <= 0) continue;
+                var feet = ray.origin + ray.direction * t;
+                _feet = feet;
+                float depth = Vector3.Dot(feet - _main.transform.position, _main.transform.forward);
+                float worldH = _lineH[k] / RefH * 2f * depth * Mathf.Tan(_main.fieldOfView * 0.5f * Mathf.Deg2Rad);
+                var toCam = _main.transform.position - feet; toCam.y = 0;
+                float yaw = Mathf.Atan2(toCam.x, toCam.z) * Mathf.Rad2Deg + (k == _lineLead ? 0 : (_lineX[k] < 0 ? 14f : -14f));
+                _lineLit[k] = Mathf.MoveTowards(_lineLit[k], k == _lineLead ? 1 : 0, red ? 1 : dt / 0.3f);
+                if (fresh && _models[ci]) { Pose(ci, yaw, worldH, 1f, 1f, 0, false); _models[ci].Pose(red ? 1.2f : _clock + k * 0.37f); }
+                float grow = Mathf.Clamp01(_showAmt * 3f);
+                Pose(ci, yaw, worldH, Mathf.Lerp(0.55f, 1f, UiKit.BackOut(grow, 1.4f)) * Mathf.Lerp(0.93f, 1f, _lineLit[k]), 1f, 0, true);
+                if (k == _lineLead)
+                {
+                    haveLead = true; leadFeet = feet; leadToCam = toCam; leadH = worldH;
+                    var c = Cast.All[ci];
+                    leadCol = new Color(((c.Color >> 16) & 255) / 255f, ((c.Color >> 8) & 255) / 255f, (c.Color & 255) / 255f);
+                }
+            }
+            for (int i = 0; i < 8; i++) if (!used[i] && _bodies[i] && _bodies[i].activeSelf) _bodies[i].SetActive(false);
+            if (!haveLead) { SetGlow(false); return; }
+            SetGlow(true);
+            float a = _showAmt;
+            _poolT.position = leadFeet + Vector3.up * 0.04f;
+            _poolT.localScale = new Vector3(leadH * 1.7f, leadH * 1.7f, 1);
+            _haloT.position = leadFeet + Vector3.up * leadH * 0.55f - leadToCam.normalized * 0.8f;
+            _haloT.localScale = new Vector3(leadH * 1.9f, leadH * 1.9f, 1);
+            _pool.SetColor("_Color", Color.Lerp(leadCol, Color.white, 0.35f));
+            _pool.SetFloat("_Intensity", 0.8f * a);
+            _halo.SetColor("_Color", leadCol);
+            _halo.SetFloat("_Intensity", 0.34f * a);
+        }
+
         void SetGlow(bool on)
         {
             if (_poolT) _poolT.gameObject.SetActive(on);
@@ -238,7 +340,11 @@ namespace Bonanza.Shell
             go.transform.rotation = Quaternion.Euler(lean * 0.6f, yaw, lean);
             float s = k * scale * rel;
             go.transform.localScale = new Vector3(s / Mathf.Sqrt(squashY), s * squashY, s / Mathf.Sqrt(squashY));
-            if (animate && m != null) m.Step(Settings.ReduceMotion ? 0 : Time.unscaledDeltaTime);
+            if (animate && m != null)
+            {
+                m.Step(Settings.ReduceMotion ? 0 : Time.unscaledDeltaTime);
+                if (_cheerAmt > 0.001f) m.Cheer(_cheerAmt, _cheerPhase, Settings.ReduceMotion ? 0f : 1f);
+            }
         }
 
         void Ensure(int i)

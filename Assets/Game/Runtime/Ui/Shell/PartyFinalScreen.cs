@@ -26,7 +26,7 @@ namespace Bonanza.Shell
         public PartyFinalView View;
         public const int AgainBtn = 0, MenuBtn = 1;
         /// Where the stage figure stands (reference px), read by the host to place the cast.
-        public const float FigureFeet = 456f, FigureHeight = 262f, ColW = 190, ColStep = 204, BaseY = 548;
+        public const float FigureFeet = 458f, FigureHeight = 236f, ColW = 190, ColStep = 204, BaseY = 548;
         static readonly float[] BlockH = { 108, 80, 62, 48 };
         static readonly int[][] ColOf = { new[] { 0 }, new[] { 1, 0 }, new[] { 1, 0, 2 }, new[] { 1, 0, 2, 3 } };
 
@@ -245,8 +245,14 @@ namespace Bonanza.Shell
                 _crownB.anchoredPosition = new Vector2(ColCenter(order, 0, n), -(headY + 6 - (View.Cast != null ? View.Cast.HopRef : 0f)) + bob);
                 _crownB.localScale = Vector3.one * (1.0f * Mathf.Clamp01(pop));
                 _crownB.localRotation = Quaternion.Euler(0, 0, red ? 0 : Mathf.Sin(now * 1.3f) * 4f);
-                _trophy.anchoredPosition = new Vector2(ColCenter(order, 0, n) + 112, -(FigureFeet - 150) + (red ? 0 : Mathf.Sin(now * 2f) * 6f));
-                _trophy.localScale = Vector3.one * (0.8f * Mathf.Clamp01(pop));
+                // held up in the raised right hand when the cheer has the arms up, else beside the figure
+                Vector2 hand = default;
+                bool held = View.Cast != null && View.Cast.TryHandRef(out hand);
+                if (held)
+                    _trophy.anchoredPosition = new Vector2(hand.x - 18f, -(hand.y + 22f));
+                else
+                    _trophy.anchoredPosition = new Vector2(ColCenter(order, 0, n) + 112, -(FigureFeet - 150) + (red ? 0 : Mathf.Sin(now * 2f) * 6f));
+                _trophy.localScale = Vector3.one * ((held ? 0.58f : 0.8f) * Mathf.Clamp01(pop));
             }
             else
             {
@@ -292,8 +298,8 @@ namespace Bonanza.Shell
             _statRt.anchoredPosition = new Vector2(0, -BaseY - 8 + (1 - se) * -10);
 
             // ---- buttons
-            DriveButton(_again, input, AgainBtn, true, "PLAY AGAIN", "SPACE", dt, red, age - 1.1f, !small);
-            DriveButton(_menu, input, MenuBtn, false, "MENU", "ESC", dt, red, age - 1.25f, !small);
+            DriveButton(_again, input, AgainBtn, PressFocus != 1, "PLAY AGAIN", "SPACE", dt, red, age - 1.1f, !small);
+            DriveButton(_menu, input, MenuBtn, PressFocus == 1, "MENU", "ESC", dt, red, age - 1.25f, !small);
             _again.Label.rectTransform.anchoredPosition = new Vector2(small ? 0 : -42, 1);
             _menu.Label.rectTransform.anchoredPosition = new Vector2(small ? 0 : -30, 1);
             _menu.Inner.localScale *= Mathf.Lerp(1f, 1.1f, small ? 1 : 0);

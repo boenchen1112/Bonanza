@@ -30,6 +30,8 @@ namespace Bonanza.Shell
         /// The clickable buttons, in focus order. Rects are read each frame for the host's click targets.
         public readonly List<RectTransform> Buttons = new List<RectTransform>();
         int _pressButton = -1;
+        /// Which pill holds the gold focus after a press moved it (0 the main action, 1 the back pill), or -1 for the default.
+        public int PressFocus = -1;
         internal void NotePress(int i) { _pressButton = i; }
         /// The button the pointer went down on this frame (focus follows the press, the click then fires), or -1; read once.
         public int TakePressButton() { int c = _pressButton; _pressButton = -1; return c; }
