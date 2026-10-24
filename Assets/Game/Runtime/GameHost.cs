@@ -398,6 +398,7 @@ namespace Bonanza
                 else _hall.SetPose(PoseFor(_mode));
                 if (_mode == Mode.Title) { if (Shell.Current != Shell.Title) Shell.Show(Shell.Title, null); }
                 else if (_mode == Mode.Roster) { if (Shell.Current != Shell.Roster) Shell.Show(Shell.Roster, null); }
+                else if (_mode == Mode.Menu) { if (Shell.Current != Shell.FreePlay) Shell.Show(Shell.FreePlay, null); }
                 else if (_mode == Mode.PartyHub && _party != null)
                 {
                     var scr = _party.Done ? (ShellScreen)Shell.Final : Shell.Hub;
@@ -410,7 +411,7 @@ namespace Bonanza
             else if (!want)
             {
                 if (_hall != null && _hall.Live && !ShellMode(_mode) && !gate) HallSuspend();
-                if (Shell.Current != null && _mode != Mode.Title && _mode != Mode.Roster && _mode != Mode.PartyHub) Shell.Hide();
+                if (Shell.Current != null && _mode != Mode.Title && _mode != Mode.Roster && _mode != Mode.PartyHub && _mode != Mode.Menu) Shell.Hide();
             }
         }
 
@@ -582,6 +583,60 @@ namespace Bonanza
             Shell.Roster.View = new RosterView { R = _roster, Flash = _rosterFlash, ShakeT = _rosterShakeT, ShakeCard = _rosterShakeCard, Cast = cast };
             cast.Place(220f, 490f, 332f, _roster.Stage == RosterStage.Lineup);
             cast.Focus(Shell.Roster.FocusChar);
+        }
+
+        /// Push Free Play's cards (each game's record) and focus into the uGUI view.
+        FreePlayCard[] _menuCards; int _menuKey;
+        void FeedMenu()
+        {
+            int key = Games.Count;
+            foreach (var e in Games) { var r = Save.Get(e.Id); key = key * 31 + r.Plays * 7919 + r.Score; }
+            if (_menuCards == null || key != _menuKey)
+            {
+                _menuKey = key;
+                _menuCards = Games.Select(e =>
+                {
+                    var r = Save.Get(e.Id); var c = Records.Card(r);
+                    return new FreePlayCard { Id = e.Id, Title = e.Title, Blurb = e.Blurb, Played = r.Plays > 0, Rank = c.Rank, Best = c.Best, Plays = c.Plays };
+                }).ToArray();
+            }
+            var cards = _menuCards;
+            if (_debug)
+            {
+                // `?scene=freeplay&debug&menuDemo=<k>`: made-up records for the screenshots, nothing is saved.
+                var m = System.Text.RegularExpressions.Regex.Match(Application.absoluteURL ?? "", @"[?&]menuDemo=([a-z]+)");
+                if (m.Success)
+                {
+                    string[] ranks = { "S", "A", "B", "-", "S" }; int[] plays = { 12, 3, 1, 0, 40 }; int[] scores = { 482310, 91200, 4050, 0, 1203400 };
+                    cards = Games.Select((e, i) =>
+                    {
+                        bool pl = m.Groups[1].Value == "all" ? true : plays[i % 5] > 0;
+                        if (m.Groups[1].Value == "none") pl = false;
+                        var c = Records.Card(new GameRecord { Plays = plays[i % 5] == 0 ? 1 : plays[i % 5], Rank = ranks[i % 5], Score = scores[i % 5] == 0 ? 123 : scores[i % 5] });
+                        if (m.Groups[1].Value == "mix" && i >= 3) pl = false;
+                        return new FreePlayCard { Id = e.Id, Title = e.Title, Blurb = e.Blurb, Played = pl, Rank = c.Rank, Best = c.Best, Plays = c.Plays };
+                    }).ToArray();
+                }
+            }
+            Shell.FreePlay.View = new FreePlayView { Focus = _menuIndex, Cards = cards };
+        }
+
+        /// Invisible IMGUI click targets over Free Play's cards, PLAY and BACK.
+        void MenuTargets()
+        {
+            if (!Shell.Interactive || Shell.Current != Shell.FreePlay) return;
+            for (int i = 0; i < Shell.ButtonCount; i++)
+            {
+                var rect = Shell.ButtonScreen(i);
+                if (rect.width <= 0 || !GUI.Button(rect, GUIContent.none, GUIStyle.none)) continue;
+                if (i == FreePlayScreen.BackBtn) { ShellSfx("uiBack"); _mode = Mode.Title; }
+                else if (i < Games.Count || i == FreePlayScreen.PlayBtn)
+                {
+                    if (i < Games.Count) _menuIndex = i;
+                    _from = "freeplay"; ShellSfx("fanfare"); Open(Games[_menuIndex]);
+                }
+                break;
+            }
         }
 
         /// Invisible IMGUI click targets over the roster's uGUI buttons.
@@ -1163,6 +1218,7 @@ namespace Bonanza
                         else if (InputMap.IsBack(p.Action)) { ShellSfx("uiBack"); _mode = Mode.Title; break; }
                     }
                     _presses.Clear();
+                    if (_mode == Mode.Menu) FeedMenu();
                     break;
 
                 case Mode.Options:
@@ -1704,25 +1760,7 @@ namespace Bonanza
                         Hud.Center(0.68f, "INPUT OK - WAITING FOR THE AUDIO CLOCK (is sound output available?)", Hud.Mid, Hud.Gold);
                     break;
 
-                case Mode.Menu:
-                    Hud.Dim(ShellDim(0.85f));
-                    Hud.Center(0.08f, "FREE PLAY", Hud.Big, Hud.Gold, 100);
-                    for (int i = 0; i < Games.Count; i++)
-                    {
-                        var e = Games[i];
-                        var r = new Rect(Screen.width * 0.25f, Screen.height * 0.26f + i * 80 * s, Screen.width * 0.5f, 70 * s);
-                        bool sel = i == _menuIndex;
-                        Hud.Box(r, sel ? new Color(1, 0.8f, 0.3f, 0.35f) : new Color(1, 1, 1, 0.08f));
-                        var card = Records.Card(Save.Get(e.Id));
-                        Hud.Text(new Rect(r.x + 16 * s, r.y, r.width, r.height * 0.6f), e.Title, Hud.Mid, sel ? Hud.Gold : Color.white, TextAnchor.MiddleLeft);
-                        Hud.Text(new Rect(r.x + 16 * s, r.y + r.height * 0.5f, r.width, r.height * 0.5f), e.Blurb, Hud.Small, new Color(1, 1, 1, 0.8f), TextAnchor.MiddleLeft);
-                        // The record: rank, best score, plays (web freeplay.js card).
-                        Hud.Text(new Rect(r.x, r.y, r.width - 16 * s, r.height * 0.6f), $"RANK {card.Rank}   BEST {card.Best}", Hud.Small, sel ? Hud.Gold : Color.white, TextAnchor.MiddleRight);
-                        Hud.Text(new Rect(r.x, r.y + r.height * 0.5f, r.width - 16 * s, r.height * 0.5f), card.Plays, Hud.Small, new Color(1, 1, 1, 0.6f), TextAnchor.MiddleRight);
-                        if (GUI.Button(r, GUIContent.none, GUIStyle.none)) { _menuIndex = i; _from = "freeplay"; ShellSfx("fanfare"); Open(e); }
-                    }
-                    Hud.Center(0.9f, "UP/DOWN to choose   SPACE / click to play   ESC / X: back", Hud.Small, new Color(1, 1, 1, 0.7f), 40);
-                    break;
+                case Mode.Menu: MenuTargets(); break;
 
                 case Mode.Title:
                     TitleTargets();

@@ -52,6 +52,9 @@ namespace Bonanza.Shell
         public int Hover;        // button index under the pointer, -1 none
         public bool Pressed;     // pointer button held over `Hover`
         public bool Reduced;     // Settings.ReduceMotion
+        public Vector2 Pointer;  // pointer in screen px, y up
+        public bool Held;        // pointer button down anywhere (a slider drag keeps going off its track)
+        public bool Fresh;       // the pointer button went down this frame
     }
 
     public sealed class ShellHost : MonoBehaviour
@@ -63,6 +66,7 @@ namespace Bonanza.Shell
         public RosterScreen Roster { get; private set; }
         public PartyHubScreen Hub { get; private set; }
         public PartyFinalScreen Final { get; private set; }
+        public FreePlayScreen FreePlay { get; private set; }
         public ShellScreen Current { get; private set; }
 
         RectTransform _root;
@@ -100,6 +104,8 @@ namespace Bonanza.Shell
             Hub.BuildInto(_root, "PartyHub");
             Final = new PartyFinalScreen();
             Final.BuildInto(_root, "PartyFinal");
+            FreePlay = new FreePlayScreen();
+            FreePlay.BuildInto(_root, "FreePlay");
         }
 
         void Update()
@@ -161,6 +167,7 @@ namespace Bonanza.Shell
             var ptr = Pointer.current;
             if (ptr == null) return inp;
             var p = ptr.position.ReadValue();
+            inp.Pointer = p; inp.Held = ptr.press.isPressed; inp.Fresh = ptr.press.wasPressedThisFrame;
             for (int i = 0; i < s.Buttons.Count; i++)
             {
                 var r = ButtonScreen(s, i);
@@ -176,7 +183,7 @@ namespace Bonanza.Shell
 
         static Rect ButtonScreen(ShellScreen s, int i)
         {
-            if (s == null || i < 0 || i >= s.Buttons.Count || !s.Buttons[i]) return Rect.zero;
+            if (s == null || i < 0 || i >= s.Buttons.Count || !s.Buttons[i] || !s.Buttons[i].gameObject.activeInHierarchy) return Rect.zero;
             s.Buttons[i].GetWorldCorners(_corners);
             return new Rect(_corners[0].x, Screen.height - _corners[1].y, _corners[2].x - _corners[0].x, _corners[1].y - _corners[0].y);
         }
