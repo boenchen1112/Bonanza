@@ -141,7 +141,7 @@ Shader "Bonanza/Composite"
                     float l0 = dot(c, w), la = dot(n0, w), lb = dot(n1, w), lc = dot(n2, w), ld = dot(n3, w);
                     l0 /= 1.0 + l0; la /= 1.0 + la; lb /= 1.0 + lb; lc /= 1.0 + lc; ld /= 1.0 + ld;
                     float lmax = max(l0, max(max(la, lb), max(lc, ld))), lmin = min(l0, min(min(la, lb), min(lc, ld)));
-                    float k = saturate((lmax - lmin - 0.04) * 5.0) * 0.55 * _BonTexel.z;
+                    float k = saturate((lmax - lmin - 0.03) * 6.0) * 0.8 * _BonTexel.z;
                     c = lerp(c, (n0 + n1 + n2 + n3 + c) * 0.2, k);
                 }
 
