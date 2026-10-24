@@ -212,6 +212,22 @@ namespace Bonanza
             return _round.Result(_ids);
         }
 
+        /// The results card shows the tempo game's own numbers: taps ON, EARLY, LATE, beats missed and the average lean.
+        public override List<KeyValuePair<string, string>> ResultsStats(Outcome o)
+        {
+            if (_round == null || !_round.Done) return null;
+            int ms = Mathf.RoundToInt((float)System.Math.Abs(_round.BiasMs));
+            string lean = ms == 0 ? "ON" : (_round.BiasMs < 0 ? "-" : "+") + ms + " MS";
+            return new List<KeyValuePair<string, string>>
+            {
+                new KeyValuePair<string, string>("ON", _round.On.ToString()),
+                new KeyValuePair<string, string>("EARLY", _round.Early.ToString()),
+                new KeyValuePair<string, string>("LATE", _round.Late.ToString()),
+                new KeyValuePair<string, string>("MISSED", _round.Miss.ToString()),
+                new KeyValuePair<string, string>("AVG LEAN", lean),
+            };
+        }
+
         public override IEnumerable<KeyValuePair<string, double>> TestChart()
         {
             if (!ShotMode("ffmiss"))
@@ -362,7 +378,7 @@ namespace Bonanza
             if (_round.Survived && left == 0 && !_surviveShown)
             {
                 _surviveShown = true;
-                Ui.Banner("SURVIVE!", "NO HEARTS LEFT - KEEP THE BEAT", Red, 1.8f, plate: true, y: 0.36f);
+                Ui.Banner("SURVIVE!", "NO HEARTS LEFT - KEEP THE BEAT", Red, 1.6f, plate: true, y: 0.33f, scale: 0.8f);
                 Shot("survive", 0.45);
                 Shot("survivelater", 3.0);
             }
