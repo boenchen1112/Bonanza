@@ -154,6 +154,7 @@ namespace Bonanza
             Look.Fx.SetGroundY(0);
             Look.Fx.SetFocus(new Vector3(0, 1.6f, 3.2f));
             Look.ShadowFocus(new Vector3(0, 0, 2.6f), 7.6f);   // the maestro, his podium and the front drums
+            PostState.EdgeAA = 1;   // soften the silhouettes (composite edge smoothing; set back to 0 when the game ends)
 
             _env = Look.CreateEnv(EnvPreset.Stage, o =>
             {
@@ -161,21 +162,21 @@ namespace Bonanza
                 o.Backdrop.Arches = 0; o.Backdrop.Skyline = 0;
                 o.Floaters.Count = 0;
                 // Two spot cones from the flies onto the maestro, one onto the player's drum.
-                o.Spotlights.Count = 3;
-                o.Spotlights.Anchors = new[] { new Vector3(-3.2f, 11.5f, 6.5f), new Vector3(3.2f, 11.5f, 6.5f), new Vector3(5.5f, 11.0f, 3.5f) };
-                o.Spotlights.Targets = new[] { new Vector3(0, 0, 4.0f), new Vector3(0, 0, 4.0f), new Vector3(3.6f, 0, 0.6f) };
+                o.Spotlights.Count = 2;
+                o.Spotlights.Anchors = new[] { new Vector3(-3.2f, 11.5f, 6.5f), new Vector3(3.2f, 11.5f, 6.5f) };
+                o.Spotlights.Targets = new[] { new Vector3(0, 0, 4.0f), new Vector3(0, 0, 4.0f) };
                 o.Spotlights.Height = 12f; o.Spotlights.Radius = 1.55f; o.Spotlights.Sweep = 0.025f;
                 o.Spotlights.Base = 0.03f; o.Spotlights.Flare = 0.025f; o.Spotlights.Tint = new Color(1f, 0.95f, 0.85f);
             });
             _env.AddCrowd(new EnvCrowd.Options
             {
                 Style = EnvCrowd.FigureStyle.Figure, Stands = EnvCrowd.StandStyle.Risers, Poses = true, PoseKinds = 4,
-                Rows = 7, PerRow = 30, RowGrow = 3, Radius = 13.2f, RowDepth = 1.5f, RowRise = 0.62f, Arc = Mathf.PI * 0.6f,
+                Rows = 6, PerRow = 26, RowGrow = 3, Radius = 13.2f, RowDepth = 1.6f, RowRise = 0.66f, Arc = Mathf.PI * 0.6f,
                 Scale = 1.75f, Center = new Vector3(0, StallsY + 0.05f, -3.2f), RiserY = StallsY - 0.2f, RisersFollowRows = true,
-                PaletteMix = 0.55f, BrightMin = 0.55f, BrightMax = 0.85f, Deepen = 1.3f, Energy = 0.25f, Rim = 0.9f, FogMul = 0.85f,
+                PaletteMix = 0.4f, BrightMin = 0.3f, BrightMax = 0.52f, Deepen = 1.45f, Energy = 0.12f, Rim = 0.8f, FogMul = 1f,
                 Seed = 0xf1a1e, RiserLights = true,
             });
-            _env.Crowd.SetEnergy(0.22f);
+            _env.Crowd.SetEnergy(0.12f);
 
             BuildPlatform();
             BuildHouse();
@@ -190,6 +191,7 @@ namespace Bonanza
         {
             _trail?.Release();
             _trail = null;
+            PostState.EdgeAA = 0;
             foreach (var o in _owned) if (o) Destroy(o);
             _owned.Clear();
             if (_heads != null && _heads.Mesh) Destroy(_heads.Mesh);
@@ -202,7 +204,8 @@ namespace Bonanza
         void BuildPlatform()
         {
             var planks = Own(PlankTex(256));
-            _floorMat = Surf(L(0.62f, 0.36f, 0.2f), rim: 0.35f, pulse: 0.02f, bands: 3, softness: 0.35f, map: planks, tiling: new Vector2(6, 9), mapStrength: 0.9f);
+            _floorMat = Surf(L(0.5f, 0.25f, 0.12f), rim: 0.35f, pulse: 0.02f, bands: 3, softness: 0.35f, map: planks, tiling: new Vector2(6, 9), mapStrength: 0.9f);
+            Look.Track(_floorMat, PC.GroundAlt, 1.45f);   // warm boards at the matinee, wine at the gala, ember at the finale (never a grey floor)
             var b = new MeshBuilder();
             b.Box(Matrix4x4.TRS(new Vector3(0, -0.7f, -1.5f), Quaternion.identity, new Vector3(34, 1.4f, 17f)), Color.white);
             Part("Platform", transform, b, _floorMat, Vector3.zero);
@@ -213,7 +216,7 @@ namespace Bonanza
             Part("PlatformFace", transform, b, face, Vector3.zero);
 
             // gold inlay: concentric rings on the floor round the podium (the eye goes to the maestro)
-            _inlayMat = Surf(Color.white, rim: 0.5f, pulse: 0.1f, lift: 0.12f, bands: 2);
+            _inlayMat = Surf(Color.white, rim: 0.4f, pulse: 0.06f, lift: 0.03f, bands: 2);
             b = new MeshBuilder();
             var gold = L(1f, 0.74f, 0.32f);
             foreach (var (r, w) in new[] { (1.75f, 0.05f), (2.05f, 0.025f), (3.2f, 0.035f) })
@@ -254,8 +257,8 @@ namespace Bonanza
 
             // balconies: two gilt tiers on the arc of the stalls, crimson fronts with a gold rail and a sconce every few metres
             _balconyMat = Surf(Color.white, rim: 0.9f, pulse: 0.04f, lift: 0.02f, bands: 3, softness: 0.3f, fog: 0.8f);
-            Look.Track(_balconyMat, PC.BandAlt, 0.95f);
-            var gilt = Surf(L(1f, 0.76f, 0.34f), rim: 1.2f, pulse: 0.05f, lift: 0.08f, bands: 3, fog: 0.75f);
+            Look.Track(_balconyMat, PC.BandAlt, 0.6f);
+            var gilt = Surf(L(0.8f, 0.56f, 0.24f), rim: 0.9f, pulse: 0.03f, lift: 0.02f, bands: 3, fog: 1f);
             var front = new MeshBuilder();
             var rail = new MeshBuilder();
             var sconce = new MeshBuilder();
@@ -293,9 +296,9 @@ namespace Bonanza
                     float a = -arc / 2 + arc * (i + 0.5f + (rng.Next() - 0.5f) * 0.5f) / n;
                     float rr = R + 0.75f + rng.Next() * 0.5f;
                     var p = center + new Vector3(Mathf.Sin(a) * rr, top - 0.25f + rng.Next() * 0.15f, Mathf.Cos(a) * rr);
-                    var c = crowd[(int)(rng.Next() * crowd.Length) % crowd.Length] * (0.45f + rng.Next() * 0.3f);
+                    var c = crowd[(int)(rng.Next() * crowd.Length) % crowd.Length] * (0.22f + rng.Next() * 0.16f);
                     heads.Sphere(0.34f, 7, 4, Matrix4x4.Translate(p + new Vector3(0, -0.15f, 0)), c, new Vector3(1.2f, 0.8f, 1));
-                    heads.Sphere(0.2f, 7, 5, Matrix4x4.Translate(p + new Vector3(0, 0.38f, 0)), L(0.85f, 0.68f, 0.56f) * 0.7f, Vector3.one);
+                    heads.Sphere(0.2f, 7, 5, Matrix4x4.Translate(p + new Vector3(0, 0.38f, 0)), L(0.85f, 0.68f, 0.56f) * 0.4f, Vector3.one);
                 }
             }
             Part("BalconyFronts", transform, front, _balconyMat, Vector3.zero);
@@ -307,7 +310,7 @@ namespace Bonanza
 
             // the back wall and side walls: a tall dark drum with gilt pilasters, and a ceiling with coffer rings
             _wallMat = Surf(Color.white, rim: 0.5f, pulse: 0.02f, bands: 2, softness: 0.4f, fog: 1);
-            Look.Track(_wallMat, PC.Band, 0.42f);
+            Look.Track(_wallMat, PC.Band, 0.22f);
             b = new MeshBuilder();
             b.Shell(29, 29, 16, 72, -Mathf.PI * 0.55f, Mathf.PI * 1.1f, Matrix4x4.Translate(center + new Vector3(0, 6.5f, 0)), Color.white, Vector2.one, inward: true);
             Part("HallWall", transform, b, _wallMat, Vector3.zero);
@@ -379,9 +382,6 @@ namespace Bonanza
             g.Tube(pts, 0.09f, 6, Matrix4x4.identity, Color.white);
             foreach (float side in new[] { -1f, 1f })
             {
-                g.Torus(0.42f, 0.07f, 5, 18, Mathf.PI * 2, Matrix4x4.TRS(new Vector3(side * 8.35f, 2.6f, z - 0.05f), Quaternion.Euler(0, 0, 90), new Vector3(1.6f, 1, 1)), Color.white);
-                g.Sphere(0.16f, 8, 6, Matrix4x4.Translate(new Vector3(side * 7.8f, 2.35f, z - 0.3f)), Color.white, Vector3.one);
-                g.Cone(0.16f, 0.55f, 8, Matrix4x4.Translate(new Vector3(side * 7.8f, 2.25f, z - 0.3f)), Color.white);
             }
             Part("Fringe", transform, g, gold, Vector3.zero);
         }
@@ -433,7 +433,7 @@ namespace Bonanza
             {
                 var r = EnvKit.Renderer("ChandelierHalo" + c, transform, qm, _haloMat);
                 r.transform.localPosition = ChandelierAt[c] + new Vector3(0, 0.2f, 0);
-                r.transform.localScale = Vector3.one * (c == 0 ? 7.5f : 5.5f);
+                r.transform.localScale = Vector3.one * (c == 0 ? 5.5f : 4.2f);
                 _halos[c] = r.transform;
             }
         }
@@ -458,7 +458,7 @@ namespace Bonanza
             b.Torus(PodiumR + 0.12f, 0.06f, 5, 48, Mathf.PI * 2, Matrix4x4.TRS(new Vector3(0, 0.05f, 0), Quaternion.Euler(90, 0, 0), Vector3.one), Color.white);
             b.Shell(PodiumR + 0.065f, PodiumR + 0.075f, 0.06f, 48, 0, Mathf.PI * 2, Matrix4x4.Translate(new Vector3(0, PodiumH * 0.55f, 0)), Color.white, Vector2.one);
             Part("PodiumGilt", transform, b, gilt, PodiumAt);
-            _podRingMat = AddMat(L(1f, 0.55f, 0.4f), 0.9f, 0.3f, 0);
+            _podRingMat = AddMat(L(1f, 0.55f, 0.4f), 0.5f, 0.3f, 0);
             b = new MeshBuilder();
             b.Torus(PodiumR + 0.32f, 0.035f, 4, 64, Mathf.PI * 2, Matrix4x4.TRS(new Vector3(0, 0.012f, 0), Quaternion.Euler(90, 0, 0), new Vector3(1, 1, 0.3f)), Color.white);
             Part("PodiumRing", transform, b, _podRingMat, PodiumAt);
@@ -634,13 +634,13 @@ namespace Bonanza
             // the baton: ivory shaft with a cork grip, along +z of its own transform; a glowing tip
             _mBaton = new GameObject("Baton").transform; _mBaton.SetParent(_mRoot, false);
             var bat = new MeshBuilder();
-            bat.Shell(0.012f, 0.026f, 0.62f, 8, 0, Mathf.PI * 2, Matrix4x4.TRS(new Vector3(0, 0, 0.36f), Quaternion.Euler(90, 0, 0), Vector3.one), L(0.98f, 0.95f, 0.86f), Vector2.one);
+            bat.Shell(0.018f, 0.036f, 0.8f, 8, 0, Mathf.PI * 2, Matrix4x4.TRS(new Vector3(0, 0, 0.45f), Quaternion.Euler(90, 0, 0), Vector3.one), L(1f, 0.97f, 0.9f), Vector2.one);
             bat.Sphere(0.045f, 8, 6, Matrix4x4.Translate(new Vector3(0, 0, 0.04f)), L(0.7f, 0.5f, 0.32f), new Vector3(1, 1, 1.5f));
             Part("BatonMesh", _mBaton, bat, mat, Vector3.zero, cast: true);
             _tipMat = AddMat(L(1f, 0.9f, 0.6f), 1.6f, 0.5f, 0);
             var tip = new MeshBuilder();
-            tip.Sphere(0.04f, 8, 6, Matrix4x4.identity, Color.white, Vector3.one);
-            _mTip = Part("BatonTip", _mBaton, tip, _tipMat, new Vector3(0, 0, 0.68f)).transform;
+            tip.Sphere(0.06f, 8, 6, Matrix4x4.identity, Color.white, Vector3.one);
+            _mTip = Part("BatonTip", _mBaton, tip, _tipMat, new Vector3(0, 0, 0.86f)).transform;
 
             Look.Blob(_mRoot, 0.8f, 0.5f, PodiumH, 0);
         }
@@ -662,7 +662,7 @@ namespace Bonanza
         MeshBatch _heads;
         Transform _youMark;
         Material _youMat;
-        static readonly Vector3[] SeatAt = { new Vector3(3.55f, 0, 0.55f), new Vector3(-3.55f, 0, 0.55f), new Vector3(-6.0f, 0, 2.7f), new Vector3(6.0f, 0, 2.7f) };
+        static readonly Vector3[] SeatAt = { new Vector3(3.05f, 0, 0.75f), new Vector3(-3.05f, 0, 0.75f), new Vector3(-5.1f, 0, 3.1f), new Vector3(5.1f, 0, 3.1f) };
 
         void BuildTimpani()
         {
@@ -697,13 +697,12 @@ namespace Bonanza
                 var seat = SeatAt[s];
                 // the drum sits between the drummer and the maestro
                 var toM = (PodiumAt - seat); toM.y = 0; toM.Normalize();
-                var drumPos = seat + toM * 0.95f;
+                var face = Vector3.Slerp(toM, new Vector3(0, 0, -1), 0.42f).normalized;   // facing the maestro, turned partly to us
+                var drumPos = seat + face * 1.02f;   // the drum stands right in front of its player, in view
                 var kr = EnvKit.Renderer("Kettle" + s, transform, km, copper); kr.transform.localPosition = drumPos; kr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
                 var rr = EnvKit.Renderer("KettleRim" + s, transform, rm, mat); rr.transform.localPosition = drumPos;
                 d.Drum = drumPos + new Vector3(0, 0.84f, 0);
                 // the drummer faces the maestro, turned partly toward us (stage blocking: we see their faces)
-                var toCam = new Vector3(0, 0, -1);
-                var face = Vector3.Slerp(toM, toCam, 0.42f).normalized;
                 d.Root = new GameObject("Drummer" + s).transform;
                 d.Root.SetParent(transform, false);
                 d.Root.localPosition = seat;
@@ -830,7 +829,7 @@ namespace Bonanza
                     at += g.Beats;
                 }
             }
-            _trail = Look.Fx.Trail(new Color(1f, 0.88f, 0.55f), 0.07f);
+            _trail = Look.Fx.Trail(new Color(1f, 0.88f, 0.55f), 0.09f);
             Frame(true, 0);
             int tris = 0, draws = 0;
             foreach (var f in GetComponentsInChildren<MeshFilter>(true))
@@ -951,7 +950,7 @@ namespace Bonanza
             _lastBeatWhole = whole;
 
             // crowd energy: the combo warms the house; a hush hushes it
-            float energy = _finale > 0 ? 0.9f : hidden ? 0.02f : 0.18f + 0.45f * Mathf.Clamp01(_round.Combo / 32f);
+            float energy = _finale > 0 ? 0.9f : hidden ? 0.02f : 0.1f + 0.35f * Mathf.Clamp01(_round.Combo / 48f);
             _env.Crowd.SetEnergy(energy);
 
             UpdateMaestro(dt, hidden);
@@ -1106,7 +1105,7 @@ namespace Bonanza
 
             // the baton: out of the right hand along the forearm, tipped up and toward us; it whips a little ahead of the hand
             var fdir = (hr - elbowR).normalized;
-            var want = (fdir + new Vector3(0.15f, 0.55f, -0.65f)).normalized;
+            var want = (fdir + new Vector3(-0.4f, 0.65f, -0.3f)).normalized;   // out to his right and up: long in the frame, not end-on
             if (!waiting && hh < 0.5f)
             {
                 float whip = Mathf.Sin(Mathf.PI * Mathf.Pow(u, 0.62f));
@@ -1125,7 +1124,7 @@ namespace Bonanza
             if (_trail != null)
             {
                 bool tr = show && live && !waiting && !reduce;
-                _trail.SetWidth(tr ? 0.06f + flash * 0.05f : 0f);
+                _trail.SetWidth(tr ? 0.09f + flash * 0.06f : 0f);
                 _trail.Set(_mTip.position);
                 // the trail warms as the tempo presses on, cools as it broadens
                 var tc = rampDir > 0 ? new Color(1f, 0.7f, 0.35f) : rampDir < 0 ? new Color(0.6f, 0.85f, 1f) : new Color(1f, 0.9f, 0.6f);
@@ -1231,8 +1230,11 @@ namespace Bonanza
             float pulse = Look.BeatPulse;
             _footMat.SetFloat("_Intensity", Mathf.Lerp(1.2f + pulse * 0.9f, 0.25f, hh));
             _lipMat.SetFloat("_Intensity", Mathf.Lerp(1.0f + pulse * 0.6f, 0.2f, hh));
-            _podRingMat.SetFloat("_Intensity", Mathf.Lerp(0.8f + pulse * 1.4f, 0.35f, hh));
+            _podRingMat.SetFloat("_Intensity", Mathf.Lerp(0.45f + pulse * 0.9f, 0.2f, hh));
             _standLampMat.SetFloat("_Intensity", 1.6f);
+            // the house sits in the dark: its listeners graded down, further in a hush, up for the ovation
+            float tint = Mathf.Lerp(0.8f, 0.42f, hh) * (_finale > 0 ? 1.25f : 1);
+            _env.Crowd.SetTint(new Color(tint, tint, tint, 1));
             var spot = _env.Spotlights;
             if (spot != null) spot.SetLevel(Mathf.Lerp(0.03f, 0.05f, hh), hidden ? 0 : 0.025f);
             var cam = Look.Rig?.Camera;

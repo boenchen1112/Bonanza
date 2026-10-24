@@ -68,7 +68,8 @@ namespace Bonanza
 
         readonly System.Collections.Generic.List<Object> _owned = new System.Collections.Generic.List<Object>();
         Material _veilMat, _cloudMat, _stoneMat, _capMat, _glyphMat, _seaMat, _farMat, _horizonMat, _haloMat, _gloryMat, _choirMat, _mouthMat, _blobMat,
-                 _veilGlowMat, _rayMat, _lanternMat, _starMat, _markMat;
+                 _veilGlowMat, _rayMat, _lanternMat, _starMat, _markMat, _ledgeMat;
+        readonly Transform[] _ledge = new Transform[3];
         Transform _seaFloor, _glory, _stars, _mark;
         readonly Transform[][] _layers = new Transform[3][];
         static readonly float[] LayerW = { 48, 110, 220 };
@@ -90,8 +91,8 @@ namespace Bonanza
         Material _sweepMat;
 
         // choir: singers recycled along x at a fixed world pitch, on one tier behind the stair
-        const int ChoirN = 9;
-        const float ChoirPitch = 7.2f, ChoirZ = 17f;
+        const int ChoirN = 8;
+        const float ChoirPitch = 8.4f, ChoirZ = 26f, ChoirY = SeaY + 2.5f;
         float _choirOpen, _choirHop;
 
         // ------------------------------------------------------------ materials
@@ -197,8 +198,9 @@ namespace Bonanza
             _glyphMat = Add(0);
             var noise = Own(NoiseTex(128, 0xb0b0));
             _seaMat = Surf(Color.white, rim: 0.3f, pulse: 0.02f, lift: 0.04f, bands: 2, softness: 0.6f, map: noise, tiling: new Vector2(14, 6), mapStrength: 0.6f);
-            _farMat = Surf(Color.white, rim: 0.9f, pulse: 0, lift: 0.1f, bands: 3, softness: 0.5f, fog: 0.8f);
-            _horizonMat = Surf(Color.white, rim: 0.8f, pulse: 0, lift: 0.12f, bands: 2, softness: 0.7f, fog: 0.75f);
+            _farMat = Surf(Color.white, rim: 2.0f, pulse: 0, lift: 0.06f, bands: 3, softness: 0.35f, fog: 0.7f);   // silhouettes with a rim of light
+            _horizonMat = Surf(Color.white, rim: 1.6f, pulse: 0, lift: 0.12f, bands: 2, softness: 0.6f, fog: 0.75f);
+            _ledgeMat = Surf(Color.white, rim: 1.2f, pulse: 0.02f, lift: 0.02f, bands: 3, softness: 0.45f, fog: 0);
             _choirMat = Surf(Color.white, rim: 1.1f, pulse: 0.05f, lift: 0.1f, bands: 3, softness: 0.4f, fog: 0.6f);
             _mouthMat = Surf(Color.white, rim: 0, pulse: 0, lift: 0, bands: 1, softness: 0.2f, fog: 0.6f);
             Look.Track(_cloudMat, PC.GroundAlt, 0.96f);
@@ -206,9 +208,11 @@ namespace Bonanza
             Look.Track(_seaMat, PC.Band, 0.95f);
             Look.Track(_farMat, PC.Band, 1.05f);
             Look.Track(_horizonMat, PC.BandAlt, 1.1f);
+            Look.Track(_ledgeMat, PC.Band, 0.8f);
 
             BuildSea();
             BuildLayers();
+            BuildLedge();
             BuildGlory();
             BuildStars();
             BuildSweep();
@@ -281,25 +285,25 @@ namespace Bonanza
                 var b = new MeshBuilder();
                 if (L == 0)
                 {
-                    for (int i = 0; i < 36; i++)
+                    for (int i = 0; i < 28; i++)
                     {
                         float x = rng.Next() * W, z;
                         float w, top;
                         int kind = 1 + i % 2;   // nothing in front of the stair: the near field stays the plain sea
                         if (kind == 0) { z = -2.2f - rng.Next() * 2.6f; w = 1.0f + rng.Next() * 1.0f; top = SeaY + 0.05f + rng.Next() * 0.2f; }   // in front: small and low, below the stair (never near the lens)
                         else if (kind == 1) { z = 3f + rng.Next() * 6f; w = 1.2f + rng.Next() * 1.4f; top = SeaY + 0.12f + rng.Next() * 0.25f; }   // just behind: low, so the step row stands clear
-                        else { z = ChoirZ + 1.5f + rng.Next() * 5f; w = 2.6f + rng.Next() * 2.4f; top = SeaY + 1.6f + rng.Next() * 0.5f; }   // the choir's bank
+                        else { z = ChoirZ + 1.5f + rng.Next() * 5f; w = 2.6f + rng.Next() * 2.4f; top = ChoirY + 0.05f + rng.Next() * 0.4f; }   // the choir's bank
                         Puff(b, Matrix4x4.TRS(new Vector3(x, top, z), Quaternion.Euler(0, rng.Next() * 360, 0), Vector3.one), w, 9, 6, (uint)(i + 11), 0.97f + rng.Next() * 0.05f, 3);
                     }
                 }
                 else if (L == 1)
                 {
                     // little rotundas on far clouds: columns, a gilt dome, and a lantern glow inside (lit at vespers)
-                    Rotunda(b, lanterns, new Vector3(W * 0.58f, 3.2f, 52f), 2.4f);
-                    Rotunda(b, lanterns, new Vector3(W * 0.08f, 5.5f, 70f), 3.0f);
-                    for (int i = 0; i < 14; i++)
+                    Rotunda(b, lanterns, new Vector3(W * 0.58f, 1.9f, 60f), 2.4f);
+                    Rotunda(b, lanterns, new Vector3(W * 0.08f, 2.6f, 80f), 3.0f);
+                    for (int i = 0; i < 10; i++)
                     {
-                        float x = (i + rng.Next() * 0.6f) / 14 * W, z = 38 + rng.Next() * 28;
+                        float x = (i + rng.Next() * 0.6f) / 10 * W, z = 38 + rng.Next() * 28;
                         float h = 3 + rng.Next() * 7, w = 4 + rng.Next() * 4;
                         int n = 4 + (int)(rng.Next() * 3);
                         int start = b.Count;
@@ -347,6 +351,28 @@ namespace Bonanza
                     _layers[L][c] = rr.transform;
                     if (lmesh != null) EnvKit.Renderer("Lanterns", rr.transform, lmesh, _lanternMat);
                 }
+            }
+        }
+
+        /// A near cloud ledge across the bottom of the frame, in shadow (the darker band tone): it frames the stair
+        /// from below and fills the empty foreground. One 48-unit chunk tiled three times like the sea's puffs.
+        void BuildLedge()
+        {
+            var rng = new FxRng(0x1ed9e);
+            var b = new MeshBuilder();
+            for (int i = 0; i < 16; i++)
+            {
+                float x = (i + rng.Next() * 0.7f) / 16 * LayerW[0];
+                float z = -4.2f - rng.Next() * 1.6f, w = 1.6f + rng.Next() * 1.2f;
+                Puff(b, Matrix4x4.TRS(new Vector3(x, SeaY + 0.25f + rng.Next() * 0.3f, z), Quaternion.Euler(0, rng.Next() * 360, 0), Vector3.one), w, 10, 6, (uint)(i + 501), 0.85f, 4);
+            }
+            var mesh = Own(b.ToMesh("Ledge"));
+            mesh.bounds = new Bounds(mesh.bounds.center, mesh.bounds.size + new Vector3(8, 4, 4));
+            for (int c = 0; c < 3; c++)
+            {
+                var r = EnvKit.Renderer("Ledge_" + c, transform, mesh, _ledgeMat);
+                r.receiveShadows = false;
+                _ledge[c] = r.transform;
             }
         }
 
@@ -448,6 +474,32 @@ namespace Bonanza
             b.Sphere(0.12f * k, 8, 6, Matrix4x4.Translate(at + new Vector3(0, 2.85f * k, 0)), gilt, Vector3.one);
         }
 
+        /// A light cone in the XY plane facing -z: half width w0 at its foot (y = 0), w1 at the top (y = h). Seven
+        /// columns of vertices whose colour falls from white in the middle to black at both edges (soft sides); uv.y is
+        /// 1 at the foot and 0 at the top (GlowAdd's ramp fades it upward).
+        static void RayCone(MeshBuilder b, float w0, float w1, float h)
+        {
+            const int cols = 6, rows = 4;
+            int o = b.Count;
+            for (int j = 0; j <= rows; j++)
+                for (int i = 0; i <= cols; i++)
+                {
+                    float u = i / (float)cols, v = j / (float)rows;
+                    float half = Mathf.Lerp(w0, w1, v);
+                    float k = 1 - Mathf.Abs(u * 2 - 1);
+                    k = k * k * (3 - 2 * k);
+                    b.P.Add(new Vector3((u * 2 - 1) * half, v * h, 0)); b.N.Add(Vector3.back);
+                    b.C.Add(new Color(k, k, k, 1)); b.UV.Add(new Vector2(u, 1 - v));
+                }
+            for (int j = 0; j < rows; j++)
+                for (int i = 0; i < cols; i++)
+                {
+                    int a = o + j * (cols + 1) + i;
+                    b.T.Add(a); b.T.Add(a + cols + 1); b.T.Add(a + 1);
+                    b.T.Add(a + 1); b.T.Add(a + cols + 1); b.T.Add(a + cols + 2);
+                }
+        }
+
         /// A soft glow card in the XY plane (uv 0..1), centred, facing -z.
         static void Card(MeshBuilder b, Matrix4x4 m)
         {
@@ -505,12 +557,11 @@ namespace Bonanza
             _glyphs = new MeshBatch("Glyphs", transform, glyph, Pool, _glyphMat);
             _glyphs.Renderer.receiveShadows = false;
 
-            // the shaft of light a plate rises in (bright at the plate, fading up): an open tube that glows in its middle
+            // the shaft of light a plate rises in: a soft cone facing the camera, bright at the plate and fading to
+            // nothing at its top and at both sides (vertex colour across, the material's ramp up)
             var ray = new MeshBuilder();
-            int r0 = ray.Count;
-            ray.Shell(0.4f, 0.5f, 3.0f, 12, 0, Mathf.PI * 2, Matrix4x4.Translate(new Vector3(0, 1.5f, 0)), Color.white, Vector2.one);
-            for (int v = r0; v < ray.Count; v++) ray.UV[v] = new Vector2(ray.UV[v].x, 1 - ray.UV[v].y);   // 1 at the plate (the source)
-            _rayMat = Add(1.4f, 0.3f);
+            RayCone(ray, 0.5f, 1.15f, 3.2f);
+            _rayMat = Add(0, 0.3f);
             _rayMat.SetFloat("_Ramp", 1);
             _rays = new MeshBatch("Rays", transform, ray, Pool, _rayMat);
 
@@ -608,6 +659,8 @@ namespace Bonanza
                 b.Box(Matrix4x4.TRS(new Vector3(sx * 0.23f, 0.47f, -1.14f), q, new Vector3(0.42f, 0.5f, 0.03f)), page);
                 b.Box(Matrix4x4.TRS(new Vector3(sx * 0.24f, 0.2f, -1.12f), q, new Vector3(0.5f, 0.05f, 0.06f)), gilt);
             }
+            // each singer rides its own little cloud (the choir drifts along with the view)
+            Puff(b, Matrix4x4.TRS(new Vector3(0, 0.32f, 0.1f), Quaternion.identity, new Vector3(1, 0.7f, 1)), 2.3f, 10, 6, 77, 0.95f, 4);
             _choir = new MeshBatch("Choir", transform, b, ChoirN, _choirMat);
             _choir.Renderer.receiveShadows = false;
             var m = new MeshBuilder();
@@ -941,10 +994,11 @@ namespace Bonanza
             _haloBounce = Mathf.Max(0, _haloBounce - dt * 3.2f);
             float hb = Settings.ReduceMotion ? 0 : Mathf.Sin(_haloBounce * Mathf.PI * 2.2f) * _haloBounce * 0.12f;
             var hp = _jHalo.localPosition;
-            float hy = 1.06f * sy + 0.04f;
-            _haloY = Damp(_haloY, hy, 14, dt);
-            _jHalo.localPosition = new Vector3(0, _haloY + hb, 0);
-            _jHalo.localRotation = Quaternion.Euler(-12, _time * 40f, 0);
+            float hy = 0.9f * sy + 0.06f;
+            _haloY = hy;   // rides the head (no lag: it must never leave it during a hop)
+            _jHalo.localPosition = new Vector3(0, _haloY + hb * 0.5f, -0.03f);
+            // a fixed tilt toward the camera (it looks a little down at the jumper): always an open ring, never an edge-on bar
+            _jHalo.localRotation = Quaternion.Euler(-38, 18, 0);
             _haloMat.SetFloat("_Intensity", 1.1f + 0.35f * _jSing + joy * 0.8f + _haloBounce * 0.5f);
 
             // contact shadow and the step mark on the surface under the jumper
@@ -1121,7 +1175,7 @@ namespace Bonanza
                     float steady = down ? 0.3f : 0;
                     float rk = Mathf.Max(flash, steady) + pop * 0.4f;
                     var rc = down ? RayGold : Color.Lerp(kc, Color.white, 0.35f);
-                    _rays.Matrix[q] = rk > 0.01f ? Matrix4x4.TRS(pos, Quaternion.identity, new Vector3(1, 0.6f + 0.4f * Mathf.Clamp01(r * 1.5f), 1)) : hide;
+                    _rays.Matrix[q] = rk > 0.01f ? Matrix4x4.TRS(pos + new Vector3(0, -0.05f, 0.2f), Quaternion.identity, new Vector3(1, 0.6f + 0.4f * Mathf.Clamp01(r * 1.5f), 1)) : hide;
                     _rays.Tint[q] = new Color(rc.r * rk, rc.g * rk, rc.b * rk, 1);
                 }
                 // landing, lead-ins, home
@@ -1153,20 +1207,25 @@ namespace Bonanza
             _choirHop = Damp(_choirHop, 0, 1.2f, dt);
             if (_cheer > 0.95f) _choirHop = 1;
             float reduce = Settings.ReduceMotion ? 0.3f : 1;
-            int k0 = Mathf.FloorToInt(_camX / ChoirPitch) - ChoirN / 2;
+            // The choir rides its clouds along with the view, in two wings either side of the jumper's line of sight,
+            // so a singer never stands behind the jumper: the step row always has clear air behind it.
+            var cam = Look.Rig?.Camera;
+            var cp = cam ? cam.transform.position : new Vector3(_camX, 2, -10);
+            float sight = cp.x + (_jx - cp.x) * (ChoirZ - cp.z) / Mathf.Max(1f, 0 - cp.z);   // where the eye-to-jumper line meets the choir
             for (int j = 0; j < ChoirN; j++)
             {
-                int k = k0 + j;
+                int k = j;
                 uint h = (uint)(k * 2654435761u);
                 float r1 = (h & 1023) / 1023f, r2 = ((h >> 10) & 1023) / 1023f, r3 = ((h >> 20) & 1023) / 1023f;
                 int size = (int)(((uint)k * 7u + 3u) % 3u);   // three sizes: alto, soprano, little treble
-                float s = size == 0 ? 1.55f : size == 1 ? 1.25f : 0.95f;
-                float x = k * ChoirPitch + (r1 - 0.5f) * 1.4f;
+                float s = (size == 0 ? 1.55f : size == 1 ? 1.25f : 0.95f) * 1.35f;
+                int side = j % 2 == 0 ? -1 : 1, rank = j / 2;
+                float x = sight + side * (9.5f + rank * ChoirPitch + (r1 - 0.5f) * 1.2f);
                 float z = ChoirZ + (r2 - 0.5f) * 1.5f;
                 float bob = beat * 0.14f * reduce;
                 float hop = _choirHop * Mathf.Abs(Mathf.Sin(_time * 7f + r1 * 6)) * 0.6f * reduce;
                 float sway = Mathf.Sin(_time * 1.4f + r2 * 6) * 4f * reduce;
-                var pos = new Vector3(x, SeaY + 1.55f + bob + hop, z);
+                var pos = new Vector3(x, ChoirY + bob + hop, z);
                 var rot = Quaternion.Euler(0, (r1 - 0.5f) * 24, sway);
                 var m = Matrix4x4.TRS(pos, rot, new Vector3(s, s * (1 - beat * 0.04f * reduce), s));
                 _choir.Matrix[j] = m;
@@ -1193,6 +1252,8 @@ namespace Bonanza
                 float c0 = Mathf.Floor(cp.x / W) * W;
                 for (int c = 0; c < 3; c++) _layers[L][c].localPosition = new Vector3(c0 + (c - 1) * W, 0, 0);
             }
+            float l0 = Mathf.Floor(cp.x / LayerW[0]) * LayerW[0];
+            for (int c = 0; c < 3; c++) _ledge[c].localPosition = new Vector3(l0 + (c - 1) * LayerW[0], 0, 0);
             var sun = Look.Palette.Live[PD.SunDir];
             var d = new Vector3(sun.x, sun.y, -sun.z).normalized;
             _glory.position = cp + d * 150f;

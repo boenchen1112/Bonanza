@@ -184,42 +184,42 @@ namespace Bonanza.Look
             // Lit for value contrast (judge round 2): the playfield clouds are the brightest band (GroundAlt is their top
             // tint), the far clouds (Band, BandAlt) and the fog sit a value step darker and more saturated, the fill from
             // below is a coloured shadow (lilac at dawn, blue by day, plum at vespers) so cloud undersides go dark.
-            _all["bounce-brigade-easy"] = Make(_base, p => p
-                .Set(PC.SkyTop, 0x4a4cae).Set(PC.SkyMid, 0xc884b4).Set(PC.SkyBot, 0xffae5e)
-                .Set(PC.Sun, 0xffd890).Set(PD.SunDir, 0.34f, 0.07f, -1).Set(PF.SunStrength, 0.5f).Set(PF.SunSize, 0.16f)
-                .Set(PC.Ground, 0x5a3c92).Set(PC.GroundAlt, 0xfff0e0).Set(PC.GroundRim, 0xffd27a)
-                .Set(PC.Band, 0xc68aaa).Set(PC.BandAlt, 0xa47ab4)
+            _all["bounce-brigade-easy"] = Make(_base, p => p   // golden morning: cream clouds, peach far banks, warm light
+                .Set(PC.SkyTop, 0x4a86e0).Set(PC.SkyMid, 0xffcf9c).Set(PC.SkyBot, 0xffb860)
+                .Set(PC.Sun, 0xffe2a0).Set(PD.SunDir, 0.34f, 0.08f, -1).Set(PF.SunStrength, 0.5f).Set(PF.SunSize, 0.16f)
+                .Set(PC.Ground, 0x7a5048).Set(PC.GroundAlt, 0xfff4e0).Set(PC.GroundRim, 0xffd27a)
+                .Set(PC.Band, 0xeeb28e).Set(PC.BandAlt, 0xdca486)
                 .Set(PC.Accent, 0xffc23d).Set(PC.Accent2, 0x2f9bff).Set(PC.Accent3, 0xff4f9a)
                 .SetCrowd(0xffffff, 0xfff1e0, 0xf0f0ff)
-                .Set(PC.Key, 0xffe0b0).Set(PD.KeyDir, -0.62f, 0.62f, 0.46f).Set(PF.KeyIntensity, 3.1f)
-                .Set(PC.FillSky, 0x9a84de).Set(PC.FillGround, 0x6a3c9a).Set(PF.FillIntensity, 0.8f)
-                .Set(PC.Rim, 0xffc078).Set(PD.RimDir, 0.55f, 0.35f, -0.75f).Set(PF.RimStrength, 1.15f)
-                .Set(PC.Fog, 0xb27aa6).Set(PF.FogNear, 24).Set(PF.FogFar, 150)
-                .Set(PF.Bloom, 0.28f).Set(PF.BloomThreshold, 1.7f).Set(PF.Exposure, 1.0f).Set(PF.Saturation, 1.2f).Set(PF.Vignette, 0.5f));
-            _all["bounce-brigade-medium"] = Make(_base, p => p
-                .Set(PC.SkyTop, 0x0a36b0).Set(PC.SkyMid, 0x1a78e6).Set(PC.SkyBot, 0x86ccff)
-                .Set(PC.Sun, 0xfff4d0).Set(PD.SunDir, 0.3f, 0.32f, -1).Set(PF.SunStrength, 0.45f).Set(PF.SunSize, 0.14f)
-                .Set(PC.Ground, 0x2a4aa8).Set(PC.GroundAlt, 0xffffff).Set(PC.GroundRim, 0xffe07a)
-                .Set(PC.Band, 0x8ab8ee).Set(PC.BandAlt, 0x5c9ae6)
+                .Set(PC.Key, 0xffe4b4).Set(PD.KeyDir, -0.62f, 0.62f, 0.46f).Set(PF.KeyIntensity, 3.1f)
+                .Set(PC.FillSky, 0xa8b8ec).Set(PC.FillGround, 0xa07060).Set(PF.FillIntensity, 0.8f)
+                .Set(PC.Rim, 0xffd08a).Set(PD.RimDir, 0.55f, 0.35f, -0.75f).Set(PF.RimStrength, 1.2f)
+                .Set(PC.Fog, 0xeebc96).Set(PF.FogNear, 30).Set(PF.FogFar, 180)
+                .Set(PF.Bloom, 0.28f).Set(PF.BloomThreshold, 1.7f).Set(PF.Exposure, 1.0f).Set(PF.Saturation, 1.18f).Set(PF.Vignette, 0.5f));
+            _all["bounce-brigade-medium"] = Make(_base, p => p   // full day: deep blue zenith, white clouds, darker blue banks, warm sun
+                .Set(PC.SkyTop, 0x06228a).Set(PC.SkyMid, 0x1460d8).Set(PC.SkyBot, 0x6cb8ff)
+                .Set(PC.Sun, 0xfff0c8).Set(PD.SunDir, 0.3f, 0.32f, -1).Set(PF.SunStrength, 0.45f).Set(PF.SunSize, 0.14f)
+                .Set(PC.Ground, 0x1a3488).Set(PC.GroundAlt, 0xffffff).Set(PC.GroundRim, 0xffe07a)
+                .Set(PC.Band, 0x5a8ad4).Set(PC.BandAlt, 0x3a6cc4)
                 .Set(PC.Accent, 0xffc23d).Set(PC.Accent2, 0x2f9bff).Set(PC.Accent3, 0xff4f9a)
                 .SetCrowd(0xffffff, 0xf4f8ff, 0xfffaf0)
-                .Set(PC.Key, 0xfff6e2).Set(PD.KeyDir, -0.55f, 0.7f, 0.42f).Set(PF.KeyIntensity, 3.2f)
-                .Set(PC.FillSky, 0x86b4ff).Set(PC.FillGround, 0x4c6cc8).Set(PF.FillIntensity, 0.95f)
-                .Set(PC.Rim, 0xffffff).Set(PD.RimDir, 0.5f, 0.4f, -0.75f).Set(PF.RimStrength, 1.0f)
-                .Set(PC.Fog, 0x4a92e6).Set(PF.FogNear, 24).Set(PF.FogFar, 150)
-                .Set(PF.Bloom, 0.22f).Set(PF.BloomThreshold, 1.8f).Set(PF.Exposure, 1.0f).Set(PF.Saturation, 1.22f).Set(PF.Vignette, 0.4f));
-            _all["bounce-brigade-hard"] = Make(_base, p => p
-                .Set(PC.SkyTop, 0x0a0828).Set(PC.SkyMid, 0x34125e).Set(PC.SkyBot, 0xd23c76)
-                .Set(PC.Sun, 0xff8a50).Set(PD.SunDir, 0.32f, 0.02f, -1).Set(PF.SunStrength, 0.55f).Set(PF.SunSize, 0.18f)
-                .Set(PC.Ground, 0x1e0a34).Set(PC.GroundAlt, 0xeab4d6).Set(PC.GroundRim, 0xffb060)
-                .Set(PC.Band, 0x5a2a7c).Set(PC.BandAlt, 0x40206c)
+                .Set(PC.Key, 0xfff0cc).Set(PD.KeyDir, -0.6f, 0.66f, 0.42f).Set(PF.KeyIntensity, 3.4f)
+                .Set(PC.FillSky, 0x6c9cf4).Set(PC.FillGround, 0x34509c).Set(PF.FillIntensity, 0.8f)
+                .Set(PC.Rim, 0xfff4dc).Set(PD.RimDir, 0.5f, 0.4f, -0.75f).Set(PF.RimStrength, 1.0f)
+                .Set(PC.Fog, 0x3a78d0).Set(PF.FogNear, 40).Set(PF.FogFar, 230)
+                .Set(PF.Bloom, 0.2f).Set(PF.BloomThreshold, 1.8f).Set(PF.Exposure, 1.0f).Set(PF.Saturation, 1.25f).Set(PF.Vignette, 0.42f));
+            _all["bounce-brigade-hard"] = Make(_base, p => p   // vespers night: indigo and teal, cool moonlight, warm lanterns the only warm light
+                .Set(PC.SkyTop, 0x040820).Set(PC.SkyMid, 0x10285a).Set(PC.SkyBot, 0x1e6a82)
+                .Set(PC.Sun, 0xb8d8ff).Set(PD.SunDir, 0.32f, 0.14f, -1).Set(PF.SunStrength, 0.4f).Set(PF.SunSize, 0.12f)
+                .Set(PC.Ground, 0x080c26).Set(PC.GroundAlt, 0xc4d0f4).Set(PC.GroundRim, 0xffb060)
+                .Set(PC.Band, 0x22346e).Set(PC.BandAlt, 0x1a2a5c)
                 .Set(PC.Accent, 0xffc23d).Set(PC.Accent2, 0x2f9bff).Set(PC.Accent3, 0xff4f9a)
-                .SetCrowd(0xfff0f0, 0xffe6d0, 0xf0e6ff)
-                .Set(PC.Key, 0xffa678).Set(PD.KeyDir, -0.66f, 0.46f, 0.5f).Set(PF.KeyIntensity, 2.8f)
-                .Set(PC.FillSky, 0x6a46c0).Set(PC.FillGround, 0x3a0e54).Set(PF.FillIntensity, 0.75f)
-                .Set(PC.Rim, 0xff7a58).Set(PD.RimDir, 0.6f, 0.3f, -0.75f).Set(PF.RimStrength, 1.45f)
-                .Set(PC.Fog, 0x34165a).Set(PF.FogNear, 20).Set(PF.FogFar, 120)
-                .Set(PF.Bloom, 0.5f).Set(PF.BloomThreshold, 1.35f).Set(PF.Exposure, 1.02f).Set(PF.Saturation, 1.18f).Set(PF.Vignette, 0.58f));
+                .SetCrowd(0xf0f4ff, 0xe6eeff, 0xf0e6ff)
+                .Set(PC.Key, 0xa8c4ff).Set(PD.KeyDir, -0.6f, 0.6f, 0.45f).Set(PF.KeyIntensity, 2.6f)
+                .Set(PC.FillSky, 0x3a56b0).Set(PC.FillGround, 0x141a48).Set(PF.FillIntensity, 0.8f)
+                .Set(PC.Rim, 0x7fd8ff).Set(PD.RimDir, 0.6f, 0.3f, -0.75f).Set(PF.RimStrength, 1.45f)
+                .Set(PC.Fog, 0x0e1c40).Set(PF.FogNear, 24).Set(PF.FogFar, 140)
+                .Set(PF.Bloom, 0.55f).Set(PF.BloomThreshold, 1.3f).Set(PF.Exposure, 1.05f).Set(PF.Saturation, 1.15f).Set(PF.Vignette, 0.58f));
 
             _all["chomp-chorus"] = Make(_base, p => p
                 .Set(PC.SkyTop, 0x110226).Set(PC.SkyMid, 0x3f0e5e).Set(PC.SkyBot, 0xb03bb0)
@@ -267,21 +267,21 @@ namespace Bonanza.Look
                 .Set(PC.Accent, 0xffcf6a).Set(PC.Accent2, 0xff8a3c).Set(PC.Accent3, 0x6fd0ff)
                 .SetCrowd(0xffcf6a, 0xff8a5c, 0xe86a8a, 0xfff0d0, 0x8ac8ff)
                 .Set(PC.Key, 0xfff0d6).Set(PD.KeyDir, -0.45f, 0.78f, 0.5f).Set(PF.KeyIntensity, 2.75f)
-                .Set(PC.FillSky, 0xd99a62).Set(PC.FillGround, 0x2a0e08).Set(PF.FillIntensity, 0.62f)
+                .Set(PC.FillSky, 0xd99a62).Set(PC.FillGround, 0x2a0e08).Set(PF.FillIntensity, 0.5f)
                 .Set(PC.Rim, 0xffc070).Set(PD.RimDir, 0.55f, 0.4f, -0.75f).Set(PF.RimStrength, 1.2f).Set(PF.RimPower, 2.4f)
-                .Set(PC.Fog, 0x1a0a06).Set(PF.FogNear, 15).Set(PF.FogFar, 50).Set(PF.FogHeight, 0.25f).Set(PF.FogHeightY, 5f)
+                .Set(PC.Fog, 0x1a0a06).Set(PF.FogNear, 11).Set(PF.FogFar, 40).Set(PF.FogHeight, 0.25f).Set(PF.FogHeightY, 5f)
                 .Set(PF.Bloom, 0.7f).Set(PF.BloomThreshold, 1.45f).Set(PF.Exposure, 1.06f).Set(PF.Saturation, 1.12f).Set(PF.Vignette, 0.55f));
             var ffMedium = Make(_base, p => p
                 .Set(PC.SkyTop, 0x02040e).Set(PC.SkyMid, 0x060a20).Set(PC.SkyBot, 0x101a40)
                 .Set(PC.Sun, 0x9fb8ff).Set(PD.SunDir, 0, 0.3f, -1).Set(PF.SunStrength, 0f).Set(PF.SunSize, 0.2f)
-                .Set(PC.Ground, 0x3a2030).Set(PC.GroundAlt, 0x553048).Set(PC.GroundRim, 0xffd27a)
+                .Set(PC.Ground, 0x3a1828).Set(PC.GroundAlt, 0x5c2236).Set(PC.GroundRim, 0xffd27a)
                 .Set(PC.Band, 0x1a2a6e).Set(PC.BandAlt, 0x2c48a8)
                 .Set(PC.Accent, 0xffd27a).Set(PC.Accent2, 0x6fd8ff).Set(PC.Accent3, 0xff6fae)
                 .SetCrowd(0x6fd8ff, 0xffd27a, 0xb08cff, 0xf0f4ff, 0xff8ab8)
                 .Set(PC.Key, 0xf4f2ff).Set(PD.KeyDir, -0.4f, 0.82f, 0.45f).Set(PF.KeyIntensity, 2.85f)
-                .Set(PC.FillSky, 0x6f82ff).Set(PC.FillGround, 0x080a20).Set(PF.FillIntensity, 0.7f)
+                .Set(PC.FillSky, 0x6f82ff).Set(PC.FillGround, 0x080a20).Set(PF.FillIntensity, 0.5f)
                 .Set(PC.Rim, 0x8fd4ff).Set(PD.RimDir, 0.55f, 0.4f, -0.75f).Set(PF.RimStrength, 1.4f).Set(PF.RimPower, 2.4f)
-                .Set(PC.Fog, 0x060a1e).Set(PF.FogNear, 15).Set(PF.FogFar, 50).Set(PF.FogHeight, 0.25f).Set(PF.FogHeightY, 5f)
+                .Set(PC.Fog, 0x060a1e).Set(PF.FogNear, 11).Set(PF.FogFar, 40).Set(PF.FogHeight, 0.25f).Set(PF.FogHeightY, 5f)
                 .Set(PF.Bloom, 0.75f).Set(PF.BloomThreshold, 1.4f).Set(PF.Exposure, 1.05f).Set(PF.Saturation, 1.15f).Set(PF.Vignette, 0.58f));
             var ffHard = Make(_base, p => p
                 .Set(PC.SkyTop, 0x080102).Set(PC.SkyMid, 0x180306).Set(PC.SkyBot, 0x3a0810)
@@ -291,9 +291,9 @@ namespace Bonanza.Look
                 .Set(PC.Accent, 0xffb03a).Set(PC.Accent2, 0xff5a3c).Set(PC.Accent3, 0x6fd0ff)
                 .SetCrowd(0xffb03a, 0xff5a3c, 0xff3a6a, 0xfff0d0, 0xffd27a)
                 .Set(PC.Key, 0xffe2c2).Set(PD.KeyDir, -0.35f, 0.88f, 0.35f).Set(PF.KeyIntensity, 3.0f)
-                .Set(PC.FillSky, 0xff5a3c).Set(PC.FillGround, 0x160204).Set(PF.FillIntensity, 0.55f)
+                .Set(PC.FillSky, 0xff5a3c).Set(PC.FillGround, 0x160204).Set(PF.FillIntensity, 0.45f)
                 .Set(PC.Rim, 0xff7a3c).Set(PD.RimDir, 0.6f, 0.35f, -0.75f).Set(PF.RimStrength, 1.6f).Set(PF.RimPower, 2.2f)
-                .Set(PC.Fog, 0x140204).Set(PF.FogNear, 14).Set(PF.FogFar, 46).Set(PF.FogHeight, 0.3f).Set(PF.FogHeightY, 5f)
+                .Set(PC.Fog, 0x140204).Set(PF.FogNear, 11).Set(PF.FogFar, 38).Set(PF.FogHeight, 0.3f).Set(PF.FogHeightY, 5f)
                 .Set(PF.Bloom, 0.85f).Set(PF.BloomThreshold, 1.35f).Set(PF.Exposure, 1.05f).Set(PF.Saturation, 1.18f).Set(PF.Vignette, 0.62f));
             foreach (var kv in new[] { ("easy", ffEasy), ("medium", ffMedium), ("hard", ffHard) })
             {

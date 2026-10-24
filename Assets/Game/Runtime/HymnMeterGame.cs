@@ -230,6 +230,16 @@ namespace Bonanza
             return list;
         }
 
+        /// The card centred, a filled rank stamp with the sticker pinned to it, and the six excerpts as pips (gold
+        /// first, mint right, coral wrong, grey no answer), like the strip's.
+        public override void ResultsStyle(Bonanza.HudKit.ResultsData d)
+        {
+            d.Centered = true; d.RankFilled = true; d.BadgeOnRank = true;
+            if (_round == null) return;
+            d.Pips = new List<Color>();
+            foreach (var s in _round.Slots) d.Pips.Add(PipColor(s));
+        }
+
         public override IEnumerable<KeyValuePair<string, double>> TestChart()
         {
             foreach (var p in _round.PerfectPresses()) yield return new KeyValuePair<string, double>(p.Action, p.Time);

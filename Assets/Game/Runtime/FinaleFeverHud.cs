@@ -193,15 +193,17 @@ namespace Bonanza
         void BuildStrip(RectTransform root)
         {
             _strip = UiKit.Rect("Programme", root);
-            UiKit.Place(_strip, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -12), new Vector2(400, 62));
+            UiKit.Place(_strip, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -12), new Vector2(440, 62));
             Plate(_strip, 22, 0.66f);
             Rim(_strip, 22, new Color(1f, 0.85f, 0.5f, 0.22f));
             _levelChip = UiKit.Box(_strip, "LevelChip", Mint, UiKit.Pill, true, 10);
-            Centre(_levelChip.rectTransform, new Vector2(-126, 13), new Vector2(96, 22));
+            Centre(_levelChip.rectTransform, new Vector2(-146, 13), new Vector2(96, 22));
             _levelText = Label(_levelChip.transform, "Level", "EASY", 10f, Ink, TextAlignmentOptions.Midline, 10);
             UiKit.Stretch(_levelText.rectTransform);
             _stripTitle = Label(_strip, "Title", "HYMN 1 / 3", 11.5f, UiKit.Cream, TextAlignmentOptions.MidlineLeft, 8);
-            Centre(_stripTitle.rectTransform, new Vector2(46, 13), new Vector2(240, 22));
+            Centre(_stripTitle.rectTransform, new Vector2(46, 13), new Vector2(270, 22));
+            _stripTitle.enableAutoSizing = true; _stripTitle.fontSizeMax = _stripTitle.fontSize; _stripTitle.fontSizeMin = _stripTitle.fontSize * 0.6f;
+            _stripTitle.overflowMode = TextOverflowModes.Truncate;
             _pipRow = UiKit.Rect("Lines", _strip);
             Centre(_pipRow, new Vector2(0, -13), new Vector2(360, 20));
             for (int i = 0; i < _pips.Length; i++)
@@ -324,8 +326,6 @@ namespace Bonanza
             Centre(gz.rectTransform, Vector2.zero, new Vector2(TrackW * great, TrackH - 4));
             _onZone = UiKit.Box(_track, "On", new Color(CallOn.r, CallOn.g, CallOn.b, 0.75f), UiKit.Pill, true, 6);
             Centre(_onZone.rectTransform, Vector2.zero, new Vector2(TrackW * perfect, TrackH - 2));
-            var onLbl = Label(_track, "OnLbl", "ON", 8.5f, Ink, TextAlignmentOptions.Midline, 10);
-            Centre(onLbl.rectTransform, new Vector2(0, 0), new Vector2(60, 16));
             var mid = UiKit.Box(_track, "Mid", new Color(1, 1, 1, 0.9f));
             Centre(mid.rectTransform, Vector2.zero, new Vector2(2, TrackH + 10));
             for (int i = 0; i < _mticks.Length; i++)
@@ -351,7 +351,7 @@ namespace Bonanza
         void BuildCallout(RectTransform root)
         {
             _callout = UiKit.Rect("Callout", root);
-            UiKit.Place(_callout, new Vector2(0.5f, 0), new Vector2(0.5f, 0.5f), new Vector2(0, 150), new Vector2(200, 58));
+            UiKit.Place(_callout, new Vector2(0.5f, 0), new Vector2(0.5f, 0.5f), new Vector2(250, 170), new Vector2(200, 58));   // beside the podium, over the player's drum side: never on the maestro
             _callPlate = Plate(_callout, 24, 0.7f);
             _callRim = Rim(_callout, 24, Color.white);
             _callText = Label(_callout, "Word", "", 22f, Color.white, TextAlignmentOptions.Midline, 4, TextStyle.Display);
@@ -391,7 +391,7 @@ namespace Bonanza
         void BeginHud()
         {
             Ui.ShowScoreboard();
-            Ui.Banner(Title, "TAP EVERY BEAT - THE TEMPO WILL MOVE", Gold, 1.8f, plate: true, y: 0.42f);
+            Ui.Banner(Title, "TAP EVERY BEAT - THE TEMPO WILL MOVE", Gold, 1.8f, plate: true, y: 0.33f, scale: 0.85f);
             int n = _round.Slots.Count;
             _bpmLo = new double[n]; _bpmHi = new double[n]; _fermBpm = new double[n][];
             for (int k = 0; k < n; k++)
@@ -430,7 +430,7 @@ namespace Bonanza
         {
             _stripPulse = 1;
             if (slot.Index > 0)
-                Ui.Banner($"HYMN {slot.Index + 1} / {TempoRound.ExcerptCount}", slot.Level == HymnLevel.Medium ? "MEDIUM - UP AND DOWN" : "HARD - JUMPS AND HOLDS", LevelColor(slot.Level), 1.6f, plate: true, y: 0.42f);
+                Ui.Banner($"HYMN {slot.Index + 1} / {TempoRound.ExcerptCount}", slot.Level == HymnLevel.Medium ? "MEDIUM - UP AND DOWN" : "HARD - JUMPS AND HOLDS", LevelColor(slot.Level), 1.4f, plate: true, y: 0.33f, scale: 0.78f);
         }
 
         void HudTapped(TempoBeat b)
@@ -479,8 +479,8 @@ namespace Bonanza
         void HudLine(TempoLine line)
         {
             string what; Color c;
-            if (line.HeartDelta < 0) { what = $"LINE {line.Index + 1}: {line.Misses} MISSED - HEART LOST"; c = CallMiss; }
-            else if (line.Misses == 0 && line.Top == line.Count) { what = line.HeartDelta > 0 ? $"LINE {line.Index + 1}: CLEAN - HEART BACK" : $"LINE {line.Index + 1}: CLEAN"; c = Gold; }
+            if (line.HeartDelta < 0) { what = $"LINE {line.Index + 1}: HEART LOST"; c = CallMiss; }
+            else if (line.Misses == 0 && line.Top == line.Count) { what = line.HeartDelta > 0 ? $"LINE {line.Index + 1}: HEART BACK" : $"LINE {line.Index + 1}: CLEAN"; c = Gold; }
             else if (line.Misses == 0) { what = $"LINE {line.Index + 1}: KEPT"; c = Mint; }
             else { what = $"LINE {line.Index + 1}: {line.Misses} MISSED"; c = Amber; }
             _toast = what; _toastColor = c; _toastLife = 1.9f;
@@ -513,7 +513,7 @@ namespace Bonanza
             string tier = _round.Tier;
             string head = _round.Survived ? "YOU SURVIVED" : tier == "METRONOME" ? "BRAVISSIMO!" : "BRAVO!";
             string sub = tier == "METRONOME" ? "NOT ONE BEAT MISSED" : _round.Survived ? "THE RANK STOPS AT B" : $"{_round.Miss} BEATS MISSED";
-            Ui.Banner(head, sub, _round.Survived ? CallMiss : Gold, 2.9f, plate: true, y: 0.24f);
+            Ui.Banner(head, sub, _round.Survived ? CallMiss : Gold, 2.9f, plate: true, y: 0.3f, scale: 0.85f);
             _finaleK = 0.001f;
             _meterTitle.text = "YOUR AVERAGE OVER THE ROUND";
             _leanMs = (float)_round.BiasMs;
@@ -596,6 +596,7 @@ namespace Bonanza
             if (k != _stripSlot)
             {
                 _stripSlot = k;
+                _toastLife = 0;   // a new excerpt: the last line's verdict belongs to the one before
                 _levelText.text = s.Level.ToString().ToUpperInvariant();
                 _pipCount = Mathf.Min(_pips.Length, s.Lines.Count);
                 float pw = 30, pg = 8, x0 = -(_pipCount * pw + (_pipCount - 1) * pg) / 2 + pw / 2;
@@ -731,7 +732,7 @@ namespace Bonanza
             }
             if (_finaleK <= 0)
             {
-                string title = Beat < 0 ? "TAP ON EVERY BEAT" : hidden ? "BY EAR - KEEP THE BEAT GOING" : "TIMING";
+                string title = Beat < 0 ? "TAP ON EVERY BEAT" : hidden ? "BY EAR - KEEP THE BEAT GOING" : "ON THE BEAT";
                 if (_meterTitle.text != title) _meterTitle.text = title;
                 _meterTitle.color = hidden ? CallEarly : UiKit.Cream;
             }
@@ -740,8 +741,8 @@ namespace Bonanza
             {
                 _finaleK = Mathf.Min(1, _finaleK + real * 1.6f);
                 float e = reduce ? 1 : UiKit.EaseOutCubic(_finaleK);
-                _meter.anchoredPosition = new Vector2(0, Mathf.Lerp(16, 200, e));
-                _meter.localScale = Vector3.one * Mathf.Lerp(1, 1.3f, e);
+                _meter.anchoredPosition = new Vector2(0, Mathf.Lerp(16, 40, e));
+                _meter.localScale = Vector3.one * Mathf.Lerp(1, 1.18f, e);
                 _diamond.gameObject.SetActive(false);
             }
 
