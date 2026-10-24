@@ -67,6 +67,7 @@ namespace Bonanza.Shell
         public PartyHubScreen Hub { get; private set; }
         public PartyFinalScreen Final { get; private set; }
         public FreePlayScreen FreePlay { get; private set; }
+        public OptionsScreen Options { get; private set; }
         public ShellScreen Current { get; private set; }
 
         RectTransform _root;
@@ -106,6 +107,8 @@ namespace Bonanza.Shell
             Final.BuildInto(_root, "PartyFinal");
             FreePlay = new FreePlayScreen();
             FreePlay.BuildInto(_root, "FreePlay");
+            Options = new OptionsScreen();
+            Options.BuildInto(_root, "Options");
         }
 
         void Update()

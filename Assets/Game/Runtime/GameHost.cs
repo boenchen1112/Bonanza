@@ -361,9 +361,6 @@ namespace Bonanza
 
         static bool ShellMode(Mode m) => m == Mode.Title || m == Mode.Menu || m == Mode.Options || m == Mode.Roster || m == Mode.PartyHub;
 
-        /// The IMGUI screens still on the placeholder dim less over the live hall so it shows through.
-        float ShellDim(float a) => _hall != null && _hall.Live ? Mathf.Min(a, 0.5f) : a;
-
         string PoseFor(Mode m) => m switch
         {
             Mode.Title => Title.Attract ? "attract" : "title",
@@ -399,6 +396,7 @@ namespace Bonanza
                 if (_mode == Mode.Title) { if (Shell.Current != Shell.Title) Shell.Show(Shell.Title, null); }
                 else if (_mode == Mode.Roster) { if (Shell.Current != Shell.Roster) Shell.Show(Shell.Roster, null); }
                 else if (_mode == Mode.Menu) { if (Shell.Current != Shell.FreePlay) Shell.Show(Shell.FreePlay, null); }
+                else if (_mode == Mode.Options) { if (Shell.Current != Shell.Options) Shell.Show(Shell.Options, null); }
                 else if (_mode == Mode.PartyHub && _party != null)
                 {
                     var scr = _party.Done ? (ShellScreen)Shell.Final : Shell.Hub;
@@ -411,7 +409,7 @@ namespace Bonanza
             else if (!want)
             {
                 if (_hall != null && _hall.Live && !ShellMode(_mode) && !gate) HallSuspend();
-                if (Shell.Current != null && _mode != Mode.Title && _mode != Mode.Roster && _mode != Mode.PartyHub && _mode != Mode.Menu) Shell.Hide();
+                if (Shell.Current != null && _mode != Mode.Title && _mode != Mode.Roster && _mode != Mode.PartyHub && _mode != Mode.Menu && _mode != Mode.Options) Shell.Hide();
             }
         }
 
@@ -619,6 +617,78 @@ namespace Bonanza
                 }
             }
             Shell.FreePlay.View = new FreePlayView { Focus = _menuIndex, Cards = cards };
+        }
+
+        /// Push the options' state into the uGUI view and apply what the pointer did (a slider drag, a held stepper).
+        float _optTick;
+        void FeedOptions()
+        {
+            var o = Shell.Options;
+            if (!_confirmReset)
+            {
+                if (o.DragRow >= 0)
+                {
+                    _optIndex = o.DragRow;
+                    float q = Settings.QuantizePct(o.DragValue);
+                    bool sfx = o.DragRow == (int)Opt.Sfx;
+                    if (!Mathf.Approximately(q, sfx ? Settings.Sfx : Settings.Music))
+                    {
+                        if (sfx) Settings.Sfx = q; else Settings.Music = q;
+                        if (sfx && Time.unscaledTime - _optTick > 0.08f) { _optTick = Time.unscaledTime; ShellSfx("ui"); }   // hear the new level
+                    }
+                }
+                int rep = o.TakeRepeat();
+                if (rep != 0) { _optIndex = (int)Opt.Offset; AdjustOption(_optIndex, rep); }
+            }
+            else o.TakeRepeat();
+            string gfx = _optIndex == (int)Opt.Graphics
+                ? $"Now drawing at {RenderQuality.Level.Scale:0.##}x, {RenderQuality.Level.Tier.ToString().ToUpperInvariant()}{(RenderQuality.Auto ? " (auto: " + RenderQuality.Reason + ")" : "")}"
+                : null;
+            o.View = new OptionsView
+            {
+                Focus = _optIndex, Confirm = _confirmReset, Music = Settings.Music, Sfx = Settings.Sfx, Offset = Settings.OffsetMs,
+                Reduce = Settings.ReduceMotionOption, ReduceSystem = Settings.ReduceMotion, Graphics = (int)Settings.Graphics,
+                Swing = (int)Settings.SwingInputChoice, CameraAvail = Settings.CameraInputAvailable, GfxLine = gfx,
+            };
+        }
+
+        /// Invisible IMGUI click targets over the options' controls. Sliders are dragged (FeedOptions), not clicked.
+        void OptionsTargets()
+        {
+            if (!Shell.Interactive || Shell.Current != Shell.Options) return;
+            var o = Shell.Options;
+            for (int i = 0; i < Shell.ButtonCount; i++)
+            {
+                var rect = Shell.ButtonScreen(i);
+                if (rect.width <= 0 || !GUI.Button(rect, GUIContent.none, GUIStyle.none)) continue;
+                if (_confirmReset)
+                {
+                    if (i == OptionsScreen.ResetBtn) { Save.ResetProgress(Games.Select(e => e.Id)); ShellSfx("fanfare"); }
+                    else ShellSfx("uiBack");
+                    _confirmReset = false;
+                    break;
+                }
+                int row = OptionsScreen.RowOf(i);
+                if (i >= OptionsScreen.RowBase) { if (_optIndex != row) { _optIndex = row; ShellSfx("ui"); } }
+                else if (i == OptionsScreen.MusicTrack || i == OptionsScreen.SfxTrack) _optIndex = row;
+                else if (i == OptionsScreen.OffMinus || i == OptionsScreen.OffPlus)
+                {
+                    _optIndex = row;
+                    if (!o.Repeated) AdjustOption(row, i == OptionsScreen.OffPlus ? 1 : -1);
+                }
+                else if (i < OptionsScreen.GfxBase) { _optIndex = row; Settings.ReduceMotionOption = i == OptionsScreen.ReduceBase + 1; ShellSfx("ui"); }
+                else if (i < OptionsScreen.SwingBase)
+                {
+                    _optIndex = row;
+                    Settings.Graphics = (GraphicsSetting)(i - OptionsScreen.GfxBase);
+                    RenderQuality.Apply(Settings.Graphics);
+                    ShellSfx("ui");
+                }
+                else if (i < OptionsScreen.ResetBtn) { _optIndex = row; Settings.SwingInputChoice = (SwingInput)(i - OptionsScreen.SwingBase); ShellSfx("ui"); }
+                else if (i == OptionsScreen.ResetBtn) OptionChoice((int)Opt.Reset);
+                else if (i == OptionsScreen.BackBtn) OptionChoice((int)Opt.Back);
+                break;
+            }
         }
 
         /// Invisible IMGUI click targets over Free Play's cards, PLAY and BACK.
@@ -1241,6 +1311,7 @@ namespace Bonanza
                         else if (InputMap.IsBack(p.Action)) { ShellSfx("uiBack"); _mode = Mode.Title; break; }
                     }
                     _presses.Clear();
+                    if (_mode == Mode.Options) FeedOptions();
                     break;
 
                 case Mode.Roster:
@@ -1546,27 +1617,6 @@ namespace Bonanza
             }
         }
 
-        string OptionValue(int row)
-        {
-            switch ((Opt)row)
-            {
-                case Opt.Music: return Mathf.RoundToInt(Settings.Music * 100) + "%";
-                case Opt.Sfx: return Mathf.RoundToInt(Settings.Sfx * 100) + "%";
-                case Opt.Offset: { float v = Settings.OffsetMs; return (v > 0 ? "+" : "") + v.ToString("0") + "ms"; }
-                case Opt.Reduce: return Settings.ReduceMotionOption ? "ON" : Settings.ReduceMotion ? "ON (SYSTEM)" : "OFF";
-                case Opt.Graphics: return Settings.Graphics.ToString().ToUpperInvariant();
-                case Opt.Swing:
-                    switch (Settings.SwingInputChoice)
-                    {
-                        case SwingInput.Mouse: return "MOUSE CONDUCT";
-                        case SwingInput.Camera: return Settings.CameraInputAvailable ? "CAMERA CONDUCT" : "CAMERA CONDUCT (N/A)";
-                        default: return "TAP";
-                    }
-                case Opt.Reset: return _confirmReset ? "scores, ranks, stats" : "";
-            }
-            return "";
-        }
-
         void TickGame()
         {
             _phase = "tick";
@@ -1766,29 +1816,7 @@ namespace Bonanza
                     TitleTargets();
                     break;
 
-                case Mode.Options:
-                    Hud.Dim(ShellDim(0.85f));
-                    Hud.Center(0.08f, "OPTIONS", Hud.Big, Hud.Gold, 100);
-                    for (int i = 0; i < OptionRows.Length; i++)
-                    {
-                        bool isReset = i == (int)Opt.Reset;
-                        string label = isReset && _confirmReset ? "RESET ALL PROGRESS?" : OptionRows[i];
-                        bool grey = i == (int)Opt.Swing && Settings.SwingInputChoice == SwingInput.Camera && !Settings.CameraInputAvailable;
-                        if (MenuRow(i, 0.21f, label, OptionValue(i), i == _optIndex, s, 50, 44, grey, 0.6f))
-                        {
-                            if (_confirmReset) { if (isReset) { Save.ResetProgress(Games.Select(e => e.Id)); ShellSfx("fanfare"); } else ShellSfx("uiBack"); _confirmReset = false; }
-                            else OptionChoice(i);
-                        }
-                    }
-                    if (_confirmReset) Hud.Center(0.8f, "SPACE: reset     any other key: cancel", Hud.Small, new Color(1, 0.6f, 0.6f, 0.9f), 40);
-                    else if (_optIndex == (int)Opt.Graphics)
-                        Hud.Center(0.8f, $"Now drawing at {RenderQuality.Level.Scale:0.##}x, {RenderQuality.Level.Tier.ToString().ToUpperInvariant()}{(RenderQuality.Auto ? " (auto: " + RenderQuality.Reason + ")" : "")}", Hud.Small, new Color(1, 1, 1, 0.7f), 40);
-                    else if (_optIndex == (int)Opt.Swing)
-                        Hud.Center(0.8f, "Tap is the default. Mouse: hold the button as the ball flies, flick the pointer DOWN as it lands.\n" + (Settings.CameraInputAvailable ? "Camera: raise your hand as the ball flies, conduct DOWN as it lands. Asks for your webcam when a round starts; nothing is recorded or sent." : "Camera conducting needs a browser with webcam access; here it conducts with the mouse."), Hud.Small, new Color(1, 1, 1, 0.7f), 80);
-                    else if (_optIndex == (int)Opt.Offset)
-                        Hud.Center(0.8f, "Negative offset = your presses land late.\nPress late and see GOOD more than PERFECT? Try -20 ms steps.", Hud.Small, new Color(1, 1, 1, 0.7f), 80);
-                    Hud.Center(0.9f, "UP/DOWN choose   LEFT/RIGHT adjust   ESC / X back", Hud.Small, new Color(1, 1, 1, 0.7f), 40);
-                    break;
+                case Mode.Options: OptionsTargets(); break;
 
                 case Mode.Roster: RosterTargets(); break;
 
@@ -1863,17 +1891,6 @@ namespace Bonanza
             Hud.Box(menu, new Color(1, 1, 1, 0.12f)); Hud.Text(menu, "MENU", Hud.Small, Color.white);
             if (GUI.Button(again, GUIContent.none, GUIStyle.none)) Open(_entry);
             else if (GUI.Button(menu, GUIContent.none, GUIStyle.none)) LeaveRound();
-        }
-
-        /// One selectable row: label left, value right. Row i sits at y0 + i rows. True if clicked.
-        bool MenuRow(int i, float y0, string label, string value, bool sel, float s, float pitch = 80, float height = 66, bool grey = false, float width = 0.44f)
-        {
-            var r = new Rect(Screen.width * (0.5f - width / 2), Screen.height * y0 + i * pitch * s, Screen.width * width, height * s);
-            Hud.Box(r, sel ? new Color(1, 0.8f, 0.3f, 0.35f) : new Color(1, 1, 1, 0.08f));
-            Hud.Text(new Rect(r.x + 18 * s, r.y, r.width, r.height), label, Hud.Mid, sel ? Hud.Gold : Color.white, TextAnchor.MiddleLeft);
-            if (!string.IsNullOrEmpty(value))
-                Hud.Text(new Rect(r.x, r.y, r.width - 18 * s, r.height), value, Hud.Small, grey ? new Color(1, 1, 1, 0.4f) : new Color(1, 1, 1, 0.85f), TextAnchor.MiddleRight);
-            return i >= 0 && GUI.Button(r, GUIContent.none, GUIStyle.none);
         }
 
         static readonly string[] PlaceName = { "1ST", "2ND", "3RD", "4TH" };
