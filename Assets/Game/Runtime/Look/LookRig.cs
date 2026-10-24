@@ -42,6 +42,8 @@ namespace Bonanza.Look
         public Fx Fx { get; private set; }
         /// 0..1 beat flash. Set by the game each frame; surfaces lift and the key breathes with it.
         public float BeatPulse;
+        /// Opt-in stage dim (0 = off, the default): the exposure falls by this share. A game sets it each frame it wants a dim.
+        public float Dim;
 
         Transform _sky;
         Camera _cam;
@@ -306,7 +308,7 @@ namespace Bonanza.Look
             Shader.SetGlobalVector("_BonRimColor", V(p[PC.Rim]));
             Shader.SetGlobalVector("_BonRimDir", Dir(p[PD.RimDir]));
             Shader.SetGlobalVector("_BonRimParams", new Vector4(p[PF.RimStrength], p[PF.RimPower], pulse, 0));
-            Shader.SetGlobalVector("_BonPostParams", new Vector4(p[PF.Exposure], p[PF.Saturation], p[PF.Vignette] * RenderQuality.Vignette, _time % 100f));
+            Shader.SetGlobalVector("_BonPostParams", new Vector4(p[PF.Exposure] * (1 - Mathf.Clamp01(Dim) * 0.5f), p[PF.Saturation], p[PF.Vignette] * RenderQuality.Vignette, _time % 100f));
             Shader.SetGlobalVector("_BonFogColor", V(p[PC.Fog]));
             Shader.SetGlobalVector("_BonFogParams", new Vector4(p[PF.FogNear], p[PF.FogFar], p[PF.FogHeight], p[PF.FogHeightY]));
             // Shadow tint: a much darker, slightly cooler ground, so shadows sit in the palette.

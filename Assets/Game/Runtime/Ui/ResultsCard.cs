@@ -25,6 +25,8 @@ namespace Bonanza.HudKit
         /// with a glow, the sticker pinned to the stamp, and a row of result pips (one colour per round of the game).
         public bool Centered, RankFilled, BadgeOnRank;
         public List<Color> Pips;
+        /// Opt-in: the stat row's label size in px (0 = the shared 7.9) in near-white, for a card that is read at a glance.
+        public float StatLabelPx;
         public List<PartyRow> Party;
         /// (key, label) chips for the continue prompt: ("SPACE", "play again"), ("ESC", "menu").
         public List<KeyValuePair<string, string>> Prompts = new List<KeyValuePair<string, string>>();
@@ -46,6 +48,7 @@ namespace Bonanza.HudKit
         bool _built;
         float _t = -1, _stampAt, _badgeAt;
         Color _rankColor;
+        float _statLabelPx;
 
         sealed class Item { public RectTransform Rt; public CanvasGroup Group; public float At; public Vector2 Pos; }
 
@@ -79,6 +82,7 @@ namespace Bonanza.HudKit
             _group.alpha = 1;
             _score = d.Score; _lastShown = -1;
             _rankColor = UiKit.RankColor(d.Rank);
+            _statLabelPx = d.StatLabelPx;
 
             // the dim sits under the card: the scene behind stays, darker
             _dim = UiKit.Box(_root, "Dim", new Color(8 / 255f, 7 / 255f, 20 / 255f, 0.68f));
@@ -271,8 +275,8 @@ namespace Bonanza.HudKit
                 n.rectTransform.anchorMin = n.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
                 n.rectTransform.sizeDelta = new Vector2(colW, 30); n.rectTransform.anchoredPosition = new Vector2(0, 8);
                 n.text = cells[i].value;
-                var l = UiKit.Text(cell, "L", TextStyle.Label, 11f * 0.72f, UiKit.Dim, TextAlignmentOptions.Center, italic: false);
-                l.characterSpacing = 8f;
+                var l = UiKit.Text(cell, "L", TextStyle.Label, _statLabelPx > 0 ? _statLabelPx : 11f * 0.72f, _statLabelPx > 0 ? new Color(0.93f, 0.94f, 0.98f) : UiKit.Dim, TextAlignmentOptions.Center, italic: false);
+                l.characterSpacing = _statLabelPx > 0 ? 0f : 8f;
                 l.rectTransform.anchorMin = l.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
                 l.rectTransform.sizeDelta = new Vector2(colW, 16); l.rectTransform.anchoredPosition = new Vector2(0, -12);
                 l.text = cells[i].label;

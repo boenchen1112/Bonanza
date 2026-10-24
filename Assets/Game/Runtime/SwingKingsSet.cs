@@ -62,6 +62,7 @@ namespace Bonanza
         // net, night, batter
         Material _netMat;
         float _netHit;
+        Material _batterMat, _cardMat;
         Material[] _flareMats, _poolMats, _blinkMats, _winMats;
         int _skyWindowCount;
         Renderer[] _blinkers;
@@ -490,6 +491,33 @@ namespace Bonanza
             var r0r = EnvKit.Static(_env, "StandRows", transform, b, mat);
             r0r.receiveShadows = false;
 
+            // Low quality trims the crowd to a share of the figures; flat fan cards fill the seats it leaves empty (one
+            // static mesh drawn in Load, in the crowd's palette, tinted with it at night). Nothing on High.
+            float gap = 1 - RenderQuality.CrowdBudget;
+            if (gap > 0.01f)
+            {
+                _cardMat = EnvKit.Surface(_env, Color.white, null, null, rim: 0.3f, pulse: 0.03f, bands: 2, twoSided: true);
+                var cb = new MeshBuilder();
+                var rng = new System.Random(0x5ea7);
+                Color[] fans = { Lin(0xffe066), Lin(0x7fe7ff), Lin(0xff5d7a), Lin(0xeeeeff), Lin(0xb28cff) };
+                const int Seg = 70;
+                for (int k = 0; ; k++)
+                {
+                    float r = o.Radius + k * o.RowDepth;
+                    if (r > o.BowlTop - 0.5f) break;
+                    for (int i = 0; i < Seg; i++)
+                    {
+                        if (rng.NextDouble() > gap * 0.9f) continue;
+                        float a = a0 + arc * (i + 0.5f) / Seg;
+                        float t = Tone(a) * 0.62f;
+                        var c = fans[rng.Next(fans.Length)];
+                        cb.Shell(r - 0.3f, r - 0.3f, 0.62f, 1, a, arc / Seg * 0.5f,
+                            Matrix4x4.Translate(new Vector3(0, YAt(r) + 0.42f, cz)), new Color(c.r * t, c.g * t, c.b * t, 1), Vector2.one, inward: true);
+                    }
+                }
+                if (cb.Count > 0) EnvKit.Static(_env, "StandCards", transform, cb, _cardMat).receiveShadows = false;
+            }
+
             // Section dividers: low concrete walls up three of the aisles, splitting the bowl into sections, with a pale cap.
             var db = new MeshBuilder();
             foreach (int ai in new[] { 2, 5, 8 })
@@ -916,7 +944,7 @@ namespace Bonanza
         /// The stand-in batter (neutral capsule + batting helmet) and a real bat: tapered barrel, knob, tip.
         void BuildBatter()
         {
-            var batterMat = Mat(Color.white, rim: 0.9f); Look.Track(batterMat, PC.Batter);
+            var batterMat = Mat(Color.white, rim: 0.9f); Look.Track(batterMat, PC.Batter); _batterMat = batterMat;
             var go = Cast(Prim(PrimitiveType.Capsule, BatterPos + Vector3.up * 0.9f, new Vector3(0.6f, 0.9f, 0.6f), batterMat));
             go.name = "BatterStandIn";
             _batter = go.transform;
@@ -1171,13 +1199,13 @@ namespace Bonanza
             _nightK = Damp(_nightK, _nightGoal, 1.4f, dt);
             float n = _nightK;
             float flicker = 1 + Mathf.Sin(Time.time * 23f) * 0.015f;
-            for (int i = 0; i < _flareMats.Length; i++) _flareMats[i].SetFloat(IdIntensity, (n * 2.0f * flicker + Look.BeatPulse * n * 0.4f) * (i == 0 ? 0.22f : 1));   // the near head sits by the score: a lit lamp, not a flare
+            for (int i = 0; i < _flareMats.Length; i++) _flareMats[i].SetFloat(IdIntensity, (n * 2.0f * flicker + Look.BeatPulse * n * 0.4f) * (i == 0 ? 0.08f : 1));   // the near head sits by the score: a faint lamp that cannot bloom beside the HUD
             for (int i = 0; i < _flareMatsR.Length; i++) _flareMatsR[i].SetFloat(IdIntensity, n * 2.2f * flicker + Look.BeatPulse * n * 0.3f);
             // the floods carry the night: warm pools on the plate and the mound
             for (int i = 0; i < _poolMats.Length; i++) _poolMats[i].SetFloat(IdIntensity, n * 0.6f * (1 + Look.BeatPulse * 0.04f));   // warm, never a white hot spot on the plate
             for (int i = 0; i < _beamMats.Length; i++)
             {
-                _beamMats[i].SetFloat(IdIntensity, n * 0.26f * flicker);
+                _beamMats[i].SetFloat(IdIntensity, n * 0.13f * flicker);
                 bool on = n > 0.01f;   // no blended cone over the frame by day (the shader is linked by the near cones)
                 if (_beamR[i].enabled != on) _beamR[i].enabled = on;
             }
@@ -1199,11 +1227,12 @@ namespace Bonanza
             // the night turf keeps its clumps and mow texture under the floods (flat teal read as a painted floor)
             if (_turfMat) _turfMat.SetFloat("_MapStrength", Mathf.Lerp(0.72f, 1.0f, n));
             if (_ledMat) _ledMat.SetColor("_BaseColor", Color.Lerp(LedDay, LedNight, n) * (1 + Look.BeatPulse * 0.25f));
-            _env?.Spotlights?.SetLevel(Mathf.Lerp(0.03f, 0.016f, n), Mathf.Lerp(0.04f, 0.028f, n));   // at night the cones read from the towers to the pools, without a milky veil over the crowd
+            _env?.Spotlights?.SetLevel(Mathf.Lerp(0.03f, 0.008f, n), Mathf.Lerp(0.04f, 0.014f, n));   // at night the cones read from the towers to the pools, without a milky veil over the crowd
             // the bowl falls dark toward the walls at night; the floods and the rim light carry the crowd
             if (_env?.Crowd != null) _env.Crowd.O.StandColor = Color.Lerp(StandDay, StandNight, n);
             if (_rowsMat) _rowsMat.SetColor("_BaseColor", Color.Lerp(StandDay, StandNight, n));
-            _env?.Crowd?.SetTint(Color.Lerp(Color.white, new Color(0.4f, 0.44f, 0.64f), n));   // the crowd falls ~40% darker: the field's pools are the brightest thing
+            _env?.Crowd?.SetTint(Color.Lerp(Color.white, new Color(0.58f, 0.62f, 0.84f), n));   // the crowd's lit side is lifted so it reads against the haze; the pools stay the brightest thing
+            if (_cardMat) _cardMat.SetColor("_BaseColor", Color.Lerp(Color.white, new Color(0.58f, 0.62f, 0.84f), n));
 
             // stand-in: hop on a hit, slump on a miss (the character replaces this; the cues stay)
             _batterHop = Damp(_batterHop, 0, 5, dt);

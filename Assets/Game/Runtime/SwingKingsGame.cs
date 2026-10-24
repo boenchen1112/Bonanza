@@ -111,6 +111,9 @@ namespace Bonanza
         DownbeatPitch _lastBall;
 
         // HUD (canvas: Ui). Presentation only; it ages on real time.
+        float _dim;                     // eased stage-light dim while SIDE RETIRED holds
+        float _finishPush;              // slow push-in on the batter through the finish
+        double _fbSplitAt = -1, _fbLiveAt = -1; string _fbLevel;   // the free-bars counter and the live stinger (clocked off the bar line)
         float _outsClear;               // seconds until the lamps reset after the side is retired
         bool _hintHidden;
         float _camPush, _camLift;
@@ -209,6 +212,7 @@ namespace Bonanza
             // The HUD (web ui.hud + swingKings/hud.js): score block, outs lamps, the one-line instruction, the title card.
             Ui.ShowScoreboard();
             Ui.CornerScrims(true);   // the arches and bunting run into both top corners
+            Ui.OutMarks = true;
             Ui.Outs(0);
             _mouse = Conducting;
             Ui.Hint(_cam ? HintCamera : _mouse
@@ -534,6 +538,19 @@ namespace Bonanza
             UpdateFinaleShow(dt);
             UpdateBat(dt);
             UpdateSet(dt, _round != null ? _round.BeatAt(_now) : 0);
+            _dim = Damp(_dim, _outsClear > 0 ? 1 : 0, _outsClear > 0 ? 6f : 2.5f, Time.deltaTime);
+            Look.Dim = Settings.ReduceMotion ? _dim * 0.5f : _dim;
+            if (_finishShown) _finishPush = Mathf.Min(1, _finishPush + Time.deltaTime / 5f);
+            if (_fbSplitAt > 0 && _now >= _fbSplitAt)
+            {
+                _fbSplitAt = -1;
+                Ui.Banner("FREE BAR 2/2", "LISTEN FOR THE DOWNBEAT", new Color(0.62f, 0.9f, 1f), Mathf.Max(1f, (float)(_fbLiveAt - _now) * 0.8f), plate: true, y: 0.73f, scale: 0.5f);
+            }
+            if (_fbLiveAt > 0 && _now >= _fbLiveAt)
+            {
+                _fbLiveAt = -1;
+                Ui.Banner("PLAY BALL!", null, Bonanza.HudKit.UiKit.Gold, 0.8f, plate: true, y: 0.72f, scale: 0.8f);
+            }
             // "SIDE RETIRED" holds all three lamps, then the count starts over (web _outsClear).
             if (_outsClear > 0)
             {
@@ -549,8 +566,8 @@ namespace Bonanza
             _camLift = Damp(_camLift, 0, 3.4f, dt);
             _camPush = Damp(_camPush, 0, 3.2f, dt);
             Look.Rig.Frame(
-                W(-1.9f + _camPush * 0.9f, 1.95f + _camPush * 0.15f + _camLift * 0.42f, 0),
-                (night ? 12.0f : 12.6f) - _camPush * 0.5f + _camLift * 0.7f,
+                W(-1.9f + _camPush * 0.9f + _finishPush * 0.5f, 1.95f + _camPush * 0.15f + _camLift * 0.42f, 0),
+                (night ? 12.0f : 12.6f) - _camPush * 0.5f + _camLift * 0.7f - _finishPush * 2.2f * (Settings.ReduceMotion ? 0.4f : 1),
                 2.15f, 0.055f + Mathf.Sin((float)beat * 0.11f) * 0.012f, 45, 2.4f);
         }
 
@@ -591,8 +608,12 @@ namespace Bonanza
             float free = (float)(firstScored - _now);
             float life = Mathf.Max(2.2f, free * 0.72f + 0.13f);
             string level = slot.Level.ToString().ToUpperInvariant();
-            Ui.Banner("FREE BARS", $"HYMN {slot.Index + 1}/{DownbeatRound.ExcerptCount} · {level} · LISTEN FOR THE DOWNBEAT",
-                new Color(0.62f, 0.9f, 1f), life, plate: true, y: 0.2f, scale: 0.62f);
+            // Low and small, off the ball's arc (the flight crosses the upper frame). The counter changes and the live
+            // stinger lands at times with a per-hymn jitter, never on the bar line: they must not show where the downbeat is.
+            float jit = ((slot.Index * 37) % 11) / 100f;
+            _fbSplitAt = _now + free * (0.30 + jit); _fbLiveAt = _now + free * (0.62 + jit);
+            Ui.Banner("FREE BAR 1/2", $"HYMN {slot.Index + 1}/{DownbeatRound.ExcerptCount} · {level} · LISTEN FOR THE DOWNBEAT",
+                new Color(0.62f, 0.9f, 1f), Mathf.Max(1f, free * (0.30f + jit)), plate: true, y: 0.73f, scale: 0.5f);
             SkvLog($"ev=excerpt k={slot.Index} free={free:F2}");
         }
 
@@ -606,9 +627,16 @@ namespace Bonanza
             _env?.Crowd?.Wave(1, 2);
             _env?.Crowd?.Hype(1);
             Look.Fx.ClearBadges();
-            Ui.Banner("GAME!", null, Bonanza.HudKit.UiKit.Gold, 1.7f, scale: 1.1f, y: 0.36f);
+            Ui.Banner("GAME!", null, Bonanza.HudKit.UiKit.Gold, 1.7f, plate: true, scale: 1.2f, y: 0.36f);
             if (_finaleShow < 0) _finaleShow = 0;
             Look.Fx.Confetti(new Vector3(-1, 8.5f, 12), 90, null, 4, 0.4f, 0.11f, 3.6f);
+        }
+
+        /// The shared card's opt-ins: centred, a filled rank tile in the rank colour with its glow, the sticker on it,
+        /// and stat labels in near-white at a readable size.
+        public override void ResultsStyle(Bonanza.HudKit.ResultsData d)
+        {
+            d.Centered = true; d.RankFilled = true; d.BadgeOnRank = true; d.StatLabelPx = 12f;
         }
 
         /// The results card's stat row: what this game is about (finding downbeats, dodging bombs), not the judge counts.
@@ -625,11 +653,11 @@ namespace Bonanza
             var inv = System.Globalization.CultureInfo.InvariantCulture;
             return new List<KeyValuePair<string, string>>
             {
-                new KeyValuePair<string, string>("DOWNBEATS", $"{hit}/{balls}"),
-                new KeyValuePair<string, string>("HOME RUNS", _round.Homers.ToString(inv)),
-                new KeyValuePair<string, string>("BOMBS DODGED", $"{bombs - _round.Bombs}/{bombs}"),
-                new KeyValuePair<string, string>("BOMBS HIT", _round.Bombs.ToString(inv)),
-                new KeyValuePair<string, string>("BEST STREAK", _round.Stats.MaxCombo.ToString(inv)),
+                new KeyValuePair<string, string>("BEATS", $"{hit}/{balls}"),
+                new KeyValuePair<string, string>("HOMERS", _round.Homers.ToString(inv)),
+                new KeyValuePair<string, string>("DODGED", $"{bombs - _round.Bombs}/{bombs}"),
+                new KeyValuePair<string, string>("BOOMS", _round.Bombs.ToString(inv)),
+                new KeyValuePair<string, string>("STREAK", _round.Stats.MaxCombo.ToString(inv)),
             };
         }
 
@@ -832,11 +860,12 @@ namespace Bonanza
             var f = Feel.ForCombo(c.Verdict, c.Combo);
             if (!c.IsDemo)
             {
-                float hs = Mathf.Min(Feel.HitstopMax * 1.6f, f.Hitstop * (big ? 1.9f : 1f) * (fin ? 2.6f : 1f));
+                float hs = Mathf.Clamp(f.Hitstop * (big ? 1.9f : 1f) * (fin ? 2.6f : 1f), 0.04f, 0.06f);   // 40-60 ms
                 // The freeze ends well before the next unjudged note arrives, and is visual only.
                 var dpHit = p as DownbeatPitch;
                 Look.Hitstop(Mathf.Max(0, Mathf.Min(hs, dpHit != null ? (float)(_round.Clock.SpbAt(dpHit.Time) * 0.4) : hs)));   // ends well before the next pitch lands
-                rig.PunchZoom(1 + (big ? 0.14f : 0.035f) * (fin ? 1.6f : 1f));   // a real camera punch on a home run
+                rig.PunchZoom(1 + (big ? 0.12f : 0.05f) * (fin ? 1.5f : 1f));   // the camera kick (softened by reduced motion)
+                if (big) _camLift = 1.5f;   // and the camera rises to follow the home run's arc for a beat
             }
             _camPush = big ? 1 : 0.45f;
 
@@ -863,7 +892,7 @@ namespace Bonanza
         void OnWhiff(WhiffEvent w)
         {
             SkvLog($"ev={(w.SideRetired ? "retired" : "strike")} outs={w.Outs} swung={(w.Swung ? 1 : 0)}");
-            Strike(w.Pitch, w.Outs, w.SideRetired, w.Swung, w.Swung ? "WHIFF!" : "STRIKE!", w.Swung ? null : "LOOKING · " + w.Outs + (w.Outs == 1 ? " OUT" : " OUTS"));
+            Strike(w.Pitch, w.Outs, w.SideRetired, w.Swung, w.Swung ? "WHIFF!" : "STRIKE!", w.Swung ? null : "LOOKING - OUT " + w.Outs);
         }
 
         /// A strike, whatever its cause: a ball let go or a bomb swung at. Batter, lamps, crowd, burst and callout
@@ -878,13 +907,9 @@ namespace Bonanza
             _env?.Crowd?.Deflate(sideRetired ? 1.4f : 0.9f);
             if (sideRetired) _env?.Crowd?.Wave(0.55f, 1.4f);
             var fx = Look.Fx;
-            if (!bomb)
-            {
-                // (a bomb brings its own burst: the miss burst on top of the fireball read as two things at once)
-                var o = VerdictOpts.Default;
-                o.Combo = 0; o.GroundY = 0; o.Text = false; o.Stage = false;
-                fx.PlayVerdict(Verdict.Miss, Contact, o);
-            }
+            // (no pink ring: the out stamps its red X into the OUTS pill, the bomb brings its own burst, and the ball
+            // thuds into the net)
+            if (sideRetired) Ui.OutsPulse();
             float gap = GapAfter(pitch);
             float life = Mathf.Min(0.9f, Mathf.Max(0.55f, gap * 0.7f));
             fx.ClearBadges();
@@ -892,7 +917,7 @@ namespace Bonanza
             {
                 float retire = Mathf.Max(1.2f, Mathf.Min(1.8f, gap * 0.9f));
                 _outsClear = retire;
-                fx.Callout("SIDE RETIRED!", bomb ? "BOMB · 3 OUTS" : "3 OUTS", Contact + new Vector3(1.1f, 1.6f, 0), Hex(0xff4d6a), 1.05f, retire, 0.3f);
+                fx.Callout("SIDE RETIRED!", bomb ? "BOMB! - OUT 3" : "OUT 3", Contact + new Vector3(1.1f, 1.6f, 0), Hex(0xff4d6a), 1.05f, retire, 0.3f);
                 Look.Rig.Shake(0.08f, new Vector3(0, -1, 0));
             }
             else fx.Callout(word, sub, Contact + new Vector3(1.0f, 1.3f, 0), bomb ? Hex(0xff6a3a) : swung ? Hex(0xff5d8a) : Hex(0xff8a3c), bomb ? 0.9f : 0.8f, life, 0.4f);
@@ -928,10 +953,10 @@ namespace Bonanza
                 Cue(BatterCue.Whiff);
                 _env?.Crowd?.Deflate(0.5f);
                 Look.Fx.ClearBadges();
-                Look.Fx.Callout("BOMB!", "FREE BAR · NO STRIKE", Contact + new Vector3(1.0f, 1.3f, 0), Hex(0xffb347), 0.8f, 0.85f, 0.4f);
+                Look.Fx.Callout("BOMB!", "FREE BAR - NO OUT", Contact + new Vector3(1.0f, 1.3f, 0), Hex(0xffb347), 0.8f, 0.85f, 0.4f);
                 return;
             }
-            Strike(e.Pitch, e.Outs, e.SideRetired, true, "BOMB!", "STRIKE \u00B7 " + e.Outs + (e.Outs == 1 ? " OUT" : " OUTS"), bomb: true);
+            Strike(e.Pitch, e.Outs, e.SideRetired, true, "BOMB!", "OUT " + e.Outs, bomb: true);
         }
 
         /// A bomb let go: it shows itself past the plate and drops away as a dud (its ball is gone from the flight now).

@@ -119,70 +119,112 @@ namespace Bonanza
             Look.Fx.Flare(at, Hex(0xfff0d0) * 0.6f, 0.5f, 0.08f, 0.4f, 1.2f);
         }
 
-        /// The burst itself, when the shown casing's moment is over: a billowing orange fireball with a hot heart, embers,
-        /// a shock ring, casing and shell debris, then a dark smoke cloud that rolls up and back, off the next pitch's path.
+        /// The burst itself, when the shown casing's moment is over: a stylised toon blast. An orange-red core under a
+        /// small bright cap, a dark purple-grey cartoon smoke puff in two bands, two or three chunky shards. Nothing here
+        /// is white or additive over the crowd (the flares are clamped), and it is gone within one beat.
         void BombBurst(Vector3 at)
         {
             var fx = Look.Fx;
-            float calm = Calm ? 0.5f : 1;
-            // warm core, not white: flares under the bloom's blow-out
-            fx.Flare(at, Hex(0xffb347) * 0.9f, 1.6f, 0.2f, 0.4f, 2.0f);
-            fx.Flare(at, Hex(0xff6a1a) * 0.7f, 2.4f, 0.34f, 0.3f, 1.6f);
-            // the fireball: orange puffs billowing out, a yellow heart that burns out first
+            bool soft = LowFx;
+            float k = soft ? 0.5f : 1;
+            // clamped warm flares: orange-red, never a white-out
+            fx.Flare(at, Hex(0xff7a2a) * 0.5f, 1.3f * (soft ? 0.7f : 1), 0.16f, 0.4f, 1.6f);
+            // the core: orange-red puffs under a smaller bright cap
             var f = _fire.Begin();
-            f.Pos(at).Dir(new Vector3(0.1f, 1, -0.1f)); f.Cone = 1; f.Jitter = 0.12f;
-            f.Color(new Color(0.85f, 0.2f, 0.03f)); f.Size = 1.25f; f.Life = 0.5f; f.Speed = 4.2f;
-            _fire.Emit(Calm ? 6 : 12);
-            f.Color(new Color(0.8f, 0.42f, 0.08f)); f.Size = 0.85f; f.Life = 0.3f; f.Speed = 2.4f;
-            _fire.Emit(Calm ? 3 : 6);
-            // embers thrown wide, and a few slower sparks that hang in the fire
-            fx.Burst(at, Mathf.RoundToInt(22 * calm), Hex(0xffd27a), 10f, 0.09f, 0.8f, -12f);
-            fx.Burst(at, Mathf.RoundToInt(12 * calm), Hex(0xff7a1a), 4.5f, 0.2f, 0.4f, -1.5f);
-            fx.Impact(at, new Vector3(0.2f, 1, -0.2f), Hex(0xff9a3a), Mathf.RoundToInt(14 * calm), 13, 0.13f, 1f);
-            fx.Ring(at, Hex(0xffa040), 0.34f, 0.4f, 3.2f, 0.32f, 0.03f, 0.02f, 0.9f);
-            // casing debris: black shards and a few brass bits, and the rest of the shell
+            f.Pos(at).Dir(new Vector3(0.1f, 1, -0.1f)); f.Cone = 1; f.Jitter = 0.1f;
+            f.Color(new Color(0.8f, 0.17f, 0.04f)); f.Size = 1.05f; f.Life = 0.32f; f.Speed = 2.8f;
+            _fire.Emit(soft ? 4 : 8);
+            f.Pos(at + Vector3.up * 0.18f); f.Color(new Color(0.85f, 0.55f, 0.1f)); f.Size = 0.6f; f.Life = 0.2f; f.Speed = 1.2f;   // the cap: bright yellow-orange, not white
+            _fire.Emit(soft ? 1 : 3);
+            fx.Burst(at, Mathf.RoundToInt(10 * k), Hex(0xff9a3a), 7f, 0.09f, 0.45f, -10f);
+            // chunky shards: three casing pieces, one brass
             var e = _debris.Begin();
-            e.Pos(at); e.Cone = 1; e.Speed = 7.5f; e.Size = 0.11f;
-            foreach (var c in Casing) { e.Color(c); _debris.Emit(Calm ? 3 : 7); }
-            e.Color(ShellWhite); e.Size = 0.08f; _debris.Emit(Calm ? 3 : 6);
-            // smoke: a dark cloud that rolls up and drifts back toward the net (the next pitch comes in under it)
+            e.Pos(at); e.Cone = 1; e.Speed = 6f; e.Size = 0.28f; e.Life = 0.7f;
+            foreach (var c in Casing) { e.Color(c); _debris.Emit(1); }
+            // smoke: a dark purple-grey puff in two flat bands (a deep base, a lighter cap rolling over it)
             var s = _smoke.Begin();
-            s.Pos(at + new Vector3(0.1f, 0.15f, 0.1f)).Dir(new Vector3(0.35f, 1, 0.45f)); s.Cone = 0.55f; s.Speed = 2.8f; s.Jitter = 0.2f;
-            s.Grav = 1.3f; s.Drag = 2.4f; s.Fade = PFade.Hold;
-            s.Color(new Color(0.11f, 0.1f, 0.13f)); s.Alpha = 1f; s.Size = 0.95f; s.Life = 1.4f; s.S0 = 0.45f; s.S1 = 2.6f;
-            _smoke.Emit(Calm ? 5 : 11);
-            s.Color(new Color(0.3f, 0.28f, 0.32f)); s.Alpha = 0.85f; s.Size = 0.75f; s.Life = 1.1f; s.Speed = 2.0f;
-            _smoke.Emit(Calm ? 3 : 6);
-            Look.Rig.DoFlash(Calm ? 0.04f : 0.09f, Hex(0xffb070));   // a warm blink of the whole frame, under the white-out
-            Look.Rig.Shake(Calm ? 0.04f : 0.12f, new Vector3(0.3f, 1f, 0));
-            Look.Hitstop(0.045f);
+            s.Pos(at + new Vector3(0.1f, 0.1f, 0.1f)).Dir(new Vector3(0.3f, 1, 0.4f)); s.Cone = 0.5f; s.Speed = 2.2f; s.Jitter = 0.15f;
+            s.Grav = 1.0f; s.Drag = 2.6f; s.Fade = PFade.Hold;
+            s.Color(new Color(0.16f, 0.12f, 0.22f)); s.Alpha = 1f; s.Size = 0.85f; s.Life = 0.8f; s.S0 = 0.5f; s.S1 = 1.9f;
+            _smoke.Emit(soft ? 3 : 6);
+            s.Pos(at + new Vector3(0.1f, 0.35f, 0.1f)); s.Color(new Color(0.36f, 0.3f, 0.46f)); s.Alpha = 0.9f; s.Size = 0.6f; s.Life = 0.65f; s.Speed = 1.6f;
+            _smoke.Emit(soft ? 2 : 4);
+            // the batter is sooted and dizzy for a moment
+            _sootT = 0.9f; _sootStar = 0;
+            Look.Rig.DoFlash(soft ? 0.02f : 0.05f, Hex(0xff8a50));   // a brief warm blink, never white
+            Look.Rig.Shake(Calm ? 0.04f : 0.1f, new Vector3(0.3f, 1f, 0));
+            Look.Hitstop(0.05f);
+        }
+
+        float _sootT, _sootStar;
+        Color _batterBase;
+
+        /// Soot on the capsule batter (charcoal, fading back) and gold stars wheeling over his head.
+        void UpdateSoot(float dt)
+        {
+            if (_batterMat == null) return;
+            if (_sootT <= 0) return;
+            _sootT -= dt;
+            _batterBase = Look.Palette.Live[PC.Batter];
+            float k = Mathf.Clamp01(_sootT / 0.9f);
+            _batterMat.SetColor("_BaseColor", Color.Lerp(_batterBase, new Color(0.07f, 0.06f, 0.08f), Mathf.Min(1, k * 2.2f)));
+            _sootStar -= dt;
+            if (_sootStar <= 0 && !Calm)
+            {
+                _sootStar = 0.14f;
+                float a = Time.time * 9f;
+                var head = BatterPos + new Vector3(Mathf.Cos(a) * 0.35f, 2.15f, Mathf.Sin(a) * 0.2f);
+                var st = _debris.Begin();
+                st.Pos(head).Dir(Vector3.up); st.Cone = 0.2f; st.Speed = 0.6f; st.Size = 0.14f; st.Life = 0.45f; st.Color(new Color(1f, 0.82f, 0.25f));
+                _debris.Emit(1);
+            }
+            if (_sootT <= 0) _batterMat.SetColor("_BaseColor", _batterBase);
         }
 
         // ------------------------------------------------------------ fizzle
 
-        /// A bomb let go: the ball becomes the casing where it is (shell flakes off) and drops past the plate.
+        /// A bomb let go: as it crosses the plate in front of the batter the ball turns into the casing (fuse sparks, shell
+        /// flakes), drops, bounces and rolls in the foreground and goes out with a teal DODGED puff. Under 0.4 s, so it is
+        /// done before the next pitch's arc comes through.
         void BombFizzle(Vector3 at)
         {
             var d = AcquireDud();
-            d.Live = true; d.Boom = false; d.T = 0; d.Life = 0.8f; d.P = at; d.Bounced = false; d.Scale = 0.46f;
-            // a hop out past the plate in front of the batter (toward the camera), so the dud is seen, not hidden by him
-            d.V = new Vector3(1.5f, 1.8f, -2.6f);
+            at = new Vector3(at.x, Mathf.Max(at.y, 0.5f), at.z);
+            d.Live = true; d.Boom = false; d.T = 0; d.Life = 0.38f; d.P = at; d.Bounced = false; d.Scale = 0.46f;
+            // a hop out past the plate toward the camera, so the dud is seen in the foreground, not hidden by the batter
+            d.V = new Vector3(1.1f, 1.4f, -3.6f);
             d.Axis = Vector3.Cross(Vector3.up, new Vector3(d.V.x, 0, d.V.z)).normalized; d.Spin = 480;
             d.NextSpark = 0;
             d.Go.position = at; d.Go.localScale = Vector3.one * d.Scale; d.Go.rotation = Quaternion.Euler(0, 0, -30);
             d.SparkMat.SetFloat(IdIntensity, 2.2f);
             // the disguise falls off: a puff of white shell flakes
             var e = _debris.Begin();
-            e.Pos(at).Dir(new Vector3(-0.3f, 1, 0)); e.Cone = 0.8f; e.Speed = 3f; e.Size = 0.075f; e.Life = 0.5f; e.Grav = -10;
+            e.Pos(at).Dir(new Vector3(-0.3f, 1, 0)); e.Cone = 0.8f; e.Speed = 3f; e.Size = 0.075f; e.Life = 0.35f; e.Grav = -10;
             e.Color(ShellWhite); _debris.Emit(Calm ? 4 : 8);
         }
 
+        static readonly Color DodgeTeal = new Color(0.25f, 0.95f, 0.8f);
+
+        /// The dud is out: a small teal puff, a soft ring and a tiny word.
+        void DodgedPuff(Vector3 p)
+        {
+            var s = _smoke.Begin();
+            s.Pos(p + Vector3.up * 0.1f).Dir(Vector3.up); s.Cone = 0.7f; s.Speed = 0.9f; s.Jitter = 0.08f;
+            s.Color(new Color(0.3f, 0.8f, 0.7f)); s.Alpha = 0.7f; s.Size = 0.4f; s.Life = 0.45f; s.S0 = 0.4f; s.S1 = 1.5f; s.Fade = PFade.Hold;
+            _smoke.Emit(Calm ? 2 : 4);
+            Look.Fx.Ring(p + Vector3.up * 0.12f, DodgeTeal * 0.6f, 0.4f, 0.25f, 1.6f, 0.1f, 0.01f, 0.01f, 0.5f);
+            Look.Fx.Callout("DODGED", null, p + new Vector3(0.1f, 0.5f, 0), DodgeTeal, 0.5f, 0.55f, 0.4f);
+        }
+
         bool Calm => Settings.ReduceMotion;
+        /// Reduced motion or a lowered quality tier: smaller, dimmer flashes and fewer particles.
+        bool LowFx => Settings.ReduceMotion || RenderQuality.FxBudget < 0.99f;
 
         /// Per frame (presentation time): the duds roll and sputter, the shown casings burst, and the alpha batches draw.
         void UpdateBombs(float dt)
         {
             if (_smoke == null) return;
+            UpdateSoot(dt);
             for (int i = 0; i < _duds.Count; i++)
             {
                 var d = _duds[i];
@@ -222,12 +264,8 @@ namespace Bonanza
                 }
                 if (d.T >= d.Life)
                 {
-                    // out: a small grey puff and a wisp, the casing sinks away
-                    var s = _smoke.Begin();
-                    s.Pos(d.P + Vector3.up * 0.1f).Dir(Vector3.up); s.Cone = 0.7f; s.Speed = 1.0f; s.Jitter = 0.08f;
-                    s.Color(new Color(0.6f, 0.6f, 0.66f)); s.Alpha = 0.75f; s.Size = 0.45f; s.Life = 0.8f; s.S0 = 0.4f; s.S1 = 1.7f; s.Fade = PFade.Hold;
-                    _smoke.Emit(Calm ? 2 : 5);
-                    Look.Fx.Burst(d.P + Vector3.up * 0.2f, Calm ? 2 : 5, Hex(0xb8bcc8), 1.6f, 0.07f, 0.35f, -2f);
+                    // out: a teal DODGED puff, the casing sinks away
+                    DodgedPuff(d.P);
                     Park(d);
                     continue;
                 }
