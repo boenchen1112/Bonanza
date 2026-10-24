@@ -52,6 +52,9 @@ namespace Bonanza.Shell
         Pill _play, _back;
         int _lastFocus = -1;
         int _count;
+        int _pressCard = -1;
+        /// The card the pointer went down on this frame (focus follows the press), or -1; read once.
+        public int TakePressCard() { int c = _pressCard; _pressCard = -1; return c; }
 
         protected override void Build(RectTransform root)
         {
@@ -81,15 +84,17 @@ namespace Bonanza.Shell
             UiKit.Place(_stripText.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(740, 40));
 
             _hintRt = UiKit.Rect("Hint", root);
-            UiKit.Place(_hintRt, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -596), new Vector2(430, 30));
+            UiKit.Place(_hintRt, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -612), new Vector2(430, 32));
             _hintGroup = _hintRt.gameObject.AddComponent<CanvasGroup>();
             var hp = UiKit.Box(_hintRt, "Plate", new Color(0.05f, 0.03f, 0.12f, 0.9f), UiKit.Pill, true, 24);
             UiKit.Stretch(hp.rectTransform);
+            var hr = UiKit.Box(_hintRt, "Ring", new Color(UiKit.Cream.r, UiKit.Cream.g, UiKit.Cream.b, 0.75f), UiKit.PillRing(4), true, 24);
+            UiKit.Stretch(hr.rectTransform);
             _hint = UiKit.Text(_hintRt, "Text", TextStyle.Label, 14f, UiKit.Cream, italic: false);
             _hint.characterSpacing = 3f; _hint.text = "LEFT / RIGHT  CHOOSE";
             UiKit.Place(_hint.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(420, 28));
 
-            _play = MakePill(root, "Play", new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -520), new Vector2(430, 62), 24f, new Vector2(76, 30));
+            _play = MakePill(root, "Play", new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -540), new Vector2(430, 62), 24f, new Vector2(76, 30));
             _back = MakePill(root, "Back", new Vector2(1, 0), new Vector2(1, 0), new Vector2(-64, 14), new Vector2(210, 42), 16f, new Vector2(50, 24));
             for (int i = 0; i < MaxCards; i++) Buttons.Add(_cards[i].Rt);
             Buttons.Add(_play.Rt);
@@ -122,6 +127,7 @@ namespace Bonanza.Shell
             c.Name.overflowMode = TextOverflowModes.Truncate;
             c.Blurb = UiKit.Text(c.Inner, "Blurb", TextStyle.Label, 14f, UiKit.Cream, TextAlignmentOptions.Top, italic: false, upper: false);
             c.Blurb.textWrappingMode = TextWrappingModes.Normal;
+            c.Blurb.lineSpacing = 0f;
             c.Blurb.color = new Color(UiKit.Cream.r, UiKit.Cream.g, UiKit.Cream.b, 0.9f);
 
             // the record
@@ -144,8 +150,8 @@ namespace Bonanza.Shell
             UiKit.Place(c.NoRec.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(CardW - 30, 56));
 
             // NEW: a tilted gold tag over the top corner
-            c.NewRt = UiKit.Rect("New", c.Rt);
-            UiKit.Place(c.NewRt, new Vector2(1, 1), new Vector2(0.5f, 0.5f), new Vector2(-18, -8), new Vector2(64, 28));
+            c.NewRt = UiKit.Rect("New", c.Inner);
+            UiKit.Place(c.NewRt, new Vector2(1, 1), new Vector2(0.5f, 0.5f), new Vector2(-40, -34), new Vector2(64, 28));
             c.NewRt.localRotation = Quaternion.Euler(0, 0, 10);
             var ns = UiKit.Box(c.NewRt, "Shadow", new Color(0, 0, 0, 0.5f), UiKit.Pill, true, 28);
             UiKit.Place(ns.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -3), new Vector2(66, 30));
@@ -177,9 +183,10 @@ namespace Bonanza.Shell
             _head.anchoredPosition = new Vector2(0, -16 + (1 - hEnter) * 26);
 
             // ---- cards: a row, centred; on a short screen they are shorter and the tagline moves to the strip
-            float cardH = small ? 300 : 364;
+            float cardH = small ? 300 : 392;
             float pitch = CardW + Gap;
-            _cardsRt.anchoredPosition = new Vector2(0, small ? 84 : 44);
+            _cardsRt.anchoredPosition = new Vector2(0, small ? 84 : 30);
+            if (input.Fresh && input.Hover >= 0 && input.Hover < _count) _pressCard = input.Hover;
             if (focus != _lastFocus && _lastFocus >= 0 && _count > 0) _cards[focus].Rt.SetAsLastSibling();
             _lastFocus = focus;
             for (int i = 0; i < MaxCards; i++)
@@ -214,7 +221,7 @@ namespace Bonanza.Shell
                 c.Grad.Set(new Color(top.r * dark, top.g * dark, top.b * dark, top.a), new Color(bot.r * dark, bot.g * dark, bot.b * dark, bot.a));
                 c.Stripe.color = A(gc, 0.65f + 0.35f * Mathf.Max(c.Focus, hov));
                 c.StageGlow.color = A(gc, 0.38f + 0.3f * c.Focus);
-                Color rim = Color.Lerp(new Color(1, 0.95f, 0.8f, 0.2f), new Color(0.55f, 0.95f, 1f, 1f), hov);
+                Color rim = Color.Lerp(new Color(1, 0.95f, 0.8f, 0.2f), new Color(1, 0.95f, 0.8f, 0.55f), hov);
                 c.Ring.color = Color.Lerp(rim, new Color(1, 0.93f, 0.6f, 1f), c.Focus);
                 c.Shadow.color = new Color(0, 0, 0, 0.5f * (1 - 0.5f * c.Press));
 
@@ -233,18 +240,19 @@ namespace Bonanza.Shell
                     float te = red ? 1 : UiKit.BackOut((age - 0.3f - i * 0.07f) / 0.5f);
                     c.Tile.localScale = Vector3.one * Mathf.Clamp01(te) * (1 + (te > 1 ? te - 1 : 0)) * (0.92f + 0.12f * c.Focus);
                 }
-                UiKit.Place(c.TileHolder, new Vector2(0.5f, 1), new Vector2(0.5f, 0.5f), new Vector2(0, small ? -68 : -84), new Vector2(112, 112));
+                UiKit.Place(c.TileHolder, new Vector2(0.5f, 1), new Vector2(0.5f, 0.5f), new Vector2(0, small ? -68 : -80), new Vector2(112, 112));
 
                 // text
                 c.Name.text = d.Title ?? "";
                 float nameCap = 22f * (small ? 1.1f : 1f);
                 c.Name.fontSizeMax = UiKit.FontSizeForCap(nameCap); c.Name.fontSizeMin = small ? 18f : 14f;
-                float nameY = small ? -128 : -148;
+                float nameY = small ? -128 : -156;
                 UiKit.Place(c.Name.rectTransform, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, nameY), new Vector2(CardW - 14, small ? 62 : 58));
                 c.Blurb.gameObject.SetActive(!small);
                 c.Blurb.text = d.Blurb ?? "";
-                UiKit.Place(c.Blurb.rectTransform, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -204), new Vector2(CardW - 22, 72));
-                c.Blurb.fontSize = UiKit.FontSizeForCap(12.5f);
+                UiKit.Place(c.Blurb.rectTransform, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -216), new Vector2(CardW - 12, 78));
+                c.Blurb.enableAutoSizing = true; c.Blurb.fontSizeMax = UiKit.FontSizeForCap(14f); c.Blurb.fontSizeMin = 10f;
+                c.Blurb.overflowMode = TextOverflowModes.Truncate;
 
                 // the record, or NEW
                 c.RecordRt.gameObject.SetActive(d.Played);
@@ -253,40 +261,61 @@ namespace Bonanza.Shell
                 if (!d.Played)
                 {
                     float nb = red ? 0 : Mathf.Sin(Time.unscaledTime * 3.2f + i * 1.3f);
-                    c.NewRt.localScale = Vector3.one * (small ? 1.6f : 1f) * (1 + 0.05f * nb) * Mathf.Clamp01(red ? 1 : UiKit.BackOut((age - 0.5f - i * 0.07f) / 0.4f));
-                    c.NoRec.fontSize = UiKit.FontSizeForCap(13f * (small ? 1.25f : 1f)); c.NoRec.characterSpacing = small ? 0.5f : 2f;
-                    c.NoRec.rectTransform.sizeDelta = new Vector2(CardW - (small ? 6 : 30), 56);
-                    c.NoRec.text = small ? "NOT PLAYED" : "NOT PLAYED YET";
-                    c.New.fontSize = UiKit.FontSizeForCap(17f * (small ? 1.1f : 1f));
-                    UiKit.Place(c.NoRecRt, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0, 12), new Vector2(CardW - 24, small ? 70 : 62));
+                    float pop = Mathf.Clamp01(red ? 1 : UiKit.BackOut((age - 0.5f - i * 0.07f) / 0.4f));
+                    c.NewRt.localScale = Vector3.one * (small ? 1.5f : 1f) * (1 + 0.05f * nb) * pop;
+                    if (small)
+                    {
+                        UiKit.Place(c.NewRt, new Vector2(0.5f, 0), new Vector2(0.5f, 0.5f), new Vector2(0, 44), new Vector2(64, 28));
+                        c.NewRt.localRotation = Quaternion.identity;
+                    }
+                    else
+                    {
+                        UiKit.Place(c.NewRt, new Vector2(1, 1), new Vector2(0.5f, 0.5f), new Vector2(-40, -34), new Vector2(64, 28));
+                        c.NewRt.localRotation = Quaternion.Euler(0, 0, 10);
+                    }
+                    c.NoRecRt.gameObject.SetActive(!small);
+                    c.NoRec.fontSize = UiKit.FontSizeForCap(13f);
+                    c.NoRec.characterSpacing = 2f;
+                    c.NoRec.rectTransform.sizeDelta = new Vector2(CardW - 30, 56);
+                    c.NoRec.text = "NOT PLAYED YET";
+                    c.New.fontSize = UiKit.FontSizeForCap(17f);
+                    UiKit.Place(c.NoRecRt, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0, 16), new Vector2(CardW - 24, 62));
                 }
                 else
                 {
                     var rc = UiKit.RankColor(d.Rank);
                     bool ranked = d.Rank != "-" && !string.IsNullOrEmpty(d.Rank);
-                    c.RankFill.color = ranked ? rc : new Color(1, 1, 1, 0.22f);
-                    c.Rank.text = ranked ? d.Rank : "-";
-                    c.Rank.color = ranked ? Ink : Color.white;
-                    float rs = small ? 1.12f : 1f;
-                    UiKit.Place(c.RecordRt, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0, 12), new Vector2(CardW - 20, small ? 66 : 62));
+                    c.RankFill.color = ranked ? rc : new Color(1, 1, 1, 0.14f);
+                    c.Rank.text = ranked ? d.Rank : "?";
+                    c.Rank.color = ranked ? Ink : new Color(UiKit.Cream.r, UiKit.Cream.g, UiKit.Cream.b, 0.8f);
                     var rt = c.RankFill.rectTransform;
-                    rt.sizeDelta = Vector2.one * (46 * rs);
-                    rt.anchoredPosition = new Vector2(25 * rs, 0);
-                    c.Rank.fontSize = UiKit.FontSizeForCap(26f * rs);
-                    float tx = 25 * rs + 23 * rs + 8;
-                    float tw = CardW - 20 - tx - 2;
                     c.BestLabel.text = "BEST";
-                    c.BestLabel.fontSize = UiKit.FontSizeForCap(12f * (small ? 1.35f : 1f));
+                    c.BestLabel.fontSize = UiKit.FontSizeForCap(12f);
                     c.Best.text = d.Best ?? "";
-                    c.Best.enableAutoSizing = true; c.Best.fontSizeMax = UiKit.FontSizeForCap(20f * (small ? 1.15f : 1f)); c.Best.fontSizeMin = 12f;
+                    c.Best.enableAutoSizing = true; c.Best.fontSizeMax = UiKit.FontSizeForCap(22f); c.Best.fontSizeMin = 12f;
                     c.Best.textWrappingMode = TextWrappingModes.NoWrap;
+                    c.Best.alignment = TextAlignmentOptions.Center;
                     c.Plays.text = d.Plays ?? "";
-                    c.Plays.fontSize = UiKit.FontSizeForCap(12f * (small ? 1.35f : 1f));
-                    float lh = small ? 20 : 17;
-                    c.Plays.gameObject.SetActive(!small);
-                    UiKit.Place(c.BestLabel.rectTransform, new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(tx, small ? 14 : 20), new Vector2(tw, lh));
-                    UiKit.Place(c.Best.rectTransform, new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(tx, small ? -8 : 1), new Vector2(tw, 28));
-                    UiKit.Place(c.Plays.rectTransform, new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(tx, -19), new Vector2(tw, lh));
+                    c.Plays.fontSize = UiKit.FontSizeForCap(12f);
+                    c.BestLabel.gameObject.SetActive(!small); c.Best.gameObject.SetActive(!small); c.Plays.gameObject.SetActive(!small);
+                    if (small)
+                    {
+                        // just the rank badge; the score and plays are in the strip below
+                        UiKit.Place(c.RecordRt, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0, 14), new Vector2(CardW - 20, 62));
+                        rt.sizeDelta = Vector2.one * 56; rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f); rt.anchoredPosition = Vector2.zero;
+                        c.Rank.fontSize = UiKit.FontSizeForCap(32f);
+                    }
+                    else
+                    {
+                        // badge and BEST / plays on one row, the score across the card under them
+                        UiKit.Place(c.RecordRt, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0, 16), new Vector2(CardW - 24, 76));
+                        rt.sizeDelta = Vector2.one * 42; rt.anchorMin = rt.anchorMax = new Vector2(0, 0.5f); rt.anchoredPosition = new Vector2(24, 17);
+                        c.Rank.fontSize = UiKit.FontSizeForCap(24f);
+                        UiKit.Place(c.BestLabel.rectTransform, new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(54, 27), new Vector2(70, 18));
+                        UiKit.Place(c.Plays.rectTransform, new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(54, 8), new Vector2(70, 18));
+                        c.BestLabel.alignment = TextAlignmentOptions.Left; c.Plays.alignment = TextAlignmentOptions.Left;
+                        UiKit.Place(c.Best.rectTransform, new Vector2(0.5f, 0), new Vector2(0.5f, 0.5f), new Vector2(0, 14), new Vector2(CardW - 28, 30));
+                    }
                 }
             }
 
@@ -295,8 +324,8 @@ namespace Bonanza.Shell
             _stripGroup.alpha = stripA;
             if (_count > 0)
             {
-                _stripText.text = (cards[focus].Blurb ?? "") + (cards[focus].Played ? "   -   " + cards[focus].Plays : "");
-                _stripText.fontSize = UiKit.FontSizeForCap(17f * 1.2f);
+                _stripText.text = (cards[focus].Blurb ?? "") + (cards[focus].Played ? "   -   BEST " + cards[focus].Best + "   -   " + cards[focus].Plays : "");
+                _stripText.enableAutoSizing = true; _stripText.fontSizeMax = UiKit.FontSizeForCap(17f * 1.2f); _stripText.fontSizeMin = 12f;
                 _strip.anchoredPosition = new Vector2(0, -442);
                 _strip.sizeDelta = new Vector2(760, 54);
             }
@@ -311,7 +340,7 @@ namespace Bonanza.Shell
             _play.Label.rectTransform.anchoredPosition = new Vector2(small ? 0 : -42, 1);
             _play.Label.rectTransform.sizeDelta = new Vector2((small ? 400 : 430) - (small ? 24 : 112), 72);
             _play.Label.enableAutoSizing = true; _play.Label.fontSizeMax = UiKit.FontSizeForCap(24f); _play.Label.fontSizeMin = 14f;
-            _back.Rt.anchoredPosition = new Vector2(-64, 14);
+            _back.Rt.anchoredPosition = small ? new Vector2(-96, 30) : new Vector2(-64, 14);
             _back.Inner.localScale *= Mathf.Lerp(1f, 1.3f, small ? 1 : 0);
             _back.Label.rectTransform.anchoredPosition = new Vector2(small ? 0 : -20, 1);
         }

@@ -19,18 +19,21 @@ const cx = (i) => [640 + (i - 2) * 182, 330];
 const S = [
   { n: 'idle', d: 'mix', w: 1280, h: 720, wait: 4 },
   { n: 'focus-2', d: 'mix', w: 1280, h: 720, wait: 2, keys: [R, R] },
-  { n: 'focus-last', d: 'mix', w: 1280, h: 720, wait: 2, keys: [L] },
+  { n: 'focus-last', d: 'mix', w: 1280, h: 720, wait: 2, keys: [R, R, R, R, R] },
   { n: 'all-ranked', d: 'all', w: 1280, h: 720, wait: 3, keys: [R] },
   { n: 'none-played', d: 'none', w: 1280, h: 720, wait: 3 },
   { n: 'real-save', d: '', w: 1280, h: 720, wait: 3 },
   { n: 'hover', d: 'mix', w: 1280, h: 720, wait: 3, hover: cx(3) },
   { n: 'press', d: 'mix', w: 1280, h: 720, wait: 3, press: cx(1) },
-  { n: 'hover-play', d: 'mix', w: 1280, h: 720, wait: 3, hover: [640, 551] },
+  { n: 'hover-play', d: 'mix', w: 1280, h: 720, wait: 3, hover: [640, 571] },
   { n: 'reduced', d: 'mix', w: 1280, h: 720, wait: 2, reduced: true, keys: [R] },
   { n: 'low', d: 'mix', w: 1280, h: 720, wait: 4, q: 'low' },
   { n: '4x3', d: 'mix', w: 1024, h: 768, wait: 4, keys: [R] },
   { n: '21x9', d: 'mix', w: 1680, h: 720, wait: 4 },
   { n: 'small', d: 'mix', w: 640, h: 360, wait: 4, keys: [R] },
+  { n: 'small-all', d: 'all', w: 640, h: 360, wait: 4, keys: [R, R] },
+  { n: 'small-none', d: 'none', w: 640, h: 360, wait: 4 },
+  { n: 'press-focus', d: 'mix', w: 1280, h: 720, wait: 1.5, press: cx(3) },
 ];
 for (const s of S) {
   if (only.length && !only.includes(s.n)) continue;
