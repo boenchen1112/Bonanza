@@ -152,8 +152,14 @@
         if ((coarse || small) && !dismissed) {
           var n = document.getElementById('unity-mobile-notice');
           n.hidden = false;
+          // the notice sits above the canvas, not over the menu: the canvas starts below it
+          var fit = function () {
+            var h = n.hidden ? 0 : n.offsetHeight;
+            canvas.style.top = h + 'px'; canvas.style.height = 'calc(100% - ' + h + 'px)';
+          };
+          fit(); window.addEventListener('resize', fit);
           document.getElementById('unity-mobile-notice-close').onclick = function () {
-            n.hidden = true;
+            n.hidden = true; fit();
             try { sessionStorage.setItem('bonanza-notice', '1'); } catch (e) { /* ignore */ }
           };
         }

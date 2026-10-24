@@ -408,21 +408,32 @@ namespace Bonanza
         }
 
         /// Push the title's state into the uGUI view and tell the backdrop the beat.
+        string[] _titleLines; string _titleR3; (int, int, int, int) _titleKey = (-1, 0, 0, 0);
         void FeedTitle()
         {
             var st = Save.Stats;
-            var lines = Records.StatsLines(st.Rounds, Records.BestOverall(Games.Select(e => new KeyValuePair<string, GameRecord>(e.Title, Save.Get(e.Id)))));
-            var e = Title.Attract ? Find(Title.CurrentGameId) : null;
+            var key = (st.Rounds, st.Notes, st.Parties, st.Wins);
+            if (_titleLines == null || key != _titleKey)
+            {
+                _titleKey = key;
+                _titleLines = Records.StatsLines(st.Rounds, Records.BestOverall(Games.Select(g => new KeyValuePair<string, GameRecord>(g.Title, Save.Get(g.Id)))));
+                _titleR3 = st.Rounds > 0 ? $"{st.Notes} NOTES   {st.Parties} PARTIES   {st.Wins} WINS" : null;
+            }
+            string gid = Title.Attract ? Title.CurrentGameId : null;
+            var e = gid != null ? Find(gid) : null;
+            int gi = 0;
+            if (e != null) for (int k = 0; k < Games.Count; k++) if (Games[k].Id == gid) { gi = k; break; }
             Shell.Title.View = new TitleView
             {
                 Focus = _titleIndex,
                 Attract = Title.Attract,
                 GameTitle = e?.Title, GameBlurb = e?.Blurb,
+                GameIndex = gi, GameCount = Games.Count,
                 Progress = Title.StepProgress,
                 Beat = Title.OnGrid ? Title.Beat : 0,
                 BeatPulse = Title.OnGrid ? Title.BeatPulse : 0,
-                Records1 = lines[0], Records2 = lines[1],
-                Records3 = st.Rounds > 0 ? $"{st.Notes} NOTES   {st.Parties} PARTIES   {st.Wins} WINS" : null,
+                Records1 = _titleLines[0], Records2 = _titleLines[1],
+                Records3 = _titleR3,
                 PerfTip = _perfTip,
             };
             if (_hall != null && _hall.Live) _hall.Tick(Title.Beat, Title.OnGrid, Title.OnGrid ? Title.BeatPulse : 0);
@@ -437,7 +448,7 @@ namespace Bonanza
                 if (Title.Attract) { TitleReelPress("a"); Event.current.Use(); }
                 else Title.Reel.Press("click", false);
             }
-            if (Title.Attract || !Shell.Interactive || Shell.Current != Shell.Title) return;
+            if (Title.Attract || _perfTip || !Shell.Interactive || Shell.Current != Shell.Title) return;
             for (int i = 0; i < Shell.ButtonCount; i++)
             {
                 var r = Shell.ButtonScreen(i);

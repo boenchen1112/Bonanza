@@ -19,7 +19,7 @@ namespace Bonanza.Shell
         public float BeatPulse;      // 1 on the beat, decaying
         public string Records1, Records2, Records3;
         public bool PerfTip;
-        public string[] Items;
+        public int GameIndex, GameCount;
     }
 
     public sealed class TitleScreen : ShellScreen
@@ -31,14 +31,15 @@ namespace Bonanza.Shell
 
         sealed class Letter { public RectTransform Rt; public TextMeshProUGUI Front, Back; public float X; }
         readonly System.Collections.Generic.List<Letter> _letters = new System.Collections.Generic.List<Letter>();
-        RectTransform _logo, _tagRow, _stack, _foot, _attract, _tip;
+        RectTransform _logo, _tagRow, _stack, _foot, _attract, _tip, _plaque;
         CanvasGroup _stackGroup, _attractGroup, _footGroup, _tipGroup;
         Image _logoGlow, _progress, _promptDot;
-        TextMeshProUGUI _tagline, _rec1, _rec2, _rec3, _hint, _gameName, _blurb, _prompt, _tipHead, _tipBody;
+        TextMeshProUGUI _tagline, _rec1, _rec2, _hint, _gameName, _blurb, _prompt, _tipHead, _tipBody, _gameNum;
+        Image[] _pips;
 
         sealed class Btn
         {
-            public RectTransform Rt, Inner; public Image Fill, Ring, Glow; public TextMeshProUGUI Label;
+            public RectTransform Rt, Inner; public Image Fill, Ring, Glow, Shadow; public TextMeshProUGUI Label;
             public RectTransform Chip; public Image ChipFill; public TextMeshProUGUI ChipText; public UiGradient Grad;
             public float Focus, Hover, Press;
         }
@@ -96,51 +97,65 @@ namespace Bonanza.Shell
 
             // button stack
             _stack = UiKit.Rect("Buttons", root);
-            UiKit.Place(_stack, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -98), new Vector2(520, 260));
+            UiKit.Place(_stack, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -88), new Vector2(520, 260));
             _stackGroup = _stack.gameObject.AddComponent<CanvasGroup>();
             string[] names = { "PARTY", "FREE PLAY", "OPTIONS" };
-            for (int i = 0; i < 3; i++) _btns.Add(MakeButton(i, names[i], new Vector2(0, 84 - i * 76)));
+            for (int i = 0; i < 3; i++) _btns.Add(MakeButton(i, names[i], new Vector2(0, 84 - i * 70)));
 
-            // records + hint foot
+            // records plaque + key hint
             _foot = UiKit.Rect("Foot", root);
-            UiKit.Place(_foot, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0, 22), new Vector2(760, 112));
+            UiKit.Place(_foot, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0, 70), new Vector2(760, 100));
             _footGroup = _foot.gameObject.AddComponent<CanvasGroup>();
-            var recPill = UiKit.Box(_foot, "Pill", new Color(12 / 255f, 8 / 255f, 32 / 255f, UiKit.DarkAlpha(0.62f)), UiKit.Pill, true, 24);
-            UiKit.Place(recPill.rectTransform, new Vector2(0.5f, 1), new Vector2(0.5f, 1), Vector2.zero, new Vector2(520, 72));
-            var recRing = UiKit.Box(recPill.rectTransform, "Ring", new Color(1, 0.9f, 0.54f, 0.5f), UiKit.PillRing(5), true, 24);
-            UiKit.Stretch(recRing.rectTransform);
-            _rec1 = UiKit.Text(recPill.rectTransform, "R1", TextStyle.Label, 13f, UiKit.Cream, italic: false);
-            UiKit.Place(_rec1.rectTransform, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -13), new Vector2(500, 26));
-            _rec1.characterSpacing = 5f;
-            _rec2 = UiKit.Text(recPill.rectTransform, "R2", TextStyle.Label, 13f, Gold, italic: false);
-            UiKit.Place(_rec2.rectTransform, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0, 13), new Vector2(500, 26));
-            _rec2.characterSpacing = 5f;
-            _rec3 = UiKit.Text(_foot, "R3", TextStyle.Label, 12f, new Color(1, 1, 1, 0.7f), italic: false);
-            UiKit.Place(_rec3.rectTransform, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -78), new Vector2(700, 22));
-            _rec3.characterSpacing = 4f;
-            _hint = UiKit.Text(_foot, "Hint", TextStyle.Label, 11f, new Color(1, 1, 1, 0.55f), italic: false);
-            UiKit.Place(_hint.rectTransform, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0, 0), new Vector2(700, 22));
-            _hint.characterSpacing = 4f;
-            _hint.text = "UP / DOWN CHOOSE      SPACE SELECT";
+            var plate = UiKit.Box(_foot, "Plaque", new Color(0.05f, 0.03f, 0.12f, 0.97f), UiKit.Pill, true, 24);
+            _plaque = plate.rectTransform;
+            UiKit.Place(_plaque, new Vector2(0.5f, 1), new Vector2(0.5f, 1), Vector2.zero, new Vector2(720, 60));
+            var edge = UiKit.Box(_plaque, "Edge", new Color(1, 0.95f, 0.8f, 0.14f), UiKit.PillRing(4), true, 24);
+            UiKit.Stretch(edge.rectTransform);
+            _rec1 = UiKit.Text(_plaque, "R1", TextStyle.Label, 15f, UiKit.Cream, italic: false);
+            UiKit.Place(_rec1.rectTransform, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -8), new Vector2(700, 26));
+            _rec1.characterSpacing = 3f;
+            _rec2 = UiKit.Text(_plaque, "R2", TextStyle.Label, 15f, Gold, italic: false);
+            UiKit.Place(_rec2.rectTransform, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0, 8), new Vector2(700, 26));
+            _rec2.characterSpacing = 3f;
+            var hintPlate = UiKit.Box(_foot, "HintPlate", new Color(0.05f, 0.03f, 0.12f, 0.95f), UiKit.Pill, true, 24);
+            UiKit.Place(hintPlate.rectTransform, new Vector2(0.5f, 0), new Vector2(0.5f, 0), Vector2.zero, new Vector2(500, 32));
+            _hint = UiKit.Text(hintPlate.rectTransform, "Hint", TextStyle.Label, 14f, UiKit.Cream, italic: false);
+            UiKit.Place(_hint.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(490, 30));
+            _hint.characterSpacing = 3f;
+            _hint.text = "UP / DOWN  CHOOSE        SPACE  SELECT";
 
-            // attract card
+            // attract card: the game on the left, where it sits in the reel on the right
             _attract = UiKit.Rect("Attract", root);
             UiKit.Place(_attract, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -92), new Vector2(760, 280));
             _attractGroup = _attract.gameObject.AddComponent<CanvasGroup>();
-            var card = UiKit.Box(_attract, "Card", new Color(12 / 255f, 8 / 255f, 32 / 255f, UiKit.DarkAlpha(0.7f)), UiKit.Pill, true, 24);
-            UiKit.Place(card.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 20), new Vector2(640, 170));
+            var card = UiKit.Box(_attract, "Card", new Color(0.05f, 0.03f, 0.12f, 0.9f), UiKit.Pill, true, 24);
+            UiKit.Place(card.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 22), new Vector2(700, 190));
             var cardRing = UiKit.Box(card.rectTransform, "Ring", new Color(1, 0.9f, 0.54f, 0.65f), UiKit.PillRing(6), true, 24);
             UiKit.Stretch(cardRing.rectTransform);
-            _gameName = UiKit.Text(card.rectTransform, "Game", TextStyle.Display, 38f, Gold);
-            UiKit.Place(_gameName.rectTransform, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -22), new Vector2(620, 90));
-            _blurb = UiKit.Text(card.rectTransform, "Blurb", TextStyle.Label, 15f, UiKit.Cream, italic: false, upper: false);
-            UiKit.Place(_blurb.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -16), new Vector2(580, 30));
-            var barBg = UiKit.Box(card.rectTransform, "BarBg", new Color(1, 1, 1, 0.14f), UiKit.Pill, true, 24);
-            UiKit.Place(barBg.rectTransform, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0, 20), new Vector2(380, 8));
+            _gameName = UiKit.Text(card.rectTransform, "Game", TextStyle.Display, 34f, Gold, TextAlignmentOptions.Left);
+            UiKit.Place(_gameName.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(36, -22), new Vector2(430, 80));
+            _blurb = UiKit.Text(card.rectTransform, "Blurb", TextStyle.Label, 17f, UiKit.Cream, TextAlignmentOptions.TopLeft, italic: false, upper: false);
+            _blurb.textWrappingMode = TextWrappingModes.Normal;
+            UiKit.Place(_blurb.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(36, -104), new Vector2(430, 56));
+            var div = UiKit.Box(card.rectTransform, "Div", new Color(1, 0.9f, 0.54f, 0.3f), UiKit.Pill, true, 24);
+            UiKit.Place(div.rectTransform, new Vector2(1, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-190, 8), new Vector2(3, 110));
+            var gl = UiKit.Text(card.rectTransform, "GL", TextStyle.Label, 13f, UiKit.Cream, italic: false);
+            gl.characterSpacing = 5f; gl.text = "NOW SHOWING";
+            UiKit.Place(gl.rectTransform, new Vector2(1, 1), new Vector2(0.5f, 1), new Vector2(-100, -24), new Vector2(170, 24));
+            _gameNum = UiKit.Text(card.rectTransform, "Num", TextStyle.Display, 40f, Gold);
+            UiKit.Place(_gameNum.rectTransform, new Vector2(1, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-100, 4), new Vector2(170, 100));
+            _pips = new Image[5];
+            for (int i = 0; i < 5; i++)
+            {
+                _pips[i] = UiKit.Box(card.rectTransform, "Pip" + i, Color.white, UiKit.Disc);
+                UiKit.Place(_pips[i].rectTransform, new Vector2(1, 0), new Vector2(0.5f, 0.5f), new Vector2(-100 + (i - 2) * 22, 44), new Vector2(12, 12));
+            }
+            var barBg = UiKit.Box(card.rectTransform, "BarBg", new Color(1, 1, 1, 0.16f), UiKit.Pill, true, 24);
+            UiKit.Place(barBg.rectTransform, new Vector2(0.5f, 0), new Vector2(0.5f, 0.5f), new Vector2(0, 20), new Vector2(630, 8));
             _progress = UiKit.Box(barBg.rectTransform, "Bar", Gold, UiKit.Pill, true, 24);
             UiKit.Stretch(_progress.rectTransform);
-            _prompt = UiKit.Text(_attract, "Prompt", TextStyle.Display, 22f, Color.white);
-            UiKit.Place(_prompt.rectTransform, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0, 8), new Vector2(600, 60));
+            _prompt = UiKit.Text(_attract, "Prompt", TextStyle.Display, 24f, UiKit.Cream);
+            UiKit.Place(_prompt.rectTransform, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0, 4), new Vector2(600, 64));
             _prompt.text = "PRESS ANY BUTTON";
 
             // perf tip
@@ -166,8 +181,10 @@ namespace Bonanza.Shell
         {
             var b = new Btn();
             b.Rt = UiKit.Rect("Btn" + i, _stack);
-            UiKit.Place(b.Rt, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), pos, new Vector2(430, 64));
+            UiKit.Place(b.Rt, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), pos, new Vector2(430, 60));
             b.Inner = UiKit.Rect("Inner", b.Rt); UiKit.Stretch(b.Inner);
+            b.Shadow = UiKit.Box(b.Inner, "Shadow", new Color(0, 0, 0, 0.5f), UiKit.Pill, true, 24);
+            UiKit.Place(b.Shadow.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -7), new Vector2(436, 64));
             b.Glow = UiKit.Box(b.Inner, "Glow", new Color(1f, 0.8f, 0.3f, 0), UiKit.Soft);
             UiKit.Place(b.Glow.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(620, 170));
             b.Fill = UiKit.Box(b.Inner, "Fill", Color.white, UiKit.Pill, true, 24);
@@ -199,12 +216,14 @@ namespace Bonanza.Shell
             float shown = Shown, age = Age;
             Group.alpha = UiKit.Clamp01(shown * 1.6f);
 
+            // small screens: the logo shrinks, the menu block and the records grow so the text stays readable
+            float comp = Mathf.Clamp01((600f - Screen.height) / 240f);
             // ---- logo: letters drop in with a stagger, then ride the beat
             float a1 = v.Attract ? 1 : 0;
             _attractAmt = Damp(_attractAmt, a1, red ? 40 : 6, dt);
-            float lscale = Mathf.Lerp(1f, 0.74f, _attractAmt);
+            float lscale = Mathf.Lerp(1f, 0.74f, _attractAmt) * Mathf.Lerp(1f, 0.82f, comp);
             double bar = v.Beat;
-            _logo.anchoredPosition = new Vector2(0, Mathf.Lerp(186, 210, _attractAmt) + (1 - UiKit.EaseOutCubic(shown)) * 60);
+            _logo.anchoredPosition = new Vector2(0, Mathf.Lerp(Mathf.Lerp(186, 150, comp), 210, _attractAmt) + (1 - UiKit.EaseOutCubic(shown)) * 60);
             for (int i = 0; i < _letters.Count; i++)
             {
                 var l = _letters[i];
@@ -228,9 +247,14 @@ namespace Bonanza.Shell
 
             _tagRow.anchoredPosition = new Vector2(0, Mathf.Lerp(54, 96, _attractAmt));
             var tg = _tagRow.GetComponent<CanvasGroup>() ?? _tagRow.gameObject.AddComponent<CanvasGroup>();
-            tg.alpha = UiKit.Clamp01((age - 0.5f) * 3f) * (1 - _attractAmt * 0.0f) * (red ? shown : 1);
+            tg.alpha = UiKit.Clamp01((age - 0.5f) * 3f) * (1 - _attractAmt * 0.0f) * (red ? shown : 1) * (1 - UiKit.Clamp01((comp - 0.4f) * 5f));   // no room for it on a short screen
 
             // ---- buttons
+            _stack.localScale = Vector3.one * Mathf.Lerp(1f, 1.1f, comp);
+            _stack.anchoredPosition = new Vector2(0, Mathf.Lerp(-88, -70, comp));
+            _foot.localScale = Vector3.one * Mathf.Lerp(1f, 1.7f, comp);
+            _foot.anchoredPosition = new Vector2(0, Mathf.Lerp(70, 20, comp));
+            _attract.localScale = Vector3.one * Mathf.Lerp(1f, 1.2f, comp);
             _stackGroup.alpha = (1 - _attractAmt) * UiKit.Clamp01((age - 0.15f) * 3f) * (red ? shown : 1);
             _stackGroup.blocksRaycasts = false;
             for (int i = 0; i < _btns.Count; i++)
@@ -240,25 +264,29 @@ namespace Bonanza.Shell
                 b.Focus = Damp(b.Focus, foc ? 1 : 0, red ? 40 : 16, dt);
                 b.Hover = Damp(b.Hover, input.Hover == i ? 1 : 0, red ? 40 : 18, dt);
                 b.Press = Damp(b.Press, input.Pressed && input.Hover == i ? 1 : 0, red ? 60 : 30, dt);
-                float emph = Mathf.Max(b.Focus, b.Hover * 0.75f);
+                float hov = b.Hover * (1 - b.Focus);
                 float enter = red ? 1 : UiKit.BackOut((age - 0.2f - i * 0.08f) / 0.45f);
-                b.Rt.anchoredPosition = new Vector2((1 - Mathf.Min(1, enter)) * -80f, 84 - i * 76);
+                b.Rt.anchoredPosition = new Vector2((1 - Mathf.Min(1, enter)) * -80f, 84 - i * 70);
                 float pulse = foc && !red ? 1 + v.BeatPulse * 0.025f : 1;
-                b.Inner.localScale = Vector3.one * ((1 + 0.06f * emph) * (1 - 0.05f * b.Press) * pulse);
-                Color top = Color.Lerp(new Color(0.16f, 0.09f, 0.34f, 0.82f), UiKit.Hex(0xffe27a), emph);
-                Color bot = Color.Lerp(new Color(0.08f, 0.04f, 0.2f, 0.82f), UiKit.Hex(0xff9a2e), emph);
+                b.Inner.localScale = Vector3.one * ((1 + 0.06f * b.Focus + 0.03f * hov) * (1 - 0.07f * b.Press) * pulse);
+                // rest: deep indigo; hover: lifted violet with a cyan rim; focus: gold. Press only darkens the pressed button.
+                Color top = Color.Lerp(new Color(0.11f, 0.06f, 0.27f, 0.96f), new Color(0.27f, 0.19f, 0.55f, 0.97f), hov);
+                Color bot = Color.Lerp(new Color(0.05f, 0.02f, 0.14f, 0.96f), new Color(0.14f, 0.09f, 0.34f, 0.97f), hov);
+                top = Color.Lerp(top, UiKit.Hex(0xffe27a), b.Focus); bot = Color.Lerp(bot, UiKit.Hex(0xff9a2e), b.Focus);
+                float dark = 1 - 0.38f * b.Press;
+                top = new Color(top.r * dark, top.g * dark, top.b * dark, top.a); bot = new Color(bot.r * dark, bot.g * dark, bot.b * dark, bot.a);
                 b.Grad.Set(top, bot);
-                b.Ring.color = Color.Lerp(new Color(1, 0.9f, 0.54f, 0.35f), new Color(1, 0.98f, 0.8f, 1f), emph);
-                UiKit.SetFill(b.Label, Color.Lerp(Color.white, UiKit.Hex(0x2a0f45), emph), false);
-                b.Label.color = Color.Lerp(Color.white, UiKit.Hex(0x2a0f45), emph);
-                b.Glow.color = new Color(1f, 0.75f, 0.25f, 0.55f * b.Focus * (0.8f + 0.2f * v.BeatPulse) + 0.2f * b.Hover);
+                Color rim = Color.Lerp(new Color(1f, 0.95f, 0.78f, 0.78f), new Color(0.55f, 0.95f, 1f, 1f), hov);
+                b.Ring.color = Color.Lerp(rim, new Color(1, 0.98f, 0.82f, 1f), b.Focus);
+                b.Shadow.color = new Color(0, 0, 0, 0.5f * (1 - 0.6f * b.Press));
+                b.Label.color = Color.Lerp(Color.white, UiKit.Hex(0x2a0f45), b.Focus);
+                b.Glow.color = new Color(1f, 0.75f, 0.25f, 0.55f * b.Focus * (0.8f + 0.2f * v.BeatPulse));
                 b.Chip.localScale = Vector3.one * Mathf.Lerp(0.001f, 1f, b.Focus);
             }
 
             // ---- foot
             _footGroup.alpha = (1 - _attractAmt) * UiKit.Clamp01((age - 0.5f) * 3f) * (red ? shown : 1);
-            _rec1.text = v.Records1 ?? ""; _rec2.text = v.Records2 ?? "";
-            _rec3.text = v.Records3 ?? ""; _rec3.gameObject.SetActive(!string.IsNullOrEmpty(v.Records3));
+            _rec1.text = string.IsNullOrEmpty(v.Records3) ? (v.Records1 ?? "") : v.Records1 + "   -   " + v.Records3; _rec2.text = v.Records2 ?? "";
 
             // ---- attract card
             _attractGroup.alpha = _attractAmt * _attractAmt;
@@ -266,10 +294,13 @@ namespace Bonanza.Shell
             {
                 _gameName.text = v.GameTitle ?? "";
                 _blurb.text = v.GameBlurb ?? "";
+                _gameNum.text = (v.GameIndex + 1) + " / " + Mathf.Max(1, v.GameCount);
+                for (int pi = 0; pi < _pips.Length; pi++)
+                    _pips[pi].color = pi == v.GameIndex ? Gold : new Color(1, 1, 1, 0.28f);
                 var pr = _progress.rectTransform;
                 pr.anchorMin = new Vector2(0, 0); pr.anchorMax = new Vector2(Mathf.Clamp01(v.Progress), 1); pr.offsetMin = pr.offsetMax = Vector2.zero;
-                float pa = red ? 1 : 0.55f + 0.45f * v.BeatPulse;
-                _prompt.color = new Color(1, 1, 1, pa);
+                float pa = red ? 1 : 0.8f + 0.2f * v.BeatPulse;
+                _prompt.color = new Color(UiKit.Cream.r, UiKit.Cream.g, UiKit.Cream.b, pa);
                 _prompt.rectTransform.localScale = Vector3.one * (red ? 1 : 1 + 0.04f * v.BeatPulse);
             }
 

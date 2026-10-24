@@ -14,6 +14,7 @@ using System.Collections.Generic;
 using Bonanza.HudKit;
 using Bonanza.Look;
 using UnityEngine;
+using UnityEngine.Rendering.Universal;
 
 namespace Bonanza.Shell
 {
@@ -64,6 +65,7 @@ namespace Bonanza.Shell
 
         // moving parts
         Transform _burst;
+        AntialiasingMode _aa; bool _aaSet;
         MeshBatch _bulbs, _heads, _bodies, _sticks, _flecks;
         Vector3[] _bulbAt; float[] _bulbPhase, _bulbBase; Color[] _bulbColor; int[] _bulbKind;   // kind 0 foot, 1 marquee, 2 string
         int _footN, _marqN;
@@ -419,6 +421,7 @@ namespace Bonanza.Shell
             for (int i = 0; i < sn; i++)
             {
                 int who = (int)(rng.Next() * n) % n;
+                for (int tries = 0; tries < 40 && Mathf.Abs(_headAt[who].x) < 5.6f; tries++) who = (who + 7) % n;   // none behind the menu column
                 _stickAt[i] = _headAt[who] + new Vector3((rng.Next() - 0.5f) * 0.9f, 0.9f, 0.1f);
                 _stickPhase[i] = rng.Next() * 6.28f;
                 _stickTint[i] = glow[i % glow.Length];
@@ -463,6 +466,11 @@ namespace Bonanza.Shell
                 _cam.nearClipPlane = 0.3f; _cam.farClipPlane = 160f;
             }
             _poseAge = 0;
+            if (_cam && RenderQuality.Level.Msaa > 1)
+            {
+                var ad = _cam.GetUniversalAdditionalCameraData();
+                if (ad != null) { _aa = ad.antialiasing; ad.antialiasing = AntialiasingMode.FastApproximateAntialiasing; _aaSet = true; }
+            }
             SetPose(pose, true);
             _look.Rig?.Reset();
             ApplyPose(0, true);
@@ -475,6 +483,8 @@ namespace Bonanza.Shell
             Live = false;
             _look.Rig?.Restore();
             _look.Rig?.Release();
+            if (_aaSet && _cam) { var ad = _cam.GetUniversalAdditionalCameraData(); if (ad != null) ad.antialiasing = _aa; }
+            _aaSet = false;
             if (_cam) { _cam.clearFlags = _flags; _cam.backgroundColor = _bg; }
             Shader.SetGlobalVector("_BonShadowFocus", Vector4.zero);
             gameObject.SetActive(false);
@@ -562,10 +572,11 @@ namespace Bonanza.Shell
             }
             _heads.Flush(); _bodies.Flush();
 
+            bool hideProps = still || PoseName == "attract";   // reduced motion: no waving sticks, no confetti; attract: no crowd under them
             for (int i = 0; i < _stickAt.Length; i++)
             {
                 float a = still ? 0 : Mathf.Sin(t * 2.6f + _stickPhase[i]) * 0.35f;
-                _sticks.Matrix[i] = Matrix4x4.TRS(_stickAt[i], Quaternion.Euler(0, 0, a * Mathf.Rad2Deg), Vector3.one);
+                _sticks.Matrix[i] = hideProps ? Matrix4x4.Scale(Vector3.zero) : Matrix4x4.TRS(_stickAt[i], Quaternion.Euler(0, 0, a * Mathf.Rad2Deg), Vector3.one);
                 _sticks.Tint[i] = _stickTint[i] * (0.8f + 0.3f * pulse);
             }
             _sticks.Flush();
@@ -579,7 +590,7 @@ namespace Bonanza.Shell
                     float x = p.x + (still ? 0 : Mathf.Sin(t * 0.5f + _fleckPhase[i]) * 0.5f);
                     float tw = 0.5f + 0.5f * Mathf.Sin(t * 2.5f + _fleckPhase[i] * 2);
                     float fade = Mathf.Clamp01(y * 0.6f) * Mathf.Clamp01((12.5f - y) * 0.6f);
-                    _flecks.Matrix[i] = Matrix4x4.TRS(new Vector3(x, y, p.z), Quaternion.Euler(0, t * 60 + _fleckPhase[i] * 50, 20), Vector3.one);
+                    _flecks.Matrix[i] = still ? Matrix4x4.Scale(Vector3.zero) : Matrix4x4.TRS(new Vector3(x, y, p.z), Quaternion.Euler(0, t * 60 + _fleckPhase[i] * 50, 20), Vector3.one);
                     _flecks.Tint[i] = _fleckTint[i] * (0.25f + 0.75f * tw) * fade;
                 }
                 _flecks.Flush();
