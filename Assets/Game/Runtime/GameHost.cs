@@ -397,13 +397,15 @@ namespace Bonanza
                 if (!_hall.Live) _hall.Resume(PoseFor(_mode), true);
                 else _hall.SetPose(PoseFor(_mode));
                 if (_mode == Mode.Title) { if (Shell.Current != Shell.Title) Shell.Show(Shell.Title, null); }
+                else if (_mode == Mode.Roster) { if (Shell.Current != Shell.Roster) Shell.Show(Shell.Roster, null); }
                 else if (Shell.Current != null) Shell.Hide();
                 if (_mode != Mode.Title) _hall.Tick(0, false, 0);
+                if (_mode != Mode.Roster && _hall.HasCast) _hall.Cast.Show(false);
             }
             else if (!want)
             {
                 if (_hall != null && _hall.Live && !ShellMode(_mode) && !gate) HallSuspend();
-                if (Shell.Current != null && _mode != Mode.Title) Shell.Hide();
+                if (Shell.Current != null && _mode != Mode.Title && _mode != Mode.Roster) Shell.Hide();
             }
         }
 
@@ -453,6 +455,41 @@ namespace Bonanza
             {
                 var r = Shell.ButtonScreen(i);
                 if (r.width > 0 && GUI.Button(r, GUIContent.none, GUIStyle.none)) TitleChoice(i);
+            }
+        }
+
+        /// Push the roster's state into the uGUI view and put the focused character on the hall's stage.
+        void FeedRoster()
+        {
+            if (_roster == null || _hall == null || !_hall.Live) return;
+            var cast = _hall.Cast;
+            cast.Show(true);
+            Shell.Roster.View = new RosterView { R = _roster, Flash = _rosterFlash, ShakeT = _rosterShakeT, ShakeCard = _rosterShakeCard, Cast = cast };
+            cast.Place(238f, 498f, 332f, _roster.Stage == RosterStage.Lineup);
+            cast.Focus(Shell.Roster.FocusChar);
+        }
+
+        /// Invisible IMGUI click targets over the roster's uGUI buttons.
+        void RosterTargets()
+        {
+            if (_roster == null || !Shell.Interactive || Shell.Current != Shell.Roster) return;
+            var r = _roster;
+            for (int i = 0; i < Shell.ButtonCount; i++)
+            {
+                var rect = Shell.ButtonScreen(i);
+                if (rect.width <= 0 || !GUI.Button(rect, GUIContent.none, GUIStyle.none)) continue;
+                if (i < RosterScreen.SeatBase) { if (r.Stage == RosterStage.Chars) { r.Cursor = i; RosterPress("a"); } }
+                else if (i < RosterScreen.ActionBtn)
+                {
+                    if (r.Stage != RosterStage.Lineup) continue;
+                    int seat = i - RosterScreen.SeatBase;
+                    r.SeatSel = seat;
+                    bool leftHalf = Event.current.mousePosition.x < rect.center.x;
+                    RosterPress(seat > 0 && !leftHalf ? "right" : seat > 0 ? "left" : "left");
+                }
+                else if (i == RosterScreen.ActionBtn) RosterPress("a");
+                else if (i == RosterScreen.BackBtn) RosterPress("b");
+                break;
             }
         }
 
@@ -1046,6 +1083,7 @@ namespace Bonanza
                     if (_mode == Mode.Roster && _roster != null) ApplyRoster(_roster.Update(Time.unscaledDeltaTime, _rosterRng));
                     if (_rosterFlash != null && (_rosterFlashT -= Time.unscaledDeltaTime) <= 0) _rosterFlash = null;
                     if (_rosterShakeT > 0) _rosterShakeT -= Time.unscaledDeltaTime;
+                    if (_mode == Mode.Roster) FeedRoster();
                     break;
 
                 case Mode.PartyHub:
@@ -1258,7 +1296,7 @@ namespace Bonanza
             {
                 case RosterEvent.Tick: ShellSfx("ui"); break;
                 case RosterEvent.Miss: ShellSfx("miss"); if (o.Flash != null) Debug.Log($"[SHELL] roster miss flash={o.Flash}"); break;
-                case RosterEvent.Lock: ShellSfx("perfect"); Debug.Log($"[SHELL] roster pick seat={o.Seat} char={_roster.Picks[o.Seat]}"); break;
+                case RosterEvent.Lock: ShellSfx("perfect"); if (_hall != null && _hall.HasCast) _hall.Cast.Pop(); Debug.Log($"[SHELL] roster pick seat={o.Seat} char={_roster.Picks[o.Seat]}"); break;
                 case RosterEvent.CpuLock: ShellSfx("great"); Debug.Log($"[SHELL] roster pick seat={o.Seat} char={_roster.Picks[o.Seat]} cpu"); break;
                 case RosterEvent.Unlock: ShellSfx("uiBack"); Debug.Log($"[SHELL] roster unpick seat={o.Seat}"); break;
                 case RosterEvent.Leave: ShellSfx("uiBack"); _roster = null; _mode = Mode.Title; return;
@@ -1581,7 +1619,7 @@ namespace Bonanza
                     Hud.Center(0.9f, "UP/DOWN choose   LEFT/RIGHT adjust   ESC / X back", Hud.Small, new Color(1, 1, 1, 0.7f), 40);
                     break;
 
-                case Mode.Roster: DrawRoster(s); break;
+                case Mode.Roster: RosterTargets(); break;
 
                 case Mode.PartyHub:
                     Hud.Dim(ShellDim(0.88f));
@@ -1660,76 +1698,6 @@ namespace Bonanza
         }
 
         /// One selectable row: label left, value right. Row i sits at y0 + i rows. True if clicked.
-        // The roster screen, IMGUI placeholders until the visual phase: a header, the 4x2 character grid,
-        // the four seats, a hint. Same stages and wording as the web.
-        void DrawRoster(float s)
-        {
-            if (_roster == null) return;
-            var r = _roster;
-            Hud.Dim(ShellDim(0.85f));
-            string head, sub, hint;
-            switch (r.Stage)
-            {
-                case RosterStage.Lineup: head = "PICK YOUR RIVALS"; sub = "you are P1 - UP/DOWN pick a seat - LEFT/RIGHT CPU easy / normal / hard / off"; hint = "LEFT/RIGHT seat type   SPACE continue   X back"; break;
-                case RosterStage.Chars: head = "CHOOSE YOUR CHARACTER"; sub = "move with the arrows - SPACE to lock in - X to go back"; hint = "ARROWS choose   SPACE lock in   X back"; break;
-                case RosterStage.Cpu: head = "CPU IS CHOOSING..."; sub = "they always take the good one"; hint = "CPU choosing..."; break;
-                default:
-                    head = r.Mode == "party" ? "LINEUP SET - PRESS SPACE" : "READY - PRESS SPACE";
-                    sub = r.Mode == "party" ? "four games, one crown" : "pick a minigame next";
-                    hint = r.Mode == "party" ? "SPACE start the party   X back" : "SPACE pick a game   X back"; break;
-            }
-            Hud.Center(0.04f, head, Hud.Big, Hud.Gold, 100);
-            if (_rosterFlash != null) Hud.Center(0.17f, _rosterFlash, Hud.Small, new Color(1, 0.45f, 0.4f), 40);
-            else Hud.Center(0.17f, sub, Hud.Small, new Color(1, 1, 1, 0.8f), 40);
-
-            // character grid: 4 columns, 2 rows
-            bool gridOn = r.Stage == RosterStage.Chars;
-            float cw = 190 * s, ch = 84 * s, gap = 12 * s;
-            float gx = Screen.width * 0.5f - (4 * cw + 3 * gap) / 2, gy = Screen.height * 0.26f;
-            for (int i = 0; i < Cast.All.Count; i++)
-            {
-                var c = Cast.All[i];
-                var rect = new Rect(gx + (i % RosterState.Cols) * (cw + gap) + (i == _rosterShakeCard && _rosterShakeT > 0 ? Mathf.Sin(_rosterShakeT * 90f) * 6 * s : 0), gy + (i / RosterState.Cols) * (ch + gap), cw, ch);
-                var col = new Color(((c.Color >> 16) & 255) / 255f, ((c.Color >> 8) & 255) / 255f, (c.Color & 255) / 255f);
-                bool taken = r.Taken(i), on = gridOn && i == r.Cursor;
-                float dim = gridOn ? (taken ? 0.3f : 1f) : 0.45f;
-                Hud.Box(new Rect(rect.x - (on ? 4 * s : 0), rect.y - (on ? 4 * s : 0), rect.width + (on ? 8 * s : 0), rect.height + (on ? 8 * s : 0)), on ? new Color(1, 1, 1, 0.9f) : new Color(1, 1, 1, 0.1f));
-                Hud.Box(rect, new Color(col.r * dim * 0.8f, col.g * dim * 0.8f, col.b * dim * 0.8f, 1));
-                Hud.Text(rect, c.Name, Hud.Mid, new Color(1, 1, 1, taken ? 0.5f : 1f), TextAnchor.MiddleCenter);
-                if (taken) Hud.Text(new Rect(rect.x, rect.y + rect.height * 0.62f, rect.width, rect.height * 0.38f), "P" + (r.TakenBy(i) + 1), Hud.Small, Hud.Gold, TextAnchor.MiddleCenter);
-                if (GUI.Button(rect, GUIContent.none, GUIStyle.none) && r.Stage == RosterStage.Chars) { r.Cursor = i; RosterPress("a"); }
-            }
-            if (gridOn) Hud.Center(0.62f, Cast.All[r.Cursor].Name + " - " + Cast.All[r.Cursor].Trait, Hud.Small, Color.white, 40);
-
-            // the four seats
-            float sw = 220 * s, sh = 72 * s, sy = Screen.height * 0.7f;
-            float sx = Screen.width * 0.5f - (4 * sw + 3 * gap) / 2;
-            for (int i = 0; i < RosterRules.Seats; i++)
-            {
-                if (r.Mode == "free" && i > 0) continue;   // Free Play is solo: no rival seats to show
-                var rect = new Rect(sx + i * (sw + gap), sy, sw, sh);
-                bool off = r.Seat[i] == RosterState.Off;
-                bool active = (r.Stage == RosterStage.Lineup && i == r.SeatSel) || (r.Stage == RosterStage.Chars && i == r.Active);
-                Hud.Box(rect, active ? new Color(1, 0.8f, 0.3f, 0.35f) : new Color(1, 1, 1, off ? 0.04f : 0.1f));
-                Hud.Text(new Rect(rect.x + 10 * s, rect.y + 4 * s, rect.width, rect.height * 0.5f), "P" + (i + 1) + "  " + (r.Picks[i] != null ? Cast.ById(r.Picks[i]).Name : "-"), Hud.Small, off ? new Color(1, 1, 1, 0.4f) : Color.white, TextAnchor.MiddleLeft);
-                Hud.Text(new Rect(rect.x + 10 * s, rect.y + rect.height * 0.5f, rect.width, rect.height * 0.45f), SeatLabel(r, i) + (r.Picks[i] != null ? "  READY!" : ""), Hud.Small, new Color(1, 1, 1, 0.7f), TextAnchor.MiddleLeft);
-                if (r.Picks[i] != null)
-                {
-                    var c = Cast.ById(r.Picks[i]);
-                    Hud.Box(new Rect(rect.xMax - 12 * s, rect.y, 12 * s, rect.height), new Color(((c.Color >> 16) & 255) / 255f, ((c.Color >> 8) & 255) / 255f, (c.Color & 255) / 255f));
-                }
-                if (GUI.Button(rect, GUIContent.none, GUIStyle.none) && r.Stage == RosterStage.Lineup)
-                {
-                    r.SeatSel = i;
-                    if (i > 0) RosterPress("right"); else RosterPress("left");
-                }
-            }
-            if (r.Stage == RosterStage.Go && GUI.Button(new Rect(0, 0, Screen.width, Screen.height * 0.26f), GUIContent.none, GUIStyle.none)) RosterPress("a");
-            Hud.Center(0.9f, hint, Hud.Small, new Color(1, 1, 1, 0.7f), 40);
-        }
-
-
-
         bool MenuRow(int i, float y0, string label, string value, bool sel, float s, float pitch = 80, float height = 66, bool grey = false, float width = 0.44f)
         {
             var r = new Rect(Screen.width * (0.5f - width / 2), Screen.height * y0 + i * pitch * s, Screen.width * width, height * s);

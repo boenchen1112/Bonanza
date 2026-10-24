@@ -60,6 +60,7 @@ namespace Bonanza.Shell
 
         public ShellBackdrop Backdrop { get; private set; }
         public TitleScreen Title { get; private set; }
+        public RosterScreen Roster { get; private set; }
         public ShellScreen Current { get; private set; }
 
         RectTransform _root;
@@ -91,6 +92,8 @@ namespace Bonanza.Shell
             _root = (RectTransform)transform;
             Title = new TitleScreen();
             Title.BuildInto(_root, "Title");
+            Roster = new RosterScreen();
+            Roster.BuildInto(_root, "Roster");
         }
 
         void Update()

@@ -53,6 +53,10 @@ namespace Bonanza.Shell
         public bool Live { get; private set; }
         public string PoseName { get; private set; } = "title";
         public LookRig Look => _look;
+        CastStage _cast;
+        /// The cast on the stage (roster); built on first use.
+        public CastStage Cast => _cast ? _cast : _cast = CastStage.Create(this);
+        public bool HasCast => _cast != null;
 
         LookRig _look;
         Env _env;
@@ -100,7 +104,7 @@ namespace Bonanza.Shell
             return m;
         }
 
-        Material AddMat(Color c, float intensity, float facing = 0, float fog = 0, float ramp = 0)
+        internal Material AddMat(Color c, float intensity, float facing = 0, float fog = 0, float ramp = 0)
         {
             var m = Own(new Material(EnvKit.GlowAddMat));
             m.SetColor("_Color", c);
@@ -111,7 +115,7 @@ namespace Bonanza.Shell
             return m;
         }
 
-        Material Card(Color c, float intensity, float core, bool billboard)
+        internal Material Card(Color c, float intensity, float core, bool billboard)
         {
             var m = Own(new Material(EnvKit.GlowMat));
             m.SetColor("_Color", c);
@@ -138,7 +142,7 @@ namespace Bonanza.Shell
             return _quad = Own(q.ToMesh("Quad"));
         }
 
-        MeshRenderer CardAt(string name, Material m, Vector3 pos, Vector3 euler, Vector2 size, Transform parent = null)
+        internal MeshRenderer CardAt(string name, Material m, Vector3 pos, Vector3 euler, Vector2 size, Transform parent = null)
         {
             var r = EnvKit.Renderer(name, parent ? parent : transform, Quad(), m);
             r.receiveShadows = false;

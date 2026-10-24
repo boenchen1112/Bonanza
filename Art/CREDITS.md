@@ -16,6 +16,13 @@
   Standing Taunt Chest Thump, retargeted to the batter in Blender
   (`Tools/blender/retarget.py`). The raw downloads are kept locally, not in git.
 
+## Cast (Bopp, Zizz, Kwark, Tuff, Mimo, Nibb, Glub, Fizz)
+
+- The eight bodies were built in Blender from our own character art and given flat-colour toon
+  materials in the game (`Assets/Art/Cast/`, prefabs in `Assets/Game/Resources/Cast/`).
+- Rig and motion (idle, ready, dance, swing, pitch, taunt, celebrate, fail) from **Mixamo**
+  (https://www.mixamo.com, Adobe), retargeted in Blender. The raw downloads are kept locally, not in git.
+
 ## Callout font
 
 - **Lilita One** (Juan Montoreano, SIL Open Font License 1.1), baked to a static TextMeshPro SDF atlas
