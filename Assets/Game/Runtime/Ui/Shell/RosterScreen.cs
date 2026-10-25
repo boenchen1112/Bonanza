@@ -465,10 +465,9 @@ namespace Bonanza.Shell
             _infoGroup.alpha = UiKit.Clamp01((age - 0.35f) * 3f) * (red ? shown : 1);
             _info.gameObject.SetActive(!small);   // no room for the plate on a short screen
             _info.anchoredPosition = new Vector2(GridLeft, -(GridTop + 2 * CardH + CardGap + (small ? 10 : 22)));
-            _info.sizeDelta = new Vector2(478, small ? 64 : lineup ? 108 : 120);
-            _infoBar.rectTransform.sizeDelta = new Vector2(8, small ? 40 : lineup ? 76 : 88);
+            _info.sizeDelta = new Vector2(478, small ? 64 : 120);
+            _infoBar.rectTransform.sizeDelta = new Vector2(8, small ? 40 : 88);
             _name.rectTransform.sizeDelta = new Vector2(330, small ? 56 : 60);
-            _trait.rectTransform.anchoredPosition = new Vector2(36, lineup && !small ? -54 : -58);
             int tb = r.Taken(FocusChar) ? r.TakenBy(FocusChar) : -1;
             _status.text = tb == 0 && !chars ? "YOUR PICK" : tb >= 0 ? "TAKEN BY P" + (tb + 1) : (chars ? "FREE - SPACE TO LOCK IN" : "");
             _status.color = tb > 0 || (tb == 0 && chars) ? Coral : Gold;
@@ -479,7 +478,7 @@ namespace Bonanza.Shell
                 bool sYou = sv == RosterState.You, sOff = sv == RosterState.Off;
                 _name.text = sYou ? "P1  YOU" : "P" + (ss + 1) + (sOff ? "  EMPTY" : "  CPU");
                 string seatChar = r.Picks[ss] != null ? Cast.All[Mathf.Max(0, Cast.IndexOf(r.Picks[ss]))].Name : null;
-                _trait.text = sYou ? (seatChar != null ? "PLAYING AS " + seatChar : "PLAYER ONE") : sOff ? "NO RIVAL" : Levels[sv] + " LEVEL" + (seatChar != null ? "  -  " + seatChar : "");
+                _trait.text = sYou ? (seatChar != null ? "PLAYING AS " + seatChar : "PLAYER ONE  -  PICK A CHARACTER NEXT") : sOff ? "NO RIVAL" : Levels[sv] + " LEVEL" + (seatChar != null ? "  -  " + seatChar : "");
                 _status.text = sYou ? "YOU PLAY EVERY GAME" : sOff ? "RIGHT TO ADD A CPU" : sv == 0 ? "MISSES OFTEN" : sv == 1 ? "STEADY, FAIR FIGHT" : "NEAR PERFECT PLAY";
                 _status.color = Gold;
                 _infoBar.color = sYou ? Gold : sOff ? new Color(1, 1, 1, 0.3f) : Color.Lerp(Gold, UiKit.Hex(0xff7a3a), sv * 0.5f);
