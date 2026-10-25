@@ -116,7 +116,7 @@ namespace Bonanza.Shell
             UiKit.Place(_rec2.rectTransform, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0, 9), new Vector2(350, 24));
             _rec2.characterSpacing = 3f;
             var hintPlate = UiKit.Box(_foot, "HintPlate", new Color(0.05f, 0.03f, 0.12f, 0.95f), UiKit.Pill, true, 24);
-            UiKit.Place(hintPlate.rectTransform, new Vector2(0.5f, 0), new Vector2(0.5f, 0), Vector2.zero, new Vector2(500, 32));
+            UiKit.Place(hintPlate.rectTransform, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0, 8), new Vector2(500, 32));
             _hint = UiKit.Text(hintPlate.rectTransform, "Hint", TextStyle.Label, 14f, UiKit.Cream, italic: false);
             UiKit.Place(_hint.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(490, 30));
             _hint.characterSpacing = 3f;
