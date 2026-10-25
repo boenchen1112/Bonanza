@@ -309,7 +309,7 @@ namespace Bonanza
             {
                 var t = _ticks[_tickCursor++];
                 Host.CountTick(t.Time, t.Accent);
-                if (t.Say && t.Time > now - 0.2) Ui.Countdown(t.Text, 0.215f, 1.4f, (float)System.Math.Max(0.3, t.Len - 0.04));   // lasts until the next tick, so it never hides the tempo
+                if (t.Say && t.Time > now - 0.2) Ui.Countdown(t.Text, 0.2f, 2.9f, (float)System.Math.Max(0.3, t.Len - 0.04), Hex(0xfff2b0));   // lasts until the next tick, so it never hides the tempo
             }
         }
 
@@ -472,7 +472,7 @@ namespace Bonanza
             _shotOn = ShotMode("ffshot");
             if (!_shotOn) return;
             var s0 = _round.Slots[0];
-            _shots.Add(new ShotMark { T = s0.StartTime - 2.3 * s0.Curve.LengthOf(0), Tag = "count" });
+            _shots.Add(new ShotMark { T = s0.StartTime - 2.75 * s0.Curve.LengthOf(0), Tag = "count" });
             foreach (var s in _round.Slots)
             {
                 string L = s.Level.ToString().ToLowerInvariant();

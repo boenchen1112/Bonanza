@@ -252,7 +252,7 @@ namespace Bonanza
         void BuildMarkers(RectTransform root)
         {
             _youPlate = UiKit.Rect("You", root);
-            Centre(_youPlate, Vector2.zero, new Vector2(78, 28));
+            Centre(_youPlate, Vector2.zero, new Vector2(88, 32));
             var f = UiKit.Box(_youPlate, "Fill", UiKit.Hex(0xffd93d), UiKit.Pill, true, 12); UiKit.Stretch(f.rectTransform);
             Rim(_youPlate, 12, new Color(1, 1, 1, 0.9f));
             var t = Label(_youPlate, "Text", "YOU", 11f, Ink, TextAlignmentOptions.Midline, 12);
@@ -800,7 +800,7 @@ namespace Bonanza
                 var h = _hearts[i];
                 bool full = i < hearts;
                 if (full != h.Full && h.Break <= 0 && h.Pop <= 0) h.Full = full;
-                h.Pop = Mathf.Max(0, h.Pop - real * 2.2f);
+                h.Pop = Mathf.Max(0, h.Pop - real * 1.3f);
                 h.Break = Mathf.Max(0, h.Break - real * 1.8f);
                 float scale = 1;
                 if (h.Pop > 0) scale = reduce ? 1 : 1 + 0.45f * Mathf.Sin(h.Pop * Mathf.PI) * h.Pop;
@@ -812,7 +812,7 @@ namespace Bonanza
                 h.Fill.color = h.Break > 0 ? Color.Lerp(Color.white, new Color(1, 1, 1, 0.3f), 1 - h.Break) : Color.white;
                 h.Back.color = h.Full ? new Color(0.04f, 0.02f, 0.06f, 0.8f) : new Color(0.25f, 0.2f, 0.3f, 0.55f);
                 h.Glow.color = h.Pop > 0 && h.Break <= 0
-                    ? new Color(1f, 0.85f, 0.45f, Mathf.Min(1, h.Pop * 1.2f))   // a heart won back: a gold burst
+                    ? new Color(1f, 0.85f, 0.45f, Mathf.Min(1, h.Pop * 1.6f))   // a heart won back: a gold burst
                     : new Color(1f, 0.25f, 0.3f, last ? 0.35f + 0.25f * Mathf.Sin(_time * 3.6f) : h.Pop * 0.6f + h.Break * 0.9f);
                 h.Glow.rectTransform.localScale = Vector3.one * (1 + (reduce ? 0 : 1.6f * (h.Pop + h.Break)));
                 if (h.Shard01 > 0)
@@ -893,7 +893,7 @@ namespace Bonanza
             }
             // the red room: a slow red frame on the last heart, deeper with none
             bool red = _playing && !_round.Done && Hearts <= 1;
-            float vgoal = !red ? 0 : (Hearts == 0 ? 0.55f : 0.4f) + (reduce ? 0 : 0.12f * Mathf.Sin(_time * 2.4f));
+            float vgoal = !red ? 0 : (Hearts == 0 ? 0.3f : 0.22f) + (reduce ? 0 : 0.06f * Mathf.Sin(_time * 2.4f));   // an edge frame only: the baton and the level palette stay readable
             _vigA = Damp(_vigA, vgoal, 3, real);
             // heart moments: a quick frame pulse (red on a loss, gold on a gain), on top of the red room
             _pulseA = Mathf.Max(0, _pulseA - real * (reduce ? 2.5f : 1.8f));

@@ -439,7 +439,7 @@ namespace Bonanza
         void BuildPodium()
         {
             var velvet = Surf(L(0.5f, 0.04f, 0.09f), rim: 1.5f, pulse: 0.03f, bands: 3, softness: 0.35f);
-            var lacquer = Surf(L(0.78f, 0.48f, 0.22f), rim: 1.2f, pulse: 0.02f, lift: 0.05f, bands: 4, softness: 0.2f);   // honey oak
+            var lacquer = Surf(L(0.52f, 0.31f, 0.15f), rim: 1.2f, pulse: 0.02f, lift: 0.05f, bands: 4, softness: 0.2f);   // honey oak
             var brass = Surf(L(1f, 0.78f, 0.36f), rim: 1.4f, pulse: 0.03f, lift: 0.12f, bands: 4, softness: 0.14f);
             float h1 = PodiumH * 0.5f;
             var b = new MeshBuilder();
@@ -456,7 +456,7 @@ namespace Bonanza
             b.Torus(PodiumR + 0.015f, 0.02f, 5, 56, Mathf.PI * 2, Matrix4x4.TRS(new Vector3(0, h1 + (PodiumH - h1) * 0.5f, 0), Quaternion.Euler(90, 0, 0), Vector3.one), Color.white);
             b.Torus(PodiumR + 0.225f, 0.024f, 5, 56, Mathf.PI * 2, Matrix4x4.TRS(new Vector3(0, h1, 0), Quaternion.Euler(90, 0, 0), Vector3.one), Color.white);
             Part("PodiumBrass", transform, b, brass, PodiumAt);
-            _podRingMat = AddMat(L(1f, 0.7f, 0.4f), 0.6f, 0.3f, 0);
+            _podRingMat = AddMat(L(1f, 0.82f, 0.5f), 0.45f, 0.3f, 0);
             b = new MeshBuilder();
             b.Torus(PodiumR + 0.42f, 0.03f, 4, 72, Mathf.PI * 2, Matrix4x4.TRS(new Vector3(0, 0.012f, 0), Quaternion.Euler(90, 0, 0), new Vector3(1, 1, 0.3f)), Color.white);
             Part("PodiumRing", transform, b, _podRingMat, PodiumAt);
@@ -510,7 +510,9 @@ namespace Bonanza
             bq.Surface(1, 1, (u, v) => (new Vector3(u - 0.5f, v - 0.5f, 0), Vector3.back), Matrix4x4.identity, Color.white, Vector2.one);
             var bqm = Own(bq.ToMesh("Wash"));
             var wash = EnvKit.Renderer("MaestroWash", transform, bqm, blob);
-            wash.transform.localPosition = new Vector3(0, 3.0f, 10.5f); wash.transform.localScale = new Vector3(7f, 10f, 1);
+            wash.transform.localPosition = new Vector3(0, 3.0f, 10.5f); wash.transform.localScale = new Vector3(8.5f, 11f, 1);
+            var wash2 = EnvKit.Renderer("MaestroDrape", transform, bqm, blob);   // a second, tighter layer: a dark drape right behind his head and shoulders
+            wash2.transform.localPosition = new Vector3(0, 2.6f, 10.1f); wash2.transform.localScale = new Vector3(5.2f, 8f, 1);
             _haloBackMat = GlowCard(new Color(1f, 0.78f, 0.5f), 0.1f, 1.2f);
             var hb = EnvKit.Renderer("MaestroBackGlow", transform, bqm, _haloBackMat);
             hb.transform.localPosition = PodiumAt + new Vector3(0, PodiumH + 2.1f, 0.6f); hb.transform.localScale = new Vector3(4.4f, 4.4f, 1);
