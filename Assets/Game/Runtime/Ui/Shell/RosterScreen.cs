@@ -45,7 +45,7 @@ namespace Bonanza.Shell
 
         sealed class Card
         {
-            public RectTransform Rt, Inner; public Image Shadow, Glow, Frame, Ring, PlateFill, Veil, BadgeFill;
+            public RectTransform Rt, Inner; public Image Shadow, Glow, Frame, Ring, Chosen, PlateFill, Veil, BadgeFill;
             public RawImage Portrait; public Image Tint; public TextMeshProUGUI Name, Badge;
             public CanvasGroup Group;
             public float Focus, Hover, Press, Pop, Fade;
@@ -209,6 +209,9 @@ namespace Bonanza.Shell
             UiKit.Stretch(c.Veil.rectTransform);
             c.Ring = UiKit.Box(c.Inner, "Ring", new Color(1, 1, 1, 0.22f), UiKit.PillRing(5), true, 20);
             UiKit.Stretch(c.Ring.rectTransform);
+            // the chosen card: a thick gold outline just outside the frame
+            c.Chosen = UiKit.Box(c.Inner, "Chosen", new Color(1, 0.88f, 0.3f, 0f), UiKit.PillRing(9), true, 22);
+            UiKit.Stretch(c.Chosen.rectTransform); c.Chosen.rectTransform.offsetMin = new Vector2(-5, -5); c.Chosen.rectTransform.offsetMax = new Vector2(5, 5);
             // taken badge
             c.BadgeFill = UiKit.Box(c.Inner, "Badge", Gold, UiKit.Disc);
             UiKit.Place(c.BadgeFill.rectTransform, new Vector2(1, 1), new Vector2(0.5f, 0.5f), new Vector2(-12, -12), new Vector2(34, 34));
@@ -421,11 +424,11 @@ namespace Bonanza.Shell
                 c.Group.alpha = UiKit.Clamp01(enter * 2f) * (red ? shown : 1);
                 float sx = shaking && View.ShakeCard == i && !red ? Mathf.Sin(View.ShakeT * 90f) * 7f : 0;
                 var basePos = CardPos(i);
-                float lift = 8f * c.Focus + 3f * c.Hover * (1 - c.Focus);
+                bool mine = !chars && (r.Picks[0] != null ? Cast.IndexOf(r.Picks[0]) == i : FocusChar == i);   // the player's own pick, once chosen
+                float lift = 8f * c.Focus + 3f * c.Hover * (1 - c.Focus) + (mine ? 12f : 0f);
                 c.Rt.anchoredPosition = new Vector2(basePos.x + sx, basePos.y + lift - (1 - Mathf.Min(1, enter)) * 50f);
                 float hop = Mathf.Sin(Mathf.Clamp01(1 - c.Pop) * Mathf.PI) * 0.09f * (c.Pop > 0 ? 1 : 0);
-                bool mine = !chars && !lineup && r.Picks[0] != null && Cast.IndexOf(r.Picks[0]) == i;
-                float mineUp = mine ? 0.06f : 0f;
+                float mineUp = mine ? 0.1f : 0f;
                 c.Inner.localScale = Vector3.one * ((0.7f + 0.3f * Mathf.Min(1.1f, enter)) * (1 + 0.09f * c.Focus + mineUp + 0.035f * c.Hover + hop) * (1 - 0.06f * c.Press));
                 float dim = mine ? 1f : chars ? (taken ? 0.7f : 1f) : (by >= 0 ? 1f : 0.7f);   // picked cards stay bright with their badge, the rest step back
                 var port = View.Cast != null ? View.Cast.Portrait(i) : null;
@@ -442,6 +445,7 @@ namespace Bonanza.Shell
                 Color rim = Color.Lerp(new Color(1, 1, 1, 0.22f), new Color(0.55f, 0.95f, 1f, 1f), c.Hover);
                 c.Ring.color = Color.Lerp(rim, new Color(1, 0.93f, 0.5f, 1f), Mathf.Max(c.Focus, mine ? 1f : 0f));
                 c.Shadow.color = new Color(0, 0, 0, 0.5f * (1 - 0.5f * c.Press));
+                c.Chosen.color = new Color(1, 0.88f, 0.3f, Mathf.Max(c.Focus, mine ? 1f : 0f));
                 c.BadgeFill.gameObject.SetActive(taken);
                 c.Badge.text = by == 0 ? "YOU" : "P" + (by + 1);
                 c.Badge.fontSize = by == 0 ? 11f : 15f;
@@ -530,7 +534,7 @@ namespace Bonanza.Shell
                 float faceA = 1f;
                 if (tex == null && you && View.Cast != null)   // P1 not picked yet: the figure on stage, ghosted, instead of a '?'
                 {
-                    tex = View.Cast.Portrait(FocusChar); faceA = 0.5f;
+                    tex = View.Cast.Portrait(FocusChar); faceA = 0.9f;
                 }
                 s.Face.texture = tex; s.Face.color = new Color(1, 1, 1, tex != null ? faceA : 0);
                 s.Q.gameObject.SetActive(ci < 0 && you && tex == null);
@@ -541,7 +545,7 @@ namespace Bonanza.Shell
                 for (int k = 1; k < 6; k++) s.DiceImgs[k].gameObject.SetActive(!off);
                 var seatCol = ci >= 0 ? ColorOf(Cast.All[ci].Color) : new Color(1, 1, 1, 0.5f);
                 s.DiscRing.color = ci >= 0 ? seatCol : new Color(1, 1, 1, 0.35f);
-                s.DiscFill.color = ci >= 0 ? Color.Lerp(seatCol, Color.black, 0.5f) : new Color(1, 1, 1, 0.08f);
+                s.DiscFill.color = ci >= 0 ? Color.Lerp(seatCol, Color.black, 0.25f) : you ? new Color(1, 1, 1, 0.3f) : new Color(1, 1, 1, 0.08f);
                 s.Pick.text = ci >= 0 ? Cast.All[ci].Name : (you && chars && active ? "PICKING..." : "");
                 s.Pick.color = ci >= 0 ? Color.Lerp(seatCol, Color.white, 0.9f) : Gold;
                 // level pips: easy 1, normal 2, hard 3
