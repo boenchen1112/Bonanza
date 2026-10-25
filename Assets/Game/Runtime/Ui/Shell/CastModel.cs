@@ -51,7 +51,7 @@ namespace Bonanza.Shell
             _graph.Evaluate(0);
         }
 
-        Transform _lArm, _lFore, _lHand, _rArm, _rFore, _rHand;
+        Transform _lArm, _lFore, _lHand, _rArm, _rFore, _rHand, _head;
         bool _bound;
 
         void Bind()
@@ -68,11 +68,13 @@ namespace Bonanza.Shell
                     case "mixamorigRightArm": _rArm = t; break;
                     case "mixamorigRightForeArm": _rFore = t; break;
                     case "mixamorigRightHand": _rHand = t; break;
+                    case "mixamorigHead": _head = t; break;
                 }
             }
         }
 
         /// The hand a held prop belongs to (the right one), or null for a rig without arm bones.
+        public Transform HeadBone { get { Bind(); return _head; } }
         public Transform HeldHand { get { Bind(); return _rHand; } }
 
         /// A procedural arms-up cheer laid over the pose just evaluated: both arms swing toward up and a little out

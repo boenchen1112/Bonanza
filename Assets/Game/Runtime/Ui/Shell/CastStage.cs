@@ -128,6 +128,21 @@ namespace Bonanza.Shell
             refPos = new Vector2((v.x - 0.5f) * RefH * Mathf.Max(0.5f, _main.aspect), (1f - v.y) * RefH);
             return true;
         }
+        /// The tint of the character on stage (its body colour).
+        public Color Tint => _tint;
+        /// Where the top of the standing figure's head is, in reference px like TryHandRef, or false without a head bone.
+        public bool TryHeadRef(out Vector2 refPos)
+        {
+            refPos = default;
+            if (_shown < 0 || !_main || _models[_shown] == null || !_bodies[_shown] || !_bodies[_shown].activeSelf) return false;
+            var h = _models[_shown].HeadBone;
+            if (!h) return false;
+            var top = h.position + _models[_shown].transform.up * (_bodies[_shown].transform.lossyScale.y * 0.16f);
+            var v = _main.WorldToViewportPoint(top);
+            if (v.z <= 0) return false;
+            refPos = new Vector2((v.x - 0.5f) * RefH * Mathf.Max(0.5f, _main.aspect), (1f - v.y) * RefH);
+            return true;
+        }
         bool _noFigure;
         /// The standing figure's height as a fraction of the height asked for in Place (shorter characters read shorter).
         public float FigureRel { get; private set; } = 1;
