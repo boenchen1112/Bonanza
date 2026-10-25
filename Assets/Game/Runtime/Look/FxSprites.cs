@@ -11,7 +11,7 @@ namespace Bonanza.Look
     {
         public const int Size = 512, Grid = 4, Cell = Size / Grid, Pad = 6;
 
-        public enum Cell_ { Glow, Sparkle, Streak, Star6, Scorch, Confetti, Shard, Smoke, Solid }
+        public enum Cell_ { Glow, Sparkle, Streak, Star6, Scorch, Confetti, Shard, Smoke, Solid, Puff }
 
         static Texture2D _tex;
 
@@ -137,6 +137,18 @@ namespace Bonanza.Look
                             case Cell_.Solid:
                                 a = 1;
                                 break;
+                            case Cell_.Puff:
+                            {
+                                // a cartoon smoke puff: a cluster of hard-edged discs in three flat tone bands (lit cap, mid, shaded base)
+                                for (int k = 0; k < 7; k++)
+                                {
+                                    float bx = x - puffs[k, 0] * c * 1.1f, by = y - puffs[k, 1] * c * 0.9f + c * 0.05f;
+                                    float r = c * puffs[k, 2] * 1.55f;
+                                    a = Mathf.Max(a, Mathf.Clamp01((r - Mathf.Sqrt(bx * bx + by * by)) / 1.5f + 0.5f));
+                                }
+                                shade = y > c * 0.22f ? 1f : y > -c * 0.2f ? 0.8f : 0.6f;
+                                break;
+                            }
                         }
                         byte g = (byte)Mathf.Clamp(Mathf.RoundToInt(shade * 255), 0, 255);
                         px[(cy * Cell + py) * Size + cx * Cell + pxl] = new Color32(g, g, g, (byte)Mathf.Clamp(Mathf.RoundToInt(a * 255), 0, 255));

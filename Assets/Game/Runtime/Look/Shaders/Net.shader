@@ -47,8 +47,8 @@ Shader "Bonanza/Net"
                 float free = 1.0 - i.uv.y;                                  // the rail holds the top still
                 float wave = sin(_SwayTime * 1.3 + i.uv.x * 7.0) * 0.6 + sin(_SwayTime * 2.1 + i.uv.x * 13.0 + 1.7) * 0.4;
                 float2 dh = (i.uv - _HitU.xy) * float2(3.0, 1.6);
-                float bulge = exp(-dot(dh, dh) * 6.0) * _Hit;
-                float3 p = i.positionOS.xyz + i.normalOS * (wave * _Sway * free + bulge * 0.35);
+                float bulge = exp(-dot(dh, dh) * 4.5) * _Hit;   // a wide belly of net round where the ball went in
+                float3 p = i.positionOS.xyz + i.normalOS * (wave * _Sway * free + bulge * 0.4);
                 Varyings o;
                 float3 ws = TransformObjectToWorld(p);
                 o.positionCS = TransformWorldToHClip(ws);

@@ -77,6 +77,16 @@ namespace Bonanza
         static readonly int IdIntensity = Shader.PropertyToID("_Intensity"), IdColor = Shader.PropertyToID("_Color"),
             IdSwayTime = Shader.PropertyToID("_SwayTime"), IdHit = Shader.PropertyToID("_Hit"), IdSway = Shader.PropertyToID("_Sway");
 
+        Vector3 _netC; float _netA0, _netArc;
+
+        /// Aim the net's bulge at where a ball went in (the arc's uv: x around, y up).
+        void NetHitAt(Vector3 p)
+        {
+            var d = p - _netC;
+            float u = Mathf.Clamp01((Mathf.Atan2(d.x, d.z) - _netA0) / _netArc), v = Mathf.Clamp01(p.y / 3.4f);
+            _netMat.SetVector("_HitU", new Vector4(u, v, 0, 0));
+        }
+
         static readonly Vector3[] TowerAt = { W(-13, 0, 3.5f), W(-13, 0, -9.5f) };
         const float BankY = 8.5f, BankYRight = 10.5f;
         // The right-hand tower behind the bowl, and two mid-ground towers standing behind the far stands (depth layers
@@ -281,6 +291,7 @@ namespace Bonanza
             // Backstop behind the plate (+x): a chain-link arc with a top rail and three posts (web: r 3.3, h 3.4).
             var bc = new Vector3(PlatePos.x + 0.4f, 1.7f, PlatePos.z + 0.6f);
             float a0 = Mathf.PI * 0.32f, arc = Mathf.PI * 0.5f;
+            _netC = bc; _netA0 = a0; _netArc = arc;
             _netMat = _env.Mat(EnvKit.NetMat);
             _netMat.SetColor(IdColor, Hex(0xcfeaff));
             _netMat.SetFloat("_Opacity", 0.42f);

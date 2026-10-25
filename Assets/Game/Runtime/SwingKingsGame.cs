@@ -762,7 +762,8 @@ namespace Bonanza
                 sm.Color(new Color(0.62f, 0.6f, 0.7f)); sm.Alpha = 0.55f; sm.Size = 0.38f; sm.Life = 0.5f; sm.S0 = 0.5f; sm.S1 = 1.6f;
                 _smoke.Emit(Settings.ReduceMotion ? 1 : 3);
             }
-            _netHit = 1.6f;
+            NetHitAt(np);
+            _netHit = 1.8f;
             b.Trail?.Release();
             FreeBall(b.Go);
             ClearPips(p);
@@ -854,6 +855,10 @@ namespace Bonanza
             var fx = Look.Fx;
             fx.PlayVerdict(c.Verdict, Contact, o);
             fx.Impact(Contact, dirV, tierColor, big ? 24 : 12, 13, scale: scale);
+            // every contact reads the same way at the first frame, whatever the tier: a clamped warm flash at the sweet spot and a
+            // short spray of sparks along the hit (the same on every beat: nothing here depends on the bar)
+            fx.Flare(Contact, Color.Lerp(tierColor, Hex(0xffe3b0), 0.5f) * 0.55f, 0.75f, 0.14f, 0.4f, 1.7f);
+            fx.Burst(Contact, Settings.ReduceMotion ? 5 : 10, Hex(0xffe08a), 6f, 0.09f, 0.35f, -8f, dirV, 0.6f);
             if (big && !c.IsDemo)
             {
                 fx.SpeedLines(Contact, tierColor, roomy ? 16 : 8, 3.0f);

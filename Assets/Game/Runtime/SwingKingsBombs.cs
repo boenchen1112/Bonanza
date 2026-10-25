@@ -32,7 +32,7 @@ namespace Bonanza
 
         const int DudMax = 4;
         readonly List<Dud> _duds = new List<Dud>();
-        ParticleBatch _smoke, _debris, _fire;
+        ParticleBatch _smoke, _debris, _fire, _scorch;
         Material _smokeMat, _fireMat;
         readonly FxRng _bombRng = new FxRng(0xb0b5);
         static readonly Color BombBody = new Color(0.075f, 0.07f, 0.12f), ShellWhite = new Color(1f, 0.97f, 0.9f);
@@ -73,7 +73,7 @@ namespace Bonanza
             _smokeMat.SetFloat("_SrcBlend", 5); _smokeMat.SetFloat("_DstBlend", 10); _smokeMat.SetFloat("_ZTest", 4);
             var fxRoot = new GameObject("BombFx").transform;
             fxRoot.SetParent(transform, false);
-            _smoke = new ParticleBatch("BombSmoke", fxRoot, _smokeMat, FxSprites.Rect(FxSprites.Cell_.Smoke), PMode.Billboard, 96, _bombRng, 20, e =>
+            _smoke = new ParticleBatch("BombSmoke", fxRoot, _smokeMat, FxSprites.Rect(FxSprites.Cell_.Puff), PMode.Billboard, 96, _bombRng, 20, e =>
             { e.Grav = 0.9f; e.Drag = 2.6f; e.Size = 0.55f; e.SizeVar = 0.3f; e.Life = 1.1f; e.LifeVar = 0.3f; e.S0 = 0.45f; e.S1 = 1.8f; e.Fade = PFade.QuadOut; e.Alpha = 0.7f; e.SpinVar = 1.0f; e.Speed = 2.2f; });
             _debris = new ParticleBatch("BombDebris", fxRoot, _smokeMat, FxSprites.Rect(FxSprites.Cell_.Confetti), PMode.Tumble, 96, _bombRng, 21, e =>
             { e.Grav = -14f; e.Drag = 0.6f; e.Size = 0.1f; e.SizeVar = 0.4f; e.Aspect = 1.2f; e.Life = 0.75f; e.LifeVar = 0.25f; e.S0 = 1; e.S1 = 1; e.Fade = PFade.Late; e.Tumble = 14; e.Speed = 6; });
@@ -83,7 +83,17 @@ namespace Bonanza
             _fireMat.SetFloat("_SrcBlend", 5); _fireMat.SetFloat("_DstBlend", 1); _fireMat.SetFloat("_ZTest", 4);
             _fire = new ParticleBatch("BombFire", fxRoot, _fireMat, FxSprites.Rect(FxSprites.Cell_.Smoke), PMode.Billboard, 48, _bombRng, 22, e =>
             { e.Grav = 1.5f; e.Drag = 6f; e.Size = 0.9f; e.SizeVar = 0.3f; e.Life = 0.38f; e.LifeVar = 0.3f; e.S0 = 0.35f; e.S1 = 1.9f; e.Fade = PFade.QuadOut; e.Alpha = 1f; e.SpinVar = 2f; e.Speed = 3.4f; });
+            // a faint scorch mark on the turf where a bomb went off or a dud sputtered out (alpha: it darkens the grass)
+            _scorch = new ParticleBatch("BombScorch", fxRoot, _smokeMat, FxSprites.Rect(FxSprites.Cell_.Scorch), PMode.Ground, 8, _bombRng, 23, e =>
+            { e.Grav = 0; e.Drag = 0; e.Speed = 0; e.SpeedVar = 0; e.SpinVar = 0.2f; e.Size = 1.3f; e.SizeVar = 0.15f; e.S0 = 1; e.S1 = 1.1f; e.Life = 2.4f; e.LifeVar = 0; e.Alpha = 0.28f; e.Fade = PFade.Hold; });
             _bombPrewarm = 3;
+        }
+
+        void ScorchAt(Vector3 p, float size)
+        {
+            var e = _scorch.Begin();
+            e.Pos(new Vector3(p.x, 0.03f, p.z)).Color(new Color(0.08f, 0.06f, 0.07f)); e.Size = size; e.Life = Calm ? 1.2f : 2.4f; e.Alpha = 0.28f;
+            _scorch.Emit(1);
         }
 
         int _bombPrewarm;
@@ -146,12 +156,13 @@ namespace Bonanza
             var s = _smoke.Begin();
             s.Pos(at + new Vector3(0.1f, 0.05f, 0.1f)).Dir(new Vector3(0.3f, 1, 0.4f)); s.Cone = 0.5f; s.Speed = 2.0f; s.Jitter = 0.18f;
             s.Grav = 0.8f; s.Drag = 2.6f; s.Fade = PFade.Hold;
-            s.Color(new Color(0.2f, 0.15f, 0.28f)); s.Alpha = 1f; s.Size = 1.25f; s.Life = 0.95f; s.S0 = 0.55f; s.S1 = 1.9f;
+            s.Color(new Color(0.12f, 0.08f, 0.19f)); s.Alpha = 1f; s.Size = 1.0f; s.Life = 0.95f; s.S0 = 0.55f; s.S1 = 1.9f;
             _smoke.Emit(soft ? 3 : 6);
-            s.Pos(at + new Vector3(0.1f, 0.4f, 0.1f)); s.Color(new Color(0.42f, 0.36f, 0.52f)); s.Alpha = 1f; s.Size = 0.95f; s.Life = 0.85f; s.Speed = 1.5f;
+            s.Pos(at + new Vector3(0.1f, 0.4f, 0.1f)); s.Color(new Color(0.28f, 0.22f, 0.38f)); s.Alpha = 1f; s.Size = 0.78f; s.Life = 0.85f; s.Speed = 1.5f;
             _smoke.Emit(soft ? 2 : 5);
-            s.Pos(at + new Vector3(0.05f, 0.75f, 0.1f)); s.Color(new Color(0.62f, 0.58f, 0.7f)); s.Alpha = 0.95f; s.Size = 0.7f; s.Life = 0.7f; s.Speed = 1.1f;
+            s.Pos(at + new Vector3(0.05f, 0.75f, 0.1f)); s.Color(new Color(0.46f, 0.4f, 0.56f)); s.Alpha = 0.95f; s.Size = 0.56f; s.Life = 0.7f; s.Speed = 1.1f;
             _smoke.Emit(soft ? 1 : 3);
+            ScorchAt(new Vector3(at.x, 0, at.z), soft ? 1.0f : 1.5f);
             // the batter is sooted and dizzy for a moment
             _sootT = 0.9f; _sootStar = 0;
             Look.Rig.DoFlash(soft ? 0.02f : 0.05f, Hex(0xff8a50));   // a brief warm blink, never white
@@ -278,6 +289,7 @@ namespace Bonanza
                 {
                     // out: a teal DODGED puff, the casing sinks away
                     DodgedPuff(d.P);
+                    ScorchAt(d.P, 0.7f);
                     Park(d);
                     continue;
                 }
@@ -293,6 +305,7 @@ namespace Bonanza
             _smoke.Update(dt, axes, Time.time, pw);
             _debris.Update(dt, axes, Time.time, pw);
             _fire.Update(dt, axes, Time.time, pw);
+            _scorch.Update(dt, axes, Time.time, pw);
         }
 
         void Park(Dud d)
@@ -306,7 +319,7 @@ namespace Bonanza
 
         void DestroyBombs()
         {
-            _smoke?.Destroy(); _debris?.Destroy(); _fire?.Destroy();
+            _smoke?.Destroy(); _debris?.Destroy(); _fire?.Destroy(); _scorch?.Destroy();
             if (_smokeMat) Destroy(_smokeMat);
             if (_fireMat) Destroy(_fireMat);
         }
