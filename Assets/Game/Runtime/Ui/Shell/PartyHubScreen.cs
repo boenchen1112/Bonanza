@@ -159,9 +159,9 @@ namespace Bonanza.Shell
                 var holder = UiKit.Rect("R" + i, _rivalsRt);
                 UiKit.Place(holder, new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(i * 124, 0), new Vector2(120, 52));
                 _rival[i] = MakeFace(holder, "Face", 44);
-                UiKit.Place(_rival[i].Rt, new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(22, 0), new Vector2(44, 44));
+                UiKit.Place(_rival[i].Rt, new Vector2(0, 0.5f), new Vector2(0, 0.5f), Vector2.zero, new Vector2(44, 44));
                 _rivalName[i] = UiKit.Text(holder, "Name", TextStyle.Display, 16f, Color.white, TextAlignmentOptions.Left);
-                UiKit.Place(_rivalName[i].rectTransform, new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(60, 1), new Vector2(72, 28));
+                UiKit.Place(_rivalName[i].rectTransform, new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(54, 1), new Vector2(66, 28));
             }
 
             // ---- the standings
@@ -225,7 +225,7 @@ namespace Bonanza.Shell
             UiKit.Place(r.Sub.rectTransform, new Vector2(0, 0), new Vector2(0, 0), new Vector2(129, 11), new Vector2(190, 20));
             // YOU tag
             r.YouRt = UiKit.Rect("You", r.Inner);
-            UiKit.Place(r.YouRt, new Vector2(0, 1), new Vector2(0.5f, 0.5f), new Vector2(88, -70), new Vector2(40, 20));
+            UiKit.Place(r.YouRt, new Vector2(0, 0), new Vector2(0.5f, 0.5f), new Vector2(176, 21), new Vector2(40, 20));
             r.YouFill = UiKit.Box(r.YouRt, "Fill", Gold, UiKit.Pill, true, 20);
             UiKit.Stretch(r.YouFill.rectTransform);
             r.You = UiKit.Text(r.YouRt, "T", TextStyle.Display, 12f, Ink);
@@ -354,7 +354,7 @@ namespace Bonanza.Shell
                 bool on = i < rivals.Count;
                 _rival[i].Rt.parent.gameObject.SetActive(on);
                 if (!on) continue;
-                SetFace(_rival[i], rivals[i].Char, View.Cast, new Vector2(22, 0), 44, 1);
+                SetFace(_rival[i], rivals[i].Char, View.Cast, Vector2.zero, 44, 1);
                 _rivalName[i].text = rivals[i].Name;
             }
 
@@ -393,7 +393,8 @@ namespace Bonanza.Shell
                 r.Pop = Mathf.MoveTowards(r.Pop, 0, dt / 0.4f);
                 r.BadgeFill.color = PlaceColor(place);
                 r.Badge.text = UiKit.Int(place);
-                r.Badge.fontSize = UiKit.FontSizeForCap(22f);
+                r.Badge.fontSize = UiKit.FontSizeForCap(small ? 28f : 22f);
+                r.BadgeFill.rectTransform.sizeDelta = Vector2.one * (small ? 46f : 38f);
                 r.BadgeFill.rectTransform.localScale = Vector3.one * (1 + 0.25f * Mathf.Sin(Mathf.Clamp01(1 - r.Pop) * Mathf.PI) * (r.Pop > 0 ? 1 : 0));
 
                 SetFace(r.Face, d.Char, View.Cast, Vector2.zero, 54, 1);
@@ -404,6 +405,14 @@ namespace Bonanza.Shell
                 r.Sub.text = View.RoundsPlayed == 0 ? "READY" : tiedNow ? TiedWinsText[wn] : WinsText[wn];
                 r.Sub.fontSize = 12f * ts;
                 r.YouRt.gameObject.SetActive(you);
+                if (you)
+                {
+                    // beside the name line, inside the row: just right of the sub text
+                    r.You.fontSize = UiKit.FontSizeForCap(12f * ts);
+                    float yw = small ? 54f : 40f, yh = small ? 28f : 20f;
+                    r.YouRt.sizeDelta = new Vector2(yw, yh);
+                    r.YouRt.anchoredPosition = new Vector2(129 + r.Sub.preferredWidth + 10 + yw * 0.5f, 21);
+                }
 
                 int pts = Mathf.RoundToInt(Mathf.Lerp(d.PrevPoints, d.Points, count));
                 r.Pts.text = UiKit.Int(pts);
