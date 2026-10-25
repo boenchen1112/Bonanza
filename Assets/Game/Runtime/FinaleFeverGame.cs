@@ -309,7 +309,7 @@ namespace Bonanza
             {
                 var t = _ticks[_tickCursor++];
                 Host.CountTick(t.Time, t.Accent);
-                if (t.Say && t.Time > now - 0.2) Ui.Countdown(t.Text, 0.2f, 2.9f, (float)System.Math.Max(0.3, t.Len - 0.04), Hex(0xfff2b0));   // lasts until the next tick, so it never hides the tempo
+                if (t.Say && t.Time > now - 0.2) Ui.Countdown(t.Text, 0.28f, 2.9f, (float)System.Math.Max(0.3, t.Len - 0.04), Hex(0xfff2b0));   // lasts until the next tick, so it never hides the tempo
             }
         }
 
