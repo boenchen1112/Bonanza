@@ -240,7 +240,7 @@ namespace Bonanza.Shell
                     : low ? new Vector2(ColW - 6 - pillW * 0.5f, -h * 0.5f) : new Vector2(64 + pillW * 0.5f, -(6 + pillH * 0.5f));
                 bool tagged = you && !low;
                 float nameTop = small ? 44f : 41f, ptsTop = small ? 67f : 64f;   // centres, from the card top, when the YOU tag is up
-                if (underName) { nameTop = small ? 28f : 24f; ptsTop = small ? 56f : 48f; }
+                if (underName) { nameTop = small ? 25f : 24f; ptsTop = small ? 50f : 48f; }
                 c.Name.rectTransform.anchoredPosition = new Vector2(64, tagged ? h * 0.5f - nameTop : 11);
                 c.Pts.rectTransform.anchoredPosition = new Vector2(64, tagged ? h * 0.5f - ptsTop : -12);
                 c.TieRt.gameObject.SetActive(d.Tied);
@@ -284,7 +284,7 @@ namespace Bonanza.Shell
                 Vector2 hand = default;
                 bool held = View.Cast != null && View.Cast.TryHandRef(out hand);
                 if (held)
-                    _trophy.anchoredPosition = new Vector2(hand.x, -(hand.y + 8f));   // its foot in the fist, the cup above it
+                    _trophy.anchoredPosition = new Vector2(hand.x + (hand.x < ColCenter(order, 0, n) ? -16f : 16f), -(hand.y + 8f));   // its foot in the fist, the cup above it
                 else   // arms down: it stands on the first-place block, beside the figure
                     _trophy.anchoredPosition = new Vector2(ColCenter(order, 0, n) + 70f, -(BaseY - BlockH[0] + 4f));
                 _trophy.localScale = Vector3.one * ((held ? 0.52f : 0.8f) * Mathf.Clamp01(pop));
