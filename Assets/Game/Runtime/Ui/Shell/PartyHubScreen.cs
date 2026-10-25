@@ -393,7 +393,7 @@ namespace Bonanza.Shell
                 r.Pop = Mathf.MoveTowards(r.Pop, 0, dt / 0.4f);
                 r.BadgeFill.color = PlaceColor(place);
                 r.Badge.text = UiKit.Int(place);
-                r.Badge.fontSize = UiKit.FontSizeForCap(small ? 28f : 22f);
+                r.Badge.fontSize = UiKit.FontSizeForCap(small ? 24f : 22f);
                 r.BadgeFill.rectTransform.sizeDelta = Vector2.one * (small ? 46f : 38f);
                 r.BadgeFill.rectTransform.localScale = Vector3.one * (1 + 0.25f * Mathf.Sin(Mathf.Clamp01(1 - r.Pop) * Mathf.PI) * (r.Pop > 0 ? 1 : 0));
 
@@ -411,7 +411,7 @@ namespace Bonanza.Shell
                     r.You.fontSize = UiKit.FontSizeForCap(small ? 14f : 12f);
                     float yw = small ? 50f : 40f, yh = small ? 24f : 20f;
                     r.YouRt.sizeDelta = new Vector2(yw, yh);
-                    r.YouRt.anchoredPosition = new Vector2(129 + r.Sub.preferredWidth + 10 + yw * 0.5f, small ? 14 : 21);
+                    r.YouRt.anchoredPosition = new Vector2(129 + r.Sub.preferredWidth + 18 + yw * 0.5f, small ? 14 : 21);
                 }
 
                 int pts = Mathf.RoundToInt(Mathf.Lerp(d.PrevPoints, d.Points, count));
