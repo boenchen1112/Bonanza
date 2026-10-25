@@ -293,7 +293,7 @@ namespace Bonanza.Shell
                     UiKit.Place(sr, new Vector2(0, 1), new Vector2(0, 1), new Vector2(20, -14), new Vector2(small ? 40 : 56, 6));
                     c.NoRecRt.gameObject.SetActive(!small);
                     c.NoRec.textWrappingMode = TextWrappingModes.NoWrap;      // one line
-                    c.NoRec.enableAutoSizing = true; c.NoRec.fontSizeMax = UiKit.FontSizeForCap(13f); c.NoRec.fontSizeMin = UiKit.FontSizeForCap(10f);
+                    c.NoRec.enableAutoSizing = true; c.NoRec.fontSizeMax = UiKit.FontSizeForCap(11.5f); c.NoRec.fontSizeMin = UiKit.FontSizeForCap(10f);
                     c.NoRec.characterSpacing = 1f;
                     c.NoRec.alignment = TextAlignmentOptions.Bottom;
                     UiKit.Place(c.NoRec.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(CardW - 14, 40));

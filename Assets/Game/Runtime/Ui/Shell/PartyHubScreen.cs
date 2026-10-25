@@ -408,10 +408,10 @@ namespace Bonanza.Shell
                 if (you)
                 {
                     // beside the name line, inside the row: just right of the sub text
-                    r.You.fontSize = UiKit.FontSizeForCap(12f * ts);
-                    float yw = small ? 54f : 40f, yh = small ? 28f : 20f;
+                    r.You.fontSize = UiKit.FontSizeForCap(small ? 14f : 12f);
+                    float yw = small ? 50f : 40f, yh = small ? 24f : 20f;
                     r.YouRt.sizeDelta = new Vector2(yw, yh);
-                    r.YouRt.anchoredPosition = new Vector2(129 + r.Sub.preferredWidth + 10 + yw * 0.5f, 21);
+                    r.YouRt.anchoredPosition = new Vector2(129 + r.Sub.preferredWidth + 10 + yw * 0.5f, small ? 14 : 21);
                 }
 
                 int pts = Mathf.RoundToInt(Mathf.Lerp(d.PrevPoints, d.Points, count));

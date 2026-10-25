@@ -397,7 +397,7 @@ namespace Bonanza.Shell
             bool subOff = tight && !small && !flashing;       // the short screens (640x360) keep a one-line instruction under the title
             _subGroup.alpha = subOff ? 0 : 1;
             _subPlate.color = new Color(0.05f, 0.03f, 0.12f, subOff ? 0 : small ? 0.8f : 0.55f);
-            float subY = small ? -86f : -66f;
+            float subY = small ? -74f : -66f;
             _sub.rectTransform.anchoredPosition = new Vector2(0, subY);
             _subPlate.rectTransform.anchoredPosition = new Vector2(0, subY + 2);
             _sub.fontSize = UiKit.FontSizeForCap(small ? 17f : 15f);
@@ -465,9 +465,10 @@ namespace Bonanza.Shell
             _infoGroup.alpha = UiKit.Clamp01((age - 0.35f) * 3f) * (red ? shown : 1);
             _info.gameObject.SetActive(!small);   // no room for the plate on a short screen
             _info.anchoredPosition = new Vector2(GridLeft, -(GridTop + 2 * CardH + CardGap + (small ? 10 : 22)));
-            _info.sizeDelta = new Vector2(478, small ? 64 : 120);
-            _infoBar.rectTransform.sizeDelta = new Vector2(8, small ? 40 : 88);
+            _info.sizeDelta = new Vector2(478, small ? 64 : lineup ? 108 : 120);
+            _infoBar.rectTransform.sizeDelta = new Vector2(8, small ? 40 : lineup ? 76 : 88);
             _name.rectTransform.sizeDelta = new Vector2(330, small ? 56 : 60);
+            _trait.rectTransform.anchoredPosition = new Vector2(36, lineup && !small ? -54 : -58);
             int tb = r.Taken(FocusChar) ? r.TakenBy(FocusChar) : -1;
             _status.text = tb == 0 && !chars ? "YOUR PICK" : tb >= 0 ? "TAKEN BY P" + (tb + 1) : (chars ? "FREE - SPACE TO LOCK IN" : "");
             _status.color = tb > 0 || (tb == 0 && chars) ? Coral : Gold;
