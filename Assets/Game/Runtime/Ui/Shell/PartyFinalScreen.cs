@@ -40,7 +40,8 @@ namespace Bonanza.Shell
             public RectTransform Rt; public CanvasGroup Group;
             public Image Fill, Ring, Shine, YouFill;
             public TextMeshProUGUI Num, Name, Pts, You;
-            public RectTransform YouRt;
+            public RectTransform YouRt, TieRt;
+            public Image TieFill; public TextMeshProUGUI Tie;
             public Face Face;
         }
 
@@ -91,7 +92,7 @@ namespace Bonanza.Shell
             _statRt = UiKit.Rect("Stat", root);
             UiKit.Place(_statRt, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -BaseY - 8), new Vector2(560, 46));
             _statGroup = _statRt.gameObject.AddComponent<CanvasGroup>();
-            var sp = UiKit.Box(_statRt, "Plate", new Color(0.05f, 0.03f, 0.12f, 0.7f), UiKit.Pill, true, 24);
+            var sp = UiKit.Box(_statRt, "Plate", new Color(0.05f, 0.03f, 0.12f, 0.85f), UiKit.Pill, true, 24);
             UiKit.Stretch(sp.rectTransform);
             _stat = UiKit.Text(_statRt, "Stat", TextStyle.Display, 17f, Color.white);
             UiKit.Place(_stat.rectTransform, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -5), new Vector2(540, 26));
@@ -133,6 +134,13 @@ namespace Bonanza.Shell
             c.You = UiKit.Text(c.YouRt, "T", TextStyle.Display, 12f, Ink);
             c.You.text = "YOU";
             UiKit.Place(c.You.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 1), new Vector2(50, 22));
+            c.TieRt = UiKit.Rect("Tie", c.Rt);
+            UiKit.Place(c.TieRt, new Vector2(0, 1), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(44, 20));
+            c.TieFill = UiKit.Box(c.TieRt, "Fill", new Color(0.16f, 0.06f, 0f), UiKit.Pill, true, 22);
+            UiKit.Stretch(c.TieFill.rectTransform);
+            c.Tie = UiKit.Text(c.TieRt, "T", TextStyle.Display, 12f, Gold);
+            c.Tie.text = "TIE";
+            UiKit.Place(c.Tie.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 1), new Vector2(50, 22));
             c.Face = MakeFace(root, "Face" + i, 76);
             c.Face.Rt.anchorMin = c.Face.Rt.anchorMax = new Vector2(0.5f, 1);
             c.Face.Ring.rectTransform.anchorMin = c.Face.Ring.rectTransform.anchorMax = new Vector2(0.5f, 1);
@@ -196,36 +204,44 @@ namespace Bonanza.Shell
                 c.Group.alpha = UiKit.Clamp01(rise * 3f) * (red ? shown : 1);
                 bool you = !d.IsCpu;
                 var g = c.Fill.GetComponent<UiGradient>();
-                Color top = win ? UiKit.Hex(0xffe27a) : d.Place == 2 ? UiKit.Hex(0xc9d2ff) : d.Place == 3 ? UiKit.Hex(0xe8a56a) : UiKit.Hex(0x7a74b8);
-                Color bot = win ? UiKit.Hex(0xe58a1f) : d.Place == 2 ? UiKit.Hex(0x6b78c4) : d.Place == 3 ? UiKit.Hex(0x9c5a2c) : UiKit.Hex(0x3a3478);
+                Color top = win ? UiKit.Hex(0xffe27a) : d.Place == 2 ? UiKit.Hex(0xe6e9f0) : d.Place == 3 ? UiKit.Hex(0xe8a56a) : UiKit.Hex(0x7a74b8);
+                Color bot = win ? UiKit.Hex(0xe58a1f) : d.Place == 2 ? UiKit.Hex(0x8c93a6) : d.Place == 3 ? UiKit.Hex(0x9c5a2c) : UiKit.Hex(0x3a3478);
                 g.Set(top, bot);
                 c.Ring.color = you ? new Color(1, 1, 1, 0.95f) : new Color(1, 1, 1, 0.35f);
                 c.Num.text = UiKit.Int(d.Place);
                 c.Num.fontSize = UiKit.FontSizeForCap(34f);
                 c.Num.color = win ? new Color(0.45f, 0.2f, 0.02f) : new Color(0.12f, 0.06f, 0.3f);
                 c.Name.text = d.Name;
-                c.Pts.text = d.Tied ? $"TIE - {d.Points} PTS" : $"{d.Points} PTS";
-                c.Pts.fontSize = UiKit.FontSizeForCap(14f * ts);
-                c.Pts.color = win ? new Color(0.16f, 0.06f, 0.0f) : Color.white;
-                c.Name.color = win ? new Color(0.16f, 0.06f, 0.0f) : Color.white;
+                c.Pts.text = $"{d.Points} PTS";
+                c.Pts.fontSize = UiKit.FontSizeForCap(small ? 20f : 14f);
+                Color ink = win ? new Color(0.16f, 0.06f, 0.0f) : d.Place == 2 ? new Color(0.14f, 0.15f, 0.24f) : Color.white;
+                c.Pts.color = ink;
+                c.Name.color = ink;
                 c.Name.fontSizeMax = UiKit.FontSizeForCap(20f * (small ? 1.3f : 1f));
-                c.Name.fontSizeMin = small ? 14f : 10f;
+                c.Name.fontSizeMin = small ? UiKit.FontSizeForCap(20f) : 10f;
                 c.YouRt.gameObject.SetActive(you);
                 // portrait: sits on the block (the single winner stands on stage instead)
                 bool figure = win && single;
                 float fsz = win ? (single ? 80 : 112) : 62;
                 float fy = -(BaseY - h) + fsz * 0.5f - 2;
-                if (figure) { cx -= 70; fy = -(BaseY - h) + 14; }
+                if (figure) { cx -= 84; fy = -(BaseY - h) + 22; }
                 float cardCx = ColCenter(order, i, n);
-                float faceBottom = -fy + fsz * 0.5f - (BaseY - h);       // how far the avatar reaches into the card
-                // the YOU tag sits under the player's own avatar, inside the card; on a short card it moves to the right end
-                bool low = h < 75f;
-                float tagX = low ? cardCx + ColW * 0.5f - 30 : Mathf.Clamp(cx, cardCx - ColW * 0.5f + 26, cardCx + ColW * 0.5f - 26);
-                c.YouRt.anchoredPosition = new Vector2(tagX - cardCx - ColW * 0.5f, low ? -h * 0.5f : -(Mathf.Max(faceBottom, 0) + 12));
-                c.YouRt.sizeDelta = new Vector2(44, 20);
-                float shift = you && !low ? 4f : 0f;
-                c.Name.rectTransform.anchoredPosition = new Vector2(64, 11 - shift);
-                c.Pts.rectTransform.anchoredPosition = new Vector2(64, -12 - shift);
+                // the YOU tag sits inside the card, 6 px under its top edge, above the name; on a short card it moves to the right end
+                bool low = bh < 75f;
+                float pillH = small ? 24f : 20f, pillW = small ? 56f : 44f;
+                c.You.fontSize = UiKit.FontSizeForCap(small ? 15f : 12f);
+                c.YouRt.anchorMin = c.YouRt.anchorMax = new Vector2(0, 1);
+                c.YouRt.sizeDelta = new Vector2(pillW, pillH);
+                c.YouRt.anchoredPosition = low ? new Vector2(ColW - 6 - pillW * 0.5f, -h * 0.5f) : new Vector2(64 + pillW * 0.5f, -(6 + pillH * 0.5f));
+                bool tagged = you && !low;
+                float nameTop = small ? 44f : 41f, ptsTop = small ? 67f : 64f;   // centres, from the card top, when the YOU tag is up
+                c.Name.rectTransform.anchoredPosition = new Vector2(64, tagged ? h * 0.5f - nameTop : 11);
+                c.Pts.rectTransform.anchoredPosition = new Vector2(64, tagged ? h * 0.5f - ptsTop : -12);
+                c.TieRt.gameObject.SetActive(d.Tied);
+                c.TieRt.anchorMin = c.TieRt.anchorMax = new Vector2(0, 1);
+                c.TieRt.sizeDelta = new Vector2(pillW * 0.8f, pillH);
+                c.TieRt.anchoredPosition = new Vector2(ColW - 6 - pillW * 0.4f, -(6 + pillH * 0.5f));
+                c.Tie.fontSize = UiKit.FontSizeForCap(small ? 15f : 12f);
                 c.Num.rectTransform.anchoredPosition = new Vector2(8, figure ? -10 : 1);
                 c.YouFill.color = win ? new Color(0.16f, 0.06f, 0.0f) : Gold;   // a dark tag on the gold card
                 c.You.color = win ? Gold : Ink;
