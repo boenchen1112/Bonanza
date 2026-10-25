@@ -305,17 +305,17 @@ namespace Bonanza
                     for (int i = 0; i < 10; i++)
                     {
                         float x = (i + rng.Next() * 0.6f) / 10 * W, z = 38 + rng.Next() * 28;
-                        float h = 3 + rng.Next() * 7, w = 4 + rng.Next() * 4;
+                        float h = 3 + rng.Next() * 4.5f, w = 4 + rng.Next() * 4;   // lower banks: a tower never hangs as loose blobs above the horizon
                         int n = 4 + (int)(rng.Next() * 3);
                         int start = b.Count;
                         for (int k = 0; k < n; k++)
                         {
                             float t = k / (float)(n - 1);
                             float rr = w * Mathf.Lerp(0.62f, 0.3f, t) * (0.85f + rng.Next() * 0.3f);
-                            var c = new Vector3(x + (rng.Next() - 0.5f) * w * 0.7f, -1 + t * h, z + (rng.Next() - 0.5f) * 3);
+                            var c = new Vector3(x + (rng.Next() - 0.5f) * w * 0.4f, -1.5f + t * h, z + (rng.Next() - 0.5f) * 3);
                             b.Sphere(rr, 9, 6, Matrix4x4.Translate(c), Color.white, new Vector3(1.15f, 0.9f, 1));
                         }
-                        Shade(b, start, 0.86f + rng.Next() * 0.26f, 0.45f);   // two or three tints of bank: some lit, some in shade
+                        Shade(b, start, 0.78f + rng.Next() * 0.36f, 0.45f);   // three tints of bank: some lit, some in shade
                     }
                 }
                 else
@@ -374,9 +374,9 @@ namespace Bonanza
         {
             var rng = new FxRng(0x1ed9e);
             var b = new MeshBuilder();
-            for (int i = 0; i < 9; i++)
+            for (int i = 0; i < 11; i++)
             {
-                float x = (i + rng.Next() * 0.7f) / 9 * LayerW[0];
+                float x = (i + rng.Next() * 0.7f) / 11 * LayerW[0];
                 float z = -4.2f - rng.Next() * 1.6f, w = 1.15f + rng.Next() * 0.9f;
                 Puff(b, Matrix4x4.TRS(new Vector3(x, SeaY + 0.1f + rng.Next() * 0.2f, z), Quaternion.Euler(0, rng.Next() * 360, 0), Vector3.one), w, 10, 6, (uint)(i + 501), 0.85f, 4);
             }
@@ -743,7 +743,7 @@ namespace Bonanza
 
             // wings: little white leaves at the back
             var w = new MeshBuilder();
-            w.Sphere(0.16f, 10, 6, Matrix4x4.Translate(new Vector3(0.14f, 0, 0)), white, new Vector3(1.4f, 0.75f, 0.3f));
+            w.Sphere(0.13f, 10, 6, Matrix4x4.Translate(new Vector3(0.11f, 0, 0)), white * 0.9f, new Vector3(1.3f, 0.75f, 0.3f));   // small and cream: folded close, never a pale ghost against the sky
             _jWingL = new GameObject("WingL").transform; _jWingL.SetParent(_jBody, false); _jWingL.localPosition = new Vector3(-0.2f, 0.42f, 0.2f);
             _jWingR = new GameObject("WingR").transform; _jWingR.SetParent(_jBody, false); _jWingR.localPosition = new Vector3(0.2f, 0.42f, 0.2f);
             var wm = Own(w.ToMesh("Wing"));
@@ -1000,9 +1000,9 @@ namespace Bonanza
             // wings flap in the air
             float air = (u >= g && !last && !waiting) ? 1 : 0;
             _jPrevAir = Damp(_jPrevAir, air, 12, dt);
-            float flap = Mathf.Sin(_time * 22f) * 28f * _jPrevAir + 12;
-            _jWingL.localRotation = Quaternion.Euler(0, 30, -flap);
-            _jWingR.localRotation = Quaternion.Euler(0, -30, flap);
+            float flap = Mathf.Sin(_time * 11f) * 14f * _jPrevAir + 6;   // a slow, small flap (a fast one aliased into a ghost wing)
+            _jWingL.localRotation = Quaternion.Euler(0, 55, -flap);
+            _jWingR.localRotation = Quaternion.Euler(0, -55, flap);
 
             // halo lags the body and bounces on each landing
             _haloBounce = Mathf.Max(0, _haloBounce - dt * 3.2f);
