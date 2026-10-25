@@ -245,8 +245,11 @@ namespace Bonanza.Shell
                 c.Pts.rectTransform.anchoredPosition = new Vector2(64, tagged ? h * 0.5f - ptsTop : -12);
                 c.TieRt.gameObject.SetActive(d.Tied);
                 c.TieRt.anchorMin = c.TieRt.anchorMax = new Vector2(0, 1);
-                c.TieRt.sizeDelta = new Vector2(pillW * 0.8f, pillH);
-                c.TieRt.anchoredPosition = new Vector2(ColW - 10 - pillW * 0.4f, -(10 + pillH * 0.5f));
+                bool tieLow = win && d.Tied;   // on a shared first place the badge shares the bottom row with the YOU tag, clear of the name
+                float tieW = small && tieLow ? 50f : pillW * 0.8f;
+                c.TieRt.sizeDelta = new Vector2(tieW, pillH);
+                c.TieRt.anchoredPosition = tieLow ? new Vector2(ColW - 10 - tieW * 0.5f, -(small ? 90f : 76f)) : new Vector2(ColW - 10 - tieW * 0.5f, -(10 + pillH * 0.5f));
+                if (underName && d.Tied && small) { c.YouRt.sizeDelta = new Vector2(62f, pillH); c.YouRt.anchoredPosition = new Vector2(62f + 31f, -90f); }
                 c.Tie.fontSize = UiKit.FontSizeForCap(small ? 19f : 12f);
                 c.Num.rectTransform.anchoredPosition = new Vector2(8, figure ? -10 : 1);
                 c.YouFill.color = win ? new Color(0.16f, 0.06f, 0.0f) : Gold;   // a dark tag on the gold card
