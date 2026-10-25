@@ -92,8 +92,10 @@ namespace Bonanza.Shell
             _statRt = UiKit.Rect("Stat", root);
             UiKit.Place(_statRt, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -BaseY - 8), new Vector2(560, 46));
             _statGroup = _statRt.gameObject.AddComponent<CanvasGroup>();
-            var sp = UiKit.Box(_statRt, "Plate", new Color(0.05f, 0.03f, 0.12f, 0.85f), UiKit.Pill, true, 24);
+            var sp = UiKit.Box(_statRt, "Plate", new Color(0.05f, 0.03f, 0.12f, 1f), UiKit.Pill, true, 24);
             UiKit.Stretch(sp.rectTransform);
+            var spr = UiKit.Box(_statRt, "Ring", new Color(1, 0.95f, 0.8f, 0.45f), UiKit.PillRing(5), true, 24);
+            UiKit.Stretch(spr.rectTransform);
             _stat = UiKit.Text(_statRt, "Stat", TextStyle.Display, 17f, Color.white);
             UiKit.Place(_stat.rectTransform, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -5), new Vector2(540, 26));
             _best = UiKit.Text(_statRt, "Best", TextStyle.Label, 12f, UiKit.Cream, italic: false);
@@ -228,20 +230,24 @@ namespace Bonanza.Shell
                 float cardCx = ColCenter(order, i, n);
                 // the YOU tag sits inside the card, 6 px under its top edge, above the name; on a short card it moves to the right end
                 bool low = bh < 75f;
-                float pillH = small ? 24f : 20f, pillW = small ? 56f : 44f;
-                c.You.fontSize = UiKit.FontSizeForCap(small ? 15f : 12f);
+                float pillH = small ? 28f : 20f, pillW = small ? 70f : 44f;
+                c.You.fontSize = UiKit.FontSizeForCap(small ? 19f : 12f);
                 c.YouRt.anchorMin = c.YouRt.anchorMax = new Vector2(0, 1);
                 c.YouRt.sizeDelta = new Vector2(pillW, pillH);
-                c.YouRt.anchoredPosition = low ? new Vector2(ColW - 6 - pillW * 0.5f, -h * 0.5f) : new Vector2(64 + pillW * 0.5f, -(6 + pillH * 0.5f));
+                // the winner's block shares its top edge with the avatar ring, so there the tag sits under the points line, inside the block
+                bool underName = win && single;
+                c.YouRt.anchoredPosition = underName ? new Vector2(64 + pillW * 0.5f, -(small ? 90f : 76f))
+                    : low ? new Vector2(ColW - 6 - pillW * 0.5f, -h * 0.5f) : new Vector2(64 + pillW * 0.5f, -(6 + pillH * 0.5f));
                 bool tagged = you && !low;
                 float nameTop = small ? 44f : 41f, ptsTop = small ? 67f : 64f;   // centres, from the card top, when the YOU tag is up
+                if (underName) { nameTop = small ? 28f : 24f; ptsTop = small ? 56f : 48f; }
                 c.Name.rectTransform.anchoredPosition = new Vector2(64, tagged ? h * 0.5f - nameTop : 11);
                 c.Pts.rectTransform.anchoredPosition = new Vector2(64, tagged ? h * 0.5f - ptsTop : -12);
                 c.TieRt.gameObject.SetActive(d.Tied);
                 c.TieRt.anchorMin = c.TieRt.anchorMax = new Vector2(0, 1);
                 c.TieRt.sizeDelta = new Vector2(pillW * 0.8f, pillH);
-                c.TieRt.anchoredPosition = new Vector2(ColW - 6 - pillW * 0.4f, -(6 + pillH * 0.5f));
-                c.Tie.fontSize = UiKit.FontSizeForCap(small ? 15f : 12f);
+                c.TieRt.anchoredPosition = new Vector2(ColW - 10 - pillW * 0.4f, -(10 + pillH * 0.5f));
+                c.Tie.fontSize = UiKit.FontSizeForCap(small ? 19f : 12f);
                 c.Num.rectTransform.anchoredPosition = new Vector2(8, figure ? -10 : 1);
                 c.YouFill.color = win ? new Color(0.16f, 0.06f, 0.0f) : Gold;   // a dark tag on the gold card
                 c.You.color = win ? Gold : Ink;
@@ -278,9 +284,9 @@ namespace Bonanza.Shell
                 Vector2 hand = default;
                 bool held = View.Cast != null && View.Cast.TryHandRef(out hand);
                 if (held)
-                    _trophy.anchoredPosition = new Vector2(hand.x - 36f, -Mathf.Max(hand.y + 22f, 192f));   // never up into the headline band
-                else
-                    _trophy.anchoredPosition = new Vector2(ColCenter(order, 0, n) + 112, -(FigureFeet - 120) + (red ? 0 : Mathf.Sin(now * 2f) * 6f));
+                    _trophy.anchoredPosition = new Vector2(hand.x, -(hand.y + 8f));   // its foot in the fist, the cup above it
+                else   // arms down: it stands on the first-place block, beside the figure
+                    _trophy.anchoredPosition = new Vector2(ColCenter(order, 0, n) + 70f, -(BaseY - BlockH[0] + 4f));
                 _trophy.localScale = Vector3.one * ((held ? 0.52f : 0.8f) * Mathf.Clamp01(pop));
             }
             else
@@ -322,7 +328,7 @@ namespace Bonanza.Shell
             _statRt.sizeDelta = new Vector2(560, hasBest ? (small ? 64 : 50) : (small ? 40 : 34));
             _stat.rectTransform.anchoredPosition = new Vector2(0, hasBest ? -5 : -4);
             _stat.fontSize = UiKit.FontSizeForCap(17f * (small ? 1.2f : 1f));
-            _best.fontSize = UiKit.FontSizeForCap(12f * ts);
+            _best.fontSize = UiKit.FontSizeForCap(small ? 18f : 12f);
             _best.rectTransform.anchoredPosition = new Vector2(0, small ? 6 : 5);
             _statRt.anchoredPosition = new Vector2(0, -BaseY - 8 + (1 - se) * -10);
 
