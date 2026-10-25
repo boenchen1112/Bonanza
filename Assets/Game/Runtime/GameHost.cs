@@ -491,7 +491,7 @@ namespace Bonanza
         // ------------------------------------------------------------ party hub + wrap-up (uGUI)
 
         string _partyAct;      // a click on a hub / wrap-up button: "a" main action, "b" back
-        float _finalPopT;
+        float _finalPopT, _lockTick = -9;
 
         /// Push the party's state into the uGUI hub or wrap-up and set the stage for it.
         void FeedParty()
@@ -771,7 +771,7 @@ namespace Bonanza
                 if (i < RosterScreen.SeatBase) { if (r.Stage == RosterStage.Chars) { r.Cursor = i; RosterPress("a"); } }
                 else if (i < RosterScreen.ActionBtn)
                 {
-                    if (r.Stage != RosterStage.Lineup) continue;
+                    if (r.Stage != RosterStage.Lineup) { ShellSfx("miss"); continue; }   // seats are inert until the lineup stage
                     int seat = i - RosterScreen.SeatBase;
                     r.SeatSel = seat;
                     bool leftHalf = Event.current.mousePosition.x < rect.center.x;
@@ -1319,6 +1319,7 @@ namespace Bonanza
                         var p = _presses.Dequeue();
                         bool tip = _perfTip;
                         _perfTip = false;                              // any key closes the tip, and is not also a menu press
+                        if (tip) ShellSfx("uiBack");                    // closing the tip answers like a back press
                         if (TitleReelPress(p.Action) || tip) continue; // a press that wakes the reel is consumed, never a menu press
                         if (p.Action == "up" || p.Action == "left") { _titleIndex = (_titleIndex + TitleItems.Length - 1) % TitleItems.Length; ShellSfx("ui"); }
                         else if (p.Action == "down" || p.Action == "right") { _titleIndex = (_titleIndex + 1) % TitleItems.Length; ShellSfx("ui"); }
@@ -1386,7 +1387,8 @@ namespace Bonanza
                     while (_presses.Count > 0)
                     {
                         var p = _presses.Dequeue();
-                        if (Autoplay || inputLock) continue;
+                        if (Autoplay) continue;
+                        if (inputLock) { if (p.Action == "a" && Time.unscaledTime - _lockTick > 0.4f) { _lockTick = Time.unscaledTime; ShellSfx("miss"); } continue; }   // the wrap-up is not ready: a soft error
                         if (p.Action == "a") next = true;
                         else if (InputMap.IsBack(p.Action)) { ShellSfx("uiBack"); EndParty(); break; }
                     }
