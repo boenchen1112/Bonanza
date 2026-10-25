@@ -417,6 +417,20 @@ namespace Bonanza
 
         public override IEnumerable<KeyValuePair<string, double>> TestChart()
         {
+            string u = Application.absoluteURL;
+            if (!string.IsNullOrEmpty(u) && u.Contains("skbomb"))
+            {
+                // Capture only (?skbomb, never in a gate): a bot that swings at bombs too, so the blast, the soot, the OUTS and
+                // the side retired can be photographed; every fourth pitch is left alone (a strike into the net, a dodge).
+                int k = 0;
+                foreach (var p in _round.Pitches)
+                {
+                    if (p.IsFree) continue;
+                    if (k++ % 4 == 3) continue;
+                    yield return new KeyValuePair<string, double>("a", p.Time);
+                }
+                yield break;
+            }
             foreach (var t in _round.PerfectPresses()) yield return new KeyValuePair<string, double>("a", t);
         }
 
@@ -927,6 +941,7 @@ namespace Bonanza
                 _outsClear = retire;
                 fx.Callout("SIDE RETIRED!", bomb ? "BOMB! - OUT 3" : "OUT 3", Contact + new Vector3(1.1f, 1.6f, 0), Hex(0xff4d6a), 1.05f, retire, 0.3f);
                 Look.Rig.Shake(0.08f, new Vector3(0, -1, 0));
+                Ui.Banner("3 OUTS", null, Hex(0xff4d6a), Mathf.Min(1.1f, retire * 0.7f), plate: true, y: 0.52f, scale: 1.1f);   // the side-retired beat, centred
             }
             else fx.Callout(word, sub, Contact + new Vector3(1.0f, 1.3f, 0), bomb ? Hex(0xff6a3a) : swung ? Hex(0xff5d8a) : Hex(0xff8a3c), bomb ? 0.9f : 0.8f, life, 0.4f);
             _camPush = 0.25f;
@@ -1049,7 +1064,7 @@ namespace Bonanza
             var col = Hex(Feel.Party[_fireworks % Feel.Party.Length]);
             var col2 = Hex(Feel.Party[(_fireworks + 2) % Feel.Party.Length]);
             _fireworks++;
-            fx.Shell(at, col.linear * 1.8f, col2.linear * 1.8f, 64, 15f, 0.7f);
+            fx.Shell(at, col.linear * 2.2f, col2.linear * 2.2f, 110, 19f, 0.8f);
         }
         int _fireworks;
 
@@ -1068,7 +1083,7 @@ namespace Bonanza
                 var col = Hex(Feel.Party[i % Feel.Party.Length]);
                 var col2 = Hex(Feel.Party[(i + 2) % Feel.Party.Length]);
                 var fx = Look.Fx;
-                fx.Shell(at, col.linear * 1.8f, col2.linear * 1.8f, 70, 15.5f, 0.72f);
+                fx.Shell(at, col.linear * 2.2f, col2.linear * 2.2f, 110, 19f, 0.8f);
                 if (i % 2 == 0) fx.Confetti(new Vector3(-6 + (i * 4.1f) % 12, 9.5f, 12 + (i % 3) * 2), 26, null, 2.5f, 0.3f, 0.11f, 3.4f);
             }
             if (_finaleShow > FinaleShots[FinaleShots.Length - 1] + 0.1f) _finaleShow = -1;
