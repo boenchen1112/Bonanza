@@ -38,7 +38,7 @@ namespace Bonanza.Shell
         public const int CardBase = 0, SeatBase = 8, ActionBtn = 12, BackBtn = 13;
         const float CardW = 112, CardH = 128, CardGap = 10, GridLeft = -450, GridTop = 128;
         const float SeatW = 214, SeatH = 92, SeatGap = 10, SeatTop = 572;
-        const float StageX = 220, SmallSeatTop = 524;
+        const float StageX = 320, SmallSeatTop = 536;
         public const float StageXRef = StageX;
 
         static readonly Color Gold = UiKit.Hex(0xffd93d), Coral = UiKit.Hex(0xff7a6b), Plate = new Color(0.05f, 0.03f, 0.12f, 0.93f);
@@ -401,7 +401,7 @@ namespace Bonanza.Shell
             _sub.rectTransform.anchoredPosition = new Vector2(0, subY);
             _subPlate.rectTransform.anchoredPosition = new Vector2(0, subY + 2);
             _sub.fontSize = UiKit.FontSizeForCap(small ? 17f : 15f);
-            _hintGroup.alpha = tight ? 0 : UiKit.Clamp01((age - 0.45f) * 3f) * (red ? shown : 1);
+            _hintGroup.alpha = 0;   // the instruction line under the heading carries the hint; the footer copy is gone
 
             // ---- cards
             bool shaking = View.ShakeT > 0;
@@ -527,8 +527,13 @@ namespace Bonanza.Shell
                 // face
                 int ci = pickId != null ? Cast.IndexOf(pickId) : -1;
                 var tex = ci >= 0 && View.Cast != null ? View.Cast.Portrait(ci) : null;
-                s.Face.texture = tex; s.Face.color = new Color(1, 1, 1, tex != null ? 1 : 0);
-                s.Q.gameObject.SetActive(ci < 0 && you);
+                float faceA = 1f;
+                if (tex == null && you && View.Cast != null)   // P1 not picked yet: the figure on stage, ghosted, instead of a '?'
+                {
+                    tex = View.Cast.Portrait(FocusChar); faceA = 0.5f;
+                }
+                s.Face.texture = tex; s.Face.color = new Color(1, 1, 1, tex != null ? faceA : 0);
+                s.Q.gameObject.SetActive(ci < 0 && you && tex == null);
                 s.Q.text = "?";
                 s.Dice.gameObject.SetActive(ci < 0 && !you);
                 float da = off ? 0.35f : 0.9f;
@@ -571,11 +576,14 @@ namespace Bonanza.Shell
             bool actOn = stage != RosterStage.Cpu;
             DriveButton(_action, input, ActionBtn, actOn, PressFocus != 1, action, key, dt, red, age, 0.6f);
             DriveButton(_back, input, BackBtn, true, PressFocus == 1, "BACK", "X", dt, red, age, 0.8f);
-            _action.Rt.anchoredPosition = new Vector2(StageX, small ? -474 : Mathf.Lerp(-506, -516, comp));
-            _action.Rt.sizeDelta = actOn ? new Vector2(340, small ? 40 : 58) : Vector2.zero;
-            _action.Chip.gameObject.SetActive(!string.IsNullOrEmpty(key) && !small);
+            _action.Rt.anchoredPosition = new Vector2(StageX, small ? -448 : Mathf.Lerp(-506, -516, comp));
+            _action.Rt.sizeDelta = actOn ? new Vector2(340, small ? 60 : 58) : Vector2.zero;
+            _action.Chip.gameObject.SetActive(!string.IsNullOrEmpty(key));
+            _action.Chip.sizeDelta = small ? new Vector2(110, 40) : new Vector2(76, 30);
+            _action.ChipText.rectTransform.sizeDelta = _action.Chip.sizeDelta;
+            _action.ChipText.fontSize = UiKit.FontSizeForCap(small ? 17f : 11f);
             _back.Chip.gameObject.SetActive(!small);
-            _action.Label.rectTransform.anchoredPosition = new Vector2(small ? 0 : -40, 1);
+            _action.Label.rectTransform.anchoredPosition = new Vector2(small ? -44 : -40, 1);
             _back.Label.rectTransform.anchoredPosition = new Vector2(small ? 0 : -14, 1);
             _back.Rt.anchoredPosition = new Vector2(-72 - 60 * comp, 12 + 6 * comp);
             if (small) _back.Rt.anchoredPosition = new Vector2(-60, 8);
