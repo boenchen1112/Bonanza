@@ -235,7 +235,7 @@ namespace Bonanza.Shell
                 c.YouRt.anchorMin = c.YouRt.anchorMax = new Vector2(0, 1);
                 c.YouRt.sizeDelta = new Vector2(pillW, pillH);
                 // the winner's block shares its top edge with the avatar ring, so there the tag sits under the points line, inside the block
-                bool underName = win && single;
+                bool underName = win;
                 c.YouRt.anchoredPosition = underName ? new Vector2(64 + pillW * 0.5f, -(small ? 90f : 76f))
                     : low ? new Vector2(ColW - 6 - pillW * 0.5f, -h * 0.5f) : new Vector2(64 + pillW * 0.5f, -(6 + pillH * 0.5f));
                 bool tagged = you && !low;
@@ -287,7 +287,8 @@ namespace Bonanza.Shell
                     _trophy.anchoredPosition = new Vector2(hand.x + (hand.x < ColCenter(order, 0, n) ? -16f : 16f), -(hand.y + 8f));   // its foot in the fist, the cup above it
                 else   // arms down: it stands on the first-place block, beside the figure
                     _trophy.anchoredPosition = new Vector2(ColCenter(order, 0, n) + 70f, -(BaseY - BlockH[0] + 4f));
-                _trophy.localScale = Vector3.one * ((held ? 0.52f : 0.8f) * Mathf.Clamp01(pop));
+                _trophy.localScale = Vector3.one * ((held ? 0.56f : 0.7f) * Mathf.Clamp01(pop));
+                _trophy.SetAsLastSibling();   // in front of the crown
             }
             else
             {
