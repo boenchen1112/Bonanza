@@ -346,8 +346,8 @@ namespace Bonanza.Shell
             DriveReset(v, input, dt, red, ts);
 
             // value readouts
-            _rows[0].Value.text = Mathf.RoundToInt(v.Music * 100) + "%";
-            _rows[1].Value.text = Mathf.RoundToInt(v.Sfx * 100) + "%";
+            _rows[0].Value.text = UiKit.Pct(Mathf.RoundToInt(v.Music * 100));
+            _rows[1].Value.text = UiKit.Pct(Mathf.RoundToInt(v.Sfx * 100));
             _rows[2].Value.text = "";
             _offText.text = (v.Offset > 0 ? "+" : "") + v.Offset.ToString("0") + " MS";
             _offText.fontSize = UiKit.FontSizeForCap(19f * (small ? 1.1f : 1f));

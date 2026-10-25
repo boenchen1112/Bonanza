@@ -39,6 +39,17 @@ namespace Bonanza.Shell
 
         /// The three leaders standing in the gap between the card and the standings, for the host to put on the stage:
         /// count (0 when there is no room), the lead's slot, x from the screen centre, feet and height (reference px).
+        static readonly int[] Slot3 = { 1, 0, 2 }, Slot2 = { 0, 1 }, Slot1 = { 0 };
+        readonly float[] _xs = new float[3];
+        readonly List<PartyBoardRow> _rivals = new List<PartyBoardRow>(3);
+        int _roundKey = -1, _afterKey = -1;
+        static readonly string[] WinsText = MakeWins(false), TiedWinsText = MakeWins(true);
+        static string[] MakeWins(bool tied)
+        {
+            var a = new string[12];
+            for (int i = 0; i < a.Length; i++) { string w = i > 0 ? i + " WIN" + (i == 1 ? "" : "S") : "NO WINS"; a[i] = tied ? (i > 0 ? "TIED - " + w : "TIED") : w; }
+            return a;
+        }
         public int LineCount { get; private set; }
         public int LineLead { get; private set; }
         public readonly float[] LineX = new float[3], LineFeet = new float[3], LineH = new float[3];
@@ -253,13 +264,16 @@ namespace Bonanza.Shell
             {
                 float aspect = Screen.width / (float)Mathf.Max(1, Screen.height);
                 _shift = small ? 0f : Mathf.Clamp(RefH * aspect * 0.5f - 500f, 0f, 90f);
-                int lc = small ? 0 : Mathf.Min(3, rows.Count);
+                int lc = small || aspect < 1.5f ? 0 : Mathf.Min(3, rows.Count);   // the gap between the panels is too narrow for a lineup at 4:3
                 LineCount = lc;
                 float half = 30f + _shift;
                 float sp = Mathf.Clamp(half * 0.62f, 34f, 76f), lh = Mathf.Clamp(half * 2.0f, 150f, 238f);
                 // the podium order: second on the left, the leader forward in the middle, third on the right
-                int[] slot = lc == 3 ? new[] { 1, 0, 2 } : lc == 2 ? new[] { 0, 1 } : new[] { 0 };
-                float[] xs = lc == 3 ? new[] { -sp, 0f, sp } : lc == 2 ? new[] { -sp * 0.5f, sp * 0.5f } : new[] { 0f };
+                int[] slot = lc == 3 ? Slot3 : lc == 2 ? Slot2 : Slot1;
+                float[] xs = _xs;
+                if (lc == 3) { xs[0] = -sp; xs[1] = 0f; xs[2] = sp; }
+                else if (lc == 2) { xs[0] = -sp * 0.5f; xs[1] = sp * 0.5f; }
+                else xs[0] = 0f;
                 for (int i = 0; i < lc; i++)
                 {
                     int rk = slot[i];
@@ -276,7 +290,7 @@ namespace Bonanza.Shell
             float hEnter = red ? 1 : UiKit.EaseOutCubic(age / 0.5f);
             _headGroup.alpha = UiKit.Clamp01(hEnter * 1.3f) * (red ? shown : 1);
             _headRt.anchoredPosition = new Vector2(0, -16 + (1 - hEnter) * 26);
-            _round.text = View.Finale ? "FINAL ROUND" : $"ROUND {View.Round + 1} OF {View.Length}";
+            if (UiKit.Changed(ref _roundKey, View.Finale ? -2 : View.Round * 16 + View.Length)) _round.text = View.Finale ? "FINAL ROUND" : "ROUND " + (View.Round + 1) + " OF " + View.Length;
             _round.color = View.Finale ? new Color(1f, 0.72f, 0.42f) : Color.white;
             int n = Mathf.Clamp(View.Length, 1, 4);
             for (int i = 0; i < 4; i++)
@@ -333,7 +347,7 @@ namespace Bonanza.Shell
             }
             _race.text = View.Races ? "RACING LIVE" : "BEAT THEIR ROUNDS";
             _race.fontSize = 12f * ts;
-            var rivals = new List<PartyBoardRow>();
+            var rivals = _rivals; rivals.Clear();
             foreach (var r in rows) if (!(r.Id == HumanId(rows))) rivals.Add(r);
             for (int i = 0; i < 3; i++)
             {
@@ -350,7 +364,7 @@ namespace Bonanza.Shell
             _startY = Top + CardH * 0.5f - blockH * 0.5f + 12;
             float sEnter = red ? 1 : UiKit.EaseOutCubic((age - 0.1f) / 0.4f);
             _standGroup.alpha = UiKit.Clamp01(sEnter) * (red ? shown : 1);
-            _after.text = hasLast ? $"AFTER ROUND {View.RoundsPlayed}" : "NO ROUNDS YET";
+            if (UiKit.Changed(ref _afterKey, hasLast ? View.RoundsPlayed : -1)) _after.text = hasLast ? "AFTER ROUND " + View.RoundsPlayed : "NO ROUNDS YET";
             _stand.fontSize = 15f * ts; _after.fontSize = 13f * ts;
             _standHead.anchoredPosition = new Vector2(ColX + 20 + _shift, -(_startY - 38));
 
@@ -378,7 +392,7 @@ namespace Bonanza.Shell
                 if (place != r.LastShown) { if (r.LastShown != -99 && !red) r.Pop = 1; r.LastShown = place; }
                 r.Pop = Mathf.MoveTowards(r.Pop, 0, dt / 0.4f);
                 r.BadgeFill.color = PlaceColor(place);
-                r.Badge.text = place.ToString();
+                r.Badge.text = UiKit.Int(place);
                 r.Badge.fontSize = UiKit.FontSizeForCap(22f);
                 r.BadgeFill.rectTransform.localScale = Vector3.one * (1 + 0.25f * Mathf.Sin(Mathf.Clamp01(1 - r.Pop) * Mathf.PI) * (r.Pop > 0 ? 1 : 0));
 
@@ -386,13 +400,13 @@ namespace Bonanza.Shell
                 r.Name.text = d.Name;
                 r.Name.fontSize = UiKit.FontSizeForCap(24f * (small ? 0.95f : 1f));
                 bool tiedNow = moved && d.Tied;
-                string wins = d.Wins > 0 ? $"{d.Wins} WIN{(d.Wins == 1 ? "" : "S")}" : "NO WINS";
-                r.Sub.text = View.RoundsPlayed == 0 ? "READY" : tiedNow ? (d.Wins > 0 ? "TIED - " + wins : "TIED") : wins;
+                int wn = Mathf.Clamp(d.Wins, 0, 11);
+                r.Sub.text = View.RoundsPlayed == 0 ? "READY" : tiedNow ? TiedWinsText[wn] : WinsText[wn];
                 r.Sub.fontSize = 12f * ts;
                 r.YouRt.gameObject.SetActive(you);
 
                 int pts = Mathf.RoundToInt(Mathf.Lerp(d.PrevPoints, d.Points, count));
-                r.Pts.text = pts.ToString();
+                r.Pts.text = UiKit.Int(pts);
                 bool counting = hasLast && !red && count < 1 && count > 0;
                 r.Pts.color = counting && d.Delta > 0 ? Color.Lerp(Color.white, UiKit.Hex(0x9ee87a), 0.8f) : Color.white;
                 r.PtsLabel.fontSize = 11f * ts;
@@ -401,7 +415,7 @@ namespace Bonanza.Shell
                 bool showChip = hasLast && d.Delta >= 0;
                 float ce = red ? 1 : UiKit.BackOut((age - tCount + 0.1f - d.PrevRank * 0.1f) / 0.35f);
                 r.ChipRt.gameObject.SetActive(showChip && ce > 0.01f);
-                r.Chip.text = "+" + d.Delta;
+                r.Chip.text = UiKit.Plus(d.Delta);
                 r.ChipRt.localScale = Vector3.one * Mathf.Clamp(ce, 0, 1.2f);
                 float settle = red ? 1 : UiKit.Clamp01((age - tMove - 0.6f) / 0.6f);
                 r.ChipFill.color = d.Delta == 0 ? new Color(1, 1, 1, Mathf.Lerp(0.22f, 0.14f, settle)) : Color.Lerp(UiKit.Hex(0x3fbf5a), UiKit.Hex(0x2d8f45), settle);

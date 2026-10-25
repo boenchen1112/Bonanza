@@ -200,7 +200,7 @@ namespace Bonanza.Shell
                 Color bot = win ? UiKit.Hex(0xe58a1f) : d.Place == 2 ? UiKit.Hex(0x6b78c4) : d.Place == 3 ? UiKit.Hex(0x9c5a2c) : UiKit.Hex(0x3a3478);
                 g.Set(top, bot);
                 c.Ring.color = you ? new Color(1, 1, 1, 0.95f) : new Color(1, 1, 1, 0.35f);
-                c.Num.text = d.Place.ToString();
+                c.Num.text = UiKit.Int(d.Place);
                 c.Num.fontSize = UiKit.FontSizeForCap(34f);
                 c.Num.color = win ? new Color(0.45f, 0.2f, 0.02f) : new Color(0.12f, 0.06f, 0.3f);
                 c.Name.text = d.Name;

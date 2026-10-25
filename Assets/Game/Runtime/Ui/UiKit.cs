@@ -53,6 +53,17 @@ namespace Bonanza.HudKit
 
         // ------------------------------------------------------------ easing (web core/util.js)
 
+        // Number strings are cached so a per-frame readout does not allocate.
+        static readonly string[] _ints = new string[1024], _plus = new string[1024], _pct = new string[201];
+        public static string Int(int n) { if (n < 0 || n >= 1024) return n.ToString(); return _ints[n] ??= n.ToString(); }
+        /// "+n" (n >= 0).
+        public static string Plus(int n) { if (n < 0 || n >= 1024) return "+" + n; return _plus[n] ??= "+" + n; }
+        /// "n%" for 0..200.
+        public static string Pct(int n) { if (n < 0 || n > 200) return n + "%"; return _pct[n] ??= n + "%"; }
+        /// True (and stores it) when `key` differs from `last`: gate a text rebuild on it.
+        public static bool Changed(ref int last, int key) { if (last == key) return false; last = key; return true; }
+        public static bool Changed(ref string last, string key) { if (ReferenceEquals(last, key) || last == key) return false; last = key; return true; }
+
         public static float Clamp01(float t) => t < 0 ? 0 : t > 1 ? 1 : t;
         public static float BackOut(float t, float s = 1.70158f) { t = Clamp01(t) - 1; return t * t * ((s + 1) * t + s) + 1; }
         public static float EaseOutCubic(float t) { t = Clamp01(t); return 1 - (1 - t) * (1 - t) * (1 - t); }

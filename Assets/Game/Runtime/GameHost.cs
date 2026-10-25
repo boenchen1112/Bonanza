@@ -465,8 +465,8 @@ namespace Bonanza
             int n = three ? 3 : 2;
             float hs = Screen.height < 600 ? 0.9f : 1f;
             _tcChar[0] = 1; _tcChar[1] = 0; _tcChar[2] = 2;
-            _tcX[0] = -half * 0.68f; _tcFeet[0] = 612f; _tcH[0] = 300f * hs;
-            _tcX[1] = half * 0.68f; _tcFeet[1] = 612f; _tcH[1] = 300f * hs;
+            _tcX[0] = -half * 0.68f; _tcFeet[0] = Screen.height < 600 ? 598f : 612f; _tcH[0] = 300f * hs;
+            _tcX[1] = half * 0.68f; _tcFeet[1] = Screen.height < 600 ? 598f : 612f; _tcH[1] = 300f * hs;
             _tcX[2] = half * 0.68f - 150f; _tcFeet[2] = 580f; _tcH[2] = 260f * hs;
             cast.PlaceLineup(n, 1, _tcChar, _tcX, _tcFeet, _tcH);
         }
