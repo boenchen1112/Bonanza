@@ -149,7 +149,7 @@ namespace Bonanza.Shell
 
             // help panel under the audio rows
             _panel = UiKit.Rect("Help", root);
-            UiKit.Place(_panel, new Vector2(0.5f, 1), new Vector2(0, 1), new Vector2(lx, -402), new Vector2(ColW, 148));
+            UiKit.Place(_panel, new Vector2(0.5f, 1), new Vector2(0, 1), new Vector2(lx, -402), new Vector2(ColW, 92));
             _panelGroup = _panel.gameObject.AddComponent<CanvasGroup>();
             var pb = UiKit.Box(_panel, "Plate", new Color(0.05f, 0.03f, 0.12f, 0.9f), UiKit.Pill, true, 24);
             UiKit.Stretch(pb.rectTransform);
@@ -162,7 +162,7 @@ namespace Bonanza.Shell
             _helpText.textWrappingMode = TextWrappingModes.Normal;
             _helpText.overflowMode = TextOverflowModes.Truncate;
             _helpText.lineSpacing = 6f;
-            UiKit.Place(_helpText.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(18, -40), new Vector2(ColW - 36, 100));
+            UiKit.Place(_helpText.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(18, -38), new Vector2(ColW - 36, 50));
 
             _hintRt = UiKit.Rect("Hint", root);
             UiKit.Place(_hintRt, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -628), new Vector2(560, 32));
@@ -351,8 +351,8 @@ namespace Bonanza.Shell
             _rows[2].Value.text = "";
             _offText.text = (v.Offset > 0 ? "+" : "") + v.Offset.ToString("0") + " MS";
             _offText.fontSize = UiKit.FontSizeForCap(19f * (small ? 1.1f : 1f));
-            _offText.color = Color.Lerp(Color.white, Gold, _rows[2].Focus);
-            _offPlateRing.color = Color.Lerp(new Color(1, 0.95f, 0.8f, 0.2f), new Color(1, 0.88f, 0.4f, 0.9f), _rows[2].Focus);
+            _offText.color = Color.white;   // gold is for the selected value; focus is white
+            _offPlateRing.color = Color.Lerp(new Color(1, 0.95f, 0.8f, 0.2f), new Color(1, 1, 1, 0.95f), _rows[2].Focus);
             _rows[3].Value.text = v.ReduceSystem ? "SET BY SYSTEM" : "";
             _rows[4].Value.text = ""; _rows[5].Value.text = ""; _rows[6].Value.text = "";
 
@@ -364,7 +364,7 @@ namespace Bonanza.Shell
             _helpHead.fontSize = UiKit.FontSizeForCap(12f * ts);
             _helpText.fontSize = UiKit.FontSizeForCap(13f * ts * (small ? 0.95f : 1f));
             _helpText.enableAutoSizing = false;
-            _panel.sizeDelta = new Vector2(ColW, 148);
+            _panel.sizeDelta = new Vector2(ColW, 92);
             _hint.text = v.Confirm ? "LEFT / RIGHT  CHOOSE     SPACE  CONFIRM     ESC  CANCEL" : v.Focus >= 6 ? "UP / DOWN  CHOOSE     SPACE  SELECT" : "UP / DOWN  CHOOSE     LEFT / RIGHT  ADJUST";
             _hintGroup.alpha = UiKit.Clamp01((age - 0.5f) * 3f) * (red ? shown : 1) * (small ? 0 : 1);
             DriveButton(_back, input, BackBtn, v.Focus == 7, "BACK", "ESC", dt, red, age - 0.9f, !small);
@@ -383,10 +383,10 @@ namespace Bonanza.Shell
                 case 4: head = "GRAPHICS"; return string.IsNullOrEmpty(v.GfxLine) ? "AUTO picks a level for this device." : v.GfxLine;
                 case 5:
                     head = "SWING KINGS INPUT";
-                    if (v.Swing == 1) return "Hold the button as the ball flies, flick the pointer DOWN as it lands.";
-                    if (v.Swing == 2) return v.CameraAvail ? "Raise your hand as the ball flies, conduct DOWN as it lands. Your webcam is never recorded." : "Camera conducting needs webcam access in your browser; the mouse is used here.";
+                    if (v.Swing == 1) return "Hold as the ball flies, flick DOWN as it lands.";
+                    if (v.Swing == 2) return v.CameraAvail ? "Raise your hand, then conduct DOWN as it lands. Never recorded." : "Needs webcam access; the mouse is used here.";
                     return "Tap in time with the beat. This is the default.";
-                case 6: head = "RESET PROGRESS"; return v.Confirm ? "Erases every score, rank and stat. This cannot be undone." : "Erases every score, rank and stat.";
+                case 6: head = "RESET PROGRESS"; return v.Confirm ? "Erases every score, rank and stat. Cannot be undone." : "Erases every score, rank and stat.";
                 default: head = "BACK"; return "Back to the title screen.";
             }
         }
@@ -448,16 +448,17 @@ namespace Bonanza.Shell
             r.Grad.Set(top, bot);
             Color rim = Color.Lerp(new Color(1, 0.95f, 0.8f, 0.16f), new Color(1, 0.95f, 0.8f, 0.42f), hv);
             float rf = i == 6 && View.Confirm ? 0 : r.Focus;   // in the confirm the focus ring moves to YES / KEEP
-            r.Ring.color = Color.Lerp(rim, new Color(1, 0.88f, 0.4f, 1f), rf);
-            r.Glow.color = new Color(1, 0.75f, 0.25f, 0.28f * rf * (red ? 1 : 0.85f + 0.15f * Mathf.Sin(Time.unscaledTime * 3f)));
+            float pulse = red ? 1f : 0.82f + 0.18f * Mathf.Sin(Time.unscaledTime * 4f);
+            r.Ring.color = Color.Lerp(rim, new Color(1, 1, 1, pulse), rf);
+            r.Glow.color = new Color(1, 1, 1, 0.2f * rf * pulse);
             r.Label.fontSize = UiKit.FontSizeForCap(14f * ts);
             r.Label.characterSpacing = small ? 1.5f : 3f;
-            r.Label.color = Color.Lerp(UiKit.Cream, Gold, r.Focus);
+            r.Label.color = Color.Lerp(UiKit.Cream, Color.white, r.Focus);
             if (i == 6) r.Label.text = View.Confirm ? "RESET ALL PROGRESS?" : RowNames[6];
             if (i == 6) r.Label.color = Color.Lerp(r.Label.color, new Color(1f, 0.55f, 0.5f), _confirmT);
             UiKit.Place(r.Label.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(18, -8), new Vector2(ColW - 160, 26));
             r.Value.fontSize = UiKit.FontSizeForCap(17f * ts);
-            r.Value.color = Color.Lerp(Color.white, Gold, r.Focus);
+            r.Value.color = Color.white;
             r.Value.enableAutoSizing = false;
             UiKit.Place(r.Value.rectTransform, new Vector2(1, 1), new Vector2(1, 1), new Vector2(-18, -6), new Vector2(190, 28));
         }
@@ -520,6 +521,7 @@ namespace Bonanza.Shell
                 sg.Grad.Set(new Color(top.r * dark, top.g * dark, top.b * dark, top.a), new Color(bot.r * dark, bot.g * dark, bot.b * dark, bot.a));
                 sg.Rt.localScale = Vector3.one * (1 + 0.03f * sg.Hover) * (1 - 0.1f * sg.Press);
                 sg.Label.rectTransform.anchoredPosition = new Vector2(0, 1 - 3f * sg.Press);
+                sg.Label.rectTransform.sizeDelta = new Vector2(Mathf.Max(10f, sg.Rt.rect.width - (Screen.height < 600 ? 24f : 12f)), CtlH + 10);
                 sg.Label.text = Screen.height < 600 && sg.Full == "MEDIUM" ? "MED" : sg.Full;
                 Color rim = Color.Lerp(new Color(1, 1, 1, 0.16f), new Color(0.55f, 0.95f, 1f, 1f), sg.Hover);
                 sg.Ring.color = Color.Lerp(rim, new Color(1, 0.98f, 0.82f, 1f), sg.Sel);
