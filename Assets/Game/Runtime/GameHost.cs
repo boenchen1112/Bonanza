@@ -623,7 +623,7 @@ namespace Bonanza
             }
             Shell.Roster.View = new RosterView { R = _roster, Flash = _rosterFlash, ShakeT = _rosterShakeT, ShakeCard = _rosterShakeCard, Cast = cast };
             bool tightRoster = Screen.height < 720, smallRoster = Screen.height < 600;
-            float rf = smallRoster ? 464f : 490f, rh = smallRoster ? 250f : tightRoster ? 300f : 332f;
+            float rf = smallRoster ? 448f : 490f, rh = smallRoster ? 250f : tightRoster ? 300f : 332f;
             int sm = Shell.Roster.StageMode;
             if (sm == 1) cast.PlaceSpot(RosterScreen.StageXRef, rf, rh);
             else if (sm == 2) cast.NoFigure();
