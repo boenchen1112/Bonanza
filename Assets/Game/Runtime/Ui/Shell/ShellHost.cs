@@ -80,6 +80,10 @@ namespace Bonanza.Shell
         Canvas _canvas;
         ShellScreen _leaving;
         bool _exiting;
+        Image _veil;
+        float _veilT = 1;
+        /// Screen-to-screen dip: a dark wash that peaks mid-way, so the swap and the backdrop's pose move hide behind it.
+        public const float VeilSeconds = 0.25f, VeilPeak = 0.5f;
         static readonly Vector3[] _corners = new Vector3[4];
 
         public static ShellHost Create(Transform parent)
@@ -115,12 +119,27 @@ namespace Bonanza.Shell
             FreePlay.BuildInto(_root, "FreePlay");
             Options = new OptionsScreen();
             Options.BuildInto(_root, "Options");
+            var vr = UiKit.Rect("Veil", _root); UiKit.Stretch(vr);
+            _veil = vr.gameObject.AddComponent<Image>();
+            _veil.color = new Color(UiKit.Ink.r, UiKit.Ink.g, UiKit.Ink.b, 0);
+            _veil.raycastTarget = false;   // never eats a press
+            _veil.enabled = false;
+        }
+
+        void TickVeil(float dt, bool reduced)
+        {
+            if (_veilT >= 1) return;
+            if (reduced) { _veilT = 1; _veil.enabled = false; return; }
+            _veilT = Mathf.Min(1, _veilT + dt / VeilSeconds);
+            if (_veilT >= 1) { _veil.enabled = false; return; }
+            var c = _veil.color; c.a = VeilPeak * Mathf.Sin(_veilT * Mathf.PI); _veil.color = c;
         }
 
         void Update()
         {
             bool red = Settings.ReduceMotion;
             float dt = Time.unscaledDeltaTime;
+            TickVeil(dt, red);
             Step(Current, !_exiting, dt, red);
             if (_leaving != null)
             {
@@ -147,7 +166,11 @@ namespace Bonanza.Shell
         {
             if (Backdrop != null && pose != null) Backdrop.SetPose(pose);
             if (s == Current && !_exiting) return;
-            if (Current != null && Current != s) { _leaving = Current; }
+            if (Current != null && Current != s)
+            {
+                _leaving = Current;
+                if (s != null && !Settings.ReduceMotion) { _veilT = 0; _veil.enabled = true; _veil.transform.SetAsLastSibling(); }
+            }
             Current = s; _exiting = false;
             if (s != null) { s.SetActive(true); if (s.Shown <= 0.001f) s.Age = 0; }
         }
