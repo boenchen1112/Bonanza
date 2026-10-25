@@ -1,6 +1,6 @@
 import http from 'node:http'; import fs from 'node:fs'; import path from 'node:path';
 import { chromium } from 'playwright';
-const DIR = 'Builds/WebGL', PORT = Number(process.env.PORT || 7968), OUT = 'Captures/ui8';
+const DIR = 'Builds/WebGL', PORT = Number(process.env.PORT || 7968), OUT = process.env.OUT || 'Captures/ui8';
 const only = process.argv.slice(2);
 const TYPES = { '.html': 'text/html', '.js': 'application/javascript', '.css': 'text/css', '.wasm': 'application/wasm', '.data': 'application/octet-stream', '.png': 'image/png', '.ico': 'image/x-icon' };
 const server = http.createServer((req, res) => {
@@ -28,6 +28,7 @@ for (const s of S) {
   await page.evaluate(() => { for (const b of document.querySelectorAll('button')) if (b.textContent.trim() === 'OK') b.click(); });
   await wait(0.5);
   await page.mouse.click(s.w / 2, s.h / 2);
+  await page.mouse.move(2, 2);   // park the pointer: nothing may look hovered
   await wait(s.wait);
   const ms = await page.evaluate(() => new Promise((res) => { const d = []; let l = performance.now(), n = 0; const f = (t) => { d.push(t - l); l = t; if (++n < 120) requestAnimationFrame(f); else { d.shift(); d.sort((a, b) => a - b); res([d.reduce((a, b) => a + b, 0) / d.length, d[Math.floor(d.length * 0.95)]]); } }; requestAnimationFrame(f); }));
   await page.screenshot({ path: `${OUT}/${s.n}.png` });

@@ -173,7 +173,7 @@ namespace Bonanza.Shell
             {
                 case "swing-kings": return "One swing.\nOne beat.\nSend it.";
                 case "drumline-dash": return "Hear it.\nHit it back.";
-                case "bounce-brigade": return "Find the downbeat.\nConduct the hymn.";
+                case "bounce-brigade": return "Find the downbeat.\nLead the hymn.";
                 case "chomp-chorus": return "Four singers,\nyou are one.";
                 case "finale-fever": return "Hold the beat\nas the tempo moves.";
                 default: return full ?? "";
@@ -226,15 +226,15 @@ namespace Bonanza.Shell
                 c.Rt.sizeDelta = new Vector2(CardW, cardH);
                 c.Rt.anchoredPosition = new Vector2((i - (_count - 1) * 0.5f) * pitch, (1 - Mathf.Min(1, enter)) * -70f + (small ? 0 : 0));
                 float pulse = foc && !red ? 1 + 0.01f * Mathf.Sin(Time.unscaledTime * 4f) : 1;
-                c.Inner.localScale = Vector3.one * ((1 + 0.085f * c.Focus + 0.035f * hov) * (1 - 0.05f * c.Press) * Mathf.Clamp01(0.85f + 0.15f * enter) * pulse);
-                c.Inner.anchoredPosition = new Vector2(0, 16 * c.Focus + 6 * hov - 5 * c.Press);
+                c.Inner.localScale = Vector3.one * ((1 + 0.085f * c.Focus + 0.02f * hov) * (1 - 0.05f * c.Press) * Mathf.Clamp01(0.85f + 0.15f * enter) * pulse);
+                c.Inner.anchoredPosition = new Vector2(0, 16 * c.Focus + 3 * hov - 5 * c.Press);
 
                 var gc = GameColor(d.Id);
                 UiKit.Place(c.Shadow.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -8), new Vector2(CardW + 6, cardH + 4));
                 UiKit.Place(c.Glow.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(CardW * 1.9f, cardH * 1.45f));
-                c.Glow.color = A(Color.Lerp(gc, Gold, 0.35f), 0.6f * c.Focus * (red ? 1 : 0.85f + 0.15f * Mathf.Sin(Time.unscaledTime * 3f)) + 0.2f * hov);
-                Color top = Color.Lerp(new Color(0.15f, 0.10f, 0.31f, 0.97f), new Color(0.24f, 0.18f, 0.48f, 0.98f), hov);
-                Color bot = Color.Lerp(new Color(0.06f, 0.03f, 0.15f, 0.97f), new Color(0.12f, 0.08f, 0.30f, 0.98f), hov);
+                c.Glow.color = A(Color.Lerp(gc, Gold, 0.35f), 0.6f * c.Focus * (red ? 1 : 0.85f + 0.15f * Mathf.Sin(Time.unscaledTime * 3f)) + 0.08f * hov);
+                Color top = Color.Lerp(new Color(0.15f, 0.10f, 0.31f, 0.97f), new Color(0.19f, 0.14f, 0.38f, 0.98f), hov);
+                Color bot = Color.Lerp(new Color(0.06f, 0.03f, 0.15f, 0.97f), new Color(0.09f, 0.05f, 0.21f, 0.98f), hov);
                 top = Color.Lerp(top, Color.Lerp(new Color(0.2f, 0.12f, 0.36f, 0.98f), gc, 0.28f), c.Focus);
                 bot = Color.Lerp(bot, Color.Lerp(new Color(0.08f, 0.04f, 0.16f, 0.98f), gc, 0.1f), c.Focus);
                 float dark = 1 - 0.3f * c.Press;
@@ -273,7 +273,7 @@ namespace Bonanza.Shell
                 c.Blurb.gameObject.SetActive(!small);
                 c.Blurb.text = ShortBlurb(d.Id, d.Blurb);
                 UiKit.Place(c.Blurb.rectTransform, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -224), new Vector2(CardW - 12, 74));
-                c.Blurb.enableAutoSizing = true; c.Blurb.fontSizeMax = UiKit.FontSizeForCap(14f); c.Blurb.fontSizeMin = 10f;
+                c.Blurb.enableAutoSizing = false; c.Blurb.fontSize = UiKit.FontSizeForCap(14f);   // one size for every tagline
                 c.Blurb.overflowMode = TextOverflowModes.Truncate;
 
                 // the record, or NEW
@@ -292,10 +292,11 @@ namespace Bonanza.Shell
                     var sr = c.Stripe.rectTransform;   // the stripe leaves the corner to the badge
                     UiKit.Place(sr, new Vector2(0, 1), new Vector2(0, 1), new Vector2(20, -14), new Vector2(small ? 40 : 56, 6));
                     c.NoRecRt.gameObject.SetActive(!small);
-                    c.NoRec.fontSize = UiKit.FontSizeForCap(13f);
-                    c.NoRec.characterSpacing = 2f;
+                    c.NoRec.textWrappingMode = TextWrappingModes.NoWrap;      // one line
+                    c.NoRec.enableAutoSizing = true; c.NoRec.fontSizeMax = UiKit.FontSizeForCap(13f); c.NoRec.fontSizeMin = UiKit.FontSizeForCap(10f);
+                    c.NoRec.characterSpacing = 1f;
                     c.NoRec.alignment = TextAlignmentOptions.Bottom;
-                    UiKit.Place(c.NoRec.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(CardW - 30, 40));
+                    UiKit.Place(c.NoRec.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(CardW - 14, 40));
                     c.NoRec.text = "NOT PLAYED YET";
                     c.New.fontSize = UiKit.FontSizeForCap(17f);
                     UiKit.Place(c.NoRecRt, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0, 16), new Vector2(CardW - 24, 40));   // text sits 16 px above the card bottom
