@@ -497,7 +497,7 @@ namespace Bonanza
                 Style = EnvCrowd.FigureStyle.Figure, Stands = EnvCrowd.StandStyle.Bowl,
                 Rows = 6, PerRow = 30, RowGrow = 3, Radius = 11.6f, RowDepth = 1.2f, RowRise = 0.634f,
                 Arc = StandArc * 0.94f, BowlArc = StandArc, Center = new Vector3(0, 0.95f, 3), Scale = 1.22f, Seed = 0x5147,
-                PaletteMix = 0.1f, BrightMin = 0.55f, BrightMax = 0.85f, Deepen = 1.35f, StandColor = Hex(0x5474ad), Energy = 0.28f,
+                PaletteMix = 0.22f, BrightMin = 0.72f, BrightMax = 1.0f, Deepen = 1.1f, RowDim = 0.03f, StandColor = Hex(0x5474ad), Energy = 0.28f,
                 RoofTube = 0, Poses = true, Rim = 0.9f, FrontRowScale = 0.88f,
             });
             _env.AddMesh("sk-setedge", Color.white, rim: 0.5f, pulse: 0.06f);
