@@ -25,7 +25,7 @@ namespace Bonanza
     public sealed partial class HymnMeterGame
     {
         const float RefW = 1280, RefH = 720;
-        const float BoxS = 70, BoxGap = 12;
+        const float BoxS = 54, BoxGap = 9;
 
         Canvas _canvas;
         CanvasGroup _hudGroup;
@@ -227,8 +227,8 @@ namespace Bonanza
         void BuildAnswer(RectTransform root)
         {
             _plate = UiKit.Rect("Answer", root);
-            UiKit.Place(_plate, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0, 58), new Vector2(4 * BoxS + 3 * BoxGap + 40, BoxS + 50));
-            _plateFill = UiKit.Box(_plate, "Fill", new Color(0.04f, 0.03f, 0.13f, UiKit.DarkAlpha(0.6f)), UiKit.Pill, true, 22);
+            UiKit.Place(_plate, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0, 40), new Vector2(4 * BoxS + 3 * BoxGap + 36, BoxS + 42));
+            _plateFill = UiKit.Box(_plate, "Fill", new Color(0.04f, 0.03f, 0.13f, UiKit.DarkAlpha(0.42f)), UiKit.Pill, true, 22);
             UiKit.Stretch(_plateFill.rectTransform);
             _plateRim = UiKit.Box(_plate, "Rim", new Color(1, 1, 1, 0.16f), UiKit.PillRing(2f * 24f / 22f), true, 22);
             UiKit.Stretch(_plateRim.rectTransform);

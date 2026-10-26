@@ -193,7 +193,7 @@ namespace Bonanza
             // (Band, BandAlt): the stair's band is always the brightest value in the frame.
             _cloudMat = Surf(Color.white, rim: 0.9f, pulse: 0.03f, lift: 0.13f, bands: 3, softness: 0.45f);
             _veilMat = Surf(Color.white, rim: 2.3f, pulse: 0.12f, lift: 0.46f, bands: 3, softness: 0.55f, fog: 0.3f);   // a soft rim of light
-            _stoneMat = Surf(Color.white, rim: 0.9f, pulse: 0.04f, lift: 0.02f, bands: 3, softness: 0.18f);
+            _stoneMat = Surf(new Color(0.8f, 0.76f, 0.74f), rim: 1.7f, pulse: 0.04f, lift: 0.0f, bands: 3, softness: 0.18f);
             _stoneMat.SetFloat("_ShadowRecv", 0);   // fluted shafts would stripe with acne; the plates and clouds take the shadow
             _capMat = Surf(Color.white, rim: 1.1f, pulse: 0.1f, lift: 0.16f, bands: 3, softness: 0.2f);
             _glyphMat = Add(0);
@@ -1301,7 +1301,7 @@ namespace Bonanza
 
         // ------------------------------------------------------------ camera
 
-        const float CamDist = 10.2f, CamHeight = 1.05f, CamYaw = -0.2f, CamFov = 36f;
+        const float CamDist = 10.2f, CamHeight = 1.05f, CamYaw = -0.2f, CamFov = 38f;
 
         void Frame(bool snap, float dt = 0)
         {
