@@ -96,7 +96,7 @@ namespace Bonanza.Shell
             float p = Mathf.Sin(phase) * pump;
             var upper = (up * 0.8f + outv * (0.95f + 0.2f * p) - transform.forward * 0.05f).normalized;
             arm.rotation = Quaternion.Slerp(Quaternion.identity, Quaternion.FromToRotation((fore.position - arm.position).normalized, upper), amount) * arm.rotation;
-            var lower = (up * 1f + outv * (0.4f - 0.3f * p)).normalized;
+            var lower = (up * 1f + outv * ((hand == _rHand ? 0.9f : 0.4f) - 0.3f * p)).normalized;   // the trophy arm reaches wide of the head, clear of the crown
             fore.rotation = Quaternion.Slerp(Quaternion.identity, Quaternion.FromToRotation((hand.position - fore.position).normalized, lower), amount) * fore.rotation;
         }
 

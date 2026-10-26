@@ -178,6 +178,9 @@ namespace Bonanza.Shell
 
         // ------------------------------------------------------------------ tick
 
+        /// The podium waits for the cast to be drawn (as the hub does): its cards never show alone on a dark stage.
+        public override bool Ready => View.Cast == null || View.Cast.AllBaked;
+
         public override void Tick(float dt, ShellInput input)
         {
             var rows = View.Rows;
@@ -253,7 +256,7 @@ namespace Bonanza.Shell
                 bool figure = win && single;
                 float fsz = win ? (single ? 80 : 112) : 62;
                 float fy = -(BaseY - h) + fsz * 0.5f - 2;
-                if (figure) { cx -= 84; fy = -(BaseY - h) + 22; }
+                if (figure) { cx -= 84; fsz = small ? 66 : fsz; fy = small ? -(BaseY - h) + fsz * 0.5f - 2 : -(BaseY - h) + 22; }   // small: the avatar sits on the card's edge, not cut into it
                 float pillH = small ? 24f : 20f, pillW = small ? 58f : 44f;
                 c.You.fontSize = UiKit.FontSizeForCap(small ? 17f : 12f);
                 c.Tie.fontSize = UiKit.FontSizeForCap(small ? 17f : 12f);
@@ -291,6 +294,13 @@ namespace Bonanza.Shell
                     float chipY = -(h - 8 - pillH * 0.5f);
                     c.YouRt.anchoredPosition = new Vector2(10 + pillW * 0.5f, chipY);
                     c.TieRt.anchoredPosition = new Vector2(10 + (you ? pillW + 6f : 0f) + tieW * 0.5f, chipY);
+                    if (win)
+                    {
+                        // the first-place plate is the tallest: its tags sit centred on the bottom row, clear of the name and points above
+                        float total = (you ? pillW : 0f) + (d.Tied ? (you ? 4f : 0f) + tieW : 0f), x0 = (ColW - total) * 0.5f;
+                        c.YouRt.anchoredPosition = new Vector2(x0 + pillW * 0.5f, chipY);
+                        c.TieRt.anchoredPosition = new Vector2(x0 + (you ? pillW + 4f : 0f) + tieW * 0.5f, chipY);
+                    }
                 }
                 else if (win)
                 {
@@ -320,6 +330,9 @@ namespace Bonanza.Shell
                     bool low = bh < 75f;
                     c.YouRt.anchoredPosition = low ? new Vector2(ColW - 6 - pillW * 0.5f, -h * 0.5f) : new Vector2(ColW - 6 - pillW * 0.5f, -(h - 6 - pillH * 0.5f));
                 }
+                bool settled = red || rise >= 0.8f;   // the plate's words and tags wait for it to be tall enough to hold them
+                c.Num.gameObject.SetActive(settled); c.Name.gameObject.SetActive(settled); c.Pts.gameObject.SetActive(settled);
+                if (!settled) { c.YouRt.gameObject.SetActive(false); c.TieRt.gameObject.SetActive(false); c.Badge.gameObject.SetActive(false); c.BadgeRing.gameObject.SetActive(false); }
                 c.YouFill.color = UiKit.Hex(0xfff4d6);   // a light tag with dark text, readable on gold and silver alike
                 c.YouRing.color = new Color(0.16f, 0.06f, 0f, 0.9f);
                 c.You.color = new Color(0.16f, 0.06f, 0f);
@@ -353,7 +366,7 @@ namespace Bonanza.Shell
                 Vector2 head = default;
                 float cxn = ColCenter(order, 0, n);
                 bool onHead = View.Cast != null && View.Cast.TryHeadRef(out head);
-                float crownY = onHead ? head.y - 2f : headY + 36f - (View.Cast != null ? View.Cast.HopRef : 0f);
+                float crownY = onHead ? head.y - 3f : headY + 36f - (View.Cast != null ? View.Cast.HopRef : 0f);
                 _crownB.anchoredPosition = new Vector2(onHead ? head.x : cxn, -crownY + bob);
                 _crownB.localScale = Vector3.one * (0.72f * Mathf.Clamp01(pop));
                 _crownB.localRotation = Quaternion.Euler(0, 0, 0);

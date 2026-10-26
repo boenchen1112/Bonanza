@@ -15,14 +15,15 @@ const wait = (s) => new Promise((r) => setTimeout(r, s * 1000));
 const browser = await chromium.launch({ headless: true, args: ['--use-angle=d3d11', '--mute-audio'] });
 const page = await browser.newPage({ viewport: { width: W, height: H } });
 let result = 0, partyDone = 0; const errs = [];
-page.on('console', (m) => { const t = m.text(); if (t.includes('[ERROR]') || m.type() === 'error') errs.push(t); if (partyDone) console.log('LOG', m.type(), t.slice(0, 400)); if (t.includes('[PARTY-DONE]')) { partyDone = Date.now(); console.log(t); }
+page.on('console', (m) => { const t = m.text(); if (t.includes('[ERROR]') || m.type() === 'error') errs.push(t); if (t.includes('[POSE]')) console.log(t); if (partyDone) console.log('LOG', m.type(), t.slice(0, 400)); if (t.includes('[PARTY-DONE]')) { partyDone = Date.now(); console.log(t); }
   if (t.includes('[RESULT]')) { result = Date.now(); console.log(t); } });
 await page.goto(`http://127.0.0.1:${PORT}/${QUERY.startsWith("?") ? QUERY : "?" + QUERY}`, { waitUntil: 'load' });
 await page.waitForFunction(() => getComputedStyle(document.querySelector('#unity-loading-container')).display === 'none', null, { timeout: 120000 });
 await wait(1.5); await page.mouse.click(W / 2, H / 2); await wait(2);
 if (/partyDemo/.test(QUERY)) {   // podium demos (scene=party&partyDemo=win|youwin|wintie&debug): wait for the staging, then shoot
   await wait(Math.min(SECS, 7)); await page.mouse.move(2, 2);
-  await page.screenshot({ path: `${OUT}.png` });
+  if (process.env.BURST) for (let i = 0; i < +process.env.BURST; i++) { await page.screenshot({ path: `${OUT}-b${String(i).padStart(2, '0')}.png` }); await wait(0.35); }
+  else await page.screenshot({ path: `${OUT}.png` });
   console.log('errors:', errs.length ? errs.slice(0, 3).join(' | ') : 'none');
   await browser.close(); server.close(); process.exit(0);
 }

@@ -692,7 +692,7 @@ namespace Bonanza
             float real = Time.unscaledDeltaTime;
             bool reduce = Settings.ReduceMotion;
             bool live = _round.Started && !_resultOut;
-            _hudAlpha = Damp(_hudAlpha, live ? 1 : 0, live ? 5 : 9, real);
+            _hudAlpha = _resultOut ? 0f : Damp(_hudAlpha, live ? 1 : 0, live ? 5 : 9, real);   // gone the frame the result card opens
             _hudGroup.alpha = _hudAlpha;
             var s = Slot;
             if (s == null) return;

@@ -137,12 +137,28 @@ namespace Bonanza.Shell
             if (_shown < 0 || !_main || _models[_shown] == null || !_bodies[_shown] || !_bodies[_shown].activeSelf) return false;
             var h = _models[_shown].HeadBone;
             if (!h) return false;
-            var top = h.position + _models[_shown].transform.up * (_bodies[_shown].transform.lossyScale.y * 0.16f);
+            // the rig's own measured height (feet at 0, head top at Height) carried through the model's transform: the head bone sits
+            // mid-head, so the bone plus a fixed offset left the crown at the brow; x follows the bone (the head leans with the sway)
+            var m = _models[_shown];
+            var top = m.Height > 0.1f ? m.transform.TransformPoint(0f, m.Height, 0f) : h.position + m.transform.up * (_bodies[_shown].transform.lossyScale.y * 0.3f);
+            top = Vector3.Lerp(h.position, top, 0.55f);   // Height runs to the antenna tip on some of the cast: the skull is the first 55% from the head bone
+            top.x = h.position.x;
+            var v0 = _main.WorldToViewportPoint(h.position);
+            if (PoseLog && Time.unscaledTime > _poseLogAt)
+            {
+                _poseLogAt = Time.unscaledTime + 2f;
+                var vt = _main.WorldToViewportPoint(top);
+                var hh = _models[_shown].HeldHand;
+                var vh = hh ? _main.WorldToViewportPoint(hh.position) : Vector3.zero;
+                Debug.Log($"[POSE] char={_shown} height={m.Height:0.00} headBoneV=({v0.x:0.000},{v0.y:0.000}) headTopV=({vt.x:0.000},{vt.y:0.000}) handV=({vh.x:0.000},{vh.y:0.000})");
+            }
             var v = _main.WorldToViewportPoint(top);
             if (v.z <= 0) return false;
             refPos = new Vector2((v.x - 0.5f) * RefH * Mathf.Max(0.5f, _main.aspect), (1f - v.y) * RefH);
             return true;
         }
+        static readonly bool PoseLog = (Application.absoluteURL ?? "").Contains("poselog");
+        float _poseLogAt;
         bool _noFigure;
         /// The standing figure's height as a fraction of the height asked for in Place (shorter characters read shorter).
         public float FigureRel { get; private set; } = 1;

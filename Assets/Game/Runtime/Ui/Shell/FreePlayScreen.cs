@@ -371,7 +371,7 @@ namespace Bonanza.Shell
             _play.Label.rectTransform.anchoredPosition = new Vector2(small ? 0 : -42, 1);
             _play.Label.rectTransform.sizeDelta = new Vector2((small ? 400 : 430) - (small ? 24 : 112), 72);
             _play.Label.enableAutoSizing = true; _play.Label.fontSizeMax = UiKit.FontSizeForCap(24f); _play.Label.fontSizeMin = 14f;
-            _back.Rt.anchoredPosition = small ? new Vector2(-96, 30) : new Vector2(-64, 14);
+            _back.Rt.anchoredPosition = small ? new Vector2(-124, 30) : new Vector2(-64, 14);
             _back.Inner.localScale *= Mathf.Lerp(1f, 1.3f, small ? 1 : 0);
             _back.Label.rectTransform.anchoredPosition = new Vector2(small ? 0 : -20, 1);
         }

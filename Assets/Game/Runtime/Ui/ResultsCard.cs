@@ -43,7 +43,7 @@ namespace Bonanza.HudKit
     public sealed class ResultsCard : MonoBehaviour
     {
         // web results.js timeline (s)
-        public const float CountAt = 0.3f, CountS = 0.9f, StatsAt = 0.45f, StampAt = 0.6f, PartyAt = 0.95f, PromptAt = 0.7f;
+        public const float CountAt = 0.3f, CountS = 0.9f, StatsAt = 0.3f, StampAt = 0.6f, PartyAt = 0.95f, PromptAt = 0.7f;
 
         const float Pad = 30.7f;
         float CardW = 600;   // 660 for a card with its own larger stat labels (the five columns need the room)
@@ -64,6 +64,8 @@ namespace Bonanza.HudKit
         float _t = -1, _stampAt, _badgeAt;
         Color _rankColor;
         float _statLabelPx;
+        // a short screen halves every reference px: the small labels grow so they stay readable there
+        static float Lk => Screen.height < 600 ? 1.5f : 1f;
 
         sealed class Item { public RectTransform Rt; public CanvasGroup Group; public float At; public Vector2 Pos; }
 
@@ -333,6 +335,7 @@ namespace Bonanza.HudKit
         void StatRow(int row, float yTop, float at, (string label, string value)[] cells, float numCap, int cols = 5)
         {
             float inner = CardW - 2 * Pad, colW = inner / 5f;
+            if (Lk > 1f && cells.Length < 5) colW = inner / cells.Length * 0.9f;   // the larger small-screen labels get the room a short row has
             float x0 = -inner / 2 + colW / 2;
             if (cells.Length < 5) x0 = -colW * (cells.Length - 1) / 2f;
             for (int i = 0; i < cells.Length; i++)
@@ -344,10 +347,11 @@ namespace Bonanza.HudKit
                 n.rectTransform.anchorMin = n.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
                 n.rectTransform.sizeDelta = new Vector2(colW, 30); n.rectTransform.anchoredPosition = new Vector2(0, 8);
                 n.text = cells[i].value;
-                var l = UiKit.Text(cell, "L", TextStyle.Label, _statLabelPx > 0 ? _statLabelPx : 11f * 0.72f, _statLabelPx > 0 ? new Color(0.93f, 0.94f, 0.98f) : UiKit.Dim, TextAlignmentOptions.Center, italic: false);
-                l.characterSpacing = _statLabelPx > 0 ? 0f : 8f;
+                var l = UiKit.Text(cell, "L", TextStyle.Label, _statLabelPx > 0 ? _statLabelPx : 11f * 0.72f * Lk, _statLabelPx > 0 ? new Color(0.93f, 0.94f, 0.98f) : UiKit.Dim, TextAlignmentOptions.Center, italic: false);
+                l.characterSpacing = _statLabelPx > 0 ? 0f : (Lk > 1 ? 2f : 8f);
+                if (Lk > 1f && _statLabelPx <= 0) { l.enableAutoSizing = true; l.fontSizeMax = l.fontSize; l.fontSizeMin = l.fontSize * 0.6f; }   // a long label shrinks to its column rather than run into the next
                 l.rectTransform.anchorMin = l.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
-                l.rectTransform.sizeDelta = new Vector2(colW, 16); l.rectTransform.anchoredPosition = new Vector2(0, -12);
+                l.rectTransform.sizeDelta = new Vector2(colW, Lk > 1f ? 24 : 16); l.rectTransform.anchoredPosition = new Vector2(0, Lk > 1f ? -14 : -12);
                 l.text = cells[i].label;
                 _items.Add(new Item { Rt = cell, Group = g, At = at + i * 0.05f, Pos = cell.anchoredPosition });
             }
@@ -374,12 +378,12 @@ namespace Bonanza.HudKit
             var mk = UiKit.Box(track, "Marker", Mathf.Abs(lean) < 0.16f ? on : lean < 0 ? early : late, UiKit.Pill, true, 4f);
             UiKit.Place(mk.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(Mathf.Clamp(lean, -1, 1) * W / 2, 0), new Vector2(18, 18));
             mk.rectTransform.localRotation = Quaternion.Euler(0, 0, 45);
-            var le = UiKit.Text(row, "EarlyL", TextStyle.Label, 11f * 0.72f, early, TextAlignmentOptions.MidlineRight, italic: false);
-            UiKit.Place(le.rectTransform, new Vector2(0.5f, 1), new Vector2(1, 0.5f), new Vector2(-W / 2 - 10, -12), new Vector2(80, 18)); le.text = "EARLY"; le.characterSpacing = 6f;
-            var ll = UiKit.Text(row, "LateL", TextStyle.Label, 11f * 0.72f, late, TextAlignmentOptions.MidlineLeft, italic: false);
-            UiKit.Place(ll.rectTransform, new Vector2(0.5f, 1), new Vector2(0, 0.5f), new Vector2(W / 2 + 10, -12), new Vector2(80, 18)); ll.text = "LATE"; ll.characterSpacing = 6f;
-            var lab = UiKit.Text(row, "Label", TextStyle.Label, 12f * 0.72f, UiKit.Dim, TextAlignmentOptions.Center, italic: false);
-            UiKit.Place(lab.rectTransform, new Vector2(0.5f, 1), new Vector2(0.5f, 0.5f), new Vector2(0, -36), new Vector2(W + 140, 18)); lab.text = label ?? ""; lab.characterSpacing = 6f;
+            var le = UiKit.Text(row, "EarlyL", TextStyle.Label, 11f * 0.72f * Lk, early, TextAlignmentOptions.MidlineRight, italic: false);
+            UiKit.Place(le.rectTransform, new Vector2(0.5f, 1), new Vector2(1, 0.5f), new Vector2(-W / 2 - 10, -12), new Vector2(80, 18)); le.text = "EARLY"; le.characterSpacing = Lk > 1 ? 2f : 6f;
+            var ll = UiKit.Text(row, "LateL", TextStyle.Label, 11f * 0.72f * Lk, late, TextAlignmentOptions.MidlineLeft, italic: false);
+            UiKit.Place(ll.rectTransform, new Vector2(0.5f, 1), new Vector2(0, 0.5f), new Vector2(W / 2 + 10, -12), new Vector2(80, 18)); ll.text = "LATE"; ll.characterSpacing = Lk > 1 ? 2f : 6f;
+            var lab = UiKit.Text(row, "Label", TextStyle.Label, 12f * 0.72f * Lk, UiKit.Dim, TextAlignmentOptions.Center, italic: false);
+            UiKit.Place(lab.rectTransform, new Vector2(0.5f, 1), new Vector2(0.5f, 0.5f), new Vector2(0, -36), new Vector2(W + 140, 18)); lab.text = label ?? ""; lab.characterSpacing = Lk > 1 ? 2f : 6f;
             _items.Add(new Item { Rt = row, Group = g, At = at, Pos = row.anchoredPosition });
         }
 

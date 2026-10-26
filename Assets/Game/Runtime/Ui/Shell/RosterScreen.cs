@@ -36,7 +36,7 @@ namespace Bonanza.Shell
         public const float FigureFeet = 490f, FigureHeight = 312f;
 
         public const int CardBase = 0, SeatBase = 8, ActionBtn = 12, BackBtn = 13;
-        const float CardW = 112, CardH = 128, CardGap = 10, GridLeft = -450, GridTop = 128;
+        const float CardW = 112, CardH = 128, CardGap = 10, GridLeft = -450, GridTop = 134;
         const float SeatW = 214, SeatH = 92, SeatGap = 10, SeatTop = 572;
         const float StageX = 320, SmallSeatTop = 536;
         public const float StageXRef = StageX;
@@ -400,7 +400,7 @@ namespace Bonanza.Shell
             bool subOff = tight && !small && !flashing;       // the short screens (640x360) keep a one-line instruction under the title
             _subGroup.alpha = subOff ? 0 : 1;
             _subPlate.color = new Color(0.05f, 0.03f, 0.12f, subOff ? 0 : small ? 0.8f : 0.55f);
-            float subY = small ? -74f : -66f;
+            float subY = small ? -74f : -62f;
             _sub.rectTransform.anchoredPosition = new Vector2(0, subY);
             _subPlate.rectTransform.anchoredPosition = new Vector2(0, subY + 2);
             _sub.fontSize = UiKit.FontSizeForCap(small ? 17f : 15f);
@@ -590,7 +590,7 @@ namespace Bonanza.Shell
             _action.Label.rectTransform.anchoredPosition = new Vector2(small ? -44 : -40, 1);
             _back.Label.rectTransform.anchoredPosition = new Vector2(small ? 0 : -14, 1);
             _back.Rt.anchoredPosition = new Vector2(-72 - 60 * comp, 12 + 6 * comp);
-            if (small) _back.Rt.anchoredPosition = new Vector2(-60, 8);
+            if (small) _back.Rt.anchoredPosition = new Vector2(-88, 8);
             _back.Inner.localScale *= Mathf.Lerp(1f, 1.3f, comp);
         }
 

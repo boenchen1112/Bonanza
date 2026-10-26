@@ -456,7 +456,7 @@ namespace Bonanza.Shell
             DriveButton(_action, input, ActionBtn, PressFocus != 1, label, "SPACE", dt, red, bt, true);
             DriveButton(_quit, input, QuitBtn, PressFocus == 1, "QUIT TO MENU", "ESC", dt, red, age - 0.9f, true);
             _action.Rt.anchoredPosition = new Vector2(0, -516);
-            _quit.Rt.anchoredPosition = small ? new Vector2(-92, 34) : new Vector2(-64, 14);
+            _quit.Rt.anchoredPosition = small ? new Vector2(-120, 34) : new Vector2(-64, 14);
             _quit.Inner.localScale *= Mathf.Lerp(1f, 1.3f, small ? 1 : 0);
             _quit.Label.rectTransform.anchoredPosition = new Vector2(-20, 1);
             _action.Label.rectTransform.anchoredPosition = new Vector2(-42, 1);

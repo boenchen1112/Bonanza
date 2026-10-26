@@ -159,7 +159,7 @@ namespace Bonanza.Shell
         {
             if (!_curtain.enabled) return;
             _coverT += dt;
-            bool lift = !_cover || _coverT > 4f || (Current != null && !_exiting && Current.Shown >= 0.2f);
+            bool lift = !_cover || _coverT > 4f || (Current != null && !_exiting && Current.Shown >= 0.02f && (Backdrop == null || Backdrop.Live));
             var c = _curtain.color;
             if (!lift) { c.a = 1; _curtain.color = c; return; }
             _cover = false;
