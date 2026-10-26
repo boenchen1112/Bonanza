@@ -202,7 +202,7 @@ namespace Bonanza
             _farMat = Surf(Color.white, rim: 2.0f, pulse: 0, lift: 0.06f, bands: 3, softness: 0.35f, fog: 0.85f);   // silhouettes with a rim of light
             _horizonMat = Surf(Color.white, rim: 1.6f, pulse: 0, lift: 0.12f, bands: 2, softness: 0.6f, fog: 1f);   // atmospheric falloff
             _ledgeMat = Surf(Color.white, rim: 1.2f, pulse: 0.02f, lift: 0.02f, bands: 3, softness: 0.45f, fog: 0);
-            _choirMat = Surf(Color.white, rim: 1.1f, pulse: 0.05f, lift: 0.1f, bands: 3, softness: 0.4f, fog: 0.6f);
+            _choirMat = Surf(Color.white, rim: 1.6f, pulse: 0.05f, lift: 0.32f, bands: 3, softness: 0.55f, fog: 0.45f);
             _mouthMat = Surf(Color.white, rim: 0, pulse: 0, lift: 0, bands: 1, softness: 0.2f, fog: 0.6f);
             Look.Track(_cloudMat, PC.GroundAlt, 0.96f);
             Look.Track(_choirMat, PC.GroundAlt, 1f);
@@ -655,13 +655,13 @@ namespace Bonanza
             b.Sphere(0.5f, 8, 5, Matrix4x4.Translate(new Vector3(1.18f, 0.5f, 0.1f)), Color.white, Vector3.one);
             Shade(b, s0, 1, 0.5f);
             var ink = new Color(0.05f, 0.04f, 0.09f);
-            b.Sphere(0.12f, 8, 6, Matrix4x4.Translate(new Vector3(-0.32f, 1.27f, -0.93f)), ink, new Vector3(0.85f, 1.3f, 0.5f));
-            b.Sphere(0.12f, 8, 6, Matrix4x4.Translate(new Vector3(0.32f, 1.27f, -0.93f)), ink, new Vector3(0.85f, 1.3f, 0.5f));
+            b.Sphere(0.15f, 8, 6, Matrix4x4.Translate(new Vector3(-0.32f, 1.27f, -0.93f)), ink, new Vector3(0.85f, 1.3f, 0.5f));
+            b.Sphere(0.15f, 8, 6, Matrix4x4.Translate(new Vector3(0.32f, 1.27f, -0.93f)), ink, new Vector3(0.85f, 1.3f, 0.5f));
             b.Sphere(0.035f, 5, 4, Matrix4x4.Translate(new Vector3(-0.3f, 1.33f, -0.99f)), new Color(3, 3, 3), Vector3.one);
             b.Sphere(0.035f, 5, 4, Matrix4x4.Translate(new Vector3(0.34f, 1.33f, -0.99f)), new Color(3, 3, 3), Vector3.one);
             var blush = new Color(1f, 0.45f, 0.58f);
-            b.Sphere(0.15f, 8, 5, Matrix4x4.Translate(new Vector3(-0.58f, 1.04f, -0.86f)), blush, new Vector3(1.2f, 0.6f, 0.4f));
-            b.Sphere(0.15f, 8, 5, Matrix4x4.Translate(new Vector3(0.58f, 1.04f, -0.86f)), blush, new Vector3(1.2f, 0.6f, 0.4f));
+            b.Sphere(0.19f, 8, 5, Matrix4x4.Translate(new Vector3(-0.58f, 1.04f, -0.86f)), blush, new Vector3(1.2f, 0.6f, 0.4f));
+            b.Sphere(0.19f, 8, 5, Matrix4x4.Translate(new Vector3(0.58f, 1.04f, -0.86f)), blush, new Vector3(1.2f, 0.6f, 0.4f));
             // the hymnal, held open in both hands below the face: crimson boards and cream pages in a shallow V
             var crimson = new Color(0.62f, 0.06f, 0.12f);
             var gilt = new Color(1f, 0.72f, 0.26f);
