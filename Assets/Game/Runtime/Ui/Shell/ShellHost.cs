@@ -49,6 +49,9 @@ namespace Bonanza.Shell
         /// Per-frame: position and tint everything from `Shown`, `Age` and the screen's own state.
         public abstract void Tick(float dt, ShellInput input);
 
+        /// False while something the screen shows is still being prepared (the host holds the entrance, up to a short wait).
+        public virtual bool Ready => true;
+
         internal void SetActive(bool on) { if (Root) Root.gameObject.SetActive(on); }
     }
 
@@ -81,7 +84,7 @@ namespace Bonanza.Shell
         ShellScreen _leaving;
         bool _exiting;
         Image _veil;
-        float _veilT = 1;
+        float _veilT = 1, _readyWait;
         /// Screen-to-screen dip: a dark wash that peaks mid-way, so the swap and the backdrop's pose move hide behind it.
         public const float VeilSeconds = 0.25f, VeilPeak = 0.5f;
         static readonly Vector3[] _corners = new Vector3[4];
@@ -140,7 +143,15 @@ namespace Bonanza.Shell
             bool red = Settings.ReduceMotion;
             float dt = Time.unscaledDeltaTime;
             TickVeil(dt, red);
-            Step(Current, !_exiting, dt, red);
+            // a screen enters once the one before it is nearly gone (no double exposure) and its own content is ready (no pop-in)
+            bool hold = false;
+            if (Current != null && !_exiting && Current.Shown < 1f)
+            {
+                if (_leaving != null && !red && _leaving.Shown > 0.2f) hold = true;
+                else if (!Current.Ready && _readyWait < 1.5f) { hold = true; _readyWait += dt; }
+            }
+            if (!hold) Step(Current, !_exiting, dt, red);
+            else if (Current != null && !_exiting) Current.Age = 0;
             if (_leaving != null)
             {
                 Step(_leaving, false, dt, red);
@@ -171,7 +182,7 @@ namespace Bonanza.Shell
                 _leaving = Current;
                 if (s != null && !Settings.ReduceMotion) { _veilT = 0; _veil.enabled = true; _veil.transform.SetAsLastSibling(); }
             }
-            Current = s; _exiting = false;
+            Current = s; _exiting = false; _readyWait = 0;
             if (s != null) { s.SetActive(true); if (s.Shown <= 0.001f) s.Age = 0; }
         }
 

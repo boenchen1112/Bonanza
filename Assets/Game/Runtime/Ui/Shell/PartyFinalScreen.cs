@@ -28,6 +28,7 @@ namespace Bonanza.Shell
         /// Where the stage figure stands (reference px), read by the host to place the cast.
         public const float FigureFeet = 458f, FigureHeight = 236f, ColW = 190, ColStep = 204, BaseY = 548;
         static readonly float[] BlockH = { 108, 84, 62, 48 };
+        static readonly float[] SmallBlockH = { 112, 100, 92, 88 };   // small screens stack name, points and chips in fixed rows, so every plate is tall enough for them
         static readonly int[] Identity = { 0, 1, 2, 3 };
         static readonly int[][] ColOf = { new[] { 0 }, new[] { 1, 0 }, new[] { 1, 0, 2 }, new[] { 1, 0, 2, 3 } };
 
@@ -39,7 +40,7 @@ namespace Bonanza.Shell
         sealed class Col
         {
             public RectTransform Rt; public CanvasGroup Group;
-            public Image Fill, Ring, Shine, YouFill, YouRing;
+            public Image Fill, Ring, Shine, YouFill, YouRing, Badge, BadgeRing;
             public TextMeshProUGUI Num, Name, Pts, You;
             public RectTransform YouRt, TieRt;
             public Image TieFill; public TextMeshProUGUI Tie;
@@ -90,9 +91,11 @@ namespace Bonanza.Shell
             _trophy = MakeTrophy(root, "Trophy", 110);
             _crownB = MakeCrown(root, "Crown");
             _fist = UiKit.Rect("Fist", root);
-            UiKit.Place(_fist, new Vector2(0.5f, 1), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(20, 20));
+            UiKit.Place(_fist, new Vector2(0.5f, 1), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(30, 30));
             _fistImg = UiKit.Box(_fist, "Fist", Color.white, UiKit.Disc);
             UiKit.Stretch(_fistImg.rectTransform);
+            var fr = UiKit.Box(_fist, "Knuckles", new Color(0.12f, 0.05f, 0f, 0.85f), UiKit.Ring);
+            UiKit.Stretch(fr.rectTransform);
             _crowns[0] = MakeCrown(root, "CrownA"); _crowns[1] = MakeCrown(root, "CrownB");
 
             _statRt = UiKit.Rect("Stat", root);
@@ -127,6 +130,8 @@ namespace Bonanza.Shell
             c.Fill.gameObject.AddComponent<UiGradient>();
             c.Ring = UiKit.Box(c.Rt, "Ring", new Color(1, 0.95f, 0.8f, 0.3f), UiKit.PillRing(5), true, 20);
             UiKit.Stretch(c.Ring.rectTransform);
+            c.Badge = UiKit.Box(c.Rt, "Badge", new Color(0.12f, 0.07f, 0.3f), UiKit.Disc);
+            c.BadgeRing = UiKit.Box(c.Rt, "BadgeRing", new Color(1, 0.95f, 0.8f, 0.9f), UiKit.Ring);
             c.Num = UiKit.Text(c.Rt, "Num", TextStyle.Display, 34f, Ink);
             UiKit.Place(c.Num.rectTransform, new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(8, 1), new Vector2(54, 56));
             c.Name = UiKit.Text(c.Rt, "Name", TextStyle.Display, 20f, Color.white, TextAlignmentOptions.Left);
@@ -204,7 +209,7 @@ namespace Bonanza.Shell
                 var d = rows[i];
                 int col = order[i];
                 float cx = ColCenter(order, i, n);
-                float bh = BlockH[Mathf.Clamp(d.Place - 1, 0, 3)] * (small ? 1f : 1f);
+                float bh = (small ? SmallBlockH : BlockH)[Mathf.Clamp(d.Place - 1, 0, 3)];
                 bool win = d.Place == 1;
                 // rise from the floor, last place first
                 float rise = red ? 1 : UiKit.BackOut((age - 0.25f - (n - 1 - i) * 0.14f) / 0.55f, 1.0f);
@@ -246,7 +251,32 @@ namespace Bonanza.Shell
                 c.TieRt.sizeDelta = new Vector2(tieW, pillH);
                 c.TieRt.anchoredPosition = new Vector2(ColW - 10 - tieW * 0.5f, -(win ? 8 : 10) - pillH * 0.5f);
                 var nrt = c.Name.rectTransform; var prt = c.Pts.rectTransform;
-                if (win)
+                c.Badge.gameObject.SetActive(small); c.BadgeRing.gameObject.SetActive(small);
+                if (small)
+                {
+                    // stacked rows with fixed slots: the rank in a corner badge straddling the plate's edge, the name, the points,
+                    // then one bottom row for the YOU and TIE chips side by side (they always fit in the plate's width)
+                    float tw = ColW - 36f, edgeY = h * 0.5f;
+                    c.Name.alignment = TextAlignmentOptions.Left; c.Pts.alignment = TextAlignmentOptions.Left;
+                    nrt.sizeDelta = new Vector2(tw, 26); prt.sizeDelta = new Vector2(tw, 22);
+                    nrt.anchoredPosition = new Vector2(30, edgeY - 18); prt.anchoredPosition = new Vector2(30, edgeY - 43);
+                    c.Name.fontSizeMax = UiKit.FontSizeForCap(26f); c.Name.fontSizeMin = UiKit.FontSizeForCap(20f);
+                    c.Pts.fontSize = UiKit.FontSizeForCap(20f);
+                    var br = c.Badge.rectTransform;
+                    br.anchorMin = br.anchorMax = new Vector2(0, 0.5f); br.pivot = new Vector2(0, 0.5f);
+                    br.sizeDelta = new Vector2(32, 32); br.anchoredPosition = new Vector2(-8, edgeY);
+                    var brr = c.BadgeRing.rectTransform;
+                    brr.anchorMin = brr.anchorMax = br.anchorMin; brr.pivot = br.pivot; brr.sizeDelta = br.sizeDelta; brr.anchoredPosition = br.anchoredPosition;
+                    c.Badge.color = win ? new Color(0.3f, 0.13f, 0.02f) : new Color(0.12f, 0.07f, 0.3f);
+                    c.Num.alignment = TextAlignmentOptions.Center;
+                    c.Num.fontSize = UiKit.FontSizeForCap(22f); c.Num.color = Color.white;
+                    c.Num.rectTransform.sizeDelta = new Vector2(32, 32);
+                    c.Num.rectTransform.anchoredPosition = new Vector2(-8, edgeY);
+                    float chipY = -(h - 8 - pillH * 0.5f);
+                    c.YouRt.anchoredPosition = new Vector2(10 + pillW * 0.5f, chipY);
+                    c.TieRt.anchoredPosition = new Vector2(10 + (you ? pillW + 6f : 0f) + tieW * 0.5f, chipY);
+                }
+                else if (win)
                 {
                     // first place: number top-left, the name and points centred and the biggest text on the podium, the YOU tag on the bottom row
                     c.Name.alignment = TextAlignmentOptions.Center; c.Pts.alignment = TextAlignmentOptions.Center;
@@ -256,6 +286,7 @@ namespace Bonanza.Shell
                     c.Name.fontSizeMax = UiKit.FontSizeForCap(30f);
                     c.Name.fontSizeMin = UiKit.FontSizeForCap(16f);
                     c.Pts.fontSize = UiKit.FontSizeForCap(small ? 18f : 15f);
+                    c.Num.rectTransform.sizeDelta = new Vector2(54, 56); c.Num.alignment = TextAlignmentOptions.Center;
                     c.Num.rectTransform.anchoredPosition = new Vector2(4, h * 0.5f - 24);
                     c.YouRt.anchoredPosition = new Vector2(ColW * 0.5f, -(h - 5 - pillH * 0.5f));
                 }
@@ -266,6 +297,7 @@ namespace Bonanza.Shell
                     nrt.anchoredPosition = new Vector2(64, 11); prt.anchoredPosition = new Vector2(64, -12);
                     c.Name.fontSizeMax = UiKit.FontSizeForCap(20f * (small ? 1.3f : 1f));
                     c.Name.fontSizeMin = small ? UiKit.FontSizeForCap(20f) : 10f;
+                    c.Num.rectTransform.sizeDelta = new Vector2(54, 56); c.Num.alignment = TextAlignmentOptions.Center;
                     c.Num.rectTransform.anchoredPosition = new Vector2(8, 1);
                     // a short card has the tag at its right end, a taller one in the bottom-right corner (clear of the name)
                     bool low = bh < 75f;
@@ -309,24 +341,17 @@ namespace Bonanza.Shell
                 _crownB.localScale = Vector3.one * (0.85f * Mathf.Clamp01(pop));
                 _crownB.localRotation = Quaternion.Euler(0, 0, red ? 0 : Mathf.Sin(now * 1.3f) * 3f);
                 // held up in the raised hand when the cheer has the arms up (its foot in a fist), else standing on the first-place block
-                Vector2 hand = default;
-                bool held = View.Cast != null && View.Cast.TryHandRef(out hand);
-                _fist.gameObject.SetActive(held);
-                if (held)
-                {
-                    _trophy.anchoredPosition = new Vector2(hand.x, -(hand.y + 34f));
-                    _fist.anchoredPosition = new Vector2(hand.x, -(hand.y - 2f));
-                    _fist.localScale = Vector3.one * Mathf.Clamp01(pop);
-                    _fistImg.color = View.Cast.Tint;
-                }
-                else   // arms down: it stands on the first-place block, beside the figure
-                    _trophy.anchoredPosition = new Vector2(cxn + 70f, -(BaseY - BlockH[0] + 4f));
-                _trophy.localScale = Vector3.one * ((held ? 0.7f : 0.7f) * Mathf.Clamp01(pop));
+                _heldOn = true; _heldPop = pop; _heldCx = cxn;
+                bool held = PlaceHeld();
+                View.Cast.AfterPose = () => PlaceHeld();   // the hand moves in the cast's LateUpdate: re-read it there so the grip never lags a frame
+                _trophy.localScale = Vector3.one * (0.7f * Mathf.Clamp01(pop));
                 _trophy.SetAsLastSibling();   // in front of the crown
                 if (held) _fist.SetAsLastSibling();   // the fist closes over the foot
             }
             else
             {
+                _heldOn = false;
+                if (View.Cast != null) View.Cast.AfterPose = null;
                 _fist.gameObject.SetActive(false);
                 // a shared crown: the cup stands on the stat plate, centred between the winners, not floating
                 float mx = 0;
@@ -376,6 +401,30 @@ namespace Bonanza.Shell
             _again.Label.rectTransform.anchoredPosition = new Vector2(small ? 0 : -42, 1);
             _menu.Label.rectTransform.anchoredPosition = new Vector2(small ? 0 : -30, 1);
             _menu.Inner.localScale *= Mathf.Lerp(1f, 1.1f, small ? 1 : 0);
+        }
+
+        bool _heldOn; float _heldPop, _heldCx;
+
+        /// The trophy's foot sits in the raised hand's fist: both follow the hand bone every frame (the cheer hop and sway included).
+        /// False (and the cup stands on the first-place block) when the arms are not up.
+        bool PlaceHeld()
+        {
+            var cast = View.Cast;
+            if (!_heldOn || cast == null) return false;
+            Vector2 hand;
+            bool held = cast.TryHandRef(out hand);
+            _fist.gameObject.SetActive(held);
+            if (held)
+            {
+                float pop = Mathf.Clamp01(_heldPop);
+                _trophy.anchoredPosition = new Vector2(hand.x, -(hand.y + 48f));   // the cup is bottom-pivoted: its foot and stem sit inside the fist
+                _fist.anchoredPosition = new Vector2(hand.x, -hand.y);
+                _fist.localScale = Vector3.one * pop;
+                _fistImg.color = cast.Tint;
+                _fist.SetAsLastSibling();
+            }
+            else _trophy.anchoredPosition = new Vector2(_heldCx + 70f, -(BaseY - BlockH[0] + 4f));
+            return held;
         }
 
         static float ColCenter(int[] order, int standing, int n) => (order[standing] - (n - 1) * 0.5f) * ColStep;

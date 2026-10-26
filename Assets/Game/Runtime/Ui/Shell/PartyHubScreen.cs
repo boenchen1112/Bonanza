@@ -31,6 +31,7 @@ namespace Bonanza.Shell
     {
         public PartyHubView View;
         public const int ActionBtn = 0, QuitBtn = 1;
+        public override bool Ready => View.Cast == null || View.Cast.AllBaked;
 
         public const float RefH = 720f, RefFloor = 486f;
         const float RowW = 440, RowH = 72, RowGap = 10, ColX = 10, Top = 122, CardW = 420, CardH = 360;

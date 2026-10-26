@@ -177,7 +177,11 @@ namespace Bonanza.Shell
 
         // ------------------------------------------------------------------ per frame
 
-        void LateUpdate()
+        /// Called at the end of every LateUpdate, after the figure is posed: a screen that pins something to a bone reads the bone here.
+        public System.Action AfterPose;
+        void LateUpdate() { LateUpdateCore(); AfterPose?.Invoke(); }
+
+        void LateUpdateCore()
         {
             float dt = Time.unscaledDeltaTime;
             bool red = Settings.ReduceMotion;
