@@ -36,10 +36,19 @@
     </script>
     <!-- Camera conducting (Swing Kings): a few KB. The model and wasm under mediapipe/ load only when it is used. -->
     <script src="bonanza-camera.js"></script>
+    <style>
+      /* small windows: a one-line keyboard note that hides itself, and a fullscreen button tucked into the bottom corner
+         (the top corners hold SCORE and ACCURACY) */
+      @media (max-height: 520px), (max-width: 700px) {
+        #unity-mobile-notice { padding: calc(3px + env(safe-area-inset-top)) calc(8px + env(safe-area-inset-right)) 3px calc(8px + env(safe-area-inset-left)); font-size: 11px; line-height: 1.2; gap: 8px; transition: opacity .4s }
+        #unity-mobile-notice button { min-width: 36px; min-height: 22px; font-size: 11px; border-radius: 5px }
+        #unity-fullscreen-button { top: auto !important; bottom: calc(4px + env(safe-area-inset-bottom)) !important; right: calc(4px + env(safe-area-inset-right)) !important; width: 24px !important; height: 24px !important; background-size: contain !important }
+      }
+    </style>
   </head>
   <body>
     <div id="unity-mobile-notice" role="note" hidden>
-      <span>Bonanza works best with a keyboard. Touch plays, but a laptop or desktop feels right.</span>
+      <span>Bonanza plays best with a keyboard. Touch works too.</span>
       <button id="unity-mobile-notice-close" type="button" aria-label="Dismiss">OK</button>
     </div>
     <div id="unity-container" class="unity-desktop">
@@ -158,10 +167,13 @@
             canvas.style.top = h + 'px'; canvas.style.height = 'calc(100% - ' + h + 'px)';
           };
           fit(); window.addEventListener('resize', fit);
-          document.getElementById('unity-mobile-notice-close').onclick = function () {
+          var close = function () {
+            if (n.hidden) return;
             n.hidden = true; fit();
             try { sessionStorage.setItem('bonanza-notice', '1'); } catch (e) { /* ignore */ }
           };
+          document.getElementById('unity-mobile-notice-close').onclick = close;
+          setTimeout(close, 8000);   // it says its piece, then gets out of the way
         }
       })();
 
