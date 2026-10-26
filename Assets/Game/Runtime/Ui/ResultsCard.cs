@@ -43,7 +43,7 @@ namespace Bonanza.HudKit
     public sealed class ResultsCard : MonoBehaviour
     {
         // web results.js timeline (s)
-        public const float CountAt = 0.3f, CountS = 0.9f, StatsAt = 0.3f, StampAt = 0.6f, PartyAt = 0.95f, PromptAt = 0.7f;
+        public const float CountAt = 0.12f, CountS = 0.9f, StatsAt = 0.12f, StampAt = 0.6f, PartyAt = 0.95f, PromptAt = 0.7f;
 
         const float Pad = 30.7f;
         float CardW = 600;   // 660 for a card with its own larger stat labels (the five columns need the room)
@@ -351,7 +351,7 @@ namespace Bonanza.HudKit
                 l.characterSpacing = _statLabelPx > 0 ? 0f : (Lk > 1 ? 2f : 8f);
                 if (Lk > 1f && _statLabelPx <= 0) { l.enableAutoSizing = true; l.fontSizeMax = l.fontSize; l.fontSizeMin = l.fontSize * 0.6f; }   // a long label shrinks to its column rather than run into the next
                 l.rectTransform.anchorMin = l.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
-                l.rectTransform.sizeDelta = new Vector2(colW, Lk > 1f ? 24 : 16); l.rectTransform.anchoredPosition = new Vector2(0, Lk > 1f ? -14 : -12);
+                l.rectTransform.sizeDelta = new Vector2(Lk > 1f ? colW * 0.8f : colW, Lk > 1f ? 24 : 16);   // a gap between neighbouring labels l.rectTransform.anchoredPosition = new Vector2(0, Lk > 1f ? -14 : -12);
                 l.text = cells[i].label;
                 _items.Add(new Item { Rt = cell, Group = g, At = at + i * 0.05f, Pos = cell.anchoredPosition });
             }
@@ -420,6 +420,7 @@ namespace Bonanza.HudKit
         {
             if (!_built) return;
             _t = t;
+            _group.alpha = UiKit.Clamp01(t / 0.2f);   // the card and its header arrive together, never a bare plate
             bool calm = Settings.ReduceMotion;
             float k = UiKit.Clamp01((t - CountAt) / CountS);
             int shown = Mathf.RoundToInt(_score * (1 - Mathf.Pow(1 - k, 3)));

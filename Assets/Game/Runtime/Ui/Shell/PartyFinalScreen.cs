@@ -41,7 +41,7 @@ namespace Bonanza.Shell
         {
             public RectTransform Rt; public CanvasGroup Group;
             public Image Fill, Ring, Shine, YouFill, YouRing, Badge, BadgeRing;
-            public TextMeshProUGUI Num, Name, Pts, You;
+            public TextMeshProUGUI Num, Name, Pts, You, Ph;
             public RectTransform YouRt, TieRt;
             public Image TieFill; public TextMeshProUGUI Tie;
             public Face Face;
@@ -148,6 +148,8 @@ namespace Bonanza.Shell
             c.BadgeRing = UiKit.Box(c.Rt, "BadgeRing", new Color(1, 0.95f, 0.8f, 0.9f), UiKit.Ring);
             c.Num = UiKit.Text(c.Rt, "Num", TextStyle.Display, 34f, Ink);
             UiKit.Place(c.Num.rectTransform, new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(8, 1), new Vector2(54, 56));
+            c.Ph = UiKit.Text(c.Rt, "Ph", TextStyle.Display, 34f, new Color(0.12f, 0.06f, 0.3f, 0.55f), TextAlignmentOptions.Center);
+            UiKit.Stretch(c.Ph.rectTransform); c.Ph.text = "?";
             c.Name = UiKit.Text(c.Rt, "Name", TextStyle.Display, 20f, Color.white, TextAlignmentOptions.Left);
             c.Name.enableAutoSizing = true; c.Name.fontSizeMin = 10f; c.Name.fontSizeMax = UiKit.FontSizeForCap(20f);
             UiKit.Place(c.Name.rectTransform, new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(64, 11), new Vector2(120, 26));
@@ -307,14 +309,14 @@ namespace Bonanza.Shell
                     // first place: number top-left, the name and points centred and the biggest text on the podium, the YOU tag on the bottom row
                     c.Name.alignment = TextAlignmentOptions.Center; c.Pts.alignment = TextAlignmentOptions.Center;
                     nrt.sizeDelta = new Vector2(176, 40); prt.sizeDelta = new Vector2(176, 22);
-                    nrt.anchoredPosition = new Vector2(ColW * 0.5f - 88f, h * 0.5f - 50);
-                    prt.anchoredPosition = new Vector2(ColW * 0.5f - 88f, h * 0.5f - 76);
+                    nrt.anchoredPosition = new Vector2(ColW * 0.5f - 88f, h * 0.5f - 56);
+                    prt.anchoredPosition = new Vector2(ColW * 0.5f - 88f, h * 0.5f - 82);
                     c.Name.fontSizeMax = UiKit.FontSizeForCap(30f);
                     c.Name.fontSizeMin = UiKit.FontSizeForCap(16f);
                     c.Pts.fontSize = UiKit.FontSizeForCap(small ? 18f : 15f);
                     c.Num.rectTransform.sizeDelta = new Vector2(54, 34); c.Num.alignment = TextAlignmentOptions.Center;
                     c.Num.fontSize = UiKit.FontSizeForCap(22f);
-                    c.Num.rectTransform.anchoredPosition = new Vector2(ColW * 0.5f - 27f, h * 0.5f - 17f);   // its own row above the name
+                    c.Num.rectTransform.anchoredPosition = new Vector2(ColW * 0.5f - 27f, h * 0.5f - 12f);   // its own row above the name
                     c.YouRt.anchoredPosition = new Vector2(ColW * 0.5f, -(h - 9 - pillH * 0.5f));
                 }
                 else
@@ -332,6 +334,8 @@ namespace Bonanza.Shell
                 }
                 bool settled = red || rise >= 0.8f;   // the plate's words and tags wait for it to be tall enough to hold them
                 c.Num.gameObject.SetActive(settled); c.Name.gameObject.SetActive(settled); c.Pts.gameObject.SetActive(settled);
+                c.Ph.gameObject.SetActive(!settled);   // a rising plate shows a question mark until its card has a name
+                c.Ph.fontSize = UiKit.FontSizeForCap(small ? 30f : 34f);
                 if (!settled) { c.YouRt.gameObject.SetActive(false); c.TieRt.gameObject.SetActive(false); c.Badge.gameObject.SetActive(false); c.BadgeRing.gameObject.SetActive(false); }
                 c.YouFill.color = UiKit.Hex(0xfff4d6);   // a light tag with dark text, readable on gold and silver alike
                 c.YouRing.color = new Color(0.16f, 0.06f, 0f, 0.9f);
@@ -368,7 +372,7 @@ namespace Bonanza.Shell
                 bool onHead = View.Cast != null && View.Cast.TryHeadRef(out head);
                 float crownY = onHead ? head.y - 3f : headY + 36f - (View.Cast != null ? View.Cast.HopRef : 0f);
                 _crownB.anchoredPosition = new Vector2(onHead ? head.x : cxn, -crownY + bob);
-                _crownB.localScale = Vector3.one * (0.72f * Mathf.Clamp01(pop));
+                _crownB.localScale = Vector3.one * ((small ? 0.95f : 0.72f) * Mathf.Clamp01(pop));
                 _crownB.localRotation = Quaternion.Euler(0, 0, 0);
                 // held up in the raised hand when the cheer has the arms up (its foot in a fist), else standing on the first-place block
                 _heldOn = true; _heldPop = pop; _heldCx = cxn;
@@ -436,7 +440,8 @@ namespace Bonanza.Shell
         }
 
         // the cup's parts are laid out from the rect centre (55 above its bottom pivot): the stem sits 83 units above the pivot
-        const float HeldScale = 0.55f, StemUp = 83f;
+        const float StemUp = 83f;
+        static float HeldScale => Screen.height < 600 ? 0.72f : 0.55f;   // the cup and crown read larger on a small screen
         bool _heldOn; float _heldPop, _heldCx;
 
         /// The trophy's foot sits in the raised hand's fist: both follow the hand bone every frame (the cheer hop and sway included).

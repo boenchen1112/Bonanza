@@ -143,11 +143,11 @@ namespace Bonanza.Shell
             UiKit.Place(_title.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(188, -74), new Vector2(CardW - 188 - 12, 56));
             _blurb = UiKit.Text(_card, "Blurb", TextStyle.Label, 15f, UiKit.Cream, TextAlignmentOptions.TopLeft, italic: false, upper: false);
             _blurb.textWrappingMode = TextWrappingModes.Normal;
-            UiKit.Place(_blurb.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(188, -150), new Vector2(CardW - 188 - 20, 56));
+            UiKit.Place(_blurb.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(188, -146), new Vector2(CardW - 188 - 24, 52));
             _how = UiKit.Text(_card, "How", TextStyle.Label, 13f, UiKit.Cream, TextAlignmentOptions.TopLeft, italic: false, upper: false);
             _how.textWrappingMode = TextWrappingModes.Normal;
             _how.color = new Color(UiKit.Gold.r, UiKit.Gold.g, UiKit.Gold.b, 0.95f);
-            UiKit.Place(_how.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(26, -206), new Vector2(CardW - 52, 38));
+            UiKit.Place(_how.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(30, -218), new Vector2(CardW - 66, 36));
             var div = UiKit.Box(_card, "Div", new Color(1, 1, 1, 0.14f), UiKit.Pill, true, 4);
             UiKit.Place(div.rectTransform, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0, 104), new Vector2(CardW - 52, 3));
             _race = UiKit.Text(_card, "Race", TextStyle.Label, 12f, Gold, TextAlignmentOptions.Left, italic: false);
@@ -187,7 +187,7 @@ namespace Bonanza.Shell
             UiKit.Place(_last.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(RowW - 16, 28));
 
             // ---- buttons
-            _action = MakePill(root, "Action", new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -516), new Vector2(380, 62), 24f, new Vector2(76, 30));
+            _action = MakePill(root, "Action", new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -516), new Vector2(404, 68), 26f, new Vector2(80, 32));
             _quit = MakePill(root, "Quit", new Vector2(1, 0), new Vector2(1, 0), new Vector2(-64, 14), new Vector2(276, 42), 16f, new Vector2(50, 24));
             Buttons.Add(_action.Rt);
             Buttons.Add(_quit.Rt);
@@ -330,8 +330,8 @@ namespace Bonanza.Shell
             _title.text = View.GameTitle ?? "";
             _blurb.text = View.Blurb ?? "";
             _how.text = small ? "" : HowTo(View.GameId);
-            _how.fontSize = UiKit.FontSizeForCap(12f);
-            _blurb.fontSize = UiKit.FontSizeForCap(15f * Mathf.Lerp(1f, 1.3f, small ? 1 : 0));
+            _how.fontSize = UiKit.FontSizeForCap(11.5f);
+            _blurb.fontSize = UiKit.FontSizeForCap(14.5f * Mathf.Lerp(1f, 1.3f, small ? 1 : 0));
             if (_tileId != View.GameId)
             {
                 if (_tile) Object.Destroy(_tile.gameObject);
