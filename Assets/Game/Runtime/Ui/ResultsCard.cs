@@ -43,7 +43,7 @@ namespace Bonanza.HudKit
     public sealed class ResultsCard : MonoBehaviour
     {
         // web results.js timeline (s)
-        public const float CountAt = 0.12f, CountS = 0.9f, StatsAt = 0.12f, StampAt = 0.6f, PartyAt = 0.95f, PromptAt = 0.7f;
+        public const float CountAt = 0.12f, CountS = 0.9f, StatsAt = 0.12f, StampAt = 0.6f, PartyAt = 0.45f, PromptAt = 0.7f;
 
         const float Pad = 30.7f;
         float CardW = 600;   // 660 for a card with its own larger stat labels (the five columns need the room)
@@ -65,7 +65,7 @@ namespace Bonanza.HudKit
         Color _rankColor;
         float _statLabelPx;
         // a short screen halves every reference px: the small labels grow so they stay readable there
-        static float Lk => Screen.height < 600 ? 1.5f : 1f;
+        static float Lk => Screen.height < 600 ? 1.8f : 1f;
 
         sealed class Item { public RectTransform Rt; public CanvasGroup Group; public float At; public Vector2 Pos; }
 
@@ -139,6 +139,7 @@ namespace Bonanza.HudKit
             _card = UiKit.Rect("Card", _root);
             // left 57%, top 44% (web), centred on that point
             UiKit.Place(_card, d.Centered ? new Vector2(0.5f, 0.5f) : new Vector2(0.57f, 0.56f), new Vector2(0.5f, 0.5f), new Vector2(0, 0), new Vector2(CardW, h));
+            if (Screen.height < 600) _card.localScale = Vector3.one * 1.18f;   // a small screen gets the whole card larger, so its small print stays legible
             var shadow = UiKit.Box(_card, "Shadow", new Color(0, 0, 0, 0.55f), UiKit.Pill, true, 18f);
             UiKit.Stretch(shadow.rectTransform); shadow.rectTransform.anchoredPosition = new Vector2(0, -7);
             var body = UiKit.Box(_card, "Body", Color.white, UiKit.Pill, true, 18f);
@@ -351,8 +352,8 @@ namespace Bonanza.HudKit
                 l.characterSpacing = _statLabelPx > 0 ? 0f : (Lk > 1 ? 2f : 8f);
                 if (Lk > 1f && _statLabelPx <= 0) { l.enableAutoSizing = true; l.fontSizeMax = l.fontSize; l.fontSizeMin = l.fontSize * 0.6f; }   // a long label shrinks to its column rather than run into the next
                 l.rectTransform.anchorMin = l.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
-                l.rectTransform.sizeDelta = new Vector2(Lk > 1f ? colW * 0.8f : colW, Lk > 1f ? 24 : 16);   // a gap between neighbouring labels
-                l.rectTransform.anchoredPosition = new Vector2(0, Lk > 1f ? -16 : -12);
+                l.rectTransform.sizeDelta = new Vector2(Lk > 1f ? colW * 0.8f : colW, Lk > 1f ? 28 : 16);   // a gap between neighbouring labels
+                l.rectTransform.anchoredPosition = new Vector2(0, Lk > 1f ? -17 : -12);
                 l.text = cells[i].label;
                 _items.Add(new Item { Rt = cell, Group = g, At = at + i * 0.05f, Pos = cell.anchoredPosition });
             }
@@ -399,11 +400,11 @@ namespace Bonanza.HudKit
             var bar = UiKit.Box(row, "Bar", r.Color, UiKit.Pill, true, 2f);
             bar.rectTransform.anchorMin = new Vector2(0, 0); bar.rectTransform.anchorMax = new Vector2(0, 1); bar.rectTransform.pivot = new Vector2(0, 0.5f);
             bar.rectTransform.sizeDelta = new Vector2(4, 0); bar.rectTransform.anchoredPosition = Vector2.zero;
-            var pl = UiKit.Text(row, "Place", TextStyle.Label, 15f * 0.72f, UiKit.Dim, TextAlignmentOptions.MidlineLeft, italic: false);
+            var pl = UiKit.Text(row, "Place", TextStyle.Label, 15f * 0.72f * (Lk > 1f ? 1.4f : 1f), UiKit.Dim, TextAlignmentOptions.MidlineLeft, italic: false);
             pl.characterSpacing = 6f; pl.text = r.Place; PlaceCell(pl.rectTransform, 12, 60);
-            var nm = UiKit.Text(row, "Name", TextStyle.Label, 15f * 0.72f, r.Color, TextAlignmentOptions.MidlineLeft, italic: false);
+            var nm = UiKit.Text(row, "Name", TextStyle.Label, 15f * 0.72f * (Lk > 1f ? 1.4f : 1f), r.Color, TextAlignmentOptions.MidlineLeft, italic: false);
             nm.characterSpacing = 6f; nm.text = r.Name + (r.You ? " - YOU" : ""); PlaceCell(nm.rectTransform, 12 + 60 + 10, 300);
-            var pp = UiKit.Text(row, "Points", TextStyle.Label, 15f * 0.72f, Color.white, TextAlignmentOptions.MidlineRight, italic: false);
+            var pp = UiKit.Text(row, "Points", TextStyle.Label, 15f * 0.72f * (Lk > 1f ? 1.4f : 1f), Color.white, TextAlignmentOptions.MidlineRight, italic: false);
             pp.characterSpacing = 4f; pp.text = "+" + r.Points; PlaceCell(pp.rectTransform, inner - 12 - 80, 80);
             _items.Add(new Item { Rt = row, Group = g, At = at, Pos = row.anchoredPosition });
         }
@@ -421,7 +422,7 @@ namespace Bonanza.HudKit
         {
             if (!_built) return;
             _t = t;
-            _group.alpha = UiKit.Clamp01(t / 0.2f);   // the card and its header arrive together, never a bare plate
+            _group.alpha = UiKit.Clamp01(t / 0.1f);   // the card and its header arrive together, never a bare plate
             bool calm = Settings.ReduceMotion;
             float k = UiKit.Clamp01((t - CountAt) / CountS);
             int shown = Mathf.RoundToInt(_score * (1 - Mathf.Pow(1 - k, 3)));
@@ -459,7 +460,7 @@ namespace Bonanza.HudKit
             _promptGroup.alpha = UiKit.Clamp01((t - PromptAt) / 0.25f);
             if (_buttonGroup != null) _buttonGroup.alpha = _promptGroup.alpha;
             float breathe = calm ? 1 : 1 + Mathf.Sin(t * 3) * 0.006f;
-            _card.localScale = Vector3.one * breathe;
+            _card.localScale = Vector3.one * (breathe * (Screen.height < 600 ? 1.18f : 1f));
         }
 
         int _lastShown = -1;

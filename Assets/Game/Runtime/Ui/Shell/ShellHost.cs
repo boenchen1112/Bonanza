@@ -152,6 +152,7 @@ namespace Bonanza.Shell
         public void Cover(string line = null)
         {
             _curtainText.text = line ?? "";
+            _curtain.transform.SetAsLastSibling();   // above every screen: nothing (a title, a winner) shows through it before it lifts
             _cover = true; _coverT = 0;
             _curtain.enabled = true;
             var c = _curtain.color; c.a = 1; _curtain.color = c;
@@ -163,7 +164,7 @@ namespace Bonanza.Shell
         {
             if (!_curtain.enabled) return;
             _coverT += dt;
-            bool lift = !_cover || _coverT > 4f || (Current != null && !_exiting && Current.Shown >= 0.02f && (Backdrop == null || Backdrop.Live));
+            bool lift = !_cover || _coverT > 4f || (Current != null && !_exiting && Current.Shown >= 0.3f && (Backdrop == null || Backdrop.Live));
             var c = _curtain.color;
             if (!lift) { c.a = 1; _curtain.color = c; return; }
             _cover = false;

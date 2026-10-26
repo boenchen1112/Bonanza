@@ -266,7 +266,8 @@ namespace Bonanza
         void BuildLegend(RectTransform root)
         {
             var row = UiKit.Rect("Legend", root);
-            UiKit.Place(row, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0, 16), new Vector2(1000, 30));
+            UiKit.Place(row, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0, Screen.height < 600 ? 22 : 16), new Vector2(1000, 30));
+            if (Screen.height < 600) row.localScale = Vector3.one * 1.5f;   // the key legend stays readable at 640 wide
             // the beat keys start a bar of 4, 3 or 2 beats; UP is the bar's last beat in every pattern
             string[] keys = { "down", "left", "right", "up", null, null };
             string[] labels = { "4 BEATS", "3 BEATS", "2 BEATS", "LAST BEAT", "LOCK", "CLEAR" };

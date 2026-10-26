@@ -277,14 +277,14 @@ namespace Bonanza.Shell
                     // then one bottom row for the YOU and TIE chips side by side (they always fit in the plate's width)
                     float tw = ColW - 36f, edgeY = h * 0.5f;
                     c.Name.alignment = TextAlignmentOptions.Left; c.Pts.alignment = TextAlignmentOptions.Left;
-                    nrt.sizeDelta = new Vector2(tw - 22f, 26); prt.sizeDelta = new Vector2(tw - 22f, 22);
+                    nrt.sizeDelta = new Vector2(tw - 28f, 26); prt.sizeDelta = new Vector2(tw - 28f, 22);
                     float ny = win ? 26f : 18f, py = win ? 54f : 43f;   // the tallest plate spaces its rows out
-                    nrt.anchoredPosition = new Vector2(52, edgeY - ny); prt.anchoredPosition = new Vector2(52, edgeY - py);
+                    nrt.anchoredPosition = new Vector2(58, edgeY - ny); prt.anchoredPosition = new Vector2(58, edgeY - py);
                     c.Name.fontSizeMax = UiKit.FontSizeForCap(win ? 30f : 28f); c.Name.fontSizeMin = UiKit.FontSizeForCap(22f);
                     c.Pts.fontSize = UiKit.FontSizeForCap(win ? 22f : 21f);
                     var br = c.Badge.rectTransform;
                     br.anchorMin = br.anchorMax = new Vector2(0, 0.5f); br.pivot = new Vector2(0, 0.5f);
-                    br.sizeDelta = new Vector2(34, 34); br.anchoredPosition = new Vector2(9, edgeY - (win ? 30f : 22f));
+                    br.sizeDelta = new Vector2(34, 34); br.anchoredPosition = new Vector2(8, edgeY - (win ? 30f : 22f));
                     var brr = c.BadgeRing.rectTransform;
                     brr.anchorMin = brr.anchorMax = br.anchorMin; brr.pivot = br.pivot; brr.sizeDelta = br.sizeDelta; brr.anchoredPosition = br.anchoredPosition;
                     c.Badge.color = win ? UiKit.Gold : new Color(0.86f, 0.9f, 1f);
@@ -294,7 +294,7 @@ namespace Bonanza.Shell
                     nr.anchorMin = nr.anchorMax = br.anchorMin; nr.pivot = br.pivot;
                     nr.sizeDelta = new Vector2(34, 34);
                     nr.anchoredPosition = br.anchoredPosition;
-                    float chipY = -(h - 8 - pillH * 0.5f);
+                    float chipY = -(py + 11f + 6f + pillH * 0.5f);   // right under the points row, so the tag never floats in an empty band
                     c.YouRt.anchoredPosition = new Vector2(10 + pillW * 0.5f, chipY);
                     c.TieRt.anchoredPosition = new Vector2(10 + (you ? pillW + 6f : 0f) + tieW * 0.5f, chipY);
                     if (win)
@@ -337,6 +337,7 @@ namespace Bonanza.Shell
                 c.Num.gameObject.SetActive(settled); c.Name.gameObject.SetActive(settled); c.Pts.gameObject.SetActive(settled);
                 c.Ph.gameObject.SetActive(!settled);   // a rising plate shows a question mark until its card has a name
                 c.Ph.fontSize = UiKit.FontSizeForCap(small ? 30f : 34f);
+                if (!small && rise < 0.97f && !red) { c.YouRt.gameObject.SetActive(false); c.TieRt.gameObject.SetActive(false); }   // the tall plate's bottom tag waits until the plate is full height
                 if (!settled) { c.YouRt.gameObject.SetActive(false); c.TieRt.gameObject.SetActive(false); c.Badge.gameObject.SetActive(false); c.BadgeRing.gameObject.SetActive(false); }
                 c.YouFill.color = UiKit.Hex(0xfff4d6);   // a light tag with dark text, readable on gold and silver alike
                 c.YouRing.color = new Color(0.16f, 0.06f, 0f, 0.9f);
