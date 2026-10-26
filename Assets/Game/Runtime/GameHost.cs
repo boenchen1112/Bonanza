@@ -1101,9 +1101,14 @@ namespace Bonanza
                         });
                     }
                 }
-                d.Prompts.Add(new KeyValuePair<string, string>(Autoplay ? "" : "SPACE", Autoplay ? "autoplay" : "standings"));
+                d.Prompts.Add(new KeyValuePair<string, string>("SPACE", Autoplay ? "continue" : "standings"));
+                if (Autoplay) d.Prompts.Add(new KeyValuePair<string, string>("", "autoplay"));
             }
-            else if (Autoplay) d.Prompts.Add(new KeyValuePair<string, string>("", "autoplay"));
+            else if (Autoplay)
+            {
+                d.Prompts.Add(new KeyValuePair<string, string>("SPACE", "continue"));
+                d.Prompts.Add(new KeyValuePair<string, string>("", "autoplay"));
+            }
             else
             {
                 d.Prompts.Add(new KeyValuePair<string, string>("SPACE", "play again"));
@@ -1261,9 +1266,12 @@ namespace Bonanza
             }
         }
 
+        RulesCard _rulesCard;
+
         void Update()
         {
             if (_mode == Mode.Dead) { _presses.Clear(); return; }
+            if (_rulesCard != null && _mode != Mode.Rules && _rulesCard.Visible) _rulesCard.Hide();
             try
             {
                 if (_externalFault != null)
@@ -1888,11 +1896,9 @@ namespace Bonanza
                 case Mode.PartyHub: PartyTargets(); break;
 
                 case Mode.Rules:
-                    Hud.Dim(0.7f);
-                    Hud.Center(0.22f, _game.Title, Hud.Big, Hud.Gold, 120);
-                    Hud.Center(0.42f, _game.Blurb, Hud.Mid, Color.white);
-                    Hud.Center(0.55f, _game.Controls, Hud.Small, Color.white, 80);
-                    Hud.Center(0.75f, "PRESS TO START   (ESC / X: back)", Hud.Mid, Hud.Gold);
+                    // the framed rules panel is on the canvas (HudKit/RulesCard); built once per rules screen
+                    if (_rulesCard == null) _rulesCard = RulesCard.Create(Ui.Results.transform.parent);
+                    if (!_rulesCard.Visible) _rulesCard.Show(_game.Title, _game.Blurb, _game.Controls);
                     break;
 
                 case Mode.Playing:

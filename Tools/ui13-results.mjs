@@ -34,6 +34,11 @@ if (/party/.test(QUERY) && /autoplay/.test(QUERY)) {   // podium: let the autopl
   console.log('errors:', errs.length ? errs.slice(0, 3).join(' | ') : 'none', 'partyDone', !!partyDone);
   await browser.close(); server.close(); process.exit(0);
 }
+if (process.env.RULES) {   // the rules card, before any start press
+  await page.mouse.move(2, 2); await page.screenshot({ path: `${OUT}.png` });
+  console.log('errors:', errs.length ? errs.slice(0, 3).join(' | ') : 'none');
+  await browser.close(); server.close(); process.exit(0);
+}
 if (HUB) { await page.keyboard.press('Space'); await wait(3); }
 await page.keyboard.press('Space'); await wait(3); await page.keyboard.press('Space');
 const t0 = Date.now();

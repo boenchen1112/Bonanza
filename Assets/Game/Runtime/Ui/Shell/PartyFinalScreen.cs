@@ -57,7 +57,7 @@ namespace Bonanza.Shell
         RectTransform _confRt; readonly Image[] _conf = new Image[ConfettiN];
         readonly float[] _cx = new float[ConfettiN], _cp = new float[ConfettiN], _cs = new float[ConfettiN], _cw = new float[ConfettiN], _cr = new float[ConfettiN];
         RectTransform[] _crowns = new RectTransform[2];
-        RectTransform _fist; Image _fistImg;
+        RectTransform _fist; Image _fistImg; Image[] _fistParts;
 
         protected override void Build(RectTransform root)
         {
@@ -91,11 +91,25 @@ namespace Bonanza.Shell
             _trophy = MakeTrophy(root, "Trophy", 110);
             _crownB = MakeCrown(root, "Crown");
             _fist = UiKit.Rect("Fist", root);
-            UiKit.Place(_fist, new Vector2(0.5f, 1), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(30, 30));
-            _fistImg = UiKit.Box(_fist, "Fist", Color.white, UiKit.Disc);
-            UiKit.Stretch(_fistImg.rectTransform);
-            var fr = UiKit.Box(_fist, "Knuckles", new Color(0.12f, 0.05f, 0f, 0.85f), UiKit.Ring);
-            UiKit.Stretch(fr.rectTransform);
+            UiKit.Place(_fist, new Vector2(0.5f, 1), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(34, 34));
+            // a shaded fist: the palm, a darker lower half, four knuckles across the top, a thumb across the front
+            var fdark = UiKit.Box(_fist, "Shade", new Color(0.18f, 0.08f, 0.02f, 0.9f), UiKit.Disc);
+            UiKit.Place(fdark.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(1.5f, -2f), new Vector2(34, 32));
+            _fistImg = UiKit.Box(_fist, "Palm", Color.white, UiKit.Disc);
+            UiKit.Place(_fistImg.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 1f), new Vector2(31, 29));
+            _fistParts = new Image[5];
+            for (int k = 0; k < 4; k++)
+            {
+                var kn = UiKit.Box(_fist, "Finger" + k, Color.white, UiKit.Disc);
+                UiKit.Place(kn.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-10.5f + k * 7f, 9.5f), new Vector2(8.5f, 11));
+                var kr = UiKit.Box(kn.rectTransform, "Line", new Color(0.18f, 0.08f, 0.02f, 0.8f), UiKit.Ring); UiKit.Stretch(kr.rectTransform);
+                _fistParts[k] = kn;
+            }
+            var th = UiKit.Box(_fist, "Thumb", Color.white, UiKit.Disc);
+            UiKit.Place(th.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-9f, -4f), new Vector2(14, 10));
+            th.rectTransform.localRotation = Quaternion.Euler(0, 0, 25);
+            var thr = UiKit.Box(th.rectTransform, "Line", new Color(0.18f, 0.08f, 0.02f, 0.8f), UiKit.Ring); UiKit.Stretch(thr.rectTransform);
+            _fistParts[4] = th;
             _crowns[0] = MakeCrown(root, "CrownA"); _crowns[1] = MakeCrown(root, "CrownB");
 
             _statRt = UiKit.Rect("Stat", root);
@@ -258,20 +272,22 @@ namespace Bonanza.Shell
                     // then one bottom row for the YOU and TIE chips side by side (they always fit in the plate's width)
                     float tw = ColW - 36f, edgeY = h * 0.5f;
                     c.Name.alignment = TextAlignmentOptions.Left; c.Pts.alignment = TextAlignmentOptions.Left;
-                    nrt.sizeDelta = new Vector2(tw, 26); prt.sizeDelta = new Vector2(tw, 22);
-                    nrt.anchoredPosition = new Vector2(30, edgeY - 18); prt.anchoredPosition = new Vector2(30, edgeY - 43);
+                    nrt.sizeDelta = new Vector2(tw - 22f, 26); prt.sizeDelta = new Vector2(tw - 22f, 22);
+                    nrt.anchoredPosition = new Vector2(52, edgeY - 18); prt.anchoredPosition = new Vector2(52, edgeY - 43);
                     c.Name.fontSizeMax = UiKit.FontSizeForCap(26f); c.Name.fontSizeMin = UiKit.FontSizeForCap(20f);
                     c.Pts.fontSize = UiKit.FontSizeForCap(20f);
                     var br = c.Badge.rectTransform;
                     br.anchorMin = br.anchorMax = new Vector2(0, 0.5f); br.pivot = new Vector2(0, 0.5f);
-                    br.sizeDelta = new Vector2(32, 32); br.anchoredPosition = new Vector2(-8, edgeY);
+                    br.sizeDelta = new Vector2(34, 34); br.anchoredPosition = new Vector2(9, edgeY - 22f);
                     var brr = c.BadgeRing.rectTransform;
                     brr.anchorMin = brr.anchorMax = br.anchorMin; brr.pivot = br.pivot; brr.sizeDelta = br.sizeDelta; brr.anchoredPosition = br.anchoredPosition;
-                    c.Badge.color = win ? new Color(0.3f, 0.13f, 0.02f) : new Color(0.12f, 0.07f, 0.3f);
+                    c.Badge.color = win ? UiKit.Gold : new Color(0.86f, 0.9f, 1f);
                     c.Num.alignment = TextAlignmentOptions.Center;
-                    c.Num.fontSize = UiKit.FontSizeForCap(22f); c.Num.color = Color.white;
-                    c.Num.rectTransform.sizeDelta = new Vector2(32, 32);
-                    c.Num.rectTransform.anchoredPosition = new Vector2(-8, edgeY);
+                    c.Num.fontSize = UiKit.FontSizeForCap(22f); c.Num.color = UiKit.Ink;
+                    var nr = c.Num.rectTransform;
+                    nr.anchorMin = nr.anchorMax = br.anchorMin; nr.pivot = br.pivot;
+                    nr.sizeDelta = new Vector2(34, 34);
+                    nr.anchoredPosition = br.anchoredPosition;
                     float chipY = -(h - 8 - pillH * 0.5f);
                     c.YouRt.anchoredPosition = new Vector2(10 + pillW * 0.5f, chipY);
                     c.TieRt.anchoredPosition = new Vector2(10 + (you ? pillW + 6f : 0f) + tieW * 0.5f, chipY);
@@ -336,15 +352,15 @@ namespace Bonanza.Shell
                 Vector2 head = default;
                 float cxn = ColCenter(order, 0, n);
                 bool onHead = View.Cast != null && View.Cast.TryHeadRef(out head);
-                float crownY = onHead ? head.y + 10f : headY + 36f - (View.Cast != null ? View.Cast.HopRef : 0f);
+                float crownY = onHead ? head.y + 26f : headY + 36f - (View.Cast != null ? View.Cast.HopRef : 0f);
                 _crownB.anchoredPosition = new Vector2(onHead ? head.x : cxn, -crownY + bob);
-                _crownB.localScale = Vector3.one * (0.85f * Mathf.Clamp01(pop));
-                _crownB.localRotation = Quaternion.Euler(0, 0, red ? 0 : Mathf.Sin(now * 1.3f) * 3f);
+                _crownB.localScale = Vector3.one * (0.72f * Mathf.Clamp01(pop));
+                _crownB.localRotation = Quaternion.Euler(0, 0, 0);
                 // held up in the raised hand when the cheer has the arms up (its foot in a fist), else standing on the first-place block
                 _heldOn = true; _heldPop = pop; _heldCx = cxn;
                 bool held = PlaceHeld();
                 View.Cast.AfterPose = () => PlaceHeld();   // the hand moves in the cast's LateUpdate: re-read it there so the grip never lags a frame
-                _trophy.localScale = Vector3.one * (0.7f * Mathf.Clamp01(pop));
+                _trophy.localScale = Vector3.one * (HeldScale * Mathf.Clamp01(pop));
                 _trophy.SetAsLastSibling();   // in front of the crown
                 if (held) _fist.SetAsLastSibling();   // the fist closes over the foot
             }
@@ -356,8 +372,10 @@ namespace Bonanza.Shell
                 // a shared crown: the cup stands on the stat plate, centred between the winners, not floating
                 float mx = 0;
                 for (int k = 0; k < winners; k++) mx += ColCenter(order, k, n) / winners;
-                _trophy.anchoredPosition = new Vector2(mx, -(BaseY + 6f));
-                _trophy.localScale = Vector3.one * (0.5f * Mathf.Clamp01(pop));
+                // the cup stands centred above the gap between the two winners' plates, clear of both
+                float topEdge = BaseY - (small ? SmallBlockH[0] : BlockH[0]);
+                _trophy.anchoredPosition = new Vector2(mx, -(topEdge - 6f));
+                _trophy.localScale = Vector3.one * (0.75f * Mathf.Clamp01(pop));
                 _trophy.SetAsLastSibling();
             }
             _trophy.localRotation = Quaternion.Euler(0, 0, red ? 0 : Mathf.Sin(now * 1.4f) * 3f);
@@ -403,6 +421,8 @@ namespace Bonanza.Shell
             _menu.Inner.localScale *= Mathf.Lerp(1f, 1.1f, small ? 1 : 0);
         }
 
+        // the cup's parts are laid out from the rect centre (55 above its bottom pivot): the stem sits 83 units above the pivot
+        const float HeldScale = 0.55f, StemUp = 83f;
         bool _heldOn; float _heldPop, _heldCx;
 
         /// The trophy's foot sits in the raised hand's fist: both follow the hand bone every frame (the cheer hop and sway included).
@@ -417,10 +437,10 @@ namespace Bonanza.Shell
             if (held)
             {
                 float pop = Mathf.Clamp01(_heldPop);
-                _trophy.anchoredPosition = new Vector2(hand.x, -(hand.y + 48f));   // the cup is bottom-pivoted: its foot and stem sit inside the fist
+                _trophy.anchoredPosition = new Vector2(hand.x, -(hand.y + StemUp * HeldScale * pop));   // the cup is bottom-pivoted: its foot and stem sit inside the fist
                 _fist.anchoredPosition = new Vector2(hand.x, -hand.y);
                 _fist.localScale = Vector3.one * pop;
-                _fistImg.color = cast.Tint;
+                _fistImg.color = cast.Tint; foreach (var fp in _fistParts) fp.color = Color.Lerp(cast.Tint, Color.white, 0.12f);
                 _fist.SetAsLastSibling();
             }
             else _trophy.anchoredPosition = new Vector2(_heldCx + 70f, -(BaseY - BlockH[0] + 4f));
