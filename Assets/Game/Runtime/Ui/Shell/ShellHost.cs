@@ -84,6 +84,7 @@ namespace Bonanza.Shell
         ShellScreen _leaving;
         bool _exiting;
         Image _veil, _curtain;
+        TMPro.TextMeshProUGUI _curtainText;
         float _veilT = 1, _readyWait, _coverT;
         bool _cover;
         /// Screen-to-screen dip: a dark wash that peaks mid-way, so the swap and the backdrop's pose move hide behind it.
@@ -116,6 +117,8 @@ namespace Bonanza.Shell
             _curtain.color = new Color(UiKit.Ink.r, UiKit.Ink.g, UiKit.Ink.b, 1);
             _curtain.raycastTarget = false;
             _curtain.enabled = false;
+            _curtainText = UiKit.Text(cr, "Line", TextStyle.Display, 30f, new Color(1, 0.93f, 0.7f, 0.5f), TMPro.TextAlignmentOptions.Center);
+            UiKit.Stretch(_curtainText.rectTransform); _curtainText.text = "";
             Title = new TitleScreen();
             Title.BuildInto(_root, "Title");
             Roster = new RosterScreen();
@@ -146,8 +149,9 @@ namespace Bonanza.Shell
 
         /// Solid wash behind the screens for the gap between a game closing and the next screen drawing:
         /// no frame is ever the bare 3D default sky. It lifts once the current screen is half in.
-        public void Cover()
+        public void Cover(string line = null)
         {
+            _curtainText.text = line ?? "";
             _cover = true; _coverT = 0;
             _curtain.enabled = true;
             var c = _curtain.color; c.a = 1; _curtain.color = c;
@@ -165,6 +169,7 @@ namespace Bonanza.Shell
             _cover = false;
             c.a = Mathf.MoveTowards(c.a, 0, dt / 0.25f);
             _curtain.color = c;
+            var tc = _curtainText.color; tc.a = 0.5f * c.a; _curtainText.color = tc;
             if (c.a <= 0.001f) _curtain.enabled = false;
         }
 

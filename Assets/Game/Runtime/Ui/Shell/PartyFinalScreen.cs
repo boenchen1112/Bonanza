@@ -28,7 +28,7 @@ namespace Bonanza.Shell
         /// Where the stage figure stands (reference px), read by the host to place the cast.
         public const float FigureFeet = 458f, FigureHeight = 236f, ColW = 190, ColStep = 204, BaseY = 548;
         static readonly float[] BlockH = { 124, 84, 62, 48 };
-        static readonly float[] SmallBlockH = { 112, 100, 92, 88 };   // small screens stack name, points and chips in fixed rows, so every plate is tall enough for them
+        static readonly float[] SmallBlockH = { 134, 100, 92, 88 };   // small screens stack name, points and chips in fixed rows, so every plate is tall enough for them
         static readonly int[] Identity = { 0, 1, 2, 3 };
         static readonly int[][] ColOf = { new[] { 0 }, new[] { 1, 0 }, new[] { 1, 0, 2 }, new[] { 1, 0, 2, 3 } };
 
@@ -278,12 +278,13 @@ namespace Bonanza.Shell
                     float tw = ColW - 36f, edgeY = h * 0.5f;
                     c.Name.alignment = TextAlignmentOptions.Left; c.Pts.alignment = TextAlignmentOptions.Left;
                     nrt.sizeDelta = new Vector2(tw - 22f, 26); prt.sizeDelta = new Vector2(tw - 22f, 22);
-                    nrt.anchoredPosition = new Vector2(52, edgeY - 18); prt.anchoredPosition = new Vector2(52, edgeY - 43);
-                    c.Name.fontSizeMax = UiKit.FontSizeForCap(26f); c.Name.fontSizeMin = UiKit.FontSizeForCap(20f);
-                    c.Pts.fontSize = UiKit.FontSizeForCap(20f);
+                    float ny = win ? 26f : 18f, py = win ? 54f : 43f;   // the tallest plate spaces its rows out
+                    nrt.anchoredPosition = new Vector2(52, edgeY - ny); prt.anchoredPosition = new Vector2(52, edgeY - py);
+                    c.Name.fontSizeMax = UiKit.FontSizeForCap(win ? 30f : 28f); c.Name.fontSizeMin = UiKit.FontSizeForCap(22f);
+                    c.Pts.fontSize = UiKit.FontSizeForCap(win ? 22f : 21f);
                     var br = c.Badge.rectTransform;
                     br.anchorMin = br.anchorMax = new Vector2(0, 0.5f); br.pivot = new Vector2(0, 0.5f);
-                    br.sizeDelta = new Vector2(34, 34); br.anchoredPosition = new Vector2(9, edgeY - 22f);
+                    br.sizeDelta = new Vector2(34, 34); br.anchoredPosition = new Vector2(9, edgeY - (win ? 30f : 22f));
                     var brr = c.BadgeRing.rectTransform;
                     brr.anchorMin = brr.anchorMax = br.anchorMin; brr.pivot = br.pivot; brr.sizeDelta = br.sizeDelta; brr.anchoredPosition = br.anchoredPosition;
                     c.Badge.color = win ? UiKit.Gold : new Color(0.86f, 0.9f, 1f);

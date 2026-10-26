@@ -44,6 +44,7 @@ if (HUB) { await page.keyboard.press('Space'); await wait(3); }
 await page.keyboard.press('Space'); await wait(3); await page.keyboard.press('Space');
 const t0 = Date.now();
 while (!result && (Date.now() - t0) / 1000 < SECS) await wait(0.5);
+if (process.env.BURST) { await page.mouse.move(2, 2); for (let i = 0; i < +process.env.BURST; i++) { await page.screenshot({ path: `${OUT}-b${String(i).padStart(2, '0')}.png` }); await wait(0.25); } }
 await wait(4); await page.mouse.move(2, 2);
 await page.screenshot({ path: `${OUT}.png` });
 console.log('errors:', errs.length ? errs.slice(0, 3).join(' | ') : 'none', 'result', !!result);

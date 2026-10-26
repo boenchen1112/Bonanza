@@ -351,7 +351,8 @@ namespace Bonanza.HudKit
                 l.characterSpacing = _statLabelPx > 0 ? 0f : (Lk > 1 ? 2f : 8f);
                 if (Lk > 1f && _statLabelPx <= 0) { l.enableAutoSizing = true; l.fontSizeMax = l.fontSize; l.fontSizeMin = l.fontSize * 0.6f; }   // a long label shrinks to its column rather than run into the next
                 l.rectTransform.anchorMin = l.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
-                l.rectTransform.sizeDelta = new Vector2(Lk > 1f ? colW * 0.8f : colW, Lk > 1f ? 24 : 16);   // a gap between neighbouring labels l.rectTransform.anchoredPosition = new Vector2(0, Lk > 1f ? -14 : -12);
+                l.rectTransform.sizeDelta = new Vector2(Lk > 1f ? colW * 0.8f : colW, Lk > 1f ? 24 : 16);   // a gap between neighbouring labels
+                l.rectTransform.anchoredPosition = new Vector2(0, Lk > 1f ? -16 : -12);
                 l.text = cells[i].label;
                 _items.Add(new Item { Rt = cell, Group = g, At = at + i * 0.05f, Pos = cell.anchoredPosition });
             }

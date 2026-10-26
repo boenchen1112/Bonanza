@@ -56,6 +56,16 @@ namespace Bonanza.Shell
         public readonly float[] LineX = new float[3], LineFeet = new float[3], LineH = new float[3];
         public readonly int[] LineChar = new int[3];
 
+        static string HowToShort(string id) => id switch
+        {
+            "swing-kings" => "Tap on every downbeat.",
+            "drumline-dash" => "Listen, then tap it back.",
+            "bounce-brigade" => "Find the downbeat, key the pattern.",
+            "chomp-chorus" => "Tap when your singer gulps.",
+            "finale-fever" => "Tap every beat as it shifts.",
+            _ => "",
+        };
+
         static string HowTo(string id) => id switch
         {
             "swing-kings" => "How to play: tap SPACE on the downbeat of every bar.",
@@ -329,9 +339,10 @@ namespace Bonanza.Shell
             _upNext.fontSize = 14f * ts;
             _title.text = View.GameTitle ?? "";
             _blurb.text = View.Blurb ?? "";
-            _how.text = small ? "" : HowTo(View.GameId);
-            _how.fontSize = UiKit.FontSizeForCap(11.5f);
-            _blurb.fontSize = UiKit.FontSizeForCap(14.5f * Mathf.Lerp(1f, 1.3f, small ? 1 : 0));
+            _how.text = small ? HowToShort(View.GameId) : HowTo(View.GameId);
+            _how.rectTransform.anchoredPosition = new Vector2(30, small ? -224 : -204);
+            _how.fontSize = UiKit.FontSizeForCap(small ? 13f : 11.5f);
+            _blurb.fontSize = UiKit.FontSizeForCap(14.5f * Mathf.Lerp(1f, 1.15f, small ? 1 : 0));
             if (_tileId != View.GameId)
             {
                 if (_tile) Object.Destroy(_tile.gameObject);

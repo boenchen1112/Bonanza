@@ -1552,7 +1552,7 @@ namespace Bonanza
         {
             _presses.Clear();
             // the hub (or the podium) is built a few frames after the game closes: wash the gap
-            if (!Autoplay || (_party != null && _party.Done)) Shell?.Cover();
+            if (!Autoplay || (_party != null && _party.Done)) Shell?.Cover(_party != null && _party.Done ? "AND THE WINNER IS..." : null);
             CloseGame();
             EnterHub();
         }
