@@ -2,7 +2,7 @@
 import http from 'node:http'; import fs from 'node:fs'; import path from 'node:path';
 import { chromium } from 'playwright';
 const [OUT, QUERY, HUB, W, H, SECS] = [process.argv[2], process.argv[3], process.argv[4] === '1', +process.argv[5] || 1280, +process.argv[6] || 720, +process.argv[7] || 200];
-const DIR = 'Builds/WebGL', PORT = Number(process.env.PORT || 7983);
+const DIR = process.env.DIR || 'Builds/WebGL', PORT = Number(process.env.PORT || 7983);
 const TYPES = { '.html': 'text/html', '.js': 'application/javascript', '.css': 'text/css', '.wasm': 'application/wasm', '.data': 'application/octet-stream', '.png': 'image/png', '.ico': 'image/x-icon' };
 const server = http.createServer((req, res) => {
   let p = decodeURIComponent(req.url.split('?')[0]); if (p === '/') p = '/index.html';

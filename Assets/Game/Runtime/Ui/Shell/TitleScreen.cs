@@ -104,7 +104,7 @@ namespace Bonanza.Shell
 
             // records plaque + key hint
             _foot = UiKit.Rect("Foot", root);
-            UiKit.Place(_foot, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0, 70), new Vector2(760, 100));
+            UiKit.Place(_foot, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0, 66), new Vector2(760, 114));
             _footGroup = _foot.gameObject.AddComponent<CanvasGroup>();
             var plate = UiKit.Box(_foot, "Plaque", new Color(0.05f, 0.03f, 0.12f, 0.97f), UiKit.Pill, true, 24);
             _plaque = plate.rectTransform;

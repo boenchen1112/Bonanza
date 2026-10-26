@@ -110,7 +110,8 @@ namespace Bonanza.HudKit
 
             // --- vertical layout (top to bottom, px from the card's top edge)
             float y = Pad;
-            float rankY = y; y += 118.8f + 16f;
+            float rankSz = d.Centered ? 96f : 118.8f;   // a centred card (a game's own tall layout) gives the stamp a little less room
+            float rankY = y; y += rankSz + (d.Centered ? 10f : 16f);
             float nameY = y + 18f; y += 37.6f + 8f;
             bool ribbon = d.BadgeRibbon && !string.IsNullOrEmpty(d.Badge);
             float ribbonY = y + 12f;
@@ -123,14 +124,14 @@ namespace Bonanza.HudKit
             float pipsY = y + 8f;
             if (d.Pips != null && d.Pips.Count > 0) y += 34f;
             float leanY = y + 8f;
-            if (d.Lean.HasValue) y += 56f;
+            if (d.Lean.HasValue) y += d.Centered ? 50f : 56f;
             float partyY0 = y + 8f;
             if (hasParty) y += 8f + 11f + d.Party.Count * 28f;
             y += Pad - 4f;
             int keyed = 0;
             foreach (var pr in d.Prompts) if (!string.IsNullOrEmpty(pr.Key)) keyed++;
             float buttonsY = y + 10f;
-            if (keyed > 0) y += 68f;
+            if (keyed > 0) y += d.Centered ? 60f : 68f;
             float h = y;
 
             _card = UiKit.Rect("Card", _root);
@@ -149,7 +150,7 @@ namespace Bonanza.HudKit
 
             // rank stamp: a bordered box, the letter in the rank's colour
             _rankBox = UiKit.Rect("Rank", _card);
-            UiKit.Place(_rankBox, new Vector2(0.5f, 1), new Vector2(0.5f, 0.5f), new Vector2(0, -(rankY + 59.4f)), new Vector2(118.8f, 118.8f));
+            UiKit.Place(_rankBox, new Vector2(0.5f, 1), new Vector2(0.5f, 0.5f), new Vector2(0, -(rankY + rankSz / 2f)), new Vector2(rankSz, rankSz));
             if (d.RankFilled)
             {
                 var glow = UiKit.Box(_rankBox, "Glow", new Color(_rankColor.r, _rankColor.g, _rankColor.b, 0.55f), UiKit.Soft);
@@ -200,7 +201,7 @@ namespace Bonanza.HudKit
                 {
                     var cells = new List<(string, string)>();
                     for (int i = r * 5; i < Mathf.Min(d.Extras.Count, r * 5 + 5); i++) cells.Add((d.Extras[i].Key, d.Extras[i].Value));
-                    StatRow(r, extraY0 + r * 44f + 8f, StatsAt + 0.5f + r * 0.1f, cells.ToArray(), 17f, cells.Count == 5 ? 5 : cells.Count);
+                    StatRow(r, extraY0 + r * 44f + 8f, StatsAt + 0.3f + r * 0.06f, cells.ToArray(), 17f, cells.Count == 5 ? 5 : cells.Count);
                 }
             }
             if (d.Pips != null && d.Pips.Count > 0)
@@ -215,9 +216,9 @@ namespace Bonanza.HudKit
                     var pip = UiKit.Box(rim.transform, "Pip", d.Pips[i], UiKit.Disc);
                     UiKit.Place(pip.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(16, 16));
                 }
-                _items.Add(new Item { Rt = row, Group = g, At = StatsAt + 0.55f, Pos = row.anchoredPosition });
+                _items.Add(new Item { Rt = row, Group = g, At = StatsAt + 0.38f, Pos = row.anchoredPosition });
             }
-            if (d.Lean.HasValue) LeanGauge(d.Lean.Value, d.LeanLabel, leanY, StatsAt + 0.6f);
+            if (d.Lean.HasValue) LeanGauge(d.Lean.Value, d.LeanLabel, leanY, StatsAt + 0.42f);
             if (hasParty)
             {
                 var pdiv = UiKit.Box(_card, "PDivider", new Color(1, 1, 1, 0.09f)); Mid(pdiv.rectTransform, 0, partyY0 - 4, CardW - 2 * 31, 1);
@@ -306,7 +307,7 @@ namespace Bonanza.HudKit
                 UiKit.Stretch(kt.rectTransform);
                 px += kw + 18;
             }
-            if (d.Centered) UiKit.Place(_prompt, new Vector2(0.5f, 0), new Vector2(1, 0), new Vector2((px - 18f) / 2f, 720 * 0.034f), new Vector2(400, 24));
+            if (d.Centered) UiKit.Place(_prompt, new Vector2(1, 0), new Vector2(1, 0), new Vector2(-1280 * 0.032f - 56f, 720 * 0.034f), new Vector2(400, 24));
             _built = true;
             Reveal(0);
         }
@@ -348,7 +349,7 @@ namespace Bonanza.HudKit
                 l.rectTransform.anchorMin = l.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
                 l.rectTransform.sizeDelta = new Vector2(colW, 16); l.rectTransform.anchoredPosition = new Vector2(0, -12);
                 l.text = cells[i].label;
-                _items.Add(new Item { Rt = cell, Group = g, At = at + i * 0.08f, Pos = cell.anchoredPosition });
+                _items.Add(new Item { Rt = cell, Group = g, At = at + i * 0.05f, Pos = cell.anchoredPosition });
             }
         }
 

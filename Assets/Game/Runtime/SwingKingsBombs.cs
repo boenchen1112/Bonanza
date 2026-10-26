@@ -236,7 +236,7 @@ namespace Bonanza
             s.Color(new Color(0.3f, 0.8f, 0.7f)); s.Alpha = 0.7f; s.Size = 0.4f; s.Life = 0.45f; s.S0 = 0.4f; s.S1 = 1.5f; s.Fade = PFade.Hold;
             _smoke.Emit(Calm ? 2 : 4);
             Look.Fx.Ring(p + Vector3.up * 0.12f, DodgeTeal * 0.6f, 0.4f, 0.25f, 1.6f, 0.1f, 0.01f, 0.01f, 0.5f);
-            Look.Fx.Callout("DODGED", null, p + new Vector3(0.1f, 0.5f, 0), DodgeTeal, 0.5f, 0.55f, 0.4f);
+            Look.Fx.PopWord("DODGED", p + new Vector3(0.1f, 0.6f, 0), new Color(0.45f, 1f, 0.88f), 0.85f, 0.8f, 0.7f);   // a solid outlined word, bigger and longer than the old plate
         }
 
         bool Calm => Settings.ReduceMotion;

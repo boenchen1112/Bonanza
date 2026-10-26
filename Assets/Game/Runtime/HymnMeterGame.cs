@@ -234,7 +234,7 @@ namespace Bonanza
         /// first, mint right, coral wrong, grey no answer), like the strip's.
         public override void ResultsStyle(Bonanza.HudKit.ResultsData d)
         {
-            d.Centered = true; d.RankFilled = true; d.BadgeOnRank = true; d.BadgeRibbon = true;
+            d.Centered = true; d.RankFilled = true; d.BadgeOnRank = true;
             if (_round == null) return;
             d.Pips = new List<Color>();
             foreach (var s in _round.Slots) d.Pips.Add(PipColor(s));

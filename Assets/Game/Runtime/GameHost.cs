@@ -379,13 +379,15 @@ namespace Bonanza
         }
 
         /// Keep the backdrop and the uGUI title in step with the mode: on for shell screens once no game owns the
-        /// camera, off (camera handed back) the moment a game opens. Never in an autoplay run: those test the games.
+        /// camera, off (camera handed back) the moment a game opens. Never in an autoplay run (those test the games), except the
+        /// finished party's podium.
         void ShellSync()
         {
             // The gate counts: the hall is built and drawn behind it, so its first-frame hitches land before the title
             // music's kicks are scheduled, not on the first beat.
             bool gate = _mode == Mode.Gate && _boot.Kind != SceneKind.Game;
-            bool want = !Autoplay && (ShellMode(_mode) || gate) && _gameGo == null && _game == null;
+            bool autoFinal = Autoplay && _mode == Mode.PartyHub && _party != null && _party.Done;   // an autoplay party ends on its podium
+            bool want = (!Autoplay || autoFinal) && (ShellMode(_mode) || gate) && _gameGo == null && _game == null;
             if (want) _hallFreeFrames++; else _hallFreeFrames = 0;
             if (want && _hallFreeFrames >= 2)
             {
