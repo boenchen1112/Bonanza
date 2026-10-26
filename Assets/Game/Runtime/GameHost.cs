@@ -389,6 +389,7 @@ namespace Bonanza
             bool autoFinal = Autoplay && _mode == Mode.PartyHub && _party != null && _party.Done;   // an autoplay party ends on its podium
             bool want = (!Autoplay || autoFinal) && (ShellMode(_mode) || gate) && _gameGo == null && _game == null;
             if (want) _hallFreeFrames++; else _hallFreeFrames = 0;
+            if (_game != null || _gameGo != null) Shell?.Uncover();
             if (want && _hallFreeFrames >= 2)
             {
                 if (_hall == null) _hall = ShellBackdrop.Create(transform);
@@ -1550,6 +1551,8 @@ namespace Bonanza
         void ToHub()
         {
             _presses.Clear();
+            // the hub (or the podium) is built a few frames after the game closes: wash the gap
+            if (!Autoplay || (_party != null && _party.Done)) Shell?.Cover();
             CloseGame();
             EnterHub();
         }

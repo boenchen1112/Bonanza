@@ -411,8 +411,9 @@ namespace Bonanza.Shell
                     // beside the name line, inside the row: just right of the sub text
                     r.You.fontSize = UiKit.FontSizeForCap(small ? 14f : 12f);
                     float yw = small ? 50f : 40f, yh = small ? 24f : 20f;
+                    float subW = r.Sub.GetPreferredValues(r.Sub.text).x;
                     r.YouRt.sizeDelta = new Vector2(yw, yh);
-                    r.YouRt.anchoredPosition = new Vector2(129 + r.Sub.preferredWidth + 18 + yw * 0.5f, small ? 14 : 21);
+                    r.YouRt.anchoredPosition = new Vector2(129 + subW + 16 + yw * 0.5f, small ? 14 : 21);
                 }
 
                 int pts = Mathf.RoundToInt(Mathf.Lerp(d.PrevPoints, d.Points, count));
@@ -452,13 +453,13 @@ namespace Bonanza.Shell
                          : View.Finale ? "START FINALE" : "NEXT ROUND";
             if (View.Round > 0 && !View.Finale) label = $"START ROUND {View.Round + 1}";
             float bt = age - 0.6f;
-            DriveButton(_action, input, ActionBtn, PressFocus != 1, label, "SPACE", dt, red, bt, !small);
-            DriveButton(_quit, input, QuitBtn, PressFocus == 1, "QUIT TO MENU", "ESC", dt, red, age - 0.9f, !small);
+            DriveButton(_action, input, ActionBtn, PressFocus != 1, label, "SPACE", dt, red, bt, true);
+            DriveButton(_quit, input, QuitBtn, PressFocus == 1, "QUIT TO MENU", "ESC", dt, red, age - 0.9f, true);
             _action.Rt.anchoredPosition = new Vector2(0, -516);
-            _quit.Rt.anchoredPosition = new Vector2(-64, 14);
+            _quit.Rt.anchoredPosition = small ? new Vector2(-92, 34) : new Vector2(-64, 14);
             _quit.Inner.localScale *= Mathf.Lerp(1f, 1.3f, small ? 1 : 0);
-            _quit.Label.rectTransform.anchoredPosition = new Vector2(small ? 0 : -20, 1);
-            _action.Label.rectTransform.anchoredPosition = new Vector2(small ? 0 : -42, 1);
+            _quit.Label.rectTransform.anchoredPosition = new Vector2(-20, 1);
+            _action.Label.rectTransform.anchoredPosition = new Vector2(-42, 1);
         }
 
         static int HumanId(List<PartyBoardRow> rows) { foreach (var r in rows) if (!r.IsCpu) return r.Id; return -1; }

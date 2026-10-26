@@ -253,9 +253,9 @@ namespace Bonanza.Shell
 
             // ---- buttons
             _stack.localScale = Vector3.one * Mathf.Lerp(1f, 1.1f, comp);
-            _stack.anchoredPosition = new Vector2(0, Mathf.Lerp(-88, -60, comp));
-            _foot.localScale = Vector3.one * Mathf.Lerp(1f, 1.2f, comp);
-            _foot.anchoredPosition = new Vector2(0, Mathf.Lerp(70, 66, comp));
+            _stack.anchoredPosition = new Vector2(0, Mathf.Lerp(-88, -50, comp));
+            _foot.localScale = Vector3.one * Mathf.Lerp(1f, 0.95f, comp);
+            _foot.anchoredPosition = new Vector2(0, Mathf.Lerp(70, 78, comp));   // clear of the crowd on a short screen
             _attract.localScale = Vector3.one * Mathf.Lerp(1f, 1.2f, comp);
             _stackGroup.alpha = (1 - _attractAmt) * UiKit.Clamp01((age - 0.15f) * 3f) * (red ? shown : 1);
             _stackGroup.blocksRaycasts = false;

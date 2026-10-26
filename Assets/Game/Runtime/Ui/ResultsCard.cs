@@ -43,7 +43,7 @@ namespace Bonanza.HudKit
     public sealed class ResultsCard : MonoBehaviour
     {
         // web results.js timeline (s)
-        public const float CountAt = 0.3f, CountS = 0.9f, StatsAt = 0.45f, StampAt = 1.3f, PartyAt = 1.65f, PromptAt = 0.7f;
+        public const float CountAt = 0.3f, CountS = 0.9f, StatsAt = 0.45f, StampAt = 0.6f, PartyAt = 0.95f, PromptAt = 0.7f;
 
         const float Pad = 30.7f;
         float CardW = 600;   // 660 for a card with its own larger stat labels (the five columns need the room)

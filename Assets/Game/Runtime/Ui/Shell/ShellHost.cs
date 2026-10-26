@@ -83,8 +83,9 @@ namespace Bonanza.Shell
         Canvas _canvas;
         ShellScreen _leaving;
         bool _exiting;
-        Image _veil;
-        float _veilT = 1, _readyWait;
+        Image _veil, _curtain;
+        float _veilT = 1, _readyWait, _coverT;
+        bool _cover;
         /// Screen-to-screen dip: a dark wash that peaks mid-way, so the swap and the backdrop's pose move hide behind it.
         public const float VeilSeconds = 0.25f, VeilPeak = 0.5f;
         static readonly Vector3[] _corners = new Vector3[4];
@@ -110,6 +111,11 @@ namespace Bonanza.Shell
             // Height-led: 4:3 shows 960 reference px across, 21:9 shows 1680; screens keep their core inside 900.
             sc.matchWidthOrHeight = 1;
             _root = (RectTransform)transform;
+            var cr = UiKit.Rect("Curtain", _root); UiKit.Stretch(cr);
+            _curtain = cr.gameObject.AddComponent<Image>();
+            _curtain.color = new Color(UiKit.Ink.r, UiKit.Ink.g, UiKit.Ink.b, 1);
+            _curtain.raycastTarget = false;
+            _curtain.enabled = false;
             Title = new TitleScreen();
             Title.BuildInto(_root, "Title");
             Roster = new RosterScreen();
@@ -138,11 +144,36 @@ namespace Bonanza.Shell
             var c = _veil.color; c.a = VeilPeak * Mathf.Sin(_veilT * Mathf.PI); _veil.color = c;
         }
 
+        /// Solid wash behind the screens for the gap between a game closing and the next screen drawing:
+        /// no frame is ever the bare 3D default sky. It lifts once the current screen is half in.
+        public void Cover()
+        {
+            _cover = true; _coverT = 0;
+            _curtain.enabled = true;
+            var c = _curtain.color; c.a = 1; _curtain.color = c;
+        }
+
+        public void Uncover() { _cover = false; }
+
+        void TickCurtain(float dt)
+        {
+            if (!_curtain.enabled) return;
+            _coverT += dt;
+            bool lift = !_cover || _coverT > 4f || (Current != null && !_exiting && Current.Shown >= 0.2f);
+            var c = _curtain.color;
+            if (!lift) { c.a = 1; _curtain.color = c; return; }
+            _cover = false;
+            c.a = Mathf.MoveTowards(c.a, 0, dt / 0.25f);
+            _curtain.color = c;
+            if (c.a <= 0.001f) _curtain.enabled = false;
+        }
+
         void Update()
         {
             bool red = Settings.ReduceMotion;
             float dt = Time.unscaledDeltaTime;
             TickVeil(dt, red);
+            TickCurtain(dt);
             // a screen enters once the one before it is nearly gone (no double exposure) and its own content is ready (no pop-in)
             bool hold = false;
             if (Current != null && !_exiting && Current.Shown < 1f)

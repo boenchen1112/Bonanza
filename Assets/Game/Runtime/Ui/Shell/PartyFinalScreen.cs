@@ -27,7 +27,7 @@ namespace Bonanza.Shell
         public const int AgainBtn = 0, MenuBtn = 1;
         /// Where the stage figure stands (reference px), read by the host to place the cast.
         public const float FigureFeet = 458f, FigureHeight = 236f, ColW = 190, ColStep = 204, BaseY = 548;
-        static readonly float[] BlockH = { 108, 84, 62, 48 };
+        static readonly float[] BlockH = { 124, 84, 62, 48 };
         static readonly float[] SmallBlockH = { 112, 100, 92, 88 };   // small screens stack name, points and chips in fixed rows, so every plate is tall enough for them
         static readonly int[] Identity = { 0, 1, 2, 3 };
         static readonly int[][] ColOf = { new[] { 0 }, new[] { 1, 0 }, new[] { 1, 0, 2 }, new[] { 1, 0, 2, 3 } };
@@ -297,14 +297,15 @@ namespace Bonanza.Shell
                     // first place: number top-left, the name and points centred and the biggest text on the podium, the YOU tag on the bottom row
                     c.Name.alignment = TextAlignmentOptions.Center; c.Pts.alignment = TextAlignmentOptions.Center;
                     nrt.sizeDelta = new Vector2(176, 40); prt.sizeDelta = new Vector2(176, 22);
-                    nrt.anchoredPosition = new Vector2(ColW * 0.5f - 88f, h * 0.5f - (small ? 43 : 50));
-                    prt.anchoredPosition = new Vector2(ColW * 0.5f - 88f, h * 0.5f - (small ? 67 : 73));
+                    nrt.anchoredPosition = new Vector2(ColW * 0.5f - 88f, h * 0.5f - 50);
+                    prt.anchoredPosition = new Vector2(ColW * 0.5f - 88f, h * 0.5f - 76);
                     c.Name.fontSizeMax = UiKit.FontSizeForCap(30f);
                     c.Name.fontSizeMin = UiKit.FontSizeForCap(16f);
                     c.Pts.fontSize = UiKit.FontSizeForCap(small ? 18f : 15f);
-                    c.Num.rectTransform.sizeDelta = new Vector2(54, 56); c.Num.alignment = TextAlignmentOptions.Center;
-                    c.Num.rectTransform.anchoredPosition = new Vector2(4, h * 0.5f - 24);
-                    c.YouRt.anchoredPosition = new Vector2(ColW * 0.5f, -(h - 5 - pillH * 0.5f));
+                    c.Num.rectTransform.sizeDelta = new Vector2(54, 34); c.Num.alignment = TextAlignmentOptions.Center;
+                    c.Num.fontSize = UiKit.FontSizeForCap(22f);
+                    c.Num.rectTransform.anchoredPosition = new Vector2(ColW * 0.5f - 27f, h * 0.5f - 17f);   // its own row above the name
+                    c.YouRt.anchoredPosition = new Vector2(ColW * 0.5f, -(h - 9 - pillH * 0.5f));
                 }
                 else
                 {
@@ -352,7 +353,7 @@ namespace Bonanza.Shell
                 Vector2 head = default;
                 float cxn = ColCenter(order, 0, n);
                 bool onHead = View.Cast != null && View.Cast.TryHeadRef(out head);
-                float crownY = onHead ? head.y + 26f : headY + 36f - (View.Cast != null ? View.Cast.HopRef : 0f);
+                float crownY = onHead ? head.y - 2f : headY + 36f - (View.Cast != null ? View.Cast.HopRef : 0f);
                 _crownB.anchoredPosition = new Vector2(onHead ? head.x : cxn, -crownY + bob);
                 _crownB.localScale = Vector3.one * (0.72f * Mathf.Clamp01(pop));
                 _crownB.localRotation = Quaternion.Euler(0, 0, 0);
@@ -444,6 +445,15 @@ namespace Bonanza.Shell
                 _fist.SetAsLastSibling();
             }
             else _trophy.anchoredPosition = new Vector2(_heldCx + 70f, -(BaseY - BlockH[0] + 4f));
+            // the swinging cheer can bring the cup right over the head: the crown steps back rather than fight it
+            if (_crownB.gameObject.activeSelf)
+            {
+                var cg = _crownB.GetComponent<CanvasGroup>() ?? _crownB.gameObject.AddComponent<CanvasGroup>();
+                var ca = _crownB.anchoredPosition; var ta = _trophy.anchoredPosition;
+                float cupY = ta.y + 55f * _trophy.localScale.y;
+                bool clash = held && Mathf.Abs(ta.x - ca.x) < 50f && Mathf.Abs(cupY - ca.y) < 32f;
+                cg.alpha = Mathf.MoveTowards(cg.alpha, clash ? 0.45f : 1f, Time.unscaledDeltaTime * 6f);
+            }
             return held;
         }
 
