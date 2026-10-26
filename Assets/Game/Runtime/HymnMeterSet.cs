@@ -1165,10 +1165,19 @@ namespace Bonanza
                     float pop = _stepPop[si];
                     top -= pop * 0.07f * Mathf.Sin(pop * Mathf.PI);
                     var pos = new Vector3(x, top, 0);
-                    _cols.Matrix[q] = Matrix4x4.Translate(pos);
+                    // a column never sits half cut by the frame edge: it narrows away as it nears either side
+                    float edge = 1;
+                    if (cam)
+                    {
+                        float vx = cam.WorldToViewportPoint(new Vector3(x, top, 0)).x;
+                        edge = Mathf.SmoothStep(0, 1, Mathf.Min((1.02f - vx) / 0.1f, (vx + 0.02f) / 0.1f));
+                        if (edge < 0.02f) { n--; _cols.Matrix[q] = hide; _caps.Matrix[q] = hide; _glyphs.Matrix[q] = hide; _rays.Matrix[q] = hide; _skirts.Matrix[q] = hide; continue; }
+                    }
+                    var ev = new Vector3(edge, 1, edge);
+                    _cols.Matrix[q] = Matrix4x4.TRS(pos, Quaternion.identity, ev);
                     float tv = 0.94f + 0.06f * Mathf.Sin(i * 2.3f + b.Slot);   // a little variety in the marble
                     _cols.Tint[q] = new Color(tv, tv, tv * 0.99f, 1);
-                    _skirts.Matrix[q] = Matrix4x4.TRS(new Vector3(x, SkirtY, 0.05f), Quaternion.Euler(0, i * 67 + b.Slot * 31, 0), Vector3.one * (0.92f + 0.12f * Mathf.Sin(i * 1.7f)));
+                    _skirts.Matrix[q] = Matrix4x4.TRS(new Vector3(x, SkirtY, 0.05f), Quaternion.Euler(0, i * 67 + b.Slot * 31, 0), new Vector3(edge, 1, edge) * (0.92f + 0.12f * Mathf.Sin(i * 1.7f)));
                     _skirts.Tint[q] = Color.white;
 
                     if (r <= 0)
@@ -1180,13 +1189,13 @@ namespace Bonanza
                     var kc = KeyColor(key).linear;
                     float grow = calm ? 1 : BackOut(Mathf.Clamp01(r * 1.6f), 2.6f);
                     float sc = Mathf.LerpUnclamped(0.35f, 1, grow) + pop * 0.05f;
-                    _caps.Matrix[q] = Matrix4x4.TRS(pos, Quaternion.identity, new Vector3(sc, Mathf.LerpUnclamped(0.5f, 1, grow), sc));
+                    _caps.Matrix[q] = Matrix4x4.TRS(pos, Quaternion.identity, new Vector3(sc * edge, Mathf.LerpUnclamped(0.5f, 1, grow), sc * edge));
                     float flash = _stepFlash[si];
                     var tint = kc * (1 + pop * 0.6f + flash * 1.3f);
                     tint.a = 1;
                     _caps.Tint[q] = tint;
                     float rot = key == "right" ? 0 : key == "up" ? 90 : key == "left" ? 180 : -90;
-                    _glyphs.Matrix[q] = Matrix4x4.TRS(pos + new Vector3(0, -CapH * 0.5f * sc, -CapW * 0.5f * sc - 0.012f), Quaternion.Euler(0, 0, rot), Vector3.one * sc);
+                    _glyphs.Matrix[q] = Matrix4x4.TRS(pos + new Vector3(0, -CapH * 0.5f * sc, -CapW * 0.5f * sc - 0.012f), Quaternion.Euler(0, 0, rot), Vector3.one * (sc * edge));
                     var gc = Color.Lerp(Color.white, kc, 0.12f) * (1.05f + pop * 0.8f);
                     gc.a = 1;
                     _glyphs.Tint[q] = gc;
@@ -1194,7 +1203,7 @@ namespace Bonanza
                     float steady = down ? 0.3f : 0;
                     float rk = Mathf.Max(flash, steady) + pop * 0.4f;
                     var rc = down ? RayGold : Color.Lerp(kc, Color.white, 0.35f);
-                    _rays.Matrix[q] = rk > 0.01f ? Matrix4x4.TRS(pos + new Vector3(0, -0.05f, 0.2f), Quaternion.identity, new Vector3(1, 0.6f + 0.4f * Mathf.Clamp01(r * 1.5f), 1)) : hide;
+                    _rays.Matrix[q] = rk > 0.01f ? Matrix4x4.TRS(pos + new Vector3(0, -0.05f, 0.2f), Quaternion.identity, new Vector3(edge, 0.6f + 0.4f * Mathf.Clamp01(r * 1.5f), 1)) : hide;
                     _rays.Tint[q] = new Color(rc.r * rk, rc.g * rk, rc.b * rk, 1);
                 }
                 // landing, lead-ins, home
