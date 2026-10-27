@@ -28,7 +28,7 @@ namespace Bonanza.Shell
         /// Where the stage figure stands (reference px), read by the host to place the cast.
         public const float FigureFeet = 458f, FigureHeight = 236f, ColW = 190, ColStep = 204, BaseY = 548;
         static readonly float[] BlockH = { 124, 84, 62, 48 };
-        static readonly float[] SmallBlockH = { 134, 100, 92, 88 };   // small screens stack name, points and chips in fixed rows, so every plate is tall enough for them
+        static readonly float[] SmallBlockH = { 134, 100, 94, 92 };   // small screens stack name, points and chips in fixed rows, so every plate is tall enough for them
         static readonly int[] Identity = { 0, 1, 2, 3 };
         static readonly int[][] ColOf = { new[] { 0 }, new[] { 1, 0 }, new[] { 1, 0, 2 }, new[] { 1, 0, 2, 3 } };
 
@@ -199,8 +199,11 @@ namespace Bonanza.Shell
             FigureChar = single ? Mathf.Max(0, Cast.IndexOf(rows[0].Char)) : -1;
             var order = winners >= 2 ? Identity : ColOf[n - 1];   // a shared crown stands left to right in standing order, matching the headline
 
+            // the plates rise last place first; the winner's title, crown, cup and confetti wait for the first-place plate
+            float firstUp = 0.25f + (n - 1) * 0.14f + 0.45f;
+
             // ---- heading
-            float he = red ? 1 : UiKit.EaseOutCubic(age / 0.5f);
+            float he = red ? 1 : UiKit.EaseOutCubic((age - firstUp) / 0.5f);
             _headGroup.alpha = UiKit.Clamp01(he * 1.4f) * (red ? shown : 1);
             _headRt.anchoredPosition = new Vector2(0, -14 + (1 - he) * 24);
             _label.text = View.Tiebreak != null ? "PARTY COMPLETE   -   " + View.Tiebreak : "PARTY COMPLETE";
@@ -257,8 +260,9 @@ namespace Bonanza.Shell
                 // portrait: sits on the block (the single winner stands on stage instead)
                 bool figure = win && single;
                 float fsz = win ? (single ? 80 : 112) : 62;
-                float fy = -(BaseY - h) + fsz * 0.5f - 2;
-                if (figure) { cx -= 84; fsz = small ? 66 : fsz; fy = small ? -(BaseY - h) + fsz * 0.5f - 2 : -(BaseY - h) + 22; }   // small: the avatar sits on the card's edge, not cut into it
+                float lift = small ? 8f : 0f;   // small: the portrait stands clear above its plate, never on top of the name
+                float fy = -(BaseY - h) + fsz * 0.5f - 2 + lift;
+                if (figure) { cx -= 84; fsz = small ? 66 : fsz; fy = small ? -(BaseY - h) + fsz * 0.5f - 2 + lift : -(BaseY - h) + 22; }   // small: the avatar sits on the card's edge, not cut into it
                 float pillH = small ? 24f : 20f, pillW = small ? 58f : 44f;
                 c.You.fontSize = UiKit.FontSizeForCap(small ? 17f : 12f);
                 c.Tie.fontSize = UiKit.FontSizeForCap(small ? 17f : 12f);
@@ -278,13 +282,13 @@ namespace Bonanza.Shell
                     float tw = ColW - 36f, edgeY = h * 0.5f;
                     c.Name.alignment = TextAlignmentOptions.Left; c.Pts.alignment = TextAlignmentOptions.Left;
                     nrt.sizeDelta = new Vector2(tw - 28f, 26); prt.sizeDelta = new Vector2(tw - 28f, 22);
-                    float ny = win ? 26f : 18f, py = win ? 54f : 43f;   // the tallest plate spaces its rows out
+                    float ny = win ? 30f : 22f, py = win ? 58f : 47f;   // the tallest plate spaces its rows out
                     nrt.anchoredPosition = new Vector2(58, edgeY - ny); prt.anchoredPosition = new Vector2(58, edgeY - py);
                     c.Name.fontSizeMax = UiKit.FontSizeForCap(win ? 30f : 28f); c.Name.fontSizeMin = UiKit.FontSizeForCap(22f);
                     c.Pts.fontSize = UiKit.FontSizeForCap(win ? 22f : 21f);
                     var br = c.Badge.rectTransform;
                     br.anchorMin = br.anchorMax = new Vector2(0, 0.5f); br.pivot = new Vector2(0, 0.5f);
-                    br.sizeDelta = new Vector2(34, 34); br.anchoredPosition = new Vector2(8, edgeY - (win ? 30f : 22f));
+                    br.sizeDelta = new Vector2(34, 34); br.anchoredPosition = new Vector2(8, edgeY - (win ? 34f : 26f));
                     var brr = c.BadgeRing.rectTransform;
                     brr.anchorMin = brr.anchorMax = br.anchorMin; brr.pivot = br.pivot; brr.sizeDelta = br.sizeDelta; brr.anchoredPosition = br.anchoredPosition;
                     c.Badge.color = win ? UiKit.Gold : new Color(0.86f, 0.9f, 1f);
@@ -352,7 +356,7 @@ namespace Bonanza.Shell
                     cr.anchoredPosition = new Vector2(cx, fy + fsz * 0.5f - 28);
                     float bob = red ? 0 : Mathf.Sin(now * 2.4f + i) * 1.5f;
                     cr.anchoredPosition += new Vector2(0, bob);
-                    cr.localScale = Vector3.one * (cs * Mathf.Clamp01(UiKit.BackOut((age - 1.2f - i * 0.15f) / 0.5f)));
+                    cr.localScale = Vector3.one * (cs * Mathf.Clamp01(UiKit.BackOut((age - firstUp - 0.2f - i * 0.15f) / 0.5f)));
                     cr.localRotation = Quaternion.Euler(0, 0, i == 0 ? -6 : 6);
                 }
             }
@@ -360,7 +364,7 @@ namespace Bonanza.Shell
             if (single) { _crowns[0].gameObject.SetActive(false); _crowns[1].gameObject.SetActive(false); }
 
             // ---- crown over the stage figure, trophy beside it
-            float pop = red ? 1 : UiKit.BackOut((age - 1.0f) / 0.5f);
+            float pop = red ? 1 : UiKit.BackOut((age - firstUp - 0.15f) / 0.5f);
             _crownB.gameObject.SetActive(single);
             _trophy.gameObject.SetActive(true);
             if (single)
@@ -374,7 +378,7 @@ namespace Bonanza.Shell
                 bool onHead = View.Cast != null && View.Cast.TryHeadRef(out head);
                 float crownY = onHead ? head.y - 3f : headY + 36f - (View.Cast != null ? View.Cast.HopRef : 0f);
                 _crownB.anchoredPosition = new Vector2(onHead ? head.x : cxn, -crownY + bob);
-                _crownB.localScale = Vector3.one * ((small ? 0.95f : 0.72f) * Mathf.Clamp01(pop));
+                _crownB.localScale = Vector3.one * ((small ? 0.84f : 0.72f) * Mathf.Clamp01(pop));
                 _crownB.localRotation = Quaternion.Euler(0, 0, 0);
                 // held up in the raised hand when the cheer has the arms up (its foot in a fist), else standing on the first-place block
                 _heldOn = true; _heldPop = pop; _heldCx = cxn;
@@ -398,13 +402,13 @@ namespace Bonanza.Shell
                 _trophy.localScale = Vector3.one * (0.75f * Mathf.Clamp01(pop));
                 _trophy.SetAsLastSibling();
             }
-            _trophy.localRotation = Quaternion.Euler(0, 0, red ? 0 : Mathf.Sin(now * 1.4f) * 3f);
+            _trophy.localRotation = Quaternion.Euler(0, 0, (red ? 0 : Mathf.Sin(now * 1.4f) * 3f) + (_heldOn ? _heldLean : 0f));
 
             // ---- confetti
             _confRt.gameObject.SetActive(!red);
             if (!red)
             {
-                float fall = UiKit.Clamp01((age - 0.4f) / 0.4f);
+                float fall = UiKit.Clamp01((age - firstUp) / 0.4f);
                 for (int i = 0; i < ConfettiN; i++)
                 {
                     float t = now * 55f * _cs[i] / 760f + _cp[i];
@@ -420,7 +424,7 @@ namespace Bonanza.Shell
             }
 
             // ---- stat plate
-            float se = red ? 1 : UiKit.EaseOutCubic((age - 1.0f) / 0.5f);
+            float se = red ? 1 : UiKit.EaseOutCubic((age - firstUp - 0.1f) / 0.5f);
             _statGroup.alpha = UiKit.Clamp01(se) * (red ? shown : 1);
             _stat.text = !single ? $"TIED ON {rows[0].Points} PTS" : View.StatLine ?? "";
             _best.text = View.BestLine ?? "";
@@ -434,8 +438,8 @@ namespace Bonanza.Shell
             _statRt.anchoredPosition = new Vector2(0, -BaseY - 8 + (1 - se) * -10);
 
             // ---- buttons
-            DriveButton(_again, input, AgainBtn, PressFocus != 1, "PLAY AGAIN", "SPACE", dt, red, age - 1.1f, !small);
-            DriveButton(_menu, input, MenuBtn, PressFocus == 1, "MENU", "ESC", dt, red, age - 1.25f, !small);
+            DriveButton(_again, input, AgainBtn, PressFocus != 1, "PLAY AGAIN", "SPACE", dt, red, age - firstUp - 0.2f, !small);
+            DriveButton(_menu, input, MenuBtn, PressFocus == 1, "MENU", "ESC", dt, red, age - firstUp - 0.35f, !small);
             _again.Label.rectTransform.anchoredPosition = new Vector2(small ? 0 : -42, 1);
             _menu.Label.rectTransform.anchoredPosition = new Vector2(small ? 0 : -30, 1);
             _menu.Inner.localScale *= Mathf.Lerp(1f, 1.1f, small ? 1 : 0);
@@ -443,8 +447,8 @@ namespace Bonanza.Shell
 
         // the cup's parts are laid out from the rect centre (55 above its bottom pivot): the stem sits 83 units above the pivot
         const float StemUp = 83f;
-        static float HeldScale => Screen.height < 600 ? 0.72f : 0.55f;   // the cup and crown read larger on a small screen
-        bool _heldOn; float _heldPop, _heldCx;
+        static float HeldScale => Screen.height < 600 ? 0.62f : 0.55f;   // the cup and crown read a little larger on a small screen
+        bool _heldOn; float _heldPop, _heldCx, _heldLean;
 
         /// The trophy's foot sits in the raised hand's fist: both follow the hand bone every frame (the cheer hop and sway included).
         /// False (and the cup stands on the first-place block) when the arms are not up.
@@ -463,8 +467,12 @@ namespace Bonanza.Shell
                 _fist.localScale = Vector3.one * pop;
                 _fistImg.color = cast.Tint; foreach (var fp in _fistParts) fp.color = Color.Lerp(cast.Tint, Color.white, 0.12f);
                 _fist.SetAsLastSibling();
+                // small: the cup leans out, away from the head, so it never covers the crown or the face
+                _heldLean = 0f;
+                if (Screen.height < 600 && cast.TryHeadRef(out var hd)) _heldLean = hand.x < hd.x ? 14f : -14f;
             }
-            else _trophy.anchoredPosition = new Vector2(_heldCx + 70f, -(BaseY - BlockH[0] + 4f));
+            else _heldLean = 0f;
+            if (!held) _trophy.anchoredPosition = new Vector2(_heldCx + 70f, -(BaseY - BlockH[0] + 4f));
             // the swinging cheer can bring the cup right over the head: the crown steps back rather than fight it
             if (_crownB.gameObject.activeSelf)
             {

@@ -156,7 +156,12 @@ namespace Bonanza.Shell
             _cover = true; _coverT = 0;
             _curtain.enabled = true;
             var c = _curtain.color; c.a = 1; _curtain.color = c;
+            var tc = _curtainText.color; tc.a = CurtainTextAlpha; _curtainText.color = tc;
         }
+
+        const float CurtainTextAlpha = 0.5f, CurtainTextFade = 0.2f, CurtainFade = 0.3f;
+        /// The cover is still up (or still fading): a screen that stages a reveal (the party's wrap-up) waits for it.
+        public bool Covered => _curtain.enabled;
 
         public void Uncover() { _cover = false; }
 
@@ -168,9 +173,18 @@ namespace Bonanza.Shell
             var c = _curtain.color;
             if (!lift) { c.a = 1; _curtain.color = c; return; }
             _cover = false;
-            c.a = Mathf.MoveTowards(c.a, 0, dt / 0.25f);
+            // the line leaves first on a solid cover, then the cover lifts: nothing behind it (a title, a winner) shows
+            // through the words, at any screen size or frame rate
+            var tc = _curtainText.color;
+            if (tc.a > 0.001f && !string.IsNullOrEmpty(_curtainText.text))
+            {
+                tc.a = Mathf.MoveTowards(tc.a, 0, dt * CurtainTextAlpha / CurtainTextFade); _curtainText.color = tc;
+                c.a = 1; _curtain.color = c;
+                return;
+            }
+            tc.a = 0; _curtainText.color = tc;
+            c.a = Mathf.MoveTowards(c.a, 0, dt / CurtainFade);
             _curtain.color = c;
-            var tc = _curtainText.color; tc.a = 0.5f * c.a; _curtainText.color = tc;
             if (c.a <= 0.001f) _curtain.enabled = false;
         }
 
@@ -189,6 +203,7 @@ namespace Bonanza.Shell
             }
             if (!hold) Step(Current, !_exiting, dt, red);
             else if (Current != null && !_exiting) Current.Age = 0;
+            if (Current == Final && !_exiting && Covered) Final.Age = 0;   // the wrap-up's reveal starts once the cover has fully lifted
             if (_leaving != null)
             {
                 Step(_leaving, false, dt, red);

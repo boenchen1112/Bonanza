@@ -64,6 +64,7 @@ namespace Bonanza.HudKit
         float _t = -1, _stampAt, _badgeAt;
         Color _rankColor;
         float _statLabelPx;
+        float _fit = 1f;   // the card's scale (larger on a small screen, as far as the screen's height allows)
         // a short screen halves every reference px: the small labels grow so they stay readable there
         static float Lk => Screen.height < 600 ? 1.8f : 1f;
 
@@ -139,7 +140,23 @@ namespace Bonanza.HudKit
             _card = UiKit.Rect("Card", _root);
             // left 57%, top 44% (web), centred on that point
             UiKit.Place(_card, d.Centered ? new Vector2(0.5f, 0.5f) : new Vector2(0.57f, 0.56f), new Vector2(0.5f, 0.5f), new Vector2(0, 0), new Vector2(CardW, h));
-            if (Screen.height < 600) _card.localScale = Vector3.one * 1.18f;   // a small screen gets the whole card larger, so its small print stays legible
+            // a small screen gets the whole card larger, so its small print stays legible, but never so large that its top
+            // (or the sticker over the stamp) or its bottom leaves the screen: the scale fits the screen's height and the
+            // card steps down or up to keep both edges in
+            _fit = 1f;
+            if (Screen.height < 600)
+            {
+                float H = _root.rect.height > 1f ? _root.rect.height : 720f;
+                bool overhang = !string.IsNullOrEmpty(d.Badge) && !ribbon;
+                float mTop = 14f + (overhang ? 26f : 0f), mBot = 12f;
+                _fit = Mathf.Min(1.18f, (H - mTop - mBot) / h);
+                float cy = (d.Centered ? 0.5f : 0.44f) * H, top = cy - h * _fit * 0.5f, dy = 0f;
+                if (top < mTop) dy = mTop - top;
+                float bottom = cy + h * _fit * 0.5f + dy;
+                if (bottom > H - mBot) dy -= bottom - (H - mBot);
+                _card.anchoredPosition = new Vector2(0, -dy);
+            }
+            _card.localScale = Vector3.one * _fit;
             var shadow = UiKit.Box(_card, "Shadow", new Color(0, 0, 0, 0.55f), UiKit.Pill, true, 18f);
             UiKit.Stretch(shadow.rectTransform); shadow.rectTransform.anchoredPosition = new Vector2(0, -7);
             var body = UiKit.Box(_card, "Body", Color.white, UiKit.Pill, true, 18f);
@@ -460,7 +477,7 @@ namespace Bonanza.HudKit
             _promptGroup.alpha = UiKit.Clamp01((t - PromptAt) / 0.25f);
             if (_buttonGroup != null) _buttonGroup.alpha = _promptGroup.alpha;
             float breathe = calm ? 1 : 1 + Mathf.Sin(t * 3) * 0.006f;
-            _card.localScale = Vector3.one * (breathe * (Screen.height < 600 ? 1.18f : 1f));
+            _card.localScale = Vector3.one * (breathe * _fit);
         }
 
         int _lastShown = -1;
