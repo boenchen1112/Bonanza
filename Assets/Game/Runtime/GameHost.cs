@@ -1394,7 +1394,7 @@ namespace Bonanza
                 case Mode.PartyHub:
                     bool next = Autoplay && (_autoWait -= Time.deltaTime) <= 0;
                     // The wrap-up ignores input for a moment so a hammered SPACE from the last round cannot skip it.
-                    bool inputLock = !Autoplay && _party != null && _party.Done && Shell.Current == Shell.Final && Shell.Final.Age < 0.8f;
+                    bool inputLock = !Autoplay && _party != null && _party.Done && Shell.Current == Shell.Final && Shell.Final.Age < 1.6f;
                     while (_presses.Count > 0)
                     {
                         var p = _presses.Dequeue();
